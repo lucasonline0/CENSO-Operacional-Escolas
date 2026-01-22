@@ -1,0 +1,20 @@
+# Dependencias do Node
+web/node_modules
+web/.next
+web/out
+web/.env*.local
+
+# Build do Go
+api/bin
+api/dist
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Variaveis de Ambiente e Logs
+.env
+*.log
+.DS_Store
+.vscode

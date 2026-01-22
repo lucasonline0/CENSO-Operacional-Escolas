@@ -1,0 +1,33 @@
+services:
+  # Serviço do Banco de Dados
+  db:
+    image: postgres:16-alpine
+    container_name: censo_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - censo-network
+
+  # Interface Visual para o Banco (para facilitar o debug)
+  adminer:
+    image: adminer
+    container_name: censo_adminer
+    restart: always
+    ports:
+      - "8080:8080"
+    networks:
+      - censo-network
+
+volumes:
+  postgres_data:
+
+networks:
+  censo-network:
+    driver: bridge

@@ -1,39 +1,93 @@
 package main
 
 import (
-	"censo-seduc-api/internal/models"
-	"censo-seduc-api/pkg/database"
+	"api/internal/models"
+	"api/pkg/database"
+	"flag"
+	"fmt"
 	"log"
-
-	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
+	"net/http"
+	"os"
+	"time"
 )
 
+type config struct {
+	port int
+	env  string
+	db   struct {
+		dsn          string
+		maxOpenConns int
+		maxIdleConns int
+		maxIdleTime  string
+	}
+}
+
+type application struct {
+	config config
+	logger *log.Logger
+	models models.Models
+}
+
 func main() {
-	// 1. Carrega variaveis
-	err := godotenv.Load("../.env")
-	if err != nil {
-		log.Println("⚠️  Aviso: .env não encontrado, usando variáveis de sistema.")
+	var cfg config
+
+	flag.IntVar(&cfg.port, "port", 8000, "Porta do servidor API")
+	flag.StringVar(&cfg.env, "env", "development", "Ambiente (development|staging|production)")
+
+	getEnv := func(key, defaultValue string) string {
+		if value := os.Getenv(key); value != "" {
+			return value
+		}
+		return defaultValue
 	}
 
-	// 2. Conecta ao Banco
-	database.ConnectDB()
+	dbUser := getEnv("DB_USER", "postgres")
+	dbPassword := getEnv("DB_PASSWORD", "censo_seduc_secure_dev")
+	dbHost := getEnv("DB_HOST", "localhost")
+	dbPort := getEnv("DB_PORT", "5432")
+	dbName := getEnv("DB_NAME", "censo_seduc")
 
-	// Isso cria a tabela 'schools' baseada na Struct usada
-	database.DB.AutoMigrate(
-		&models.School{},
-		&models.Infrastructure{},
-		&models.FoodSecurity{},
-		&models.Technology{},
-		&models.HumanResources{},
-	)
+	defaultDSN := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", dbUser, dbPassword, dbHost, dbPort, dbName)
+	flag.StringVar(&cfg.db.dsn, "db-dsn", defaultDSN, "PostgreSQL DSN")
 
-	// 4. Inicializa Servidor
-	r := gin.Default()
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
-	})
+	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns", 25, "Máximo de conexões abertas")
+	flag.IntVar(&cfg.db.maxIdleConns, "db-max-idle-conns", 25, "Máximo de conexões inativas")
+	flag.StringVar(&cfg.db.maxIdleTime, "db-max-idle-time", "15m", "Tempo máximo de inatividade da conexão")
 
-	log.Println("🚀 Servidor rodando na porta 8000...")
-	r.Run(":8000")
+	flag.Parse()
+
+	logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
+
+	db, err := database.New(cfg.db.dsn)
+	if err != nil {
+		logger.Fatal(err)
+	}
+	defer db.Close()
+
+	logger.Printf("Conexão com o banco de dados estabelecida com sucesso")
+
+	app := &application{
+		config: cfg,
+		logger: logger,
+		models: models.NewModels(db),
+	}
+
+	mux := http.NewServeMux()
+	
+	mux.HandleFunc("GET /v1/healthcheck", app.healthcheckHandler)
+	
+	// ALTERAÇÃO AQUI: Removemos o "POST " para garantir compatibilidade
+	mux.HandleFunc("/v1/schools", app.createSchoolHandler)
+
+	srv := &http.Server{
+		Addr:         fmt.Sprintf(":%d", cfg.port),
+		Handler:      mux,
+		IdleTimeout:  time.Minute,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
+	}
+
+	logger.Printf("Iniciando servidor %s na porta %d", cfg.env, cfg.port)
+	err = srv.ListenAndServe()
+	logger.Fatal(err)
 }

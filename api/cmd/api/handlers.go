@@ -1,43 +1,50 @@
 package main
 
 import (
-	"api/internal/models"
 	"encoding/json"
 	"net/http"
+	"api/internal/models" 
 )
 
 func (app *application) createSchoolHandler(w http.ResponseWriter, r *http.Request) {
-	// Garante que só aceita POST (segurança extra)
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", http.MethodPost)
-		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
-		return
+	// estrutura temporária para receber o JSON
+	var input struct {
+		Nome      string `json:"nome_escola"`
+		INEP      string `json:"codigo_inep"`
+		Municipio string `json:"municipio"`
+		Dre       string `json:"dre"`
+		Zona      string `json:"zona"`
+		Endereco  string `json:"endereco"`
 	}
-
-	var input models.School
-
-	// Decodifica o JSON recebido
+	// decodifica o JSON recebido
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		app.logger.Println("Erro ao decodificar JSON:", err)
-		http.Error(w, "Erro ao processar dados enviados", http.StatusBadRequest)
+		http.Error(w, "Erro ao ler JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// CHAMA O BANCO DE DADOS
-	err := app.models.Schools.Insert(&input)
+	// ppassa os dados para o modelo do banco
+	school := models.School{
+		Nome:      input.Nome,
+		INEP:      input.INEP,
+		Municipio: input.Municipio,
+		Dre:       input.Dre,
+		Zona:      input.Zona,
+		Endereco:  input.Endereco,
+	}
+
+	// salva no banco
+	id, err := app.models.Schools.Insert(school)
 	if err != nil {
 		app.logger.Println("Erro ao inserir no banco:", err)
-		// Em produção, não mostramos o erro exato para o usuário por segurança
-		http.Error(w, "Erro interno ao salvar dados", http.StatusInternalServerError)
+		http.Error(w, "Erro ao salvar dados. Verifique o terminal do servidor.", http.StatusInternalServerError)
 		return
 	}
 
-	// Responde com sucesso e devolve o ID criado
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{
-		"status":  "success",
-		"message": "Escola cadastrada com sucesso!",
-		"data":    input,
+		"status": "success",
+		"data": map[string]int{
+			"id": id,
+		},
 	})
 }

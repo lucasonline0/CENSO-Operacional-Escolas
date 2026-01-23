@@ -6,6 +6,22 @@ import (
 	"time"
 )
 
+ 
+type School struct {
+	ID        int       `json:"id"`
+	Nome      string    `json:"nome_escola"`
+	INEP      string    `json:"codigo_inep"`
+	Municipio string    `json:"municipio"`
+	Dre       string    `json:"dre"`      
+	Zona      string    `json:"zona"`     
+	Endereco  string    `json:"endereco"` 
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type SchoolModel struct {
+	DB *sql.DB
+}
+
 type Models struct {
 	Schools SchoolModel
 }
@@ -16,23 +32,26 @@ func NewModels(db *sql.DB) Models {
 	}
 }
 
-type SchoolModel struct {
-	DB *sql.DB
-}
+func (m *SchoolModel) Insert(school School) (int, error) {
+	stmt := `
+		INSERT INTO schools (nome_escola, codigo_inep, municipio, dre, zona, endereco, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, NOW())
+		RETURNING id`
 
-// Insert insere uma nova escola no banco de dados e retorna o ID gerado
-func (m SchoolModel) Insert(school *School) error {
-	// Timeout de 3 segundos para evitar travamentos
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
+	var id int
+	
+	err := m.DB.QueryRowContext(context.Background(), stmt, 
+		school.Nome, 
+		school.INEP, 
+		school.Municipio,
+		school.Dre,
+		school.Zona,
+		school.Endereco,
+	).Scan(&id)
 
-	query := `
-		INSERT INTO schools (nome_escola, codigo_inep, municipio)
-		VALUES ($1, $2, $3)
-		RETURNING id, created_at`
+	if err != nil {
+		return 0, err
+	}
 
-	args := []any{school.NomeEscola, school.CodigoINEP, school.Municipio}
-
-	// Executa a query e preenche o ID gerado na struct original
-	return m.DB.QueryRowContext(ctx, query, args...).Scan(&school.ID, &school.CreatedAt)
+	return id, nil
 }

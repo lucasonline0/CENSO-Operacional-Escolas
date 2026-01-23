@@ -76,12 +76,11 @@ func main() {
 	
 	mux.HandleFunc("GET /v1/healthcheck", app.healthcheckHandler)
 	
-	// ALTERAÇÃO AQUI: Removemos o "POST " para garantir compatibilidade
 	mux.HandleFunc("/v1/schools", app.createSchoolHandler)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.port),
-		Handler:      mux,
+		Handler:      app.enableCORS(mux),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { schoolIdentificationSchema, SchoolIdentificationForm } from "@/schemas/school-census";
@@ -22,23 +23,43 @@ import {
 } from "@/components/ui/select";
 
 export function IdentificationForm() {
-  // 1. Inicializa o Hook Form com validação Zod
+  const [isLoading, setIsLoading] = useState(false);
+
   const form = useForm<SchoolIdentificationForm>({
     resolver: zodResolver(schoolIdentificationSchema),
     defaultValues: {
       nome_escola: "",
       codigo_inep: "",
       municipio: "",
-      uf: "PA", // Padrão
       zona: undefined,
       dre: "",
+      endereco: "",
     },
   });
 
-  // 2. Função de Envio (Por enquanto, apenas loga no console)
-  function onSubmit(data: SchoolIdentificationForm) {
-    console.log("📝 Dados validados prontos para envio:", data);
-    alert("Dados validados! Verifique o console (F12).");
+  async function onSubmit(data: SchoolIdentificationForm) {
+    setIsLoading(true);
+    
+    try {
+      const response = await fetch("http://localhost:8000/v1/schools", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text() || "Erro no servidor");
+      }
+
+      const result = await response.json();
+      alert(`✅ Escola salva: ID ${result.data.id}`);
+
+    } catch (error) {
+      console.error(error);
+      alert("❌ Falha ao salvar. Verifique a API.");
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -46,7 +67,6 @@ export function IdentificationForm() {
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-
           <div className="md:col-span-8">
             <FormField
               control={form.control}
@@ -81,7 +101,6 @@ export function IdentificationForm() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          
           <FormField
             control={form.control}
             name="municipio"
@@ -105,7 +124,7 @@ export function IdentificationForm() {
                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione a DRE" />
+                      <SelectValue placeholder="Selecione..." />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -159,8 +178,12 @@ export function IdentificationForm() {
         />
 
         <div className="flex justify-end pt-4">
-          <Button type="submit" className="w-full md:w-auto bg-blue-600 hover:bg-blue-700">
-            Salvar e Continuar &rarr;
+          <Button 
+            type="submit" 
+            className="w-full md:w-auto bg-blue-600 hover:bg-blue-700"
+            disabled={isLoading}
+          >
+            {isLoading ? "Salvando..." : "Salvar e Continuar →"}
           </Button>
         </div>
 

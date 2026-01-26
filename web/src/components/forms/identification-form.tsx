@@ -22,12 +22,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Importa os dados gerados pelo Python
-// Se der erro aqui, é porque você ainda não rodou o script Python!
 import { schoolData } from "@/data/schools"; 
+
+// chave pra salvar no navegador
+const STORAGE_KEY = "censo_draft_identification_v1";
 
 export function IdentificationForm() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(true);
 
   const form = useForm<SchoolIdentificationForm>({
     resolver: zodResolver(schoolIdentificationSchema),
@@ -41,42 +43,64 @@ export function IdentificationForm() {
     },
   });
 
-  // --- LÓGICA DE CASCATA (DATABASE) ---
+  // tento restaurar o rascunho assim que abro a tela
+  useEffect(() => {
+    const savedData = localStorage.getItem(STORAGE_KEY);
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        form.reset(parsed);
+      } catch (e) {
+        console.error("erro ao restaurar rascunho:", e);
+      }
+    }
+    setIsRestoring(false);
+  }, [form]);
+
+  // salvo cada letra que o usuario digita
+  useEffect(() => {
+    const subscription = form.watch((value) => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+    });
+    return () => subscription.unsubscribe();
+  }, [form.watch]);
 
   const selectedMunicipio = form.watch("municipio");
   const selectedDre = form.watch("dre");
 
-  // 1. Lista de Municípios (Ordenada)
+  // carrego a lista de municipios
   const municipios = useMemo(() => {
     return Object.keys(schoolData || {}).sort();
   }, []);
 
-  // 2. Lista de DREs (Baseada no Município selecionado)
+  // filtro as dres pelo municipio
   const dres = useMemo(() => {
     if (!selectedMunicipio || !schoolData[selectedMunicipio]) return [];
     return Object.keys(schoolData[selectedMunicipio]).sort();
   }, [selectedMunicipio]);
 
-  // 3. Lista de Escolas (Baseada na DRE selecionada)
+  // filtro as escolas pela dre
   const escolas = useMemo(() => {
     if (!selectedMunicipio || !selectedDre || !schoolData[selectedMunicipio]?.[selectedDre]) return [];
     return schoolData[selectedMunicipio][selectedDre].sort();
   }, [selectedMunicipio, selectedDre]);
 
-  // Reset automático dos campos filhos quando o pai muda
+  // se mudar o municipio, limpo a dre e a escola
   useEffect(() => {
-    if (selectedMunicipio && !dres.includes(form.getValues("dre"))) {
+    const currentDre = form.getValues("dre");
+    if (selectedMunicipio && currentDre && !dres.includes(currentDre)) {
         form.setValue("dre", "");
         form.setValue("nome_escola", "");
     }
   }, [selectedMunicipio, dres, form]);
 
+  // se mudar a dre, limpo a escola
   useEffect(() => {
-    if (selectedDre && !escolas.includes(form.getValues("nome_escola"))) {
+    const currentEscola = form.getValues("nome_escola");
+    if (selectedDre && currentEscola && !escolas.includes(currentEscola)) {
         form.setValue("nome_escola", "");
     }
   }, [selectedDre, escolas, form]);
-
 
   async function onSubmit(data: SchoolIdentificationForm) {
     setIsLoading(true);
@@ -90,30 +114,36 @@ export function IdentificationForm() {
       if (!response.ok) throw new Error(await response.text());
 
       const result = await response.json();
-      alert(`✅ Escola salva com sucesso! ID: ${result.data.id}`);
+      
+      // se salvou no banco, nao preciso mais do rascunho
+      localStorage.removeItem(STORAGE_KEY);
+      alert(`✅ escola salva: id ${result.data.id}`);
+      
+      form.reset(); 
+
     } catch (error) {
       console.error(error);
-      alert("❌ Erro ao salvar. Verifique se o backend Go está rodando.");
+      alert("❌ erro ao salvar. verifica a api.");
     } finally {
       setIsLoading(false);
     }
   }
 
+  if (isRestoring) return <div className="p-4 text-gray-500">recuperando dados...</div>;
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         
-        {/* GRUPO 1: Localização Hierárquica */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           
-          {/* MUNICÍPIO */}
           <FormField
             control={form.control}
             name="municipio"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Município *</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select onValueChange={field.onChange} value={field.value || ""}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione..." />
@@ -130,7 +160,6 @@ export function IdentificationForm() {
             )}
           />
 
-          {/* DRE / URE */}
           <FormField
             control={form.control}
             name="dre"
@@ -139,7 +168,7 @@ export function IdentificationForm() {
                 <FormLabel>DRE / Setor *</FormLabel>
                 <Select 
                     onValueChange={field.onChange} 
-                    defaultValue={field.value}
+                    value={field.value || ""}
                     disabled={!selectedMunicipio}
                 >
                   <FormControl>
@@ -158,14 +187,13 @@ export function IdentificationForm() {
             )}
           />
 
-          {/* ZONA */}
           <FormField
             control={form.control}
             name="zona"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Zona *</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select onValueChange={field.onChange} value={field.value || ""}>
                   <FormControl>
                     <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                   </FormControl>
@@ -181,7 +209,6 @@ export function IdentificationForm() {
           />
         </div>
 
-        {/* GRUPO 2: Escola e INEP */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
           <div className="md:col-span-8">
             <FormField
@@ -192,7 +219,7 @@ export function IdentificationForm() {
                   <FormLabel>Nome da Escola *</FormLabel>
                   <Select 
                     onValueChange={field.onChange} 
-                    defaultValue={field.value}
+                    value={field.value || ""}
                     disabled={!selectedDre}
                   >
                     <FormControl>
@@ -220,7 +247,7 @@ export function IdentificationForm() {
                 <FormItem>
                   <FormLabel>Código INEP *</FormLabel>
                   <FormControl>
-                    <Input placeholder="00000000" maxLength={8} {...field} />
+                    <Input placeholder="00000000" maxLength={8} {...field} value={field.value || ""} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -229,7 +256,6 @@ export function IdentificationForm() {
           </div>
         </div>
 
-        {/* GRUPO 3: Endereço */}
         <FormField
           control={form.control}
           name="endereco"
@@ -237,14 +263,26 @@ export function IdentificationForm() {
             <FormItem>
               <FormLabel>Endereço Completo *</FormLabel>
               <FormControl>
-                <Input placeholder="Logradouro, Número, Bairro, CEP" {...field} />
+                <Input placeholder="Logradouro, Número, Bairro, CEP" {...field} value={field.value || ""} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        <div className="flex justify-end pt-4">
+        <div className="flex justify-end pt-4 gap-4">
+            <Button 
+                type="button" 
+                variant="outline"
+                onClick={() => {
+                    localStorage.removeItem(STORAGE_KEY);
+                    form.reset();
+                    alert("rascunho limpo!");
+                }}
+            >
+                Limpar Rascunho
+            </Button>
+
           <Button type="submit" className="bg-blue-600 hover:bg-blue-700 w-full md:w-auto">
             {isLoading ? "Salvando..." : "Salvar e Continuar →"}
           </Button>

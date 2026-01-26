@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"api/internal/models"
-	"github.com/joho/godotenv" // Biblioteca para ler o .env
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
@@ -32,20 +32,19 @@ type application struct {
 func main() {
 	var cfg config
 
+	// carrega variaveis de ambiente
 	if err := godotenv.Load(); err != nil {
 		if err := godotenv.Load("../.env"); err != nil {
-			log.Println("Aviso: Arquivo .env não encontrado, usando variáveis de ambiente do sistema.")
+			log.Println("aviso: arquivo .env nao encontrado")
 		}
 	}
 
-	// monta a string de conexão (DSN) usando as variáveis do .env
 	dbHost := os.Getenv("DB_HOST")
 	dbPort := os.Getenv("DB_PORT")
 	dbUser := os.Getenv("DB_USER")
 	dbPass := os.Getenv("DB_PASSWORD")
 	dbName := os.Getenv("DB_NAME")
 
-	// se faltar algo essencial, avisa (ou usa um fallback seguro/vazio)
 	if dbHost == "" { dbHost = "localhost" }
 	if dbPort == "" { dbPort = "5432" }
 
@@ -61,7 +60,7 @@ func main() {
 
 	db, err := openDB(cfg)
 	if err != nil {
-		logger.Fatal("Erro ao conectar no banco (verifique o .env): ", err)
+		logger.Fatal("erro ao conectar no banco: ", err)
 	}
 	defer db.Close()
 
@@ -73,8 +72,10 @@ func main() {
 		models: models.NewModels(db),
 	}
 
+	// rotas
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/schools", app.createSchoolHandler)
+	mux.HandleFunc("/v1/census", app.upsertCensusHandler) // rota nova
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.port),

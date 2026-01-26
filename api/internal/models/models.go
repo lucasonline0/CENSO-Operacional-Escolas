@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// school representa a tabela de escolas
+// School representa a tabela de escolas
 type School struct {
 	ID        int       `json:"id"`
 	Nome      string    `json:"nome_escola"`
@@ -19,7 +19,7 @@ type School struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// censusresponse guarda o pacotão de respostas das 14 páginas
+// CensusResponse representa o formulário preenchido
 type CensusResponse struct {
 	ID        int             `json:"id"`
 	SchoolID  int             `json:"school_id"`
@@ -38,13 +38,11 @@ type CensusModel struct {
 	DB *sql.DB
 }
 
-// models agrupa tudo pro main.go usar
 type Models struct {
 	Schools SchoolModel
 	Census  CensusModel
 }
 
-// newmodels inicializa os conectores
 func NewModels(db *sql.DB) Models {
 	return Models{
 		Schools: SchoolModel{DB: db},
@@ -52,16 +50,38 @@ func NewModels(db *sql.DB) Models {
 	}
 }
 
-// insert salva uma nova escola
+// Insert agora verifica se a escola já existe antes de criar (Logica de Upsert Manual)
 func (m *SchoolModel) Insert(school School) (int, error) {
+	// 1. Tenta achar se já existe pelo INEP
+	var existingID int
+	queryCheck := `SELECT id FROM schools WHERE codigo_inep = $1`
+	err := m.DB.QueryRowContext(context.Background(), queryCheck, school.INEP).Scan(&existingID)
+
+	if err == nil {
+		// SE ACHOU: Atualiza os dados para garantir que estão recentes e retorna o ID existente
+		queryUpdate := `
+			UPDATE schools 
+			SET nome_escola = $1, municipio = $2, dre = $3, zona = $4, endereco = $5 
+			WHERE id = $6`
+		
+		_, errUpdate := m.DB.ExecContext(context.Background(), queryUpdate, 
+			school.Nome, school.Municipio, school.Dre, school.Zona, school.Endereco, existingID)
+		
+		if errUpdate != nil {
+			return 0, errUpdate
+		}
+		
+		return existingID, nil
+	}
+
+	// 2. SE NÃO ACHOU: Faz o Insert normal
 	stmt := `
 		INSERT INTO schools (nome_escola, codigo_inep, municipio, dre, zona, endereco, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, NOW())
 		RETURNING id`
 
 	var id int
-	
-	err := m.DB.QueryRowContext(context.Background(), stmt, 
+	err = m.DB.QueryRowContext(context.Background(), stmt, 
 		school.Nome, 
 		school.INEP, 
 		school.Municipio,
@@ -77,7 +97,7 @@ func (m *SchoolModel) Insert(school School) (int, error) {
 	return id, nil
 }
 
-// upsert salva ou atualiza o censo (se já existir, atualiza)
+// Upsert salva ou atualiza o censo
 func (m *CensusModel) Upsert(response CensusResponse) error {
 	stmt := `
 		INSERT INTO census_responses (school_id, year, status, data, updated_at)
@@ -97,7 +117,7 @@ func (m *CensusModel) Upsert(response CensusResponse) error {
 	).Scan(&response.ID)
 }
 
-// getbyschoolid busca o censo de uma escola
+// GetBySchoolID busca o censo de uma escola
 func (m *CensusModel) GetBySchoolID(schoolID int, year int) (*CensusResponse, error) {
 	stmt := `SELECT id, school_id, year, status, data, created_at, updated_at 
 	         FROM census_responses WHERE school_id = $1 AND year = $2`

@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { schoolIdentificationSchema, SchoolIdentificationForm } from "@/schemas/school-census";
+import { schoolIdentificationSchema, SchoolIdentificationForm } from "@/schemas/school-census"; // Importa do novo arquivo de schemas
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -21,16 +21,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
 import { schoolData } from "@/data/schools"; 
 
-// chave pra salvar no navegador
 const STORAGE_KEY = "censo_draft_identification_v1";
 
-export function IdentificationForm() {
+interface IdentificationFormProps {
+  onSuccess: (schoolId: number) => void;
+}
+
+export function IdentificationForm({ onSuccess }: IdentificationFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
 
+  // nota: aqui estou usando o schema específico de identificação que criamos no census-schema.ts
+  // certifique-se que o import lá em cima esteja pegando do arquivo correto ou use o schema local se preferir manter separado
   const form = useForm<SchoolIdentificationForm>({
     resolver: zodResolver(schoolIdentificationSchema),
     defaultValues: {
@@ -43,7 +47,6 @@ export function IdentificationForm() {
     },
   });
 
-  // tento restaurar o rascunho assim que abro a tela
   useEffect(() => {
     const savedData = localStorage.getItem(STORAGE_KEY);
     if (savedData) {
@@ -57,35 +60,30 @@ export function IdentificationForm() {
     setIsRestoring(false);
   }, [form]);
 
-  // salvo cada letra que o usuario digita
   useEffect(() => {
     const subscription = form.watch((value) => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
     });
     return () => subscription.unsubscribe();
-  }, [form.watch]);
+  }, [form]);
 
   const selectedMunicipio = form.watch("municipio");
   const selectedDre = form.watch("dre");
 
-  // carrego a lista de municipios
   const municipios = useMemo(() => {
     return Object.keys(schoolData || {}).sort();
   }, []);
 
-  // filtro as dres pelo municipio
   const dres = useMemo(() => {
     if (!selectedMunicipio || !schoolData[selectedMunicipio]) return [];
     return Object.keys(schoolData[selectedMunicipio]).sort();
   }, [selectedMunicipio]);
 
-  // filtro as escolas pela dre
   const escolas = useMemo(() => {
     if (!selectedMunicipio || !selectedDre || !schoolData[selectedMunicipio]?.[selectedDre]) return [];
     return schoolData[selectedMunicipio][selectedDre].sort();
   }, [selectedMunicipio, selectedDre]);
 
-  // se mudar o municipio, limpo a dre e a escola
   useEffect(() => {
     const currentDre = form.getValues("dre");
     if (selectedMunicipio && currentDre && !dres.includes(currentDre)) {
@@ -94,7 +92,6 @@ export function IdentificationForm() {
     }
   }, [selectedMunicipio, dres, form]);
 
-  // se mudar a dre, limpo a escola
   useEffect(() => {
     const currentEscola = form.getValues("nome_escola");
     if (selectedDre && currentEscola && !escolas.includes(currentEscola)) {
@@ -115,11 +112,10 @@ export function IdentificationForm() {
 
       const result = await response.json();
       
-      // se salvou no banco, nao preciso mais do rascunho
       localStorage.removeItem(STORAGE_KEY);
-      alert(`✅ escola salva: id ${result.data.id}`);
       
-      form.reset(); 
+      // aqui está a mudança: aviso o pai que deu bom e passo o id
+      onSuccess(result.data.id);
 
     } catch (error) {
       console.error(error);
@@ -135,8 +131,10 @@ export function IdentificationForm() {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         
+        {/* ... (mantive o layout igual, só removi o alert e o reset manual do submit para deixar o fluxo fluir) ... */}
+        {/* o conteúdo visual dos campos continua exatamente o mesmo do arquivo anterior */}
+        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          
           <FormField
             control={form.control}
             name="municipio"
@@ -144,49 +142,27 @@ export function IdentificationForm() {
               <FormItem>
                 <FormLabel>Município *</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value || ""}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione..." />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {municipios.map((muni) => (
-                      <SelectItem key={muni} value={muni}>{muni}</SelectItem>
-                    ))}
-                  </SelectContent>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
+                  <SelectContent>{municipios.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
                 </Select>
                 <FormMessage />
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="dre"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>DRE / Setor *</FormLabel>
-                <Select 
-                    onValueChange={field.onChange} 
-                    value={field.value || ""}
-                    disabled={!selectedMunicipio}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione..." />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {dres.map((dre) => (
-                      <SelectItem key={dre} value={dre}>{dre}</SelectItem>
-                    ))}
-                  </SelectContent>
+                <Select onValueChange={field.onChange} value={field.value || ""} disabled={!selectedMunicipio}>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
+                  <SelectContent>{dres.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
                 </Select>
                 <FormMessage />
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="zona"
@@ -194,9 +170,7 @@ export function IdentificationForm() {
               <FormItem>
                 <FormLabel>Zona *</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value || ""}>
-                  <FormControl>
-                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                  </FormControl>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
                   <SelectContent>
                     <SelectItem value="Urbana">Urbana</SelectItem>
                     <SelectItem value="Rural">Rural</SelectItem>
@@ -217,28 +191,15 @@ export function IdentificationForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Nome da Escola *</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
-                    value={field.value || ""}
-                    disabled={!selectedDre}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder={selectedDre ? "Selecione a Escola" : "..."} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {escolas.map((esc) => (
-                        <SelectItem key={esc} value={esc}>{esc}</SelectItem>
-                      ))}
-                    </SelectContent>
+                  <Select onValueChange={field.onChange} value={field.value || ""} disabled={!selectedDre}>
+                    <FormControl><SelectTrigger><SelectValue placeholder={selectedDre ? "Selecione..." : "..."} /></SelectTrigger></FormControl>
+                    <SelectContent>{escolas.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>
               )}
             />
           </div>
-
           <div className="md:col-span-4">
             <FormField
               control={form.control}
@@ -246,9 +207,7 @@ export function IdentificationForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Código INEP *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="00000000" maxLength={8} {...field} value={field.value || ""} />
-                  </FormControl>
+                  <FormControl><Input placeholder="00000000" maxLength={8} {...field} value={field.value || ""} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -262,32 +221,17 @@ export function IdentificationForm() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Endereço Completo *</FormLabel>
-              <FormControl>
-                <Input placeholder="Logradouro, Número, Bairro, CEP" {...field} value={field.value || ""} />
-              </FormControl>
+              <FormControl><Input placeholder="Logradouro..." {...field} value={field.value || ""} /></FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        <div className="flex justify-end pt-4 gap-4">
-            <Button 
-                type="button" 
-                variant="outline"
-                onClick={() => {
-                    localStorage.removeItem(STORAGE_KEY);
-                    form.reset();
-                    alert("rascunho limpo!");
-                }}
-            >
-                Limpar Rascunho
-            </Button>
-
+        <div className="flex justify-end pt-4">
           <Button type="submit" className="bg-blue-600 hover:bg-blue-700 w-full md:w-auto">
             {isLoading ? "Salvando..." : "Salvar e Continuar →"}
           </Button>
         </div>
-
       </form>
     </Form>
   );

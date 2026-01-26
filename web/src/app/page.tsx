@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Stepper } from "@/components/ui/stepper";
 import { CENSUS_STEPS } from "@/config/steps";
 import { IdentificationForm } from "@/components/forms/identification-form";
+import { GeneralDataForm } from "@/components/forms/general-data-form";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export default function CensusPage() {
@@ -11,7 +12,7 @@ export default function CensusPage() {
   const [schoolId, setSchoolId] = useState<number | null>(null);
 
   const handleStepClick = (index: number) => {
-    // só permito navegar se tiver schoolId (ou seja, passou da etapa 1)
+    // só deixo navegar se já tiver criado a escola (schoolId existe)
     if (schoolId) {
       setCurrentStep(index);
     }
@@ -19,7 +20,7 @@ export default function CensusPage() {
 
   const handleIdentificationSuccess = (id: number) => {
     setSchoolId(id);
-    setCurrentStep(1); // avança pro passo 2
+    setCurrentStep(1); // passo 1 -> passo 2
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -49,7 +50,7 @@ export default function CensusPage() {
           {/* área principal */}
           <main className="space-y-6">
             
-            {/* cabeçalho mobile (só aparece em telas pequenas) */}
+            {/* cabeçalho mobile */}
             <div className="lg:hidden mb-6">
                 <h1 className="text-xl font-bold mb-2">Passo {currentStep + 1} de {CENSUS_STEPS.length}</h1>
                 <p className="text-slate-500">{CENSUS_STEPS[currentStep].title}</p>
@@ -66,13 +67,25 @@ export default function CensusPage() {
               </CardHeader>
               <CardContent className="p-6">
                 
-                {/* RENDERIZAÇÃO CONDICIONAL DOS FORMULÁRIOS */}
-                
+                {/* passo 1: identificação */}
                 {currentStep === 0 && (
                   <IdentificationForm onSuccess={handleIdentificationSuccess} />
                 )}
 
-                {currentStep > 0 && (
+                {/* passo 2: dados gerais e infra */}
+                {currentStep === 1 && schoolId && (
+                    <GeneralDataForm 
+                        schoolId={schoolId}
+                        onSuccess={() => {
+                            setCurrentStep(2); // vai pro passo 3 (merenda)
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        onBack={() => setCurrentStep(0)}
+                    />
+                )}
+
+                {/* passos futuros: placeholder */}
+                {currentStep > 1 && (
                   <div className="flex flex-col items-center justify-center py-12 text-center text-slate-500">
                     <div className="mb-4 rounded-full bg-blue-50 p-3">
                       <span className="text-2xl">🚧</span>

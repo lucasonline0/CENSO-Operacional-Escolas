@@ -3,10 +3,16 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"api/internal/models"
 )
 
 func (app *application) createSchoolHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "método não permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
 	var input struct {
 		Nome      string `json:"nome_escola"`
 		INEP      string `json:"codigo_inep"`
@@ -46,8 +52,51 @@ func (app *application) createSchoolHandler(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-func (app *application) upsertCensusHandler(w http.ResponseWriter, r *http.Request) {
-	// estrutura pra receber o payload do censo
+// censusHandler gerencia tanto GET quanto POST para o censo
+func (app *application) censusHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		app.getCensus(w, r)
+	case http.MethodPost:
+		app.upsertCensus(w, r)
+	default:
+		http.Error(w, "método não permitido", http.StatusMethodNotAllowed)
+	}
+}
+
+func (app *application) getCensus(w http.ResponseWriter, r *http.Request) {
+	schoolIDStr := r.URL.Query().Get("school_id")
+	if schoolIDStr == "" {
+		http.Error(w, "school_id é obrigatório", http.StatusBadRequest)
+		return
+	}
+
+	schoolID, err := strconv.Atoi(schoolIDStr)
+	if err != nil {
+		http.Error(w, "school_id inválido", http.StatusBadRequest)
+		return
+	}
+
+	// por enquanto fixo em 2026, mas poderia vir da query string
+	census, err := app.models.Census.GetBySchoolID(schoolID, 2026)
+	if err != nil {
+		app.logger.Println("erro ao buscar censo:", err)
+		http.Error(w, "erro interno", http.StatusInternalServerError)
+		return
+	}
+
+	if census == nil {
+		// se não tiver nada salvo ainda, retorna um json vazio, não 404
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"data": {}}`))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(census)
+}
+
+func (app *application) upsertCensus(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		SchoolID int             `json:"school_id"`
 		Year     int             `json:"year"`
@@ -60,7 +109,6 @@ func (app *application) upsertCensusHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// validação basica
 	if input.SchoolID == 0 {
 		http.Error(w, "school_id obrigatorio", http.StatusBadRequest)
 		return
@@ -76,7 +124,6 @@ func (app *application) upsertCensusHandler(w http.ResponseWriter, r *http.Reque
 		Data:     input.Data,
 	}
 
-	// salva ou atualiza
 	err := app.models.Census.Upsert(response)
 	if err != nil {
 		app.logger.Println("erro ao salvar censo:", err)

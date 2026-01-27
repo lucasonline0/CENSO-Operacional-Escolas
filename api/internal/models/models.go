@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-// school representa a tabela de escolas
 type School struct {
 	ID        int       `json:"id"`
 	Nome      string    `json:"nome_escola"`
@@ -19,7 +18,6 @@ type School struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// censusresponse representa o formulário preenchido
 type CensusResponse struct {
 	ID        int             `json:"id"`
 	SchoolID  int             `json:"school_id"`
@@ -50,15 +48,12 @@ func NewModels(db *sql.DB) Models {
 	}
 }
 
-// insert verifica se a escola já existe antes de criar (upsert manual)
 func (m *SchoolModel) Insert(school School) (int, error) {
-	// 1. tenta achar se já existe pelo inep
 	var existingID int
 	queryCheck := `SELECT id FROM schools WHERE codigo_inep = $1`
 	err := m.DB.QueryRowContext(context.Background(), queryCheck, school.INEP).Scan(&existingID)
 
 	if err == nil {
-		// se achou: atualiza os dados para garantir que estão recentes e retorna o id existente
 		queryUpdate := `
 			UPDATE schools 
 			SET nome_escola = $1, municipio = $2, dre = $3, zona = $4, endereco = $5 
@@ -74,7 +69,6 @@ func (m *SchoolModel) Insert(school School) (int, error) {
 		return existingID, nil
 	}
 
-	// 2. se não achou: faz o insert normal
 	stmt := `
 		INSERT INTO schools (nome_escola, codigo_inep, municipio, dre, zona, endereco, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, NOW())
@@ -97,9 +91,25 @@ func (m *SchoolModel) Insert(school School) (int, error) {
 	return id, nil
 }
 
-// upsert salva ou atualiza o censo com merge de json
+func (m *SchoolModel) Get(id int) (*School, error) {
+	query := `
+		SELECT id, nome_escola, codigo_inep, municipio, dre, zona, endereco, created_at
+		FROM schools
+		WHERE id = $1`
+
+	var s School
+	err := m.DB.QueryRowContext(context.Background(), query, id).Scan(
+		&s.ID, &s.Nome, &s.INEP, &s.Municipio, &s.Dre, &s.Zona, &s.Endereco, &s.CreatedAt,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &s, nil
+}
+
 func (m *CensusModel) Upsert(response CensusResponse) error {
-	// nota: usei o operador || no update para fazer o merge do json novo com o existente
 	stmt := `
 		INSERT INTO census_responses (school_id, year, status, data, updated_at)
 		VALUES ($1, $2, $3, $4, NOW())
@@ -118,7 +128,6 @@ func (m *CensusModel) Upsert(response CensusResponse) error {
 	).Scan(&response.ID)
 }
 
-// getbyschoolid busca o censo de uma escola
 func (m *CensusModel) GetBySchoolID(schoolID int, year int) (*CensusResponse, error) {
 	stmt := `SELECT id, school_id, year, status, data, created_at, updated_at 
 	         FROM census_responses WHERE school_id = $1 AND year = $2`

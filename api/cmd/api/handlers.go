@@ -7,12 +7,44 @@ import (
 	"api/internal/models"
 )
 
-func (app *application) createSchoolHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+func (app *application) schoolsHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		app.getSchool(w, r)
+	case http.MethodPost:
+		app.createSchool(w, r)
+	default:
 		http.Error(w, "método não permitido", http.StatusMethodNotAllowed)
+	}
+}
+
+func (app *application) getSchool(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		http.Error(w, "id obrigatório", http.StatusBadRequest)
 		return
 	}
 
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "id inválido", http.StatusBadRequest)
+		return
+	}
+
+	school, err := app.models.Schools.Get(id)
+	if err != nil {
+		http.Error(w, "escola não encontrada", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"status": "success",
+		"data":   school,
+	})
+}
+
+func (app *application) createSchool(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Nome      string `json:"nome_escola"`
 		INEP      string `json:"codigo_inep"`
@@ -52,7 +84,6 @@ func (app *application) createSchoolHandler(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-// censusHandler gerencia tanto GET quanto POST para o censo
 func (app *application) censusHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -77,7 +108,6 @@ func (app *application) getCensus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// por enquanto fixo em 2026, mas poderia vir da query string
 	census, err := app.models.Census.GetBySchoolID(schoolID, 2026)
 	if err != nil {
 		app.logger.Println("erro ao buscar censo:", err)
@@ -86,7 +116,6 @@ func (app *application) getCensus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if census == nil {
-		// se não tiver nada salvo ainda, retorna um json vazio, não 404
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"data": {}}`))
 		return

@@ -73,10 +73,9 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/schools", app.createSchoolHandler)
+	mux.HandleFunc("/v1/schools", app.schoolsHandler) // <-- Atualizado aqui
 	mux.HandleFunc("/v1/census", app.censusHandler)
 
-	// configuração básica de cors pra desenvolvimento
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:3000"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -86,7 +85,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.port),
-		Handler:      c.Handler(mux), // <-- ENVOLVI O MUX NO CORS
+		Handler:      c.Handler(mux),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,

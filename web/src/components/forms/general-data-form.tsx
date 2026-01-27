@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/form-components";
 import { Separator } from "@/components/ui/separator";
 
+const STORAGE_KEY = "censo_draft_general_v1";
+
 type GeneralDataFormValues = z.infer<typeof generalDataSchema>;
 
 interface GeneralDataFormProps {
@@ -26,7 +28,7 @@ interface GeneralDataFormProps {
 
 export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataFormProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [isFetching, setIsFetching] = useState(true); // novo estado pra loading inicial
+  const [isFetching, setIsFetching] = useState(true);
 
   const form = useForm({
     resolver: zodResolver(generalDataSchema),
@@ -46,28 +48,51 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
 
   useEffect(() => {
     async function fetchData() {
+        let serverData = null;
+
         try {
             const response = await fetch(`http://localhost:8000/v1/census?school_id=${schoolId}`);
             if (response.ok) {
                 const result = await response.json();
                 if (result.data) {
-                    form.reset({
-                        ...form.getValues(),
-                        ...result.data
-                    });
+                    serverData = result.data;
                 }
             }
         } catch (error) {
             console.error("erro ao buscar dados:", error);
-        } finally {
-            setIsFetching(false);
         }
+
+        const savedDraft = localStorage.getItem(STORAGE_KEY);
+        let draftData = null;
+        if (savedDraft) {
+             try {
+                 draftData = JSON.parse(savedDraft);
+             } catch (e) {
+                 console.error(e);
+             }
+        }
+
+        const mergedData = {
+            ...form.getValues(),
+            ...(serverData || {}),
+            ...(draftData || {}) 
+        };
+
+        form.reset(mergedData);
+        setIsFetching(false);
     }
 
     if (schoolId) {
         fetchData();
     }
   }, [schoolId, form]);
+
+  useEffect(() => {
+      const subscription = form.watch((value) => {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+      });
+      return () => subscription.unsubscribe();
+  }, [form]);
 
   async function onSubmit(data: GeneralDataFormValues) {
     setIsLoading(true);
@@ -84,6 +109,8 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
       });
 
       if (!response.ok) throw new Error("erro ao salvar");
+      
+      localStorage.removeItem(STORAGE_KEY);
       
       onSuccess();
     } catch (error) {

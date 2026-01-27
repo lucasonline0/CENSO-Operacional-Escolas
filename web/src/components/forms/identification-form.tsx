@@ -27,9 +27,10 @@ const STORAGE_KEY = "censo_draft_identification_v1";
 
 interface IdentificationFormProps {
   onSuccess: (schoolId: number) => void;
+  initialId?: number | null; 
 }
 
-export function IdentificationForm({ onSuccess }: IdentificationFormProps) {
+export function IdentificationForm({ onSuccess, initialId }: IdentificationFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
 
@@ -45,21 +46,39 @@ export function IdentificationForm({ onSuccess }: IdentificationFormProps) {
     },
   });
 
-  // recupero o rascunho salvo no storage
   useEffect(() => {
-    const savedData = localStorage.getItem(STORAGE_KEY);
-    if (savedData) {
-      try {
-        const parsed = JSON.parse(savedData);
-        form.reset(parsed);
-      } catch (e) {
-        console.error("erro ao restaurar rascunho:", e);
-      }
-    }
-    setIsRestoring(false);
-  }, [form]);
+    async function restoreData() {
+        if (initialId) {
+            try {
+                const response = await fetch(`http://localhost:8000/v1/schools?id=${initialId}`);
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.data) {
+                        form.reset(result.data);
+                        setIsRestoring(false);
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.error("erro ao buscar escola:", e);
+            }
+        }
 
-  // salvo rascunho a cada alteração do form
+        const savedData = localStorage.getItem(STORAGE_KEY);
+        if (savedData) {
+            try {
+                const parsed = JSON.parse(savedData);
+                form.reset(parsed);
+            } catch (e) {
+                console.error("erro ao restaurar rascunho:", e);
+            }
+        }
+        setIsRestoring(false);
+    }
+    
+    restoreData();
+  }, [initialId, form]);
+
   useEffect(() => {
     const subscription = form.watch((value) => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
@@ -67,7 +86,6 @@ export function IdentificationForm({ onSuccess }: IdentificationFormProps) {
     return () => subscription.unsubscribe();
   }, [form]);
 
-  // logica de filtros de municipio e dre
   const selectedMunicipio = form.watch("municipio");
   const selectedDre = form.watch("dre");
 
@@ -85,7 +103,6 @@ export function IdentificationForm({ onSuccess }: IdentificationFormProps) {
     return schoolData[selectedMunicipio][selectedDre].sort();
   }, [selectedMunicipio, selectedDre]);
 
-  // reseta campos dependentes se o pai mudar
   useEffect(() => {
     const currentDre = form.getValues("dre");
     if (selectedMunicipio && currentDre && !dres.includes(currentDre)) {
@@ -110,7 +127,6 @@ export function IdentificationForm({ onSuccess }: IdentificationFormProps) {
         body: JSON.stringify(data),
       });
 
-      // verifica resposta e lança erro com texto do backend
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText || "erro desconhecido no servidor");
@@ -120,11 +136,9 @@ export function IdentificationForm({ onSuccess }: IdentificationFormProps) {
       
       localStorage.removeItem(STORAGE_KEY);
       
-      // notifica sucesso pro componente pai
       onSuccess(result.data.id);
 
     } catch (error) {
-      // tratamento de erro seguro sem usar any
       console.error(error);
       const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
       alert(`erro ao salvar: ${errorMessage}`);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { generalDataSchema } from "@/schemas/census-schema"; 
@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/form-components";
 import { Separator } from "@/components/ui/separator";
 
-// mantenho o tipo pra usar no submit, mas nao forço no useForm
 type GeneralDataFormValues = z.infer<typeof generalDataSchema>;
 
 interface GeneralDataFormProps {
@@ -27,6 +26,7 @@ interface GeneralDataFormProps {
 
 export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataFormProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(true); // novo estado pra loading inicial
 
   const form = useForm({
     resolver: zodResolver(generalDataSchema),
@@ -44,10 +44,34 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
     }
   });
 
+  useEffect(() => {
+    async function fetchData() {
+        try {
+            const response = await fetch(`http://localhost:8000/v1/census?school_id=${schoolId}`);
+            if (response.ok) {
+                const result = await response.json();
+                if (result.data) {
+                    form.reset({
+                        ...form.getValues(),
+                        ...result.data
+                    });
+                }
+            }
+        } catch (error) {
+            console.error("erro ao buscar dados:", error);
+        } finally {
+            setIsFetching(false);
+        }
+    }
+
+    if (schoolId) {
+        fetchData();
+    }
+  }, [schoolId, form]);
+
   async function onSubmit(data: GeneralDataFormValues) {
     setIsLoading(true);
     try {
-      // envio o payload pro backend
       const response = await fetch("http://localhost:8000/v1/census", {
         method: "POST", 
         headers: { "Content-Type": "application/json" },
@@ -70,11 +94,14 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
     }
   }
 
+  if (isFetching) {
+      return <div className="text-center py-8 text-slate-500">Carregando dados salvos...</div>;
+  }
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         
-        {/* seção: prédio e anexos */}
         <div className="space-y-4">
             <h3 className="text-lg font-medium">Estrutura Física</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -93,7 +120,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
                 />
             </div>
 
-            {/* mostro detalhes se tiver anexo */}
             {form.watch("possui_anexos") === "Sim" && (
                 <div className="p-4 border rounded-md bg-slate-50 grid grid-cols-1 md:grid-cols-2 gap-6">
                     <NumberInput 
@@ -113,7 +139,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
 
         <Separator />
 
-        {/* seção: oferta de ensino */}
         <div className="space-y-4">
             <h3 className="text-lg font-medium">Oferta de Ensino</h3>
             
@@ -143,7 +168,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
 
         <Separator />
 
-        {/* seção: quantitativos */}
         <div className="space-y-4">
             <h3 className="text-lg font-medium">Quantitativos</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -161,7 +185,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
 
         <Separator />
 
-        {/* seção: perímetro e estrutura */}
         <div className="space-y-6">
             <h3 className="text-lg font-medium">Segurança e Estrutura</h3>
             
@@ -197,7 +220,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
 
         <Separator />
 
-        {/* seção: ambientes escolares */}
         <div className="space-y-4">
             <h3 className="text-lg font-medium">Ambientes Escolares</h3>
             <CheckboxGroup 
@@ -211,7 +233,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
                 ]} 
             />
             
-            {/* mostro detalhes da quadra se necessário */}
             {form.watch("ambientes")?.includes("Quadra Esportiva") && (
                 <div className="p-4 bg-slate-50 border rounded-md space-y-4">
                     <RadioInput control={form.control} name="quadra_coberta" label="A quadra é coberta?" options={["Sim", "Não"]} />
@@ -223,7 +244,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
 
         <Separator />
 
-        {/* seção: sanitários */}
         <div className="space-y-4">
             <h3 className="text-lg font-medium">Instalações Sanitárias</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -241,7 +261,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
 
         <Separator />
 
-         {/* seção: energia e climatização */}
          <div className="space-y-4">
             <h3 className="text-lg font-medium">Energia e Climatização</h3>
             <NumberInput control={form.control} name="salas_climatizadas" label="Qtd. Salas Climatizadas" />
@@ -285,7 +304,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
 
         <Separator />
 
-        {/* seção: segurança eletrônica */}
         <div className="space-y-4">
             <h3 className="text-lg font-medium">Segurança Eletrônica</h3>
             <RadioInput 

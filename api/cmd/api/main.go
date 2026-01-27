@@ -13,6 +13,7 @@ import (
 	"api/internal/models"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"github.com/rs/cors"
 )
 
 type config struct {
@@ -32,7 +33,6 @@ type application struct {
 func main() {
 	var cfg config
 
-	// carrega variaveis de ambiente
 	if err := godotenv.Load(); err != nil {
 		if err := godotenv.Load("../.env"); err != nil {
 			log.Println("aviso: arquivo .env nao encontrado")
@@ -72,14 +72,21 @@ func main() {
 		models: models.NewModels(db),
 	}
 
-	// rotas
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/schools", app.createSchoolHandler)
-	mux.HandleFunc("/v1/census", app.upsertCensusHandler) // rota nova
+	mux.HandleFunc("/v1/census", app.censusHandler)
+
+	// configuração básica de cors pra desenvolvimento
+	c := cors.New(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:3000"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization"},
+		AllowCredentials: true,
+	})
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.port),
-		Handler:      app.enableCORS(mux),
+		Handler:      c.Handler(mux), // <-- ENVOLVI O MUX NO CORS
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,

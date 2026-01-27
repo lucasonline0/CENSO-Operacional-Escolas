@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { schoolIdentificationSchema, SchoolIdentificationForm } from "@/schemas/school-census"; // Importa do novo arquivo de schemas
+import { schoolIdentificationSchema, SchoolIdentificationForm } from "@/schemas/school-census"; 
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -33,8 +33,6 @@ export function IdentificationForm({ onSuccess }: IdentificationFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
 
-  // nota: aqui estou usando o schema específico de identificação que criamos no census-schema.ts
-  // certifique-se que o import lá em cima esteja pegando do arquivo correto ou use o schema local se preferir manter separado
   const form = useForm<SchoolIdentificationForm>({
     resolver: zodResolver(schoolIdentificationSchema),
     defaultValues: {
@@ -47,6 +45,7 @@ export function IdentificationForm({ onSuccess }: IdentificationFormProps) {
     },
   });
 
+  // recupero o rascunho salvo no storage
   useEffect(() => {
     const savedData = localStorage.getItem(STORAGE_KEY);
     if (savedData) {
@@ -60,6 +59,7 @@ export function IdentificationForm({ onSuccess }: IdentificationFormProps) {
     setIsRestoring(false);
   }, [form]);
 
+  // salvo rascunho a cada alteração do form
   useEffect(() => {
     const subscription = form.watch((value) => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
@@ -67,6 +67,7 @@ export function IdentificationForm({ onSuccess }: IdentificationFormProps) {
     return () => subscription.unsubscribe();
   }, [form]);
 
+  // logica de filtros de municipio e dre
   const selectedMunicipio = form.watch("municipio");
   const selectedDre = form.watch("dre");
 
@@ -84,6 +85,7 @@ export function IdentificationForm({ onSuccess }: IdentificationFormProps) {
     return schoolData[selectedMunicipio][selectedDre].sort();
   }, [selectedMunicipio, selectedDre]);
 
+  // reseta campos dependentes se o pai mudar
   useEffect(() => {
     const currentDre = form.getValues("dre");
     if (selectedMunicipio && currentDre && !dres.includes(currentDre)) {
@@ -108,18 +110,24 @@ export function IdentificationForm({ onSuccess }: IdentificationFormProps) {
         body: JSON.stringify(data),
       });
 
-      if (!response.ok) throw new Error(await response.text());
+      // verifica resposta e lança erro com texto do backend
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "erro desconhecido no servidor");
+      }
 
       const result = await response.json();
       
       localStorage.removeItem(STORAGE_KEY);
       
-      // aqui está a mudança: aviso o pai que deu bom e passo o id
+      // notifica sucesso pro componente pai
       onSuccess(result.data.id);
 
     } catch (error) {
+      // tratamento de erro seguro sem usar any
       console.error(error);
-      alert("❌ erro ao salvar. verifica a api.");
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      alert(`erro ao salvar: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
@@ -130,9 +138,6 @@ export function IdentificationForm({ onSuccess }: IdentificationFormProps) {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        
-        {/* ... (mantive o layout igual, só removi o alert e o reset manual do submit para deixar o fluxo fluir) ... */}
-        {/* o conteúdo visual dos campos continua exatamente o mesmo do arquivo anterior */}
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <FormField

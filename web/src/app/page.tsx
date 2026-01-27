@@ -1,35 +1,85 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Stepper } from "@/components/ui/stepper";
 import { CENSUS_STEPS } from "@/config/steps";
 import { IdentificationForm } from "@/components/forms/identification-form";
 import { GeneralDataForm } from "@/components/forms/general-data-form";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+
+const STORAGE_KEY_SCHOOL_ID = "census_current_school_id";
+const STORAGE_KEY_STEP = "census_current_step";
 
 export default function CensusPage() {
   const [currentStep, setCurrentStep] = useState(0);
   const [schoolId, setSchoolId] = useState<number | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+        if (typeof window !== "undefined") {
+            const savedId = localStorage.getItem(STORAGE_KEY_SCHOOL_ID);
+            const savedStep = localStorage.getItem(STORAGE_KEY_STEP);
+
+            let hasId = false;
+
+            if (savedId && !isNaN(parseInt(savedId))) {
+                setSchoolId(parseInt(savedId));
+                hasId = true;
+            }
+            
+            if (hasId && savedStep && !isNaN(parseInt(savedStep))) {
+                setCurrentStep(parseInt(savedStep));
+            }
+        }
+        setIsInitialized(true);
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (isInitialized && schoolId) {
+      localStorage.setItem(STORAGE_KEY_SCHOOL_ID, schoolId.toString());
+    }
+  }, [schoolId, isInitialized]);
+
+  useEffect(() => {
+    if (isInitialized) {
+      localStorage.setItem(STORAGE_KEY_STEP, currentStep.toString());
+    }
+  }, [currentStep, isInitialized]);
 
   const handleStepClick = (index: number) => {
-    // só deixo navegar se já tiver criado a escola (schoolId existe)
-    if (schoolId) {
-      setCurrentStep(index);
-    }
+    if (schoolId) setCurrentStep(index);
   };
 
   const handleIdentificationSuccess = (id: number) => {
     setSchoolId(id);
-    setCurrentStep(1); // passo 1 -> passo 2
+    setCurrentStep(1); 
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  const handleReset = () => {
+    if (confirm("Deseja iniciar um novo censo? O progresso atual será limpo.")) {
+      localStorage.removeItem(STORAGE_KEY_SCHOOL_ID);
+      localStorage.removeItem(STORAGE_KEY_STEP);
+      localStorage.removeItem("censo_draft_identification_v1");
+      
+      setSchoolId(null);
+      setCurrentStep(0);
+      window.location.reload();
+    }
+  };
+
+  if (!isInitialized) return null;
 
   return (
     <div className="min-h-screen bg-slate-50/50">
       <div className="container mx-auto p-4 md:p-8">
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[280px_1fr]">
           
-          {/* menu lateral */}
           <aside className="hidden lg:block">
             <div className="sticky top-8 space-y-4">
               <div className="px-3 py-2">
@@ -43,17 +93,22 @@ export default function CensusPage() {
                     onStepClick={handleStepClick}
                   />
                 </div>
+                <div className="mt-8 px-4">
+                  <Button variant="ghost" size="sm" onClick={handleReset} className="text-xs text-slate-400 hover:text-red-500">
+                    Nova Escola / Limpar
+                  </Button>
+                </div>
               </div>
             </div>
           </aside>
 
-          {/* área principal */}
           <main className="space-y-6">
-            
-            {/* cabeçalho mobile */}
-            <div className="lg:hidden mb-6">
-                <h1 className="text-xl font-bold mb-2">Passo {currentStep + 1} de {CENSUS_STEPS.length}</h1>
-                <p className="text-slate-500">{CENSUS_STEPS[currentStep].title}</p>
+            <div className="lg:hidden mb-6 flex justify-between items-center">
+                <div>
+                  <h1 className="text-xl font-bold mb-2">Passo {currentStep + 1} de {CENSUS_STEPS.length}</h1>
+                  <p className="text-slate-500">{CENSUS_STEPS[currentStep].title}</p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={handleReset}>Recomeçar</Button>
             </div>
 
             <Card className="border-slate-200 shadow-sm">
@@ -67,24 +122,21 @@ export default function CensusPage() {
               </CardHeader>
               <CardContent className="p-6">
                 
-                {/* passo 1: identificação */}
                 {currentStep === 0 && (
                   <IdentificationForm onSuccess={handleIdentificationSuccess} />
                 )}
 
-                {/* passo 2: dados gerais e infra */}
                 {currentStep === 1 && schoolId && (
                     <GeneralDataForm 
                         schoolId={schoolId}
                         onSuccess={() => {
-                            setCurrentStep(2); // vai pro passo 3 (merenda)
+                            setCurrentStep(2); 
                             window.scrollTo({ top: 0, behavior: "smooth" });
                         }}
                         onBack={() => setCurrentStep(0)}
                     />
                 )}
 
-                {/* passos futuros: placeholder */}
                 {currentStep > 1 && (
                   <div className="flex flex-col items-center justify-center py-12 text-center text-slate-500">
                     <div className="mb-4 rounded-full bg-blue-50 p-3">
@@ -93,24 +145,13 @@ export default function CensusPage() {
                     <h3 className="text-lg font-medium text-slate-900">Em Desenvolvimento</h3>
                     <p>O formulário para <strong>{CENSUS_STEPS[currentStep].title}</strong> está sendo construído.</p>
                     <p className="mt-2 text-xs font-mono text-slate-400">Escola ID Vinculado: {schoolId}</p>
-                    
                     <div className="mt-8 flex gap-4">
-                        <button 
-                            onClick={() => setCurrentStep(prev => prev - 1)}
-                            className="text-sm text-blue-600 hover:underline"
-                        >
+                        <button onClick={() => setCurrentStep(prev => prev - 1)} className="text-sm text-blue-600 hover:underline">
                             ← Voltar
-                        </button>
-                        <button 
-                            onClick={() => setCurrentStep(prev => Math.min(prev + 1, CENSUS_STEPS.length - 1))}
-                            className="rounded bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300"
-                        >
-                            Pular (Debug)
                         </button>
                     </div>
                   </div>
                 )}
-
               </CardContent>
             </Card>
           </main>

@@ -1,14 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-
+/* eslint-disable @next/next/no-img-element */ 
 import { Stepper } from "@/components/ui/stepper";
 import { CENSUS_STEPS } from "@/config/steps";
 import { IdentificationForm } from "@/components/forms/identification-form";
 import { GeneralDataForm } from "@/components/forms/general-data-form";
+import { MerendaForm } from "@/components/forms/merenda-form"; 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ConfirmationModal } from "@/components/ui/confirmation-modal"; // <--- Importei o Modal
+import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 
 const STORAGE_KEY_SCHOOL_ID = "census_current_school_id";
 const STORAGE_KEY_STEP = "census_current_step";
@@ -17,7 +18,6 @@ export default function CensusPage() {
   const [currentStep, setCurrentStep] = useState(0);
   const [schoolId, setSchoolId] = useState<number | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
-  
   const [showResetModal, setShowResetModal] = useState(false);
 
   useEffect(() => {
@@ -73,6 +73,7 @@ export default function CensusPage() {
       localStorage.removeItem(STORAGE_KEY_SCHOOL_ID);
       localStorage.removeItem(STORAGE_KEY_STEP);
       localStorage.removeItem("censo_draft_identification_v1");
+      localStorage.removeItem("censo_draft_merenda_v1");
       
       setSchoolId(null);
       setCurrentStep(0);
@@ -83,8 +84,6 @@ export default function CensusPage() {
 
   return (
     <div className="min-h-screen pb-12">
-      
-      {/* Modal de Confirmação Integrado */}
       <ConfirmationModal 
         isOpen={showResetModal}
         onClose={() => setShowResetModal(false)}
@@ -186,7 +185,18 @@ export default function CensusPage() {
                     />
                 )}
 
-                {currentStep > 1 && (
+                {currentStep === 2 && schoolId && (
+                    <MerendaForm 
+                        schoolId={schoolId}
+                        onSuccess={() => {
+                            setCurrentStep(3); 
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        onBack={() => setCurrentStep(1)}
+                    />
+                )}
+
+                {currentStep > 2 && (
                   <div className="flex flex-col items-center justify-center py-12 text-center text-slate-500">
                     <div className="mb-4 rounded-full bg-blue-50/50 p-4 backdrop-blur-sm">
                       <span className="text-3xl">🚧</span>

@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { schoolData } from "@/data/schools"; 
 
 const STORAGE_KEY = "censo_draft_identification_v1";
@@ -30,19 +31,29 @@ interface IdentificationFormProps {
   initialId?: number | null; 
 }
 
+const turnosOptions = ["Manhã", "Tarde", "Noite", "Integral"];
+
 export function IdentificationForm({ onSuccess, initialId }: IdentificationFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
 
   const form = useForm<SchoolIdentificationForm>({
-    resolver: zodResolver(schoolIdentificationSchema),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(schoolIdentificationSchema) as any,
     defaultValues: {
       nome_escola: "",
       codigo_inep: "",
-      municipio: "",
-      zona: undefined,
-      dre: "",
+      cnpj: "",
       endereco: "",
+      telefone_institucional: "",
+      municipio: "",
+      cep: "",
+      zona: undefined,
+      nome_diretor: "",
+      matricula_diretor: "",
+      contato_diretor: "",
+      dre: "",
+      turnos: [],
     },
   });
 
@@ -80,7 +91,8 @@ export function IdentificationForm({ onSuccess, initialId }: IdentificationFormP
   }, [initialId, form]);
 
   useEffect(() => {
-    const subscription = form.watch((value) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const subscription = form.watch((value: any) => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
     });
     return () => subscription.unsubscribe();
@@ -118,7 +130,8 @@ export function IdentificationForm({ onSuccess, initialId }: IdentificationFormP
     }
   }, [selectedDre, escolas, form]);
 
-  async function onSubmit(data: SchoolIdentificationForm) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function onSubmit(data: any) {
     setIsLoading(true);
     try {
       const response = await fetch("http://localhost:8000/v1/schools", {
@@ -234,13 +247,134 @@ export function IdentificationForm({ onSuccess, initialId }: IdentificationFormP
           </div>
         </div>
 
+        {/* Novos Campos Conforme Lista */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <FormField
+              control={form.control}
+              name="cnpj"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>CNPJ (se houver)</FormLabel>
+                  <FormControl><Input placeholder="00.000.000/0000-00" {...field} value={field.value || ""} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="telefone_institucional"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Telefone Institucional</FormLabel>
+                  <FormControl><Input placeholder="(91) 00000-0000" {...field} value={field.value || ""} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+             <FormField
+              control={form.control}
+              name="cep"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>CEP *</FormLabel>
+                  <FormControl><Input placeholder="00000-000" maxLength={9} {...field} value={field.value || ""} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+        </div>
+
         <FormField
           control={form.control}
           name="endereco"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Endereço Completo *</FormLabel>
-              <FormControl><Input placeholder="Logradouro..." {...field} value={field.value || ""} /></FormControl>
+              <FormControl><Input placeholder="Logradouro, número, bairro..." {...field} value={field.value || ""} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="p-4 bg-slate-50 border rounded-md space-y-4">
+            <h4 className="font-medium text-slate-700">Dados do Diretor (Se houver)</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <FormField
+                    control={form.control}
+                    name="nome_diretor"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Nome do Diretor</FormLabel>
+                        <FormControl><Input {...field} value={field.value || ""} /></FormControl>
+                        </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control}
+                    name="matricula_diretor"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Matrícula</FormLabel>
+                        <FormControl><Input {...field} value={field.value || ""} /></FormControl>
+                        </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control}
+                    name="contato_diretor"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Contato (WhatsApp)</FormLabel>
+                        <FormControl><Input placeholder="(91) 9...." {...field} value={field.value || ""} /></FormControl>
+                        </FormItem>
+                    )}
+                />
+            </div>
+        </div>
+
+        <FormField
+          control={form.control}
+          name="turnos"
+          render={() => (
+            <FormItem>
+              <div className="mb-4">
+                <FormLabel className="text-base">Turnos de Funcionamento *</FormLabel>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {turnosOptions.map((turno) => (
+                  <FormField
+                    key={turno}
+                    control={form.control}
+                    name="turnos"
+                    render={({ field }) => {
+                      return (
+                        <FormItem
+                          key={turno}
+                          className="flex flex-row items-start space-x-3 space-y-0"
+                        >
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value?.includes(turno)}
+                              onCheckedChange={(checked) => {
+                                return checked
+                                  ? field.onChange([...field.value, turno])
+                                  : field.onChange(
+                                      field.value?.filter(
+                                        (value) => value !== turno
+                                      )
+                                    )
+                              }}
+                            />
+                          </FormControl>
+                          <FormLabel className="font-normal cursor-pointer">
+                            {turno}
+                          </FormLabel>
+                        </FormItem>
+                      )
+                    }}
+                  />
+                ))}
+              </div>
               <FormMessage />
             </FormItem>
           )}

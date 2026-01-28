@@ -1,24 +1,29 @@
 import { z } from "zod";
 
 export const schoolIdentificationSchema = z.object({
-  // Validações dos campos que eu já desenhei na tela
-  dre: z.string().min(1, "Selecione a DRE"),
-  municipio: z.string().min(1, "O município é obrigatório"),
-  nome_escola: z.string().min(3, "O nome da escola deve ter pelo menos 3 letras"),
-  codigo_inep: z.string().length(8, "O código INEP deve ter exatamente 8 dígitos"),
-  
-  // Garanto que só passa se for igual ao que coloquei no meu Select
-  zona: z.enum(["Urbana", "Rural", "Ribeirinha"], {
-    error: "Selecione a zona da escola",
-  }),
-  
-  endereco: z.string().min(5, "Digite o endereço completo"),
-  
-  // Deixei esses opcionais por enquanto pra não travar meu submit,
-  // já que ainda não fiz os inputs deles no front
-  dependencia_administrativa: z.string().optional(), 
-  telefone_institucional: z.string().optional(),
+  nome_escola: z.string().min(3, "Nome da escola é obrigatório"),
+  codigo_inep: z.string().length(8, "Código INEP deve ter 8 dígitos"),
+  // Conforme texto: "CNPJ (se houver)"
   cnpj: z.string().optional(),
+  endereco: z.string().min(5, "Endereço completo é obrigatório"),
+  telefone_institucional: z.string().optional(),
+  municipio: z.string().min(1, "Selecione um município"),
+  cep: z.string().min(8, "CEP obrigatório"),
+  
+  // Corrigido erro de Overload removendo objeto de erro customizado
+  zona: z.enum(["Urbana", "Rural", "Ribeirinha"]),
+  
+  // Dados do Diretor
+  nome_diretor: z.string().optional(),
+  matricula_diretor: z.string().optional(),
+  contato_diretor: z.string().optional(),
+  
+  dre: z.string().min(1, "Selecione a DRE/Setor"),
+  
+  // Turnos: Manhã, Tarde, Noite, Integral
+  turnos: z.array(z.string()).refine((value) => value.length > 0, {
+    message: "Selecione pelo menos um turno de funcionamento",
+  }),
 });
 
 export type SchoolIdentificationForm = z.infer<typeof schoolIdentificationSchema>;

@@ -7,6 +7,11 @@ import { CENSUS_STEPS } from "@/config/steps";
 import { IdentificationForm } from "@/components/forms/identification-form";
 import { GeneralDataForm } from "@/components/forms/general-data-form";
 import { MerendaForm } from "@/components/forms/merenda-form"; 
+import { ServicosGeraisForm } from "@/components/forms/servicos-gerais-form";
+import { PortariaForm } from "@/components/forms/portaria-form";
+import { TecnologiaForm } from "@/components/forms/tecnologia-form";
+import { ServidoresForm } from "@/components/forms/servidores-form";
+import { AlunosForm } from "@/components/forms/alunos-form";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
@@ -74,6 +79,11 @@ export default function CensusPage() {
       localStorage.removeItem(STORAGE_KEY_STEP);
       localStorage.removeItem("censo_draft_identification_v1");
       localStorage.removeItem("censo_draft_merenda_v1");
+      localStorage.removeItem("censo_draft_servicos_gerais_v1");
+      localStorage.removeItem("censo_draft_portaria_v1");
+      localStorage.removeItem("censo_draft_tecnologia_v1");
+      localStorage.removeItem("censo_draft_servidores_v1");
+      localStorage.removeItem("censo_draft_alunos_v1");
       
       setSchoolId(null);
       setCurrentStep(0);
@@ -196,7 +206,64 @@ export default function CensusPage() {
                     />
                 )}
 
-                {currentStep > 2 && (
+                {currentStep === 3 && schoolId && (
+                    <ServicosGeraisForm 
+                        schoolId={schoolId}
+                        onSuccess={() => {
+                            setCurrentStep(4);
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        onBack={() => setCurrentStep(2)}
+                    />
+                )}
+
+                {currentStep === 4 && schoolId && (
+                    <PortariaForm 
+                        schoolId={schoolId}
+                        onSuccess={() => {
+                            setCurrentStep(5);
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        onBack={() => setCurrentStep(3)}
+                    />
+                )}
+
+                {currentStep === 5 && schoolId && (
+                    <TecnologiaForm 
+                        schoolId={schoolId}
+                        onSuccess={() => {
+                            setCurrentStep(6);
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        onBack={() => setCurrentStep(4)}
+                    />
+                )}
+
+                {/* PASSO 7 - SERVIDORES */}
+                {currentStep === 6 && schoolId && (
+                    <ServidoresForm 
+                        schoolId={schoolId}
+                        onSuccess={() => {
+                            setCurrentStep(7);
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        onBack={() => setCurrentStep(5)}
+                    />
+                )}
+
+                {/* PASSO 8 - PERFIL DOS ALUNOS */}
+                {currentStep === 7 && schoolId && (
+                    <AlunosForm 
+                        schoolId={schoolId}
+                        onSuccess={() => {
+                            setCurrentStep(8);
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        onBack={() => setCurrentStep(6)}
+                    />
+                )}
+
+                {currentStep > 7 && (
                   <div className="flex flex-col items-center justify-center py-12 text-center text-slate-500">
                     <div className="mb-4 rounded-full bg-blue-50/50 p-4 backdrop-blur-sm">
                       <span className="text-3xl">🚧</span>

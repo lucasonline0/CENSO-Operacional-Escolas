@@ -15,7 +15,6 @@ import { AlunosForm } from "@/components/forms/alunos-form";
 import { GestaoForm } from "@/components/forms/gestao-form";
 import { AvaliacaoForm } from "@/components/forms/avaliacao-form";
 import { ObservacoesForm } from "@/components/forms/observacoes-form";
-import { AutoFiller } from "@/dev/auto-filler"; 
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

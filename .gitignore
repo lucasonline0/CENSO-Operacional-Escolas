@@ -23,3 +23,7 @@ api/dist
 credentials.json
 key.json
 *.key
+
+# Dev Tools (Tests)
+src/dev/
+web/src/dev/auto-filler.tsx

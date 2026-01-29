@@ -18,3 +18,8 @@ api/dist
 *.log
 .DS_Store
 .vscode
+
+# Google Credentials
+credentials.json
+key.json
+*.key

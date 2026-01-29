@@ -7,8 +7,8 @@ import { avaliacaoSchema, AvaliacaoFormValues } from "@/schemas/steps/avaliacao"
 import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
 import { RadioInput } from "@/components/ui/form-components";
+import { useCensusPersistence } from "@/hooks/use-census-persistence";
 
-const STORAGE_KEY = "censo_draft_avaliacao_v1";
 const OPCOES = ["Ruim", "Regular", "Bom", "Excelente"];
 
 interface AvaliacaoFormProps {
@@ -18,8 +18,7 @@ interface AvaliacaoFormProps {
 }
 
 export function AvaliacaoForm({ schoolId, onSuccess, onBack }: AvaliacaoFormProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [isFetching, setIsFetching] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
   const form = useForm<AvaliacaoFormValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,55 +26,25 @@ export function AvaliacaoForm({ schoolId, onSuccess, onBack }: AvaliacaoFormProp
     defaultValues: {}
   });
 
-  useEffect(() => {
-    async function fetchData() {
-        let serverData = null;
-        try {
-            const response = await fetch(`http://localhost:8000/v1/schools?id=${schoolId}`);
-            if (!response.ok) {
-                 const resCenso = await fetch(`http://localhost:8000/v1/census?school_id=${schoolId}`);
-                 if (resCenso.ok) {
-                    const result = await resCenso.json();
-                    if (result.data) serverData = result.data;
-                 }
-            } else {
-                const result = await response.json();
-                if (result.data) serverData = result.data;
-            }
-        } catch (error) {
-            console.error(error);
-        }
-
-        const savedDraft = localStorage.getItem(STORAGE_KEY);
-        let draftData = null;
-        if (savedDraft) {
-             try { draftData = JSON.parse(savedDraft); } catch (e) { console.error(e); }
-        }
-
-        const mergedData = {
-            ...form.getValues(),
-            ...(serverData || {}),
-            ...(draftData || {}) 
-        };
-
-        form.reset(mergedData);
-        setIsFetching(false);
-    }
-    if (schoolId) fetchData();
-  }, [schoolId, form]);
+  const { isLoading, saveLocalDraft, clearLocalDraft } = useCensusPersistence(
+    schoolId,
+    "avaliacao",
+    form.reset,
+    form.getValues()
+  );
 
   useEffect(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const subscription = form.watch((value: any) => {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
-      });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return () => (subscription as any).unsubscribe();
-  }, [form]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const subscription = form.watch((value: any) => {
+        saveLocalDraft(value);
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return () => (subscription as any).unsubscribe();
+  }, [form, saveLocalDraft]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function onSubmit(data: any) {
-    setIsLoading(true);
+    setIsSaving(true);
     try {
       const response = await fetch("http://localhost:8000/v1/census", {
         method: "POST", 
@@ -89,17 +58,17 @@ export function AvaliacaoForm({ schoolId, onSuccess, onBack }: AvaliacaoFormProp
       });
 
       if (!response.ok) throw new Error("erro ao salvar");
-      localStorage.removeItem(STORAGE_KEY);
+      clearLocalDraft();
       onSuccess();
     } catch (error) {
       console.error(error);
       alert("erro ao salvar dados.");
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   }
 
-  if (isFetching) return <div className="text-center py-8 text-slate-500">Carregando...</div>;
+  if (isLoading) return <div className="text-center py-8 text-slate-500">Carregando Avaliação...</div>;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const control = form.control as any;
@@ -125,7 +94,7 @@ export function AvaliacaoForm({ schoolId, onSuccess, onBack }: AvaliacaoFormProp
                 ← Voltar
             </Button>
             <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                {isLoading ? "Salvando..." : "Salvar e Continuar →"}
+                {isSaving ? "Salvando..." : "Salvar e Continuar →"}
             </Button>
         </div>
       </form>

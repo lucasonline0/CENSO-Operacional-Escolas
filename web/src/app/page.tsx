@@ -15,6 +15,7 @@ import { AlunosForm } from "@/components/forms/alunos-form";
 import { GestaoForm } from "@/components/forms/gestao-form";
 import { AvaliacaoForm } from "@/components/forms/avaliacao-form";
 import { ObservacoesForm } from "@/components/forms/observacoes-form";
+import { AutoFiller } from "@/dev/auto-filler"; 
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -120,6 +121,8 @@ export default function CensusPage() {
 
   return (
     <div className="min-h-screen pb-12">
+      <AutoFiller />
+
       <ConfirmationModal 
         isOpen={showResetModal}
         onClose={() => setShowResetModal(false)}

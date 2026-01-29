@@ -1,49 +1,45 @@
 import { z } from "zod";
 
 export const merendaSchema = z.object({
+  // Estrutura
   condicoes_cozinha: z.enum(["Boa", "Regular", "Precária"]),
   tamanho_cozinha: z.enum(["Pequena", "Média", "Grande"]),
-  oferta_regular: z.enum(["Sim", "Sim, com falhas", "Não"]),
-  qualidade_merenda: z.enum(["Sim", "Regular", "Ruim"]),
-  atende_necessidades: z.enum(["Sim", "Parcialmente", "Não"]),
-  possui_refeitorio: z.enum(["Sim", "Não"]),
-  refeitorio_adequado: z.enum(["Sim", "Não"]).optional(),
-  possui_balanca: z.enum(["Sim", "Não"]),
+  oferta_regular: z.string().min(1, "Informe a regularidade"),
+  qualidade_merenda: z.string().min(1, "Informe a qualidade"),
+  atende_necessidades: z.string().min(1, "Atende às necessidades?"),
+  possui_refeitorio: z.string().min(1, "Possui refeitório?"),
+  refeitorio_adequado: z.string().optional(),
+  possui_balanca: z.string().optional(),
 
-  qtd_freezers: z.coerce.number().min(0).default(0),
-  estado_freezers: z.enum(["Bom – funcionando plenamente", "Regular – funciona, com limitações", "Ruim – funcionamento comprometido", "Inoperante"]).optional(),
-  
-  qtd_geladeiras: z.coerce.number().min(0).default(0),
-  estado_geladeiras: z.enum(["Bom – funcionando plenamente", "Regular – funciona, com limitações", "Ruim – funcionamento comprometido", "Inoperante"]).optional(),
-  
-  qtd_fogoes: z.coerce.number().min(0).default(0),
-  estado_fogoes: z.enum(["Bom – funcionando plenamente", "Regular – funciona, com limitações", "Ruim – funcionamento comprometido", "Inoperante"]).optional(),
-  
-  qtd_fornos: z.coerce.number().min(0).default(0),
-  estado_fornos: z.enum(["Bom – funcionando plenamente", "Regular – funciona, com limitações", "Ruim – funcionamento comprometido", "Inoperante"]).optional(),
-  
-  qtd_bebedouros: z.coerce.number().min(0).default(0),
-  estado_bebedouros: z.enum(["Bom – funcionando plenamente", "Regular – funciona, com limitações", "Ruim – funcionamento comprometido", "Inoperante"]).optional(),
+  // Inventário
+  qtd_freezers: z.coerce.number(),
+  estado_freezers: z.string().optional(),
+  qtd_geladeiras: z.coerce.number(),
+  estado_geladeiras: z.string().optional(),
+  qtd_fogoes: z.coerce.number(),
+  estado_fogoes: z.string().optional(),
+  qtd_fornos: z.coerce.number(),
+  estado_fornos: z.string().optional(),
+  qtd_bebedouros: z.coerce.number(),
+  estado_bebedouros: z.string().optional(),
 
-  bancadas_inox: z.enum(["Sim", "Não"]),
-  sistema_exaustao: z.enum(["Sim", "Não"]),
-  despensa_exclusiva: z.enum(["Sim", "Não"]),
-  deposito_conserva: z.enum(["Sim", "Parcialmente", "Não"]),
-  estoque_epi_extintor: z.enum(["Completo", "Parcial", "Inexistente"]),
-  manutencao_extintores: z.enum(["Está na validade", "Validade vencida"]).optional(),
+  bancadas_inox: z.string().optional(),
+  sistema_exaustao: z.string().optional(),
+  despensa_exclusiva: z.string().optional(),
+  deposito_conserva: z.string().optional(),
+  estoque_epi_extintor: z.string().optional(),
+  manutencao_extintores: z.string().optional(),
 
-  qtd_merendeiras_estatutaria: z.coerce.number().min(0).default(0),
-  qtd_merendeiras_terceirizada: z.coerce.number().min(0).default(0),
-  qtd_merendeiras_temporaria: z.coerce.number().min(0).default(0),
-  qtd_atende_necessidade: z.enum(["Sim", "Não"]),
+  // Equipe (Renomeado)
+  qtd_merendeiras_estatutaria: z.coerce.number(),
+  qtd_merendeiras_terceirizada: z.coerce.number(),
+  qtd_merendeiras_temporaria: z.coerce.number(),
   
-  empresa_terceirizada: z.enum([
-    "AJ LOURENÇO", "DIAMOND", "E.B CARDOSO", "J.R LIMPEZA", 
-    "KAPA CAPITAL", "LG SERVIÇOS", "LIMPAR", "SAP - SERVICE ALIANCA PARA", "Outra"
-  ]).optional(),
-  
-  possui_supervisor: z.enum(["Sim", "Não"]),
-  nome_supervisor: z.string().optional(),
+  qtd_atende_necessidade_merenda: z.string().min(1, "A quantidade atende?"),
+  empresa_terceirizada_merenda: z.string().optional(),
+  possui_supervisor_merenda: z.string().optional(),
+  nome_supervisor_merenda: z.string().optional(),
+  contato_supervisor_merenda: z.string().optional(),
 });
 
 export type MerendaFormValues = z.infer<typeof merendaSchema>;

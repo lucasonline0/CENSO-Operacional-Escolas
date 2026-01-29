@@ -4,165 +4,180 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"api/internal/models"
+	"time"
+
+	"censo-api/internal/models"
+	"censo-api/internal/services"
 )
 
-func (app *application) schoolsHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		app.getSchool(w, r)
-	case http.MethodPost:
-		app.createSchool(w, r)
-	default:
-		http.Error(w, "método não permitido", http.StatusMethodNotAllowed)
-	}
-}
+// NOTA: HealthCheck movido para healthcheck.go
 
-func (app *application) getSchool(w http.ResponseWriter, r *http.Request) {
+func (app *application) GetSchools(w http.ResponseWriter, r *http.Request) {
 	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		http.Error(w, "id obrigatório", http.StatusBadRequest)
+
+	if idStr != "" {
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			app.errorJSON(w, err)
+			return
+		}
+
+		school, err := app.models.Schools.Get(id)
+		if err != nil {
+			app.errorJSON(w, err)
+			return
+		}
+
+		payload := jsonResponse{
+			Error: false,
+			Data:  school,
+		}
+		app.writeJSON(w, http.StatusOK, payload)
 		return
 	}
 
-	id, err := strconv.Atoi(idStr)
+	schools, err := app.models.Schools.GetAll()
 	if err != nil {
-		http.Error(w, "id inválido", http.StatusBadRequest)
+		app.errorJSON(w, err)
 		return
 	}
 
-	school, err := app.models.Schools.Get(id)
-	if err != nil {
-		http.Error(w, "escola não encontrada", http.StatusNotFound)
-		return
+	payload := jsonResponse{
+		Error: false,
+		Data:  schools,
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"status": "success",
-		"data":   school,
-	})
+	app.writeJSON(w, http.StatusOK, payload)
 }
 
-func (app *application) createSchool(w http.ResponseWriter, r *http.Request) {
-	var input struct {
-		Nome      string `json:"nome_escola"`
-		INEP      string `json:"codigo_inep"`
-		Municipio string `json:"municipio"`
-		Dre       string `json:"dre"`
-		Zona      string `json:"zona"`
-		Endereco  string `json:"endereco"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "erro ao ler json: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	school := models.School{
-		Nome:      input.Nome,
-		INEP:      input.INEP,
-		Municipio: input.Municipio,
-		Dre:       input.Dre,
-		Zona:      input.Zona,
-		Endereco:  input.Endereco,
-	}
-
-	id, err := app.models.Schools.Insert(school)
+func (app *application) CreateSchool(w http.ResponseWriter, r *http.Request) {
+	var req models.School
+	
+	err := app.readJSON(w, r, &req)
 	if err != nil {
-		app.logger.Println("erro ao inserir no banco:", err)
-		http.Error(w, "erro ao salvar dados.", http.StatusInternalServerError)
+		app.errorJSON(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"status": "success",
-		"data": map[string]int{
-			"id": id,
-		},
-	})
-}
-
-func (app *application) censusHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		app.getCensus(w, r)
-	case http.MethodPost:
-		app.upsertCensus(w, r)
-	default:
-		http.Error(w, "método não permitido", http.StatusMethodNotAllowed)
+	id, err := app.models.Schools.Insert(req)
+	if err != nil {
+		app.errorJSON(w, err)
+		return
 	}
+
+	req.ID = id
+	payload := jsonResponse{
+		Error:   false,
+		Message: "Escola criada com sucesso",
+		Data:    req,
+	}
+
+	app.writeJSON(w, http.StatusCreated, payload)
 }
 
-func (app *application) getCensus(w http.ResponseWriter, r *http.Request) {
+func (app *application) GetCenso(w http.ResponseWriter, r *http.Request) {
 	schoolIDStr := r.URL.Query().Get("school_id")
 	if schoolIDStr == "" {
-		http.Error(w, "school_id é obrigatório", http.StatusBadRequest)
+		app.errorJSON(w, nil, http.StatusBadRequest)
 		return
 	}
 
-	schoolID, err := strconv.Atoi(schoolIDStr)
+	schoolID, _ := strconv.Atoi(schoolIDStr)
+	censo, err := app.models.Census.GetBySchoolID(schoolID, 2026)
 	if err != nil {
-		http.Error(w, "school_id inválido", http.StatusBadRequest)
+		payload := jsonResponse{Error: false, Data: nil}
+		app.writeJSON(w, http.StatusOK, payload)
+		return
+	}
+	if censo == nil {
+		payload := jsonResponse{Error: false, Data: nil}
+		app.writeJSON(w, http.StatusOK, payload)
 		return
 	}
 
-	census, err := app.models.Census.GetBySchoolID(schoolID, 2026)
-	if err != nil {
-		app.logger.Println("erro ao buscar censo:", err)
-		http.Error(w, "erro interno", http.StatusInternalServerError)
-		return
+	payload := jsonResponse{
+		Error: false,
+		Data:  censo.Data,
 	}
-
-	if census == nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"data": {}}`))
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(census)
+	app.writeJSON(w, http.StatusOK, payload)
 }
 
-func (app *application) upsertCensus(w http.ResponseWriter, r *http.Request) {
-	var input struct {
+func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Request) {
+	var req struct {
 		SchoolID int             `json:"school_id"`
 		Year     int             `json:"year"`
 		Status   string          `json:"status"`
 		Data     json.RawMessage `json:"data"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "erro ao ler json: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if input.SchoolID == 0 {
-		http.Error(w, "school_id obrigatorio", http.StatusBadRequest)
-		return
-	}
-	if input.Year == 0 {
-		input.Year = 2026
-	}
-
-	response := models.CensusResponse{
-		SchoolID: input.SchoolID,
-		Year:     input.Year,
-		Status:   input.Status,
-		Data:     input.Data,
-	}
-
-	err := app.models.Census.Upsert(response)
+	err := app.readJSON(w, r, &req)
 	if err != nil {
-		app.logger.Println("erro ao salvar censo:", err)
-		http.Error(w, "erro interno ao salvar", http.StatusInternalServerError)
+		app.errorJSON(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"status": "success", 
-		"message": "dados salvos com sucesso",
-	})
+	existingCenso, err := app.models.Census.GetBySchoolID(req.SchoolID, 2026)
+	var finalData []byte
+
+	if err == nil && existingCenso != nil {
+		var oldMap map[string]interface{}
+		var newMap map[string]interface{}
+		_ = json.Unmarshal(existingCenso.Data, &oldMap)
+		_ = json.Unmarshal(req.Data, &newMap)
+
+		if oldMap == nil { oldMap = make(map[string]interface{}) }
+		for k, v := range newMap {
+			oldMap[k] = v
+		}
+		finalData, _ = json.Marshal(oldMap)
+	} else {
+		finalData = req.Data
+	}
+
+	censo := models.CensusResponse{
+		SchoolID:  req.SchoolID,
+		Year:      req.Year,
+		Status:    req.Status,
+		Data:      finalData,
+		UpdatedAt: time.Now(),
+	}
+
+	err = app.models.Census.Upsert(censo)
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	if req.Status == "completed" {
+		go func(c models.CensusResponse) {
+			// 1. Busca os dados da Escola no banco para ter Nome, INEP, etc.
+			school, err := app.models.Schools.Get(c.SchoolID)
+			if err != nil {
+				app.logger.Println("Erro ao buscar escola para planilha:", err)
+				return
+			}
+
+			// 2. Inicializa o serviço
+			sheetsService, err := services.NewSheetsService()
+			if err != nil {
+				app.logger.Println("Erro ao inicializar Sheets:", err)
+				return
+			}
+			
+			// 3. Envia AMBOS (Censo + Dados da Escola) para a planilha
+			err = sheetsService.AppendCenso(c, *school)
+			if err != nil {
+				app.logger.Println("Erro ao salvar na planilha:", err)
+			} else {
+				app.logger.Println("Sucesso: Dados enviados para a planilha para a escola ID", c.SchoolID)
+			}
+		}(censo)
+	}
+
+	payload := jsonResponse{
+		Error:   false,
+		Message: "Censo salvo com sucesso",
+		Data:    censo,
+	}
+
+	app.writeJSON(w, http.StatusOK, payload)
 }

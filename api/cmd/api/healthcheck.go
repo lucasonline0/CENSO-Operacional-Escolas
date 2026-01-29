@@ -1,15 +1,12 @@
 package main
 
-import (
-	"net/http"
-)
+import "net/http"
 
-func (app *application) healthcheckHandler(w http.ResponseWriter, _ *http.Request) {
-	data := map[string]string{
-		"status":      "available",
-		"environment": "development",
-		"version":     "1.0.0",
+func (app *application) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	payload := jsonResponse{
+		Error:   false,
+		Message: "system operational",
 	}
 
-	app.writeJSON(w, http.StatusOK, envelope{"healthcheck": data}, nil)
+	app.writeJSON(w, http.StatusOK, payload)
 }

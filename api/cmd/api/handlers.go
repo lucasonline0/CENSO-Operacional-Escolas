@@ -95,7 +95,7 @@ func (app *application) GetCenso(w http.ResponseWriter, r *http.Request) {
 
 	schoolID, _ := strconv.Atoi(schoolIDStr)
 	censo, err := app.models.Census.GetBySchoolID(schoolID, 2026)
-
+	
 	if err != nil || censo == nil {
 		payload := jsonResponse{Error: false, Data: nil}
 		app.writeJSON(w, http.StatusOK, payload)

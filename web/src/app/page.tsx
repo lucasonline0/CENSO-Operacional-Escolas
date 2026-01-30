@@ -15,7 +15,8 @@ import { AvaliacaoForm } from "@/components/forms/avaliacao-form";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { Card } from "@/components/ui/card";
 import { Stepper } from "@/components/ui/stepper";
-import { STEPS } from "@/config/steps";
+// CORREÇÃO: Importando o nome correto sugerido pelo erro
+import { CENSUS_STEPS as STEPS } from "@/config/steps";
 
 export default function Home() {
   const [currentStep, setCurrentStep] = useState(0);

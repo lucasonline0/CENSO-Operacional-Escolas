@@ -22,33 +22,37 @@ func NewDriveService() (*DriveService, error) {
 	if envCreds != "" {
 		creds = []byte(envCreds)
 	} else {
-		fileCreds, err := os.ReadFile("credentials.json")
-		if err != nil {
-			return nil, fmt.Errorf("erro ao ler credenciais: %v", err)
+		paths := []string{"credentials.json", "../credentials.json", "../../credentials.json"}
+		var err error
+		for _, path := range paths {
+			creds, err = os.ReadFile(path)
+			if err == nil {
+				break
+			}
 		}
-		creds = fileCreds
+		if len(creds) == 0 {
+			return nil, fmt.Errorf("credenciais não encontradas (env ou arquivo)")
+		}
 	}
 
-	srv, err := drive.NewService(ctx, option.WithCredentialsJSON(creds))
+	srv, err := drive.NewService(ctx, option.WithCredentialsJSON(creds), option.WithScopes(drive.DriveScope))
 	if err != nil {
-		return nil, fmt.Errorf("erro ao criar cliente Drive: %v", err)
+		return nil, fmt.Errorf("erro criar cliente drive: %v", err)
 	}
 
 	return &DriveService{srv: srv}, nil
 }
 
-// UploadSchoolPhoto gerencia a criação da pasta e o upload
 func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, fileContent io.Reader) (string, error) {
 	rootFolderID := os.Getenv("DRIVE_ROOT_FOLDER_ID")
 	if rootFolderID == "" {
 		return "", fmt.Errorf("DRIVE_ROOT_FOLDER_ID não configurado")
 	}
 
-	// 1. Verificar se a pasta da escola já existe dentro da Raiz
 	query := fmt.Sprintf("name = '%s' and '%s' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false", folderName, rootFolderID)
 	list, err := s.srv.Files.List().Q(query).Fields("files(id)").Do()
 	if err != nil {
-		return "", fmt.Errorf("erro ao buscar pasta: %v", err)
+		return "", fmt.Errorf("erro buscar pasta: %v", err)
 	}
 
 	var schoolFolderID string
@@ -56,7 +60,6 @@ func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, fil
 	if len(list.Files) > 0 {
 		schoolFolderID = list.Files[0].Id
 	} else {
-		// 2. Criar a pasta se não existir
 		folderMetadata := &drive.File{
 			Name:     folderName,
 			Parents:  []string{rootFolderID},
@@ -64,12 +67,11 @@ func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, fil
 		}
 		folder, err := s.srv.Files.Create(folderMetadata).Fields("id").Do()
 		if err != nil {
-			return "", fmt.Errorf("erro ao criar pasta: %v", err)
+			return "", fmt.Errorf("erro criar pasta: %v", err)
 		}
 		schoolFolderID = folder.Id
 	}
 
-	// 3. Fazer Upload do Arquivo
 	fileMetadata := &drive.File{
 		Name:    fileName,
 		Parents: []string{schoolFolderID},
@@ -77,7 +79,7 @@ func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, fil
 
 	uploadedFile, err := s.srv.Files.Create(fileMetadata).Media(fileContent).Fields("id, webViewLink").Do()
 	if err != nil {
-		return "", fmt.Errorf("erro ao fazer upload do arquivo: %v", err)
+		return "", fmt.Errorf("erro upload arquivo: %v", err)
 	}
 
 	return uploadedFile.WebViewLink, nil

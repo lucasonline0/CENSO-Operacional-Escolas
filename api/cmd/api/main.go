@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"censo-api/internal/models"
-	"censo-api/internal/services" // Importando serviços (Drive e Sheets)
+	"censo-api/internal/services" 
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -32,52 +32,63 @@ type application struct {
 	config config
 	logger *log.Logger
 	models models.Models
-	sheets *services.SheetsService // Serviço de Planilhas
-	drive  *services.DriveService  // Serviço de Drive (Novo)
+	sheets *services.SheetsService
+	drive  *services.DriveService
 }
 
 func main() {
 	logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
 
-	err := godotenv.Load("../.env")
-	if err != nil {
-		if err := godotenv.Load("../../.env"); err != nil {
-			logger.Println("Aviso: Arquivo .env não encontrado. O sistema tentará usar variáveis de ambiente do SO.")
-		}
-	}
+	_ = godotenv.Load(".env")
+	_ = godotenv.Load("../.env")
+	_ = godotenv.Load("../../.env")
+	_ = godotenv.Load("../../../.env")
 
 	var cfg config
 	cfg.port = 8000
 	cfg.env = "development"
 
-	dbHost := os.Getenv("DB_HOST")
-	dbPort := os.Getenv("DB_PORT")
-	dbUser := os.Getenv("DB_USER")
-	dbPass := os.Getenv("DB_PASSWORD")
-	dbName := os.Getenv("DB_NAME")
-
-	if dbHost == "" || dbUser == "" || dbPass == "" || dbName == "" {
-		logger.Fatal("Erro: Variáveis de ambiente de banco de dados (DB_HOST, DB_USER, DB_PASSWORD, DB_NAME) não estão configuradas.")
+	// Prioriza a variável do Railway (DB_DSN)
+	dsn := os.Getenv("DB_DSN")
+	if dsn == "" {
+		dsn = os.Getenv("DATABASE_URL")
 	}
 
-	cfg.db.dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable timezone=UTC connect_timeout=5",
-		dbHost, dbPort, dbUser, dbPass, dbName)
+	// Fallback para construção manual (Dev local)
+	if dsn == "" {
+		dbHost := os.Getenv("DB_HOST")
+		dbPort := os.Getenv("DB_PORT")
+		dbUser := os.Getenv("DB_USER")
+		dbPass := os.Getenv("DB_PASSWORD")
+		dbName := os.Getenv("DB_NAME")
+
+		if dbHost != "" && dbUser != "" {
+			dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable timezone=UTC connect_timeout=5",
+				dbHost, dbPort, dbUser, dbPass, dbName)
+		}
+	}
+
+	if dsn == "" {
+		logger.Fatal("Erro: DB_DSN ou variáveis de banco não configuradas.")
+	}
+	cfg.db.dsn = dsn
 
 	db, err := openDB(cfg)
 	if err != nil {
-		logger.Fatal(err)
+		logger.Fatal("Erro fatal conectar banco:", err)
 	}
 	defer db.Close()
 
-	// Inicializa serviços externos
 	sheetsService, err := services.NewSheetsService()
 	if err != nil {
-		logger.Println("Aviso: Falha ao inicializar SheetsService (verifique credenciais):", err)
+		logger.Println("Aviso: Falha init SheetsService:", err)
 	}
 
 	driveService, err := services.NewDriveService()
 	if err != nil {
-		logger.Println("Aviso: Falha ao inicializar DriveService (verifique credenciais):", err)
+		logger.Println("Aviso: Falha init DriveService:", err)
+	} else {
+		logger.Println("DriveService iniciado.")
 	}
 
 	app := &application{
@@ -96,7 +107,7 @@ func main() {
 		WriteTimeout: 30 * time.Second,
 	}
 
-	logger.Printf("Starting %s server on %d", cfg.env, cfg.port)
+	logger.Printf("Servidor %s rodando porta %d", cfg.env, cfg.port)
 	err = srv.ListenAndServe()
 	logger.Fatal(err)
 }
@@ -135,7 +146,6 @@ func (app *application) routes() http.Handler {
 	mux.Get("/v1/census", app.GetCenso)
 	mux.Post("/v1/census", app.CreateOrUpdateCenso)
 
-	// Rota de Upload de Fotos
 	mux.Post("/v1/upload", app.uploadPhoto)
 
 	return mux

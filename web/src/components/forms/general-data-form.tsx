@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { SelectInput, RadioInput, NumberInput, TextInput } from "@/components/ui/form-components";
 import { Separator } from "@/components/ui/separator";
 import { useCensusPersistence } from "@/hooks/use-census-persistence";
+import { Input } from "@/components/ui/input"; // Importante para o input file
 
 interface GeneralDataFormProps {
   schoolId: number;
@@ -19,6 +20,9 @@ interface GeneralDataFormProps {
 
 export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataFormProps) {
   const [isSaving, setIsSaving] = useState(false);
+  // Estados para o Upload
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState("");
 
   const form = useForm<GeneralDataFormValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,7 +45,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
         banheiros_prof: 0, 
         banheiros_chuveiro: 0, 
         salas_climatizadas: 0, 
-        qtd_salas_aula: 0, // Adicionado para satisfazer o esquema
+        qtd_salas_aula: 0,
     }
   });
 
@@ -54,11 +58,43 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
     return () => subscription.unsubscribe();
   }, [form, saveLocalDraft]);
 
+  // Função de Upload (Reintegrada)
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    
+    setIsUploading(true);
+    setUploadMessage("");
+    const file = e.target.files[0];
+    const formData = new FormData();
+    formData.append("photo", file);
+    formData.append("school_id", schoolId.toString());
+
+    try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/upload`, {
+            method: "POST",
+            body: formData,
+        });
+
+        if (response.ok) {
+            setUploadMessage("✅ Foto enviada com sucesso!");
+            // Limpa o input para permitir enviar a mesma foto se necessário ou outra
+            e.target.value = "";
+        } else {
+            setUploadMessage("❌ Erro ao enviar foto.");
+        }
+    } catch (error) {
+        console.error(error);
+        setUploadMessage("❌ Erro de conexão.");
+    } finally {
+        setIsUploading(false);
+    }
+  };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function onSubmit(data: any) {
     setIsSaving(true);
     try {
-      const response = await fetch("http://localhost:8000/v1/census", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/census`, {
         method: "POST", 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ school_id: schoolId, year: 2026, status: "draft", data: data }),
@@ -155,6 +191,24 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
                 <RadioInput control={control} name="perimetro_fechado" label="O muro ou cerca fecham todo o perímetro?" options={["Sim, totalmente", "Parcialmente", "Não"]} />
             )}
             <SelectInput control={control} name="situacao_estrutura" label="Situação da estrutura da escola" options={["Necessita de reforma geral", "Necessita de reforma parcial (melhoria pontual)", "Reforma em andamento", "Está em reforma, porém a obra está parada", "Foi reformada recentemente"]} />
+            
+            {/* ÁREA DE UPLOAD (REINTEGRADA AQUI) */}
+            <div className="p-4 border border-dashed border-blue-300 rounded-md bg-blue-50/50 text-center">
+                <p className="text-sm text-slate-700 mb-2 font-medium">Anexar Fotos para Análise</p>
+                <div className="max-w-xs mx-auto">
+                    <Input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleFileUpload} 
+                        disabled={isUploading}
+                        className="bg-white"
+                    />
+                </div>
+                {isUploading && <p className="text-xs text-blue-600 mt-2 animate-pulse">Enviando para o Google Drive...</p>}
+                {uploadMessage && <p className={`text-xs mt-2 font-bold ${uploadMessage.includes("sucesso") ? "text-green-600" : "text-red-600"}`}>{uploadMessage}</p>}
+                <p className="text-xs text-slate-400 mt-2">As fotos serão salvas na pasta da escola.</p>
+            </div>
+
             <TextInput control={control} name="data_ultima_reforma" label="Data da última reforma (dd/mm/aaaa)" placeholder="dd/mm/aaaa" />
         </div>
         <Separator />

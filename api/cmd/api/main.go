@@ -39,27 +39,23 @@ type application struct {
 func main() {
 	logger := log.New(os.Stdout, "[CENSO-API] ", log.Ldate|log.Ltime|log.Lshortfile)
 
-	// Carrega .env localmente (ignorado em produção)
 	_ = godotenv.Load()
 	_ = godotenv.Load("../.env")
 	_ = godotenv.Load("../../.env")
 
 	var cfg config
 	
-	// Porta Railway
 	cfg.port = os.Getenv("PORT")
 	if cfg.port == "" {
 		cfg.port = "8000"
 	}
 	cfg.env = "production"
 
-	// Banco de Dados
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		dsn = os.Getenv("DB_DSN")
 	}
 
-	// Fallback Local
 	if dsn == "" {
 		dbHost := os.Getenv("DB_HOST")
 		if dbHost != "" {
@@ -73,7 +69,6 @@ func main() {
 	}
 	cfg.db.dsn = dsn
 
-	// Conexão DB
 	logger.Println("Iniciando conexão com banco...")
 	db, err := openDB(cfg)
 	if err != nil {
@@ -82,7 +77,6 @@ func main() {
 	defer db.Close()
 	logger.Println("Banco conectado!")
 
-	// Inicializa serviços
 	sheetsService, err := services.NewSheetsService()
 	if err != nil {
 		logger.Println("AVISO: SheetsService erro:", err)
@@ -105,7 +99,6 @@ func main() {
 		drive:  driveService,
 	}
 
-	// Servidor
 	srv := &http.Server{
 		Addr:         fmt.Sprintf("0.0.0.0:%s", cfg.port),
 		Handler:      app.routes(),
@@ -124,6 +117,11 @@ func openDB(cfg config) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	
+	db.SetMaxOpenConns(150)
+	db.SetMaxIdleConns(50)
+	db.SetConnMaxLifetime(time.Hour)
+
 	if err = db.Ping(); err != nil {
 		return nil, err
 	}
@@ -139,10 +137,9 @@ func (app *application) routes() http.Handler {
 	mux.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{
 			"https://censo-operacional-escolas.vercel.app",
-			"http://localhost:3000",
 		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-API-Key"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
 		MaxAge:           300,
@@ -153,14 +150,17 @@ func (app *application) routes() http.Handler {
 		w.Write([]byte("Censo API Online"))
 	})
 
-	mux.Get("/v1/health", app.HealthCheck)
-	mux.Get("/v1/locations", app.GetLocations) // Nova Rota
-
-	mux.Get("/v1/schools", app.GetSchools)
-	mux.Post("/v1/schools", app.CreateSchool)
-	mux.Get("/v1/census", app.GetCenso)
-	mux.Post("/v1/census", app.CreateOrUpdateCenso)
-	mux.Post("/v1/upload", app.uploadPhoto)
+	mux.Route("/v1", func(r chi.Router) {
+		r.Use(app.authenticate)
+		
+		r.Get("/health", app.HealthCheck)
+		r.Get("/locations", app.GetLocations)
+		r.Get("/schools", app.GetSchools)
+		r.Post("/v1/schools", app.CreateSchool)
+		r.Get("/census", app.GetCenso)
+		r.Post("/census", app.CreateOrUpdateCenso)
+		r.Post("/upload", app.uploadPhoto)
+	})
 
 	return mux
 }

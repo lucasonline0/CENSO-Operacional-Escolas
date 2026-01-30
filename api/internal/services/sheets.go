@@ -12,26 +12,26 @@ import (
 	"google.golang.org/api/sheets/v4"
 )
 
-// Aba principal de escrita
+// Constante para a aba de escrita principal na planilha de Censo
 const SheetRange = "Base_dados!A:A"
 
 type SheetsService struct {
-	srv           *sheets.Service
-	spreadsheetID string
+	srv                    *sheets.Service
+	censusSpreadsheetID    string // ID da planilha para SALVAR dados (Escrita)
+	locationsSpreadsheetID string // ID da planilha para LER setores (Leitura)
 }
 
 // NewSheetsService inicializa o serviço do Google Sheets.
-// EXIGE que a variável SPREADSHEET_ID esteja configurada no ambiente.
+// Lê DUAS variáveis de ambiente diferentes.
 func NewSheetsService() (*SheetsService, error) {
 	ctx := context.Background()
 	var creds []byte
 	
-	// 1. Tenta ler credenciais da variável de ambiente (Produção - Railway)
+	// 1. Autenticação (Credenciais)
 	envCreds := os.Getenv("GOOGLE_CREDENTIALS_JSON")
 	if envCreds != "" {
 		creds = []byte(envCreds)
 	} else {
-		// 2. Tenta ler do arquivo local (Desenvolvimento)
 		paths := []string{"credentials.json", "../credentials.json", "../../credentials.json"}
 		for _, path := range paths {
 			fileCreds, err := os.ReadFile(path)
@@ -41,7 +41,7 @@ func NewSheetsService() (*SheetsService, error) {
 			}
 		}
 		if len(creds) == 0 {
-			return nil, fmt.Errorf("credenciais do google não encontradas (GOOGLE_CREDENTIALS_JSON ou arquivo)")
+			return nil, fmt.Errorf("credenciais do google não encontradas")
 		}
 	}
 
@@ -50,38 +50,49 @@ func NewSheetsService() (*SheetsService, error) {
 		return nil, fmt.Errorf("erro ao criar cliente Sheets: %v", err)
 	}
 
-	// SEGURANÇA: Busca ID EXCLUSIVAMENTE da variável de ambiente
-	spreadsheetID := os.Getenv("SPREADSHEET_ID")
-	if spreadsheetID == "" {
-		return nil, fmt.Errorf("ERRO CRÍTICO: Variável de ambiente SPREADSHEET_ID não configurada")
+	// 2. Configuração dos IDs das Planilhas
+	
+	// Planilha de ESCRITA (Censo)
+	censusID := os.Getenv("SPREADSHEET_ID")
+	if censusID == "" {
+		return nil, fmt.Errorf("ERRO: Variável SPREADSHEET_ID (para salvar dados) não configurada")
+	}
+
+	// Planilha de LEITURA (Setores/DREs)
+	locationsID := os.Getenv("SPREADSHEET_ID_LOCATIONS")
+	if locationsID == "" {
+		// Se esquecerem de configurar, avisa no log, mas não derruba a aplicação inteira,
+		// porém a busca de DREs vai falhar.
+		fmt.Println("AVISO: Variável SPREADSHEET_ID_LOCATIONS não configurada. Busca de DREs falhará.")
 	}
 
 	return &SheetsService{
-		srv:           srv,
-		spreadsheetID: spreadsheetID,
+		srv:                    srv,
+		censusSpreadsheetID:    censusID,
+		locationsSpreadsheetID: locationsID,
 	}, nil
 }
 
-// GetLocations lê a aba "setores" da planilha configurada no ENV.
-// Lê colunas B (DRE) e E (Município).
+// GetLocations lê a planilha de "Setores" (LEITURA)
 func (s *SheetsService) GetLocations() (map[string][]string, error) {
-	// Intervalo: Aba 'setores', de B2 (pula cabeçalho) até E
+	if s.locationsSpreadsheetID == "" {
+		return nil, fmt.Errorf("ID da planilha de setores não configurado no servidor")
+	}
+
+	// Range: Aba 'setores', da coluna B até E, começando na linha 2
 	readRange := "setores!B2:E"
 
-	resp, err := s.srv.Spreadsheets.Values.Get(s.spreadsheetID, readRange).Do()
+	// USA O ID DE LOCALIZAÇÕES
+	resp, err := s.srv.Spreadsheets.Values.Get(s.locationsSpreadsheetID, readRange).Do()
 	if err != nil {
-		return nil, fmt.Errorf("erro ao ler aba setores: %v", err)
+		return nil, fmt.Errorf("erro ao ler planilha de setores: %v", err)
 	}
 
 	mapping := make(map[string][]string)
-	tempMap := make(map[string]map[string]bool) // Auxiliar para remover duplicatas
+	tempMap := make(map[string]map[string]bool)
 
 	for _, row := range resp.Values {
-		// A API retorna apenas as colunas com dados.
-		// Índice 0 = Coluna B (DRE)
-		// ...
-		// Índice 3 = Coluna E (Município)
-		
+		// B=0 (DRE), C=1, D=2, E=3 (Município)
 		if len(row) > 3 {
 			dre := fmt.Sprintf("%v", row[0])
 			municipio := fmt.Sprintf("%v", row[3])
@@ -90,12 +101,10 @@ func (s *SheetsService) GetLocations() (map[string][]string, error) {
 				continue
 			}
 
-			// Inicializa o mapa da DRE se não existir
 			if tempMap[dre] == nil {
 				tempMap[dre] = make(map[string]bool)
 			}
-
-			// Se o município ainda não foi adicionado a esta DRE, adiciona
+			
 			if !tempMap[dre][municipio] {
 				tempMap[dre][municipio] = true
 				mapping[dre] = append(mapping[dre], municipio)
@@ -106,15 +115,19 @@ func (s *SheetsService) GetLocations() (map[string][]string, error) {
 	return mapping, nil
 }
 
-// AppendCenso envia os dados completos para a planilha
+// AppendCenso salva dados na planilha do Censo (ESCRITA)
 func (s *SheetsService) AppendCenso(censo models.CensusResponse, school models.School) error {
+	// USA O ID DO CENSO
+	if s.censusSpreadsheetID == "" {
+		return fmt.Errorf("ID da planilha do Censo não configurado")
+	}
+
 	var data map[string]interface{}
 	err := json.Unmarshal(censo.Data, &data)
 	if err != nil {
 		return fmt.Errorf("erro ao decodificar JSON: %v", err)
 	}
 
-	// Helper para extrair valores do JSON
 	val := func(key string) interface{} {
 		if v, ok := data[key]; ok {
 			if arr, ok := v.([]interface{}); ok {
@@ -129,7 +142,6 @@ func (s *SheetsService) AppendCenso(censo models.CensusResponse, school models.S
 		return ""
 	}
 
-	// Helper para formatar campos da struct School
 	formatJsonField := func(raw json.RawMessage) string {
 		if len(raw) == 0 { return "" }
 		var arr []string
@@ -140,7 +152,7 @@ func (s *SheetsService) AppendCenso(censo models.CensusResponse, school models.S
 	}
 
 	row := []interface{}{
-		// --- 1. DADOS DE IDENTIFICAÇÃO (Tabela Schools) ---
+		// --- 1. DADOS DE IDENTIFICAÇÃO ---
 		school.NomeDiretor,
 		school.MatriculaDiretor,
 		school.ContatoDiretor,
@@ -253,9 +265,10 @@ func (s *SheetsService) AppendCenso(censo models.CensusResponse, school models.S
 
 	vr := &sheets.ValueRange{Values: [][]interface{}{row}}
 
-	_, err = s.srv.Spreadsheets.Values.Append(s.spreadsheetID, SheetRange, vr).ValueInputOption("USER_ENTERED").Do()
+	// USA O ID DO CENSO
+	_, err = s.srv.Spreadsheets.Values.Append(s.censusSpreadsheetID, SheetRange, vr).ValueInputOption("USER_ENTERED").Do()
 	if err != nil {
-		return fmt.Errorf("erro ao escrever na planilha: %v", err)
+		return fmt.Errorf("erro ao escrever na planilha do censo: %v", err)
 	}
 
 	return nil

@@ -66,7 +66,7 @@ func (s *SheetsService) GetLocations() (map[string]map[string][]string, error) {
 		return nil, fmt.Errorf("ID da planilha de setores não configurado")
 	}
 
-	readRange := "setores!B2:E"
+	readRange := "setores!B2:G"
 
 	resp, err := s.srv.Spreadsheets.Values.Get(s.locationsSpreadsheetID, readRange).Do()
 	if err != nil {
@@ -76,10 +76,10 @@ func (s *SheetsService) GetLocations() (map[string]map[string][]string, error) {
 	mapping := make(map[string]map[string][]string)
 	
 	for _, row := range resp.Values {
-		if len(row) > 3 {
+		if len(row) > 5 {
 			dre := strings.TrimSpace(fmt.Sprintf("%v", row[0]))
-			escola := strings.TrimSpace(fmt.Sprintf("%v", row[2]))
 			municipio := strings.TrimSpace(fmt.Sprintf("%v", row[3]))
+			escola := strings.TrimSpace(fmt.Sprintf("%v", row[5]))
 
 			if dre == "" || municipio == "" || escola == "" {
 				continue

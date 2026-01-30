@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"censo-api/internal/models"
+	// "censo-api/internal/services" // Não usado explicitamente aqui, métodos estão na struct app
 )
 
 // NOTA: HealthCheck movido para healthcheck.go
@@ -84,12 +85,8 @@ func (app *application) GetCenso(w http.ResponseWriter, r *http.Request) {
 
 	schoolID, _ := strconv.Atoi(schoolIDStr)
 	censo, err := app.models.Census.GetBySchoolID(schoolID, 2026)
-	if err != nil {
-		payload := jsonResponse{Error: false, Data: nil}
-		app.writeJSON(w, http.StatusOK, payload)
-		return
-	}
-	if censo == nil {
+	// Se não encontrar ou der erro, retorna nulo mas sucesso (200) para o front não quebrar
+	if err != nil || censo == nil {
 		payload := jsonResponse{Error: false, Data: nil}
 		app.writeJSON(w, http.StatusOK, payload)
 		return
@@ -119,7 +116,7 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 	existingCenso, err := app.models.Census.GetBySchoolID(req.SchoolID, 2026)
 	var finalData []byte
 
-	// Lógica de Merge (Mesclar dados novos com antigos)
+	// Lógica de Merge: Mantém dados antigos que não foram enviados agora
 	if err == nil && existingCenso != nil {
 		var oldMap map[string]interface{}
 		var newMap map[string]interface{}
@@ -151,7 +148,7 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Se finalizado, envia para a Planilha
+	// Se o status for 'completed', dispara a gravação na Planilha
 	if req.Status == "completed" {
 		go func(c models.CensusResponse) {
 			if app.sheets == nil {
@@ -159,14 +156,12 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 				return
 			}
 
-			// 1. Busca os dados da Escola
 			school, err := app.models.Schools.Get(c.SchoolID)
 			if err != nil {
 				app.logger.Println("Erro ao buscar escola para planilha:", err)
 				return
 			}
 
-			// 2. Envia para a planilha
 			err = app.sheets.AppendCenso(c, *school)
 			if err != nil {
 				app.logger.Println("Erro ao salvar na planilha:", err)
@@ -187,12 +182,12 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 
 // uploadPhoto recebe o arquivo e envia para o Google Drive
 func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
-	// Limite de 10MB
+	// Limite de 10MB para evitar sobrecarga
 	r.ParseMultipartForm(10 << 20)
 
 	file, handler, err := r.FormFile("photo")
 	if err != nil {
-		app.errorJSON(w, fmt.Errorf("arquivo inválido"), http.StatusBadRequest)
+		app.errorJSON(w, fmt.Errorf("arquivo inválido ou ausente"), http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
@@ -213,11 +208,11 @@ func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if app.drive == nil {
-		app.errorJSON(w, fmt.Errorf("serviço de drive indisponível"), http.StatusInternalServerError)
+		app.errorJSON(w, fmt.Errorf("serviço de drive indisponível no servidor"), http.StatusInternalServerError)
 		return
 	}
 
-	// Sanitizar nome da pasta: "NomeEscola - DRE - Diretor"
+	// Sanitizar nome da pasta para evitar caracteres inválidos
 	sanitize := func(s string) string {
 		return strings.Map(func(r rune) rune {
 			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == ' ' {
@@ -229,7 +224,7 @@ func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 
 	folderName := fmt.Sprintf("%s - %s - %s", sanitize(school.Nome), sanitize(school.Dre), sanitize(school.NomeDiretor))
 
-	// Usa o serviço do Drive
+	// Envia para o Drive
 	link, err := app.drive.UploadSchoolPhoto(folderName, handler.Filename, file)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro no upload para o drive: %v", err), http.StatusInternalServerError)

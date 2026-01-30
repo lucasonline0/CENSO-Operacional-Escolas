@@ -12,27 +12,37 @@ import (
 	"google.golang.org/api/sheets/v4"
 )
 
+// Aba principal de escrita
 const SheetRange = "Base_dados!A:A"
 
 type SheetsService struct {
-	srv *sheets.Service
+	srv           *sheets.Service
+	spreadsheetID string
 }
 
+// NewSheetsService inicializa o serviço do Google Sheets.
+// EXIGE que a variável SPREADSHEET_ID esteja configurada no ambiente.
 func NewSheetsService() (*SheetsService, error) {
 	ctx := context.Background()
 	var creds []byte
 	
-	// 1. Tenta ler credenciais da variável de ambiente (Produção)
+	// 1. Tenta ler credenciais da variável de ambiente (Produção - Railway)
 	envCreds := os.Getenv("GOOGLE_CREDENTIALS_JSON")
 	if envCreds != "" {
 		creds = []byte(envCreds)
 	} else {
 		// 2. Tenta ler do arquivo local (Desenvolvimento)
-		fileCreds, err := os.ReadFile("credentials.json")
-		if err != nil {
-			return nil, fmt.Errorf("erro ao ler credenciais: %v", err)
+		paths := []string{"credentials.json", "../credentials.json", "../../credentials.json"}
+		for _, path := range paths {
+			fileCreds, err := os.ReadFile(path)
+			if err == nil {
+				creds = fileCreds
+				break
+			}
 		}
-		creds = fileCreds
+		if len(creds) == 0 {
+			return nil, fmt.Errorf("credenciais do google não encontradas (GOOGLE_CREDENTIALS_JSON ou arquivo)")
+		}
 	}
 
 	srv, err := sheets.NewService(ctx, option.WithCredentialsJSON(creds))
@@ -40,16 +50,64 @@ func NewSheetsService() (*SheetsService, error) {
 		return nil, fmt.Errorf("erro ao criar cliente Sheets: %v", err)
 	}
 
-	return &SheetsService{srv: srv}, nil
-}
-
-func (s *SheetsService) AppendCenso(censo models.CensusResponse, school models.School) error {
-	// SEGURANÇA: Busca ID da variável de ambiente
+	// SEGURANÇA: Busca ID EXCLUSIVAMENTE da variável de ambiente
 	spreadsheetID := os.Getenv("SPREADSHEET_ID")
 	if spreadsheetID == "" {
-		return fmt.Errorf("SPREADSHEET_ID não configurado no ambiente")
+		return nil, fmt.Errorf("ERRO CRÍTICO: Variável de ambiente SPREADSHEET_ID não configurada")
 	}
 
+	return &SheetsService{
+		srv:           srv,
+		spreadsheetID: spreadsheetID,
+	}, nil
+}
+
+// GetLocations lê a aba "setores" da planilha configurada no ENV.
+// Lê colunas B (DRE) e E (Município).
+func (s *SheetsService) GetLocations() (map[string][]string, error) {
+	// Intervalo: Aba 'setores', de B2 (pula cabeçalho) até E
+	readRange := "setores!B2:E"
+
+	resp, err := s.srv.Spreadsheets.Values.Get(s.spreadsheetID, readRange).Do()
+	if err != nil {
+		return nil, fmt.Errorf("erro ao ler aba setores: %v", err)
+	}
+
+	mapping := make(map[string][]string)
+	tempMap := make(map[string]map[string]bool) // Auxiliar para remover duplicatas
+
+	for _, row := range resp.Values {
+		// A API retorna apenas as colunas com dados.
+		// Índice 0 = Coluna B (DRE)
+		// ...
+		// Índice 3 = Coluna E (Município)
+		
+		if len(row) > 3 {
+			dre := fmt.Sprintf("%v", row[0])
+			municipio := fmt.Sprintf("%v", row[3])
+
+			if dre == "" || municipio == "" {
+				continue
+			}
+
+			// Inicializa o mapa da DRE se não existir
+			if tempMap[dre] == nil {
+				tempMap[dre] = make(map[string]bool)
+			}
+
+			// Se o município ainda não foi adicionado a esta DRE, adiciona
+			if !tempMap[dre][municipio] {
+				tempMap[dre][municipio] = true
+				mapping[dre] = append(mapping[dre], municipio)
+			}
+		}
+	}
+
+	return mapping, nil
+}
+
+// AppendCenso envia os dados completos para a planilha
+func (s *SheetsService) AppendCenso(censo models.CensusResponse, school models.School) error {
 	var data map[string]interface{}
 	err := json.Unmarshal(censo.Data, &data)
 	if err != nil {
@@ -195,7 +253,7 @@ func (s *SheetsService) AppendCenso(censo models.CensusResponse, school models.S
 
 	vr := &sheets.ValueRange{Values: [][]interface{}{row}}
 
-	_, err = s.srv.Spreadsheets.Values.Append(spreadsheetID, SheetRange, vr).ValueInputOption("USER_ENTERED").Do()
+	_, err = s.srv.Spreadsheets.Values.Append(s.spreadsheetID, SheetRange, vr).ValueInputOption("USER_ENTERED").Do()
 	if err != nil {
 		return fmt.Errorf("erro ao escrever na planilha: %v", err)
 	}

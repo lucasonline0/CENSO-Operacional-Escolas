@@ -9,7 +9,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { schoolData } from "@/data/schools"; 
 import { useCensusPersistence } from "@/hooks/use-census-persistence";
 
 interface IdentificationFormProps {
@@ -21,6 +20,8 @@ const turnosOptions = ["Manhã", "Tarde", "Noite", "Integral"];
 
 export function IdentificationForm({ onSuccess, initialId }: IdentificationFormProps) {
   const [isSaving, setIsSaving] = useState(false);
+  const [locations, setLocations] = useState<Record<string, string[]>>({});
+  const [isLoadingLocations, setIsLoadingLocations] = useState(true);
 
   const form = useForm<SchoolIdentificationForm>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -32,14 +33,28 @@ export function IdentificationForm({ onSuccess, initialId }: IdentificationFormP
     },
   });
 
-  // Hook configurado para 'schools' (Passo 0)
+  // Hook de persistência
   const { isLoading, saveLocalDraft, clearLocalDraft } = useCensusPersistence(
-    initialId,
-    "identification",
-    form.reset,
-    form.getValues(),
-    "schools"
+    initialId, "identification", form.reset, form.getValues(), "schools"
   );
+
+  // 1. Busca DREs e Municípios da API (Google Sheets) ao carregar
+  useEffect(() => {
+    async function fetchLocations() {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/locations`);
+        if (response.ok) {
+          const result = await response.json();
+          setLocations(result.data || {});
+        }
+      } catch (error) {
+        console.error("Erro ao buscar locais:", error);
+      } finally {
+        setIsLoadingLocations(false);
+      }
+    }
+    fetchLocations();
+  }, []);
 
   useEffect(() => {
     const subscription = form.watch((value) => saveLocalDraft(value as SchoolIdentificationForm));
@@ -47,50 +62,25 @@ export function IdentificationForm({ onSuccess, initialId }: IdentificationFormP
   }, [form, saveLocalDraft]);
 
   const selectedDre = form.watch("dre");
-  const selectedMunicipio = form.watch("municipio");
 
-  // 1. Extrair todas as DREs únicas disponíveis no sistema (Inversão de Lógica)
+  // Lista de DREs (Chaves do objeto retornado pela API)
   const allDres = useMemo(() => {
-    const dresSet = new Set<string>();
-    Object.values(schoolData).forEach((municipioMap) => {
-      Object.keys(municipioMap).forEach((dre) => dresSet.add(dre));
-    });
-    return Array.from(dresSet).sort();
-  }, []);
+    return Object.keys(locations).sort();
+  }, [locations]);
 
-  // 2. Filtrar Municípios com base na DRE selecionada
-  // Só mostra municípios que possuem a DRE selecionada
+  // Lista de Municípios (Valores baseados na DRE selecionada)
   const filteredMunicipios = useMemo(() => {
     if (!selectedDre) return [];
-    
-    return Object.keys(schoolData).filter(municipio => 
-      Object.keys(schoolData[municipio]).includes(selectedDre)
-    ).sort();
-  }, [selectedDre]);
+    return locations[selectedDre]?.sort() || [];
+  }, [selectedDre, locations]);
 
-  // 3. Filtrar Escolas (Depende do Município e da DRE)
-  const escolas = useMemo(() => {
-    if (!selectedMunicipio || !selectedDre || !schoolData[selectedMunicipio]?.[selectedDre]) return [];
-    return schoolData[selectedMunicipio][selectedDre].sort();
-  }, [selectedMunicipio, selectedDre]);
-
-  // Efeito: Limpar Município se a DRE mudar (para evitar inconsistência)
+  // Limpa município se mudar a DRE
   useEffect(() => {
     const currentMunicipio = form.getValues("municipio");
-    // Se o município selecionado não pertence mais à lista da nova DRE, limpa
     if (selectedDre && currentMunicipio && !filteredMunicipios.includes(currentMunicipio)) {
         form.setValue("municipio", "");
-        form.setValue("nome_escola", "");
     }
   }, [selectedDre, filteredMunicipios, form]);
-
-  // Efeito: Limpar Escola se Município ou DRE mudar
-  useEffect(() => {
-    const currentEscola = form.getValues("nome_escola");
-    if (selectedDre && selectedMunicipio && currentEscola && !escolas.includes(currentEscola)) {
-        form.setValue("nome_escola", "");
-    }
-  }, [selectedDre, selectedMunicipio, escolas, form]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function onSubmit(data: any) {
@@ -109,27 +99,27 @@ export function IdentificationForm({ onSuccess, initialId }: IdentificationFormP
       onSuccess(result.data.id);
     } catch (error) {
       console.error(error);
-      alert("Erro ao salvar.");
+      alert("Erro ao salvar identificação.");
     } finally {
       setIsSaving(false);
     }
   }
 
-  if (isLoading) return <div className="p-8 text-center text-slate-500">Carregando Identificação...</div>;
+  if (isLoading || isLoadingLocations) return <div className="p-8 text-center text-slate-500">Carregando dados...</div>;
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           
-          {/* CAMPO DRE (AGORA É O PRIMEIRO) */}
+          {/* CAMPO DRE */}
           <FormField control={form.control} name="dre" render={({ field }) => (
               <FormItem>
                 <FormLabel>DRE / Setor *</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value || ""}>
-                  <FormControl><SelectTrigger><SelectValue placeholder="Selecione a DRE primeiro..." /></SelectTrigger></FormControl>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Selecione a DRE..." /></SelectTrigger></FormControl>
                   <SelectContent>
-                    {allDres.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                      {allDres.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -137,7 +127,7 @@ export function IdentificationForm({ onSuccess, initialId }: IdentificationFormP
             )}
           />
 
-          {/* CAMPO MUNICÍPIO (FILTRADO PELA DRE) */}
+          {/* CAMPO MUNICÍPIO */}
           <FormField control={form.control} name="municipio" render={({ field }) => (
               <FormItem>
                 <FormLabel>Município *</FormLabel>
@@ -152,7 +142,6 @@ export function IdentificationForm({ onSuccess, initialId }: IdentificationFormP
             )}
           />
 
-          {/* CAMPO ZONA */}
           <FormField control={form.control} name="zona" render={({ field }) => (
               <FormItem>
                 <FormLabel>Zona *</FormLabel>
@@ -171,10 +160,10 @@ export function IdentificationForm({ onSuccess, initialId }: IdentificationFormP
             <FormField control={form.control} name="nome_escola" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Nome da Escola *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || ""} disabled={!selectedMunicipio}>
-                    <FormControl><SelectTrigger><SelectValue placeholder={selectedMunicipio ? "Selecione..." : "..."} /></SelectTrigger></FormControl>
-                    <SelectContent>{escolas.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
-                  </Select>
+                  {/* INPUT TEXTO LIVRE */}
+                  <FormControl>
+                    <Input placeholder="Digite o nome oficial da escola..." {...field} value={field.value || ""} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

@@ -39,66 +39,60 @@ type application struct {
 func main() {
 	logger := log.New(os.Stdout, "[CENSO-API] ", log.Ldate|log.Ltime|log.Lshortfile)
 
-	// Tenta carregar .env localmente (em produção no Railway isso é ignorado/falha silenciosamente)
+	// Carrega .env localmente (ignorado em produção)
 	_ = godotenv.Load()
 	_ = godotenv.Load("../.env")
 	_ = godotenv.Load("../../.env")
 
 	var cfg config
 	
-	// 1. Configuração da Porta (CRÍTICO PARA O RAILWAY)
-	// O Railway injeta a porta na variável "PORT".
+	// Porta Railway
 	cfg.port = os.Getenv("PORT")
 	if cfg.port == "" {
-		cfg.port = "8000" // Fallback apenas para desenvolvimento local
+		cfg.port = "8000"
 	}
 	cfg.env = "production"
 
-	// 2. Configuração do Banco de Dados
+	// Banco de Dados
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		dsn = os.Getenv("DB_DSN")
 	}
 
-	// Fallback para montagem manual (Desenvolvimento Local)
+	// Fallback Local
 	if dsn == "" {
 		dbHost := os.Getenv("DB_HOST")
-		dbPort := os.Getenv("DB_PORT")
-		dbUser := os.Getenv("DB_USER")
-		dbPass := os.Getenv("DB_PASSWORD")
-		dbName := os.Getenv("DB_NAME")
-
 		if dbHost != "" {
 			dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable timezone=UTC connect_timeout=5",
-				dbHost, dbPort, dbUser, dbPass, dbName)
+				os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"))
 		}
 	}
 
 	if dsn == "" {
-		logger.Fatal("ERRO FATAL: Variável DATABASE_URL ou DB_DSN não encontrada. O servidor não pode iniciar.")
+		logger.Fatal("ERRO FATAL: Variáveis de banco não encontradas.")
 	}
 	cfg.db.dsn = dsn
 
-	// 3. Conexão com o Banco
-	logger.Println("Iniciando conexão com o banco de dados...")
+	// Conexão DB
+	logger.Println("Iniciando conexão com banco...")
 	db, err := openDB(cfg)
 	if err != nil {
-		logger.Fatal("ERRO FATAL AO CONECTAR BANCO:", err)
+		logger.Fatal("ERRO FATAL BANCO:", err)
 	}
 	defer db.Close()
-	logger.Println("Banco de dados conectado com sucesso!")
+	logger.Println("Banco conectado!")
 
-	// 4. Inicialização de Serviços Externos
+	// Inicializa serviços
 	sheetsService, err := services.NewSheetsService()
 	if err != nil {
-		logger.Println("AVISO: SheetsService não iniciou (verifique credenciais):", err)
+		logger.Println("AVISO: SheetsService erro:", err)
 	} else {
 		logger.Println("SheetsService iniciado.")
 	}
 
 	driveService, err := services.NewDriveService()
 	if err != nil {
-		logger.Println("AVISO: DriveService não iniciou (verifique credenciais):", err)
+		logger.Println("AVISO: DriveService erro:", err)
 	} else {
 		logger.Println("DriveService iniciado.")
 	}
@@ -111,16 +105,16 @@ func main() {
 		drive:  driveService,
 	}
 
-	// 5. Configuração do Servidor
+	// Servidor
 	srv := &http.Server{
-		Addr:         fmt.Sprintf("0.0.0.0:%s", cfg.port), // Escuta em todas as interfaces
+		Addr:         fmt.Sprintf("0.0.0.0:%s", cfg.port),
 		Handler:      app.routes(),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	}
 
-	logger.Printf("Servidor pronto! Escutando na porta %s no ambiente %s", cfg.port, cfg.env)
+	logger.Printf("Servidor rodando porta %s", cfg.port)
 	err = srv.ListenAndServe()
 	logger.Fatal(err)
 }
@@ -130,26 +124,22 @@ func openDB(cfg config) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	if err = db.Ping(); err != nil {
 		return nil, err
 	}
-
 	return db, nil
 }
 
 func (app *application) routes() http.Handler {
 	mux := chi.NewRouter()
-
+	
 	mux.Use(middleware.Recoverer)
-	mux.Use(middleware.Logger) // Logs de requisição ajudam a ver se o tráfego chega
+	mux.Use(middleware.Logger)
 
-	// CORREÇÃO CRÍTICA DE CORS:
-	// Removemos "*" porque AllowCredentials=true proíbe wildcard.
 	mux.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{
-			"https://censo-operacional-escolas.vercel.app", // Teu Domínio de Produção
-			"http://localhost:3000",                        // Teu Localhost
+			"https://censo-operacional-escolas.vercel.app",
+			"http://localhost:3000",
 		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
@@ -158,20 +148,18 @@ func (app *application) routes() http.Handler {
 		MaxAge:           300,
 	}))
 
-	// Rota Raiz para Health Check do Railway (Evita 502 por timeout)
 	mux.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Censo API Online"))
 	})
 
 	mux.Get("/v1/health", app.HealthCheck)
+	mux.Get("/v1/locations", app.GetLocations) // Nova Rota
 
 	mux.Get("/v1/schools", app.GetSchools)
 	mux.Post("/v1/schools", app.CreateSchool)
-
 	mux.Get("/v1/census", app.GetCenso)
 	mux.Post("/v1/census", app.CreateOrUpdateCenso)
-
 	mux.Post("/v1/upload", app.uploadPhoto)
 
 	return mux

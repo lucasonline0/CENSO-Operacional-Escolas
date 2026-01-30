@@ -92,7 +92,7 @@ export function MerendaForm({ schoolId, onSuccess, onBack }: MerendaFormProps) {
             <Separator className="my-2" />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <SelectInput control={control} name="oferta_regular" label="A merenda é ofertada regularmente? *" options={["Sim", "Sim, com falhas", "Não"]} />
-                <SelectInput control={control} name="qualidade_merenda" label="Qualidade da merenda *" options={["Sim", "Regular", "Ruim"]} />
+                <SelectInput control={control} name="qualidade_merenda" label="Qualidade da merenda *" options={["Boa", "Regular", "Ruim"]} />
             </div>
             <RadioInput control={control} name="atende_necessidades" label="Atende às necessidades dos alunos? *" options={["Sim", "Parcialmente", "Não"]} />
             <div className="p-4 bg-slate-50 border rounded-md grid grid-cols-1 md:grid-cols-2 gap-6">

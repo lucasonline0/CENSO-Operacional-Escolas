@@ -5,21 +5,18 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"censo-api/internal/models"
 )
 
-// NOTA: HealthCheck movido para healthcheck.go
-
-// GetLocations chama o serviço de Sheets para buscar DREs e Municípios
 func (app *application) GetLocations(w http.ResponseWriter, r *http.Request) {
 	if app.sheets == nil {
 		app.errorJSON(w, fmt.Errorf("serviço de planilhas indisponível"), http.StatusInternalServerError)
 		return
 	}
 
-	// Busca locais da planilha configurada no ENV
 	locations, err := app.sheets.GetLocations()
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro ao buscar locais: %v", err), http.StatusInternalServerError)
@@ -98,7 +95,7 @@ func (app *application) GetCenso(w http.ResponseWriter, r *http.Request) {
 
 	schoolID, _ := strconv.Atoi(schoolIDStr)
 	censo, err := app.models.Census.GetBySchoolID(schoolID, 2026)
-	
+
 	if err != nil || censo == nil {
 		payload := jsonResponse{Error: false, Data: nil}
 		app.writeJSON(w, http.StatusOK, payload)
@@ -126,7 +123,6 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 	existingCenso, err := app.models.Census.GetBySchoolID(req.SchoolID, 2026)
 	var finalData []byte
 
-	// Lógica de Merge
 	if err == nil && existingCenso != nil {
 		var oldMap map[string]interface{}
 		var newMap map[string]interface{}
@@ -158,7 +154,6 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Integração com Sheets ao finalizar (Usa a ID do ENV)
 	if req.Status == "completed" {
 		go func(c models.CensusResponse) {
 			if app.sheets == nil {
@@ -189,7 +184,6 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
-	// Limite 10MB
 	r.ParseMultipartForm(10 << 20)
 
 	file, handler, err := r.FormFile("photo")
@@ -219,7 +213,6 @@ func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sanitização de nome da pasta
 	sanitize := func(s string) string {
 		return strings.Map(func(r rune) rune {
 			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == ' ' {

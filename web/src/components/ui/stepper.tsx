@@ -10,7 +10,7 @@ interface Step {
 interface StepperProps {
   steps: Step[];
   currentStep: number;
-  onStepClick: (index: number) => void;
+  onStepClick?: (index: number) => void; // CORREÇÃO: Adicionado '?' para ser opcional
 }
 
 export function Stepper({ steps, currentStep, onStepClick }: StepperProps) {
@@ -24,9 +24,14 @@ export function Stepper({ steps, currentStep, onStepClick }: StepperProps) {
           <button
             key={index}
             type="button"
-            onClick={() => onStepClick(index)}
+            // Só executa se a função existir
+            onClick={() => onStepClick && onStepClick(index)}
+            // Desabilita o botão se não houver função de clique
+            disabled={!onStepClick}
             className={cn(
               "group flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors text-left",
+              // Remove cursor de clique se não for interativo
+              !onStepClick && "cursor-default pointer-events-none",
               isCurrent
                 ? "bg-blue-50 text-blue-700"
                 : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"

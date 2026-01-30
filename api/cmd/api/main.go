@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"censo-api/internal/models"
-	
+	"censo-api/internal/services" // Importando serviços (Drive e Sheets)
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -31,12 +32,14 @@ type application struct {
 	config config
 	logger *log.Logger
 	models models.Models
+	sheets *services.SheetsService // Serviço de Planilhas
+	drive  *services.DriveService  // Serviço de Drive (Novo)
 }
 
 func main() {
 	logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
 
-	err := godotenv.Load("../.env") 
+	err := godotenv.Load("../.env")
 	if err != nil {
 		if err := godotenv.Load("../../.env"); err != nil {
 			logger.Println("Aviso: Arquivo .env não encontrado. O sistema tentará usar variáveis de ambiente do SO.")
@@ -46,7 +49,7 @@ func main() {
 	var cfg config
 	cfg.port = 8000
 	cfg.env = "development"
-	
+
 	dbHost := os.Getenv("DB_HOST")
 	dbPort := os.Getenv("DB_PORT")
 	dbUser := os.Getenv("DB_USER")
@@ -66,10 +69,23 @@ func main() {
 	}
 	defer db.Close()
 
+	// Inicializa serviços externos
+	sheetsService, err := services.NewSheetsService()
+	if err != nil {
+		logger.Println("Aviso: Falha ao inicializar SheetsService (verifique credenciais):", err)
+	}
+
+	driveService, err := services.NewDriveService()
+	if err != nil {
+		logger.Println("Aviso: Falha ao inicializar DriveService (verifique credenciais):", err)
+	}
+
 	app := &application{
 		config: cfg,
 		logger: logger,
 		models: models.NewModels(db),
+		sheets: sheetsService,
+		drive:  driveService,
 	}
 
 	srv := &http.Server{
@@ -112,12 +128,15 @@ func (app *application) routes() http.Handler {
 	}))
 
 	mux.Get("/v1/health", app.HealthCheck)
-	
+
 	mux.Get("/v1/schools", app.GetSchools)
 	mux.Post("/v1/schools", app.CreateSchool)
-	
+
 	mux.Get("/v1/census", app.GetCenso)
 	mux.Post("/v1/census", app.CreateOrUpdateCenso)
+
+	// Rota de Upload de Fotos
+	mux.Post("/v1/upload", app.uploadPhoto)
 
 	return mux
 }

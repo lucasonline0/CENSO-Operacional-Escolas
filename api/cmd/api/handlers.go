@@ -2,12 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"censo-api/internal/models"
-	"censo-api/internal/services"
 )
 
 // NOTA: HealthCheck movido para healthcheck.go
@@ -51,7 +52,7 @@ func (app *application) GetSchools(w http.ResponseWriter, r *http.Request) {
 
 func (app *application) CreateSchool(w http.ResponseWriter, r *http.Request) {
 	var req models.School
-	
+
 	err := app.readJSON(w, r, &req)
 	if err != nil {
 		app.errorJSON(w, err)
@@ -118,13 +119,16 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 	existingCenso, err := app.models.Census.GetBySchoolID(req.SchoolID, 2026)
 	var finalData []byte
 
+	// Lógica de Merge (Mesclar dados novos com antigos)
 	if err == nil && existingCenso != nil {
 		var oldMap map[string]interface{}
 		var newMap map[string]interface{}
 		_ = json.Unmarshal(existingCenso.Data, &oldMap)
 		_ = json.Unmarshal(req.Data, &newMap)
 
-		if oldMap == nil { oldMap = make(map[string]interface{}) }
+		if oldMap == nil {
+			oldMap = make(map[string]interface{})
+		}
 		for k, v := range newMap {
 			oldMap[k] = v
 		}
@@ -147,24 +151,23 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Se finalizado, envia para a Planilha
 	if req.Status == "completed" {
 		go func(c models.CensusResponse) {
-			// 1. Busca os dados da Escola no banco para ter Nome, INEP, etc.
+			if app.sheets == nil {
+				app.logger.Println("Erro: Serviço de Planilhas não inicializado.")
+				return
+			}
+
+			// 1. Busca os dados da Escola
 			school, err := app.models.Schools.Get(c.SchoolID)
 			if err != nil {
 				app.logger.Println("Erro ao buscar escola para planilha:", err)
 				return
 			}
 
-			// 2. Inicializa o serviço
-			sheetsService, err := services.NewSheetsService()
-			if err != nil {
-				app.logger.Println("Erro ao inicializar Sheets:", err)
-				return
-			}
-			
-			// 3. Envia AMBOS (Censo + Dados da Escola) para a planilha
-			err = sheetsService.AppendCenso(c, *school)
+			// 2. Envia para a planilha
+			err = app.sheets.AppendCenso(c, *school)
 			if err != nil {
 				app.logger.Println("Erro ao salvar na planilha:", err)
 			} else {
@@ -180,4 +183,63 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 	}
 
 	app.writeJSON(w, http.StatusOK, payload)
+}
+
+// uploadPhoto recebe o arquivo e envia para o Google Drive
+func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
+	// Limite de 10MB
+	r.ParseMultipartForm(10 << 20)
+
+	file, handler, err := r.FormFile("photo")
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("arquivo inválido"), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	schoolIDStr := r.FormValue("school_id")
+	if schoolIDStr == "" {
+		app.errorJSON(w, fmt.Errorf("school_id obrigatório"), http.StatusBadRequest)
+		return
+	}
+
+	var schoolID int
+	fmt.Sscanf(schoolIDStr, "%d", &schoolID)
+
+	school, err := app.models.Schools.Get(schoolID)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("escola não encontrada"), http.StatusNotFound)
+		return
+	}
+
+	if app.drive == nil {
+		app.errorJSON(w, fmt.Errorf("serviço de drive indisponível"), http.StatusInternalServerError)
+		return
+	}
+
+	// Sanitizar nome da pasta: "NomeEscola - DRE - Diretor"
+	sanitize := func(s string) string {
+		return strings.Map(func(r rune) rune {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == ' ' {
+				return r
+			}
+			return '-'
+		}, s)
+	}
+
+	folderName := fmt.Sprintf("%s - %s - %s", sanitize(school.Nome), sanitize(school.Dre), sanitize(school.NomeDiretor))
+
+	// Usa o serviço do Drive
+	link, err := app.drive.UploadSchoolPhoto(folderName, handler.Filename, file)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro no upload para o drive: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	payload := jsonResponse{
+		Error:   false,
+		Message: "Upload concluído",
+		Data:    link,
+	}
+	app.writeJSON(w, http.StatusCreated, payload)
 }

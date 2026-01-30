@@ -46,41 +46,57 @@ export function IdentificationForm({ onSuccess, initialId }: IdentificationFormP
     return () => subscription.unsubscribe();
   }, [form, saveLocalDraft]);
 
-  const selectedMunicipio = form.watch("municipio");
   const selectedDre = form.watch("dre");
+  const selectedMunicipio = form.watch("municipio");
 
-  const municipios = useMemo(() => Object.keys(schoolData || {}).sort(), []);
-  
-  const dres = useMemo(() => {
-    if (!selectedMunicipio || !schoolData[selectedMunicipio]) return [];
-    return Object.keys(schoolData[selectedMunicipio]).sort();
-  }, [selectedMunicipio]);
+  // 1. Extrair todas as DREs únicas disponíveis no sistema (Inversão de Lógica)
+  const allDres = useMemo(() => {
+    const dresSet = new Set<string>();
+    Object.values(schoolData).forEach((municipioMap) => {
+      Object.keys(municipioMap).forEach((dre) => dresSet.add(dre));
+    });
+    return Array.from(dresSet).sort();
+  }, []);
 
+  // 2. Filtrar Municípios com base na DRE selecionada
+  // Só mostra municípios que possuem a DRE selecionada
+  const filteredMunicipios = useMemo(() => {
+    if (!selectedDre) return [];
+    
+    return Object.keys(schoolData).filter(municipio => 
+      Object.keys(schoolData[municipio]).includes(selectedDre)
+    ).sort();
+  }, [selectedDre]);
+
+  // 3. Filtrar Escolas (Depende do Município e da DRE)
   const escolas = useMemo(() => {
     if (!selectedMunicipio || !selectedDre || !schoolData[selectedMunicipio]?.[selectedDre]) return [];
     return schoolData[selectedMunicipio][selectedDre].sort();
   }, [selectedMunicipio, selectedDre]);
 
+  // Efeito: Limpar Município se a DRE mudar (para evitar inconsistência)
   useEffect(() => {
-    const currentDre = form.getValues("dre");
-    if (selectedMunicipio && currentDre && !dres.includes(currentDre)) {
-        form.setValue("dre", "");
+    const currentMunicipio = form.getValues("municipio");
+    // Se o município selecionado não pertence mais à lista da nova DRE, limpa
+    if (selectedDre && currentMunicipio && !filteredMunicipios.includes(currentMunicipio)) {
+        form.setValue("municipio", "");
         form.setValue("nome_escola", "");
     }
-  }, [selectedMunicipio, dres, form]);
+  }, [selectedDre, filteredMunicipios, form]);
 
+  // Efeito: Limpar Escola se Município ou DRE mudar
   useEffect(() => {
     const currentEscola = form.getValues("nome_escola");
-    if (selectedDre && currentEscola && !escolas.includes(currentEscola)) {
+    if (selectedDre && selectedMunicipio && currentEscola && !escolas.includes(currentEscola)) {
         form.setValue("nome_escola", "");
     }
-  }, [selectedDre, escolas, form]);
+  }, [selectedDre, selectedMunicipio, escolas, form]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function onSubmit(data: any) {
     setIsSaving(true);
     try {
-      const response = await fetch("http://localhost:8000/v1/schools", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/schools`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -105,28 +121,38 @@ export function IdentificationForm({ onSuccess, initialId }: IdentificationFormP
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <FormField control={form.control} name="municipio" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Município *</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value || ""}>
-                  <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
-                  <SelectContent>{municipios.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          
+          {/* CAMPO DRE (AGORA É O PRIMEIRO) */}
           <FormField control={form.control} name="dre" render={({ field }) => (
               <FormItem>
                 <FormLabel>DRE / Setor *</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value || ""} disabled={!selectedMunicipio}>
-                  <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
-                  <SelectContent>{dres.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                <Select onValueChange={field.onChange} value={field.value || ""}>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Selecione a DRE primeiro..." /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    {allDres.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                  </SelectContent>
                 </Select>
                 <FormMessage />
               </FormItem>
             )}
           />
+
+          {/* CAMPO MUNICÍPIO (FILTRADO PELA DRE) */}
+          <FormField control={form.control} name="municipio" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Município *</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value || ""} disabled={!selectedDre}>
+                  <FormControl><SelectTrigger><SelectValue placeholder={selectedDre ? "Selecione..." : "Aguardando DRE..."} /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    {filteredMunicipios.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* CAMPO ZONA */}
           <FormField control={form.control} name="zona" render={({ field }) => (
               <FormItem>
                 <FormLabel>Zona *</FormLabel>
@@ -145,8 +171,8 @@ export function IdentificationForm({ onSuccess, initialId }: IdentificationFormP
             <FormField control={form.control} name="nome_escola" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Nome da Escola *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || ""} disabled={!selectedDre}>
-                    <FormControl><SelectTrigger><SelectValue placeholder={selectedDre ? "Selecione..." : "..."} /></SelectTrigger></FormControl>
+                  <Select onValueChange={field.onChange} value={field.value || ""} disabled={!selectedMunicipio}>
+                    <FormControl><SelectTrigger><SelectValue placeholder={selectedMunicipio ? "Selecione..." : "..."} /></SelectTrigger></FormControl>
                     <SelectContent>{escolas.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
                   </Select>
                   <FormMessage />

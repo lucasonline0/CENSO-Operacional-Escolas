@@ -21,7 +21,7 @@ import (
 const version = "1.0.0"
 
 type config struct {
-	port int
+	port string // Mudado para string para facilitar
 	env  string
 	db   struct {
 		dsn string
@@ -37,25 +37,34 @@ type application struct {
 }
 
 func main() {
+	// Logger simples
 	logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
 
-	// Carrega .env de múltiplos níveis para garantir leitura local
-	_ = godotenv.Load(".env")
-	_ = godotenv.Load("../.env")
-	_ = godotenv.Load("../../.env")
-	_ = godotenv.Load("../../../.env")
+	// Tenta carregar .env (ignora erro se não existir, pois em prod usa variáveis de ambiente)
+	_ = godotenv.Load() 
+    // Tenta carregar de pastas acima caso esteja rodando de ./cmd/api
+    _ = godotenv.Load("../.env")
+    _ = godotenv.Load("../../.env")
 
 	var cfg config
-	cfg.port = 8000
-	cfg.env = "development"
-
-	// 1. Tenta pegar DSN direto (Railway injeta DATABASE_URL ou DB_DSN)
-	dsn := os.Getenv("DB_DSN")
-	if dsn == "" {
-		dsn = os.Getenv("DATABASE_URL")
+    
+    // CONFIGURAÇÃO DA PORTA (CRÍTICO PARA RAILWAY)
+    // O Railway define a variável PORT. Se não tiver, usa 8000 (local).
+	cfg.port = os.Getenv("PORT")
+	if cfg.port == "" {
+		cfg.port = "8000"
 	}
+    
+	cfg.env = "production" // Assume produção por padrão para segurança
 
-	// 2. Se não achou DSN, tenta montar via partes (Dev Local)
+	// CONFIGURAÇÃO DO BANCO
+    // 1. Tenta pegar a string de conexão completa (Railway fornece DATABASE_URL)
+	dsn := os.Getenv("DATABASE_URL")
+    if dsn == "" {
+        dsn = os.Getenv("DB_DSN")
+    }
+
+    // 2. Se não tiver DSN direto, tenta montar (para desenvolvimento local)
 	if dsn == "" {
 		dbHost := os.Getenv("DB_HOST")
 		dbPort := os.Getenv("DB_PORT")
@@ -63,34 +72,34 @@ func main() {
 		dbPass := os.Getenv("DB_PASSWORD")
 		dbName := os.Getenv("DB_NAME")
 
-		if dbHost != "" && dbUser != "" {
+		if dbHost != "" {
 			dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable timezone=UTC connect_timeout=5",
 				dbHost, dbPort, dbUser, dbPass, dbName)
 		}
 	}
 
+    // Se ainda assim não tiver DSN, não adianta continuar.
 	if dsn == "" {
-		// Se cair aqui, o Railway vai fechar e gerar erro 503/CORS no front
-		logger.Fatal("ERRO CRÍTICO: DB_DSN ou variáveis de banco não configuradas.")
+		logger.Fatal("ERRO CRÍTICO: Variável DATABASE_URL ou DB_DSN não encontrada.")
 	}
 	cfg.db.dsn = dsn
 
+    // CONEXÃO AO BANCO
 	db, err := openDB(cfg)
 	if err != nil {
 		logger.Fatal("ERRO FATAL AO CONECTAR BANCO:", err)
 	}
 	defer db.Close()
 
+    // INICIALIZAÇÃO DE SERVIÇOS
 	sheetsService, err := services.NewSheetsService()
 	if err != nil {
-		logger.Println("AVISO: SheetsService não iniciou (verifique credenciais):", err)
+		logger.Println("AVISO: SheetsService não iniciou:", err)
 	}
 
 	driveService, err := services.NewDriveService()
 	if err != nil {
-		logger.Println("AVISO: DriveService não iniciou (verifique credenciais):", err)
-	} else {
-		logger.Println("DriveService conectado.")
+		logger.Println("AVISO: DriveService não iniciou:", err)
 	}
 
 	app := &application{
@@ -101,21 +110,17 @@ func main() {
 		drive:  driveService,
 	}
 
-	// Tenta pegar porta do ambiente (Railway usa PORT)
-	portStr := os.Getenv("PORT")
-	if portStr != "" {
-		fmt.Sscanf(portStr, "%d", &cfg.port)
-	}
-
+    // SERVIDOR HTTP
+    // Importante: ListenAndServe usa o endereço ":PORTA", o que significa "0.0.0.0:PORTA"
 	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.port),
+		Addr:         fmt.Sprintf(":%s", cfg.port),
 		Handler:      app.routes(),
 		IdleTimeout:  time.Minute,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	}
 
-	logger.Printf("Servidor rodando na porta %d", cfg.port)
+	logger.Printf("Servidor iniciando na porta %s", cfg.port)
 	err = srv.ListenAndServe()
 	logger.Fatal(err)
 }
@@ -137,15 +142,16 @@ func (app *application) routes() http.Handler {
 	mux := chi.NewRouter()
 
 	mux.Use(middleware.Recoverer)
-	
-	// CONFIGURAÇÃO CORS ATUALIZADA
-	// Adicionamos explicitamente o domínio da Vercel para evitar bloqueios
+    
+    // Logger de requisições ajuda a ver se o tráfego está chegando
+    mux.Use(middleware.Logger) 
+
 	mux.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{
-			"https://censo-operacional-escolas.vercel.app", // Teu Front na Vercel
-			"http://localhost:3000",                        // Teu Front Local
-			"https://*",                                    // Fallback
-		},
+            "https://censo-operacional-escolas.vercel.app", 
+            "http://localhost:3000",
+            "*", // Temporário para garantir que funciona, depois restringimos
+        },
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
@@ -154,13 +160,10 @@ func (app *application) routes() http.Handler {
 	}))
 
 	mux.Get("/v1/health", app.HealthCheck)
-
 	mux.Get("/v1/schools", app.GetSchools)
 	mux.Post("/v1/schools", app.CreateSchool)
-
 	mux.Get("/v1/census", app.GetCenso)
 	mux.Post("/v1/census", app.CreateOrUpdateCenso)
-
 	mux.Post("/v1/upload", app.uploadPhoto)
 
 	return mux

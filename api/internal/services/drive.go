@@ -44,9 +44,9 @@ func NewDriveService() (*DriveService, error) {
 }
 
 func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, fileContent io.Reader) (string, error) {
-	rootFolderID := os.Getenv("DRIVE_ROOT_FOLDER_ID")
+	rootFolderID := os.Getenv("DRIVER_ROOT_FOLDER_ID")
 	if rootFolderID == "" {
-		return "", fmt.Errorf("DRIVE_ROOT_FOLDER_ID não configurado")
+		return "", fmt.Errorf("DRIVER_ROOT_FOLDER_ID não configurado")
 	}
 
 	query := fmt.Sprintf("name = '%s' and '%s' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false", folderName, rootFolderID)

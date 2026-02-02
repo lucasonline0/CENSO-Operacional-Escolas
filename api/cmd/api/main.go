@@ -152,8 +152,6 @@ func (app *application) routes() http.Handler {
 	})
 
 	mux.Route("/v1", func(r chi.Router) {
-		// LINHA REMOVIDA: r.Use(app.authenticate)
-		
 		r.Get("/health", app.HealthCheck)
 		r.Get("/locations", app.GetLocations)
 		r.Get("/schools", app.GetSchools)

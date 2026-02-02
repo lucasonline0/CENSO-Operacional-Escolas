@@ -10,7 +10,7 @@ func (app *application) authenticate(next http.Handler) http.Handler {
 		apiKey := r.Header.Get("X-API-Key")
 		expectedKey := os.Getenv("API_KEY")
 
-		if expectedKey == "" || apiKey != expectedKey {
+		if expectedKey != "" && apiKey != expectedKey {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}

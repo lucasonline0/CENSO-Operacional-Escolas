@@ -26,4 +26,3 @@ key.json
 
 # Dev Tools (Tests)
 src/dev/
-web/src/dev/auto-filler.tsx

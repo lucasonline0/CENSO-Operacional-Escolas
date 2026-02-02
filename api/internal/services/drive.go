@@ -23,10 +23,10 @@ func NewDriveService() (*DriveService, error) {
 		creds = []byte(envCreds)
 	} else {
 		paths := []string{"credentials.json", "../credentials.json", "../../credentials.json"}
+		var err error
 		for _, path := range paths {
-			fileCreds, err := os.ReadFile(path)
+			creds, err = os.ReadFile(path)
 			if err == nil {
-				creds = fileCreds
 				break
 			}
 		}

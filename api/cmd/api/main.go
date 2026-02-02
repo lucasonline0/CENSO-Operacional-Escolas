@@ -137,6 +137,7 @@ func (app *application) routes() http.Handler {
 	mux.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{
 			"https://censo-operacional-escolas.vercel.app",
+			"http://localhost:3000",
 		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-API-Key"},
@@ -151,7 +152,7 @@ func (app *application) routes() http.Handler {
 	})
 
 	mux.Route("/v1", func(r chi.Router) {
-		r.Use(app.authenticate)
+		// LINHA REMOVIDA: r.Use(app.authenticate)
 		
 		r.Get("/health", app.HealthCheck)
 		r.Get("/locations", app.GetLocations)

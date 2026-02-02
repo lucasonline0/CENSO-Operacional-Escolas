@@ -23,10 +23,10 @@ func NewDriveService() (*DriveService, error) {
 		creds = []byte(envCreds)
 	} else {
 		paths := []string{"credentials.json", "../credentials.json", "../../credentials.json"}
-		var err error
 		for _, path := range paths {
-			creds, err = os.ReadFile(path)
+			c, err := os.ReadFile(path)
 			if err == nil {
+				creds = c
 				break
 			}
 		}
@@ -49,8 +49,16 @@ func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, fil
 		return "", fmt.Errorf("DRIVER_ROOT_FOLDER_ID não configurado")
 	}
 
+	// 1. Busca a pasta da escola
 	query := fmt.Sprintf("name = '%s' and '%s' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false", folderName, rootFolderID)
-	list, err := s.srv.Files.List().Q(query).Fields("files(id)").Do()
+	
+	list, err := s.srv.Files.List().
+		Q(query).
+		Fields("files(id)").
+		SupportsAllDrives(true).
+		IncludeItemsFromAllDrives(true).
+		Do()
+
 	if err != nil {
 		return "", fmt.Errorf("erro buscar pasta: %v", err)
 	}
@@ -60,24 +68,35 @@ func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, fil
 	if len(list.Files) > 0 {
 		schoolFolderID = list.Files[0].Id
 	} else {
+		// 2. Cria a pasta se não existir
 		folderMetadata := &drive.File{
 			Name:     folderName,
 			Parents:  []string{rootFolderID},
 			MimeType: "application/vnd.google-apps.folder",
 		}
-		folder, err := s.srv.Files.Create(folderMetadata).Fields("id").Do()
+		folder, err := s.srv.Files.Create(folderMetadata).
+			Fields("id").
+			SupportsAllDrives(true).
+			Do()
+
 		if err != nil {
 			return "", fmt.Errorf("erro criar pasta: %v", err)
 		}
 		schoolFolderID = folder.Id
 	}
 
+	// 3. Faz o upload do arquivo
 	fileMetadata := &drive.File{
 		Name:    fileName,
 		Parents: []string{schoolFolderID},
 	}
 
-	uploadedFile, err := s.srv.Files.Create(fileMetadata).Media(fileContent).Fields("id, webViewLink").Do()
+	uploadedFile, err := s.srv.Files.Create(fileMetadata).
+		Media(fileContent).
+		Fields("id, webViewLink").
+		SupportsAllDrives(true).
+		Do()
+
 	if err != nil {
 		return "", fmt.Errorf("erro upload arquivo: %v", err)
 	}

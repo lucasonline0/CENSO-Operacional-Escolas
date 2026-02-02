@@ -40,7 +40,12 @@ export function IdentificationForm({ onSuccess, initialId }: IdentificationFormP
   useEffect(() => {
     async function fetchLocations() {
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/locations`);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/locations`, {
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || ""
+          }
+        });
         if (response.ok) {
           const result = await response.json();
           setLocations(result.data || {});
@@ -97,7 +102,10 @@ export function IdentificationForm({ onSuccess, initialId }: IdentificationFormP
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/schools`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || ""
+        },
         body: JSON.stringify(data),
       });
 

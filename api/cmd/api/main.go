@@ -156,7 +156,7 @@ func (app *application) routes() http.Handler {
 		r.Get("/health", app.HealthCheck)
 		r.Get("/locations", app.GetLocations)
 		r.Get("/schools", app.GetSchools)
-		r.Post("/v1/schools", app.CreateSchool)
+		r.Post("/schools", app.CreateSchool)
 		r.Get("/census", app.GetCenso)
 		r.Post("/census", app.CreateOrUpdateCenso)
 		r.Post("/upload", app.uploadPhoto)

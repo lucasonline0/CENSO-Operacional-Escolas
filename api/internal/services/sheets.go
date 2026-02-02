@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/xuri/excelize/v2"
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 )
@@ -16,9 +17,9 @@ import (
 const SheetRange = "Base_dados!A:A"
 
 type SheetsService struct {
-	srv                    *sheets.Service
-	censusSpreadsheetID    string
-	locationsSpreadsheetID string
+	srv           *sheets.Service
+	censusSpreadsheetID string
+	localFilePath       string
 }
 
 func NewSheetsService() (*SheetsService, error) {
@@ -52,53 +53,60 @@ func NewSheetsService() (*SheetsService, error) {
 		return nil, fmt.Errorf("ERRO: Variável SPREADSHEET_ID não configurada")
 	}
 
-	locationsID := os.Getenv("SPREADSHEET_ID_LOCATIONS")
-
 	return &SheetsService{
-		srv:                    srv,
-		censusSpreadsheetID:    censusID,
-		locationsSpreadsheetID: locationsID,
+		srv:                 srv,
+		censusSpreadsheetID: censusID,
+		localFilePath:       "data/locations.xlsx",
 	}, nil
 }
 
 func (s *SheetsService) GetLocations() (map[string]map[string][]string, error) {
-	if s.locationsSpreadsheetID == "" {
-		return nil, fmt.Errorf("ID da planilha de setores não configurado")
-	}
-
-	readRange := "setores!B2:G"
-
-	resp, err := s.srv.Spreadsheets.Values.Get(s.locationsSpreadsheetID, readRange).Do()
+	f, err := excelize.OpenFile(s.localFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("erro ao ler planilha de setores: %v", err)
+		return nil, fmt.Errorf("erro ao abrir planilha local: %v", err)
+	}
+	defer f.Close()
+
+	sheetName := f.GetSheetName(0)
+	rows, err := f.GetRows(sheetName)
+	if err != nil {
+		return nil, err
 	}
 
 	mapping := make(map[string]map[string][]string)
-	
-	for _, row := range resp.Values {
-		if len(row) > 5 {
-			dre := strings.TrimSpace(fmt.Sprintf("%v", row[0]))
-			municipio := strings.TrimSpace(fmt.Sprintf("%v", row[3]))
-			escola := strings.TrimSpace(fmt.Sprintf("%v", row[5]))
 
-			if dre == "" || municipio == "" || escola == "" {
-				continue
-			}
+	for i, row := range rows {
+		if i == 0 { // Pula cabeçalho
+			continue
+		}
+		
+		// Verifica se a linha tem colunas suficientes (até a coluna G/índice 6)
+		if len(row) <= 6 {
+			continue
+		}
 
-			if mapping[dre] == nil {
-				mapping[dre] = make(map[string][]string)
-			}
+		// Mapeamento: Coluna B (índice 1), Coluna E (índice 4), Coluna G (índice 6)
+		dre := strings.TrimSpace(row[1])
+		municipio := strings.TrimSpace(row[4])
+		escola := strings.TrimSpace(row[6])
 
-			found := false
-			for _, ex := range mapping[dre][municipio] {
-				if ex == escola {
-					found = true
-					break
-				}
+		if dre == "" || municipio == "" || escola == "" {
+			continue
+		}
+
+		if mapping[dre] == nil {
+			mapping[dre] = make(map[string][]string)
+		}
+
+		found := false
+		for _, ex := range mapping[dre][municipio] {
+			if ex == escola {
+				found = true
+				break
 			}
-			if !found {
-				mapping[dre][municipio] = append(mapping[dre][municipio], escola)
-			}
+		}
+		if !found {
+			mapping[dre][municipio] = append(mapping[dre][municipio], escola)
 		}
 	}
 

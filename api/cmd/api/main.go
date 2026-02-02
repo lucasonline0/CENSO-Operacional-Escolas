@@ -79,7 +79,7 @@ func main() {
 
 	sheetsService, err := services.NewSheetsService()
 	if err != nil {
-		logger.Println("AVISO: SheetsService erro:", err)
+		logger.Println("AVISO: SheetsService erro (escrita no sheets pode falhar):", err)
 	} else {
 		logger.Println("SheetsService iniciado.")
 	}

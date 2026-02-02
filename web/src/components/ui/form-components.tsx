@@ -1,6 +1,6 @@
 "use client";
 
-import { Control, FieldValues, Path, ControllerRenderProps } from "react-hook-form";
+import { Control, FieldValues, Path } from "react-hook-form";
 import {
   FormControl,
   FormField,
@@ -18,9 +18,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Checkbox } from "@/components/ui/checkbox";
 
-// Interface base atualizada para aceitar placeholder opcional
+// Interface base (mantida igual ao original)
 interface BaseProps<T extends FieldValues> {
   control: Control<T>;
   name: Path<T>;
@@ -38,7 +37,6 @@ interface RadioProps<T extends FieldValues> extends BaseProps<T> {
   options: string[];
 }
 
-// TextInput agora aceita e aplica o placeholder
 export function TextInput<T extends FieldValues>({
   control,
   name,
@@ -70,6 +68,7 @@ export function TextInput<T extends FieldValues>({
   );
 }
 
+// CORREÇÃO APLICADA AQUI: NumberInput com bloqueio de negativos
 export function NumberInput<T extends FieldValues>({
   control,
   name,
@@ -78,6 +77,11 @@ export function NumberInput<T extends FieldValues>({
   description,
   disabled,
 }: BaseProps<T>) {
+  
+  // Função para bloquear caracteres inválidos (negativo, e, +)
+  const blockInvalidChar = (e: React.KeyboardEvent<HTMLInputElement>) => 
+    ["e", "E", "+", "-"].includes(e.key) && e.preventDefault();
+
   return (
     <FormField
       control={control}
@@ -88,9 +92,16 @@ export function NumberInput<T extends FieldValues>({
           <FormControl>
             <Input
               type="number"
+              min={0} // Define o mínimo no HTML
+              onKeyDown={blockInvalidChar} // Bloqueia a digitação
               placeholder={placeholder}
               {...field}
-              onChange={(e) => field.onChange(e.target.valueAsNumber)}
+              onChange={(e) => {
+                // Garante que se o usuário colar algo negativo, será tratado (opcional, mas seguro)
+                const val = e.target.valueAsNumber;
+                if (val < 0) return; 
+                field.onChange(val);
+              }}
               value={field.value ?? ""}
               disabled={disabled}
             />

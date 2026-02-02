@@ -31,7 +31,6 @@ export function MerendaForm({ schoolId, onSuccess, onBack }: MerendaFormProps) {
         qtd_merendeiras_estatutaria: 0,
         qtd_merendeiras_terceirizada: 0,
         qtd_merendeiras_temporaria: 0,
-        // Valores default para campos novos/renomeados (Opcional, mas bom para evitar undefined)
         qtd_atende_necessidade_merenda: undefined, 
         empresa_terceirizada_merenda: undefined,
         possui_supervisor_merenda: undefined,
@@ -45,14 +44,15 @@ export function MerendaForm({ schoolId, onSuccess, onBack }: MerendaFormProps) {
   );
 
   useEffect(() => {
-    const subscription = form.watch((value) => saveLocalDraft(value as MerendaFormValues));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const subscription = form.watch((value: any) => saveLocalDraft(value as MerendaFormValues));
     return () => subscription.unsubscribe();
   }, [form, saveLocalDraft]);
 
   async function onSubmit(data: MerendaFormValues) {
     setIsSaving(true);
     try {
-      const response = await fetch("http://localhost:8000/v1/census", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/census`, {
         method: "POST", 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -145,7 +145,7 @@ export function MerendaForm({ schoolId, onSuccess, onBack }: MerendaFormProps) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <NumberInput control={control} name="qtd_merendeiras_estatutaria" label="Qtd. Estatutárias" />
                 <NumberInput control={control} name="qtd_merendeiras_terceirizada" label="Qtd. Terceirizadas" />
-                <NumberInput control={control} name="qtd_merendeiras_temporaria" label="Qtd. Temporárias" />
+                <NumberInput control={control} name="qtd_merendeiras_temporaria" label="Qtd. Temporários" />
             </div>
             
             <RadioInput control={control} name="qtd_atende_necessidade_merenda" label="A quantidade atual atende a necessidade?" options={["Sim", "Não"]} />

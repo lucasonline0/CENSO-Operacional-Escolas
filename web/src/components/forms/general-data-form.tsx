@@ -3,14 +3,14 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { generalDataSchema, GeneralDataFormValues } from "@/schemas/steps/general-data"; 
+import { generalDataSchema, GeneralDataFormValues } from "@/schemas/steps/general-data";
 import { Button } from "@/components/ui/button";
 import { Form, FormField, FormItem, FormControl, FormLabel } from "@/components/ui/form";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SelectInput, RadioInput, NumberInput, TextInput } from "@/components/ui/form-components";
 import { Separator } from "@/components/ui/separator";
 import { useCensusPersistence } from "@/hooks/use-census-persistence";
-import { Input } from "@/components/ui/input"; // Importante para o input file
+import { Input } from "@/components/ui/input";
 
 interface GeneralDataFormProps {
   schoolId: number;
@@ -20,7 +20,6 @@ interface GeneralDataFormProps {
 
 export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataFormProps) {
   const [isSaving, setIsSaving] = useState(false);
-  // Estados para o Upload
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
 
@@ -28,24 +27,24 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(generalDataSchema) as any,
     defaultValues: {
-        etapas_ofertadas: [], 
-        modalidades_ofertadas: [], 
-        ambientes: [], 
-        problemas_eletricos: [],
-        turmas_manha: 0, 
-        turmas_tarde: 0, 
-        turmas_noite: 0, 
-        total_alunos: 0, 
-        alunos_pcd: 0,
-        alunos_rural: 0, 
-        alunos_urbana: 0, 
-        qtd_anexos: 0, 
-        qtd_quadras: 0, 
-        banheiros_alunos: 0,
-        banheiros_prof: 0, 
-        banheiros_chuveiro: 0, 
-        salas_climatizadas: 0, 
-        qtd_salas_aula: 0,
+      etapas_ofertadas: [], 
+      modalidades_ofertadas: [], 
+      ambientes: [], 
+      problemas_eletricos: [],
+      turmas_manha: 0, 
+      turmas_tarde: 0, 
+      turmas_noite: 0, 
+      total_alunos: 0, 
+      alunos_pcd: 0,
+      alunos_rural: 0, 
+      alunos_urbana: 0, 
+      qtd_anexos: 0, 
+      qtd_quadras: 0, 
+      banheiros_alunos: 0,
+      banheiros_prof: 0, 
+      banheiros_chuveiro: 0, 
+      salas_climatizadas: 0, 
+      qtd_salas_aula: 0,
     }
   });
 
@@ -54,11 +53,11 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
   );
 
   useEffect(() => {
-    const subscription = form.watch((value) => saveLocalDraft(value as GeneralDataFormValues));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const subscription = form.watch((value: any) => saveLocalDraft(value as GeneralDataFormValues));
     return () => subscription.unsubscribe();
   }, [form, saveLocalDraft]);
 
-  // Função de Upload (Reintegrada)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     
@@ -77,7 +76,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
 
         if (response.ok) {
             setUploadMessage("✅ Foto enviada com sucesso!");
-            // Limpa o input para permitir enviar a mesma foto se necessário ou outra
             e.target.value = "";
         } else {
             setUploadMessage("❌ Erro ao enviar foto.");
@@ -119,7 +117,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         
-        {/* BLOCO 1 */}
         <div className="space-y-6">
             <h3 className="text-lg font-medium text-slate-800">Infraestrutura Escolar</h3>
             <RadioInput control={control} name="tipo_predio" label="Tipo de prédio *" options={["Próprio", "Alugado", "Compartilhado", "Cedido"]} />
@@ -135,7 +132,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
         </div>
         <Separator />
 
-        {/* BLOCO 2 */}
         <div className="space-y-6">
             <h3 className="text-lg font-medium text-slate-800">Ensino</h3>
             
@@ -149,7 +145,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
                     {["Ensino Infantil", "Ensino Fundamental I", "Ensino Fundamental II", "Ensino Médio"].map((item) => (
                         <FormField key={item} control={form.control} name="etapas_ofertadas" render={({ field }) => (
                             <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                                <FormControl><Checkbox checked={field.value?.includes(item)} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), item]) : field.onChange(field.value?.filter((v) => v !== item))} /></FormControl>
+                                <FormControl><Checkbox checked={field.value?.includes(item)} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), item]) : field.onChange(field.value?.filter((v: string) => v !== item))} /></FormControl>
                                 <FormLabel className="font-normal cursor-pointer">{item}</FormLabel>
                             </FormItem>
                         )} />
@@ -162,7 +158,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
                     {["Ensino Regular", "Ensino Integral", "Educação de Jovens e Adultos (EJA)", "Educação Especial", "Educação Profissional e Tecnológica", "Educação do Campo", "Educação Escolar Indígena", "Educação Quilombola", "CEMEP", "SOME", "PPL"].map((item) => (
                         <FormField key={item} control={form.control} name="modalidades_ofertadas" render={({ field }) => (
                             <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                                <FormControl><Checkbox checked={field.value?.includes(item)} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), item]) : field.onChange(field.value?.filter((v) => v !== item))} /></FormControl>
+                                <FormControl><Checkbox checked={field.value?.includes(item)} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), item]) : field.onChange(field.value?.filter((v: string) => v !== item))} /></FormControl>
                                 <FormLabel className="font-normal cursor-pointer">{item}</FormLabel>
                             </FormItem>
                         )} />
@@ -183,7 +179,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
         </div>
         <Separator />
 
-        {/* BLOCO 3 */}
         <div className="space-y-6">
             <h3 className="text-lg font-medium text-slate-800">Segurança e Manutenção</h3>
             <RadioInput control={control} name="muro_cerca" label="A escola possui muro ou cerca?" options={["Sim, muro", "Sim, cerca", "Sim, ambos", "Não possui"]} />
@@ -192,7 +187,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
             )}
             <SelectInput control={control} name="situacao_estrutura" label="Situação da estrutura da escola" options={["Necessita de reforma geral", "Necessita de reforma parcial (melhoria pontual)", "Reforma em andamento", "Está em reforma, porém a obra está parada", "Foi reformada recentemente"]} />
             
-            {/* ÁREA DE UPLOAD (REINTEGRADA AQUI) */}
             <div className="p-4 border border-dashed border-blue-300 rounded-md bg-blue-50/50 text-center">
                 <p className="text-sm text-slate-700 mb-2 font-medium">Anexar Fotos para Análise</p>
                 <div className="max-w-xs mx-auto">
@@ -213,14 +207,13 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
         </div>
         <Separator />
 
-        {/* BLOCO 4 */}
         <div className="space-y-4">
             <h3 className="text-lg font-medium text-slate-800">Ambientes Escolares</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {["Biblioteca", "Laboratório de Ciências", "Laboratório de Informática", "Quadra Esportiva", "Refeitório", "Cozinha", "Sala dos Professores", "Auditório", "Secretaria", "Sala de leitura", "SAEE", "Sala de reunião"].map((item) => (
                     <FormField key={item} control={form.control} name="ambientes" render={({ field }) => (
                         <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                            <FormControl><Checkbox checked={field.value?.includes(item)} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), item]) : field.onChange(field.value?.filter((v) => v !== item))} /></FormControl>
+                            <FormControl><Checkbox checked={field.value?.includes(item)} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), item]) : field.onChange(field.value?.filter((v: string) => v !== item))} /></FormControl>
                             <FormLabel className="font-normal cursor-pointer">{item}</FormLabel>
                         </FormItem>
                     )} />
@@ -240,7 +233,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
         </div>
         <Separator />
 
-        {/* BLOCO 5 */}
         <div className="space-y-6">
             <h3 className="text-lg font-medium text-slate-800">Sanitários e Climatização</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -255,7 +247,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
         </div>
         <Separator />
 
-        {/* BLOCO 6 */}
         <div className="space-y-6">
             <h3 className="text-lg font-medium text-slate-800">Energia Elétrica e Câmeras</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -269,7 +260,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
                     {["Quedas frequentes", "Sobrecarga", "Fiação antiga", "Quadro elétrico inadequado", "Não há problemas aparentes"].map((item) => (
                         <FormField key={item} control={form.control} name="problemas_eletricos" render={({ field }) => (
                             <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                                <FormControl><Checkbox checked={field.value?.includes(item)} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), item]) : field.onChange(field.value?.filter((v) => v !== item))} /></FormControl>
+                                <FormControl><Checkbox checked={field.value?.includes(item)} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), item]) : field.onChange(field.value?.filter((v: string) => v !== item))} /></FormControl>
                                 <FormLabel className="font-normal cursor-pointer">{item}</FormLabel>
                             </FormItem>
                         )} />

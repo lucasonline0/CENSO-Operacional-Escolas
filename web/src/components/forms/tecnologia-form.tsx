@@ -52,7 +52,7 @@ export function TecnologiaForm({ schoolId, onSuccess, onBack }: TecnologiaFormPr
   async function onSubmit(data: any) {
     setIsSaving(true);
     try {
-      const response = await fetch("http://localhost:8000/v1/census", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/census`, {
         method: "POST", 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

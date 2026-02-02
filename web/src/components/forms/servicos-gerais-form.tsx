@@ -39,14 +39,15 @@ export function ServicosGeraisForm({ schoolId, onSuccess, onBack }: ServicosGera
   );
 
   useEffect(() => {
-    const subscription = form.watch((value) => saveLocalDraft(value as ServicosGeraisFormValues));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const subscription = form.watch((value: any) => saveLocalDraft(value as ServicosGeraisFormValues));
     return () => subscription.unsubscribe();
   }, [form, saveLocalDraft]);
 
   async function onSubmit(data: ServicosGeraisFormValues) {
     setIsSaving(true);
     try {
-      const response = await fetch("http://localhost:8000/v1/census", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/census`, {
         method: "POST", 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

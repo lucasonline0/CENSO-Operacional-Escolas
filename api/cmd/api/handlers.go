@@ -223,8 +223,9 @@ func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 	}
 
 	folderName := fmt.Sprintf("%s - %s - %s", sanitize(school.Nome), sanitize(school.Dre), sanitize(school.NomeDiretor))
+	contentType := handler.Header.Get("Content-Type")
 
-	link, err := app.drive.UploadSchoolPhoto(folderName, handler.Filename, file)
+	link, err := app.drive.UploadSchoolPhoto(folderName, handler.Filename, contentType, file)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro no upload: %v", err), http.StatusInternalServerError)
 		return

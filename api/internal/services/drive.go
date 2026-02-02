@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"google.golang.org/api/drive/v3"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 )
 
@@ -43,13 +44,12 @@ func NewDriveService() (*DriveService, error) {
 	return &DriveService{srv: srv}, nil
 }
 
-func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, fileContent io.Reader) (string, error) {
+func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, contentType string, fileContent io.Reader) (string, error) {
 	rootFolderID := os.Getenv("DRIVER_ROOT_FOLDER_ID")
 	if rootFolderID == "" {
 		return "", fmt.Errorf("DRIVER_ROOT_FOLDER_ID não configurado")
 	}
 
-	// 1. Busca a pasta da escola
 	query := fmt.Sprintf("name = '%s' and '%s' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false", folderName, rootFolderID)
 	
 	list, err := s.srv.Files.List().
@@ -68,7 +68,6 @@ func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, fil
 	if len(list.Files) > 0 {
 		schoolFolderID = list.Files[0].Id
 	} else {
-		// 2. Cria a pasta se não existir
 		folderMetadata := &drive.File{
 			Name:     folderName,
 			Parents:  []string{rootFolderID},
@@ -85,14 +84,14 @@ func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, fil
 		schoolFolderID = folder.Id
 	}
 
-	// 3. Faz o upload do arquivo
 	fileMetadata := &drive.File{
-		Name:    fileName,
-		Parents: []string{schoolFolderID},
+		Name:     fileName,
+		Parents:  []string{schoolFolderID},
+		MimeType: contentType,
 	}
 
 	uploadedFile, err := s.srv.Files.Create(fileMetadata).
-		Media(fileContent).
+		Media(fileContent, googleapi.ContentType(contentType)).
 		Fields("id, webViewLink").
 		SupportsAllDrives(true).
 		Do()

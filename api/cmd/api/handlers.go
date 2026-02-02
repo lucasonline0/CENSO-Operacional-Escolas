@@ -3,7 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -154,7 +157,9 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// LÓGICA DE FINALIZAÇÃO: Planilha e Google Drive
 	if req.Status == "completed" {
+		// 1. Enviar para Planilha (Goroutine)
 		go func(c models.CensusResponse) {
 			if app.sheets == nil {
 				app.logger.Println("Erro: Serviço de Planilhas não inicializado.")
@@ -172,6 +177,58 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 				app.logger.Println("Sucesso: Dados enviados para a planilha.")
 			}
 		}(censo)
+
+		// 2. Processar Upload da Foto (Síncrono para garantir envio)
+		// Verifica se existe arquivo temporário para esta escola
+		tempDir := "./tmp"
+		pattern := fmt.Sprintf("%d_*", req.SchoolID)
+		matches, _ := filepath.Glob(filepath.Join(tempDir, pattern))
+
+		if len(matches) > 0 {
+			// Pega o primeiro arquivo encontrado (assume 1 foto por vez)
+			tempFilePath := matches[0]
+			
+			// Busca dados da escola para nomear pasta
+			school, err := app.models.Schools.Get(req.SchoolID)
+			if err == nil && app.drive != nil {
+				file, err := os.Open(tempFilePath)
+				if err == nil {
+					defer file.Close()
+					
+					// Recria nome da pasta
+					sanitize := func(s string) string {
+						return strings.Map(func(r rune) rune {
+							if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == ' ' {
+								return r
+							}
+							return '-'
+						}, s)
+					}
+					folderName := fmt.Sprintf("%s - %s - %s", sanitize(school.Nome), sanitize(school.Dre), sanitize(school.NomeDiretor))
+					
+					// Detecta Content-Type simples
+					buffer := make([]byte, 512)
+					file.Read(buffer)
+					contentType := http.DetectContentType(buffer)
+					file.Seek(0, 0) // Reseta ponteiro
+
+					// Nome do arquivo original (extraído do nome temporário)
+					_, filename := filepath.Split(tempFilePath)
+					originalName := strings.TrimPrefix(filename, fmt.Sprintf("%d_", req.SchoolID))
+
+					// Envia para o Drive
+					_, err = app.drive.UploadSchoolPhoto(folderName, originalName, contentType, file)
+					if err != nil {
+						app.logger.Println("Erro upload Drive:", err)
+					} else {
+						app.logger.Println("Sucesso upload Drive")
+						// Remove arquivo temporário após sucesso
+						file.Close()
+						os.Remove(tempFilePath)
+					}
+				}
+			}
+		}
 	}
 
 	payload := jsonResponse{
@@ -184,6 +241,7 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
+	// Limite 10MB
 	r.ParseMultipartForm(10 << 20)
 
 	file, handler, err := r.FormFile("photo")
@@ -199,42 +257,32 @@ func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var schoolID int
-	fmt.Sscanf(schoolIDStr, "%d", &schoolID)
+	// Apenas salva no disco temporariamente
+	tempDir := "./tmp"
+	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
+		os.Mkdir(tempDir, 0755)
+	}
 
-	school, err := app.models.Schools.Get(schoolID)
+	// Formato: ID_NomeOriginal
+	tempFilename := fmt.Sprintf("%s_%s", schoolIDStr, handler.Filename)
+	dstPath := filepath.Join(tempDir, tempFilename)
+
+	dst, err := os.Create(dstPath)
 	if err != nil {
-		app.errorJSON(w, fmt.Errorf("escola não encontrada"), http.StatusNotFound)
+		app.errorJSON(w, fmt.Errorf("erro interno ao salvar temp: %v", err), http.StatusInternalServerError)
 		return
 	}
+	defer dst.Close()
 
-	if app.drive == nil {
-		app.errorJSON(w, fmt.Errorf("serviço de drive indisponível"), http.StatusInternalServerError)
-		return
-	}
-
-	sanitize := func(s string) string {
-		return strings.Map(func(r rune) rune {
-			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == ' ' {
-				return r
-			}
-			return '-'
-		}, s)
-	}
-
-	folderName := fmt.Sprintf("%s - %s - %s", sanitize(school.Nome), sanitize(school.Dre), sanitize(school.NomeDiretor))
-	contentType := handler.Header.Get("Content-Type")
-
-	link, err := app.drive.UploadSchoolPhoto(folderName, handler.Filename, contentType, file)
-	if err != nil {
-		app.errorJSON(w, fmt.Errorf("erro no upload: %v", err), http.StatusInternalServerError)
+	if _, err := io.Copy(dst, file); err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao escrever arquivo: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	payload := jsonResponse{
 		Error:   false,
-		Message: "Upload concluído",
-		Data:    link,
+		Message: "Upload recebido (será processado ao finalizar)",
+		Data:    "temp_ok",
 	}
 	app.writeJSON(w, http.StatusCreated, payload)
 }

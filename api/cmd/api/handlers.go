@@ -157,57 +157,51 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	uploadMsg := ""
+
 	// LÓGICA DE FINALIZAÇÃO: Planilha e Google Drive
 	if req.Status == "completed" {
 		// 1. Enviar para Planilha (Goroutine)
 		go func(c models.CensusResponse) {
 			if app.sheets == nil {
-				app.logger.Println("Erro: Serviço de Planilhas não inicializado.")
 				return
 			}
 			school, err := app.models.Schools.Get(c.SchoolID)
 			if err != nil {
-				app.logger.Println("Erro ao buscar escola:", err)
+				app.logger.Println("Erro ao buscar escola para planilha:", err)
 				return
 			}
 			err = app.sheets.AppendCenso(c, *school)
 			if err != nil {
 				app.logger.Println("Erro ao salvar na planilha:", err)
-			} else {
-				app.logger.Println("Sucesso: Dados enviados para a planilha.")
 			}
 		}(censo)
 
-		// 2. Processar Upload da Foto (Síncrono para garantir envio)
+		// 2. Processar Upload da Foto
 		tempDir := "./tmp"
 		pattern := fmt.Sprintf("%d_*", req.SchoolID)
 		matches, _ := filepath.Glob(filepath.Join(tempDir, pattern))
 
 		if len(matches) > 0 {
-			// Pega o primeiro arquivo encontrado
 			tempFilePath := matches[0]
-			app.logger.Printf("[Handlers] Arquivo temporário encontrado: %s", tempFilePath)
 			
-			// Busca dados da escola para nomear pasta
 			school, err := app.models.Schools.Get(req.SchoolID)
 			if err == nil && app.drive != nil {
-				func() { // Função anônima para controlar o defer do arquivo
+				// Função anônima para garantir fechamento do arquivo
+				errUpload := func() error {
 					file, err := os.Open(tempFilePath)
 					if err != nil {
-						app.logger.Println("Erro ao abrir arquivo temporário:", err)
-						return
+						return err
 					}
 					defer file.Close()
 
-					// Verifica tamanho do arquivo para garantir integridade
+					// Verifica se o arquivo tem conteúdo
 					stat, _ := file.Stat()
 					if stat.Size() == 0 {
-						app.logger.Println("AVISO: Arquivo de foto está vazio (0 bytes). Upload cancelado.")
-						return
+						return fmt.Errorf("arquivo vazio")
 					}
-					app.logger.Printf("Arquivo aberto. Tamanho: %d bytes", stat.Size())
-					
-					// Sanitização de nome da pasta
+
+					// Sanitização
 					sanitize := func(s string) string {
 						return strings.Map(func(r rune) rune {
 							if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == ' ' {
@@ -218,48 +212,41 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 					}
 					folderName := fmt.Sprintf("%s - %s - %s", sanitize(school.Nome), sanitize(school.Dre), sanitize(school.NomeDiretor))
 					
-					// Detecta Content-Type
+					// Detecta Content-Type e reseta ponteiro
 					buffer := make([]byte, 512)
 					n, _ := file.Read(buffer)
 					contentType := http.DetectContentType(buffer[:n])
 					
-					// Reset do ponteiro do arquivo é CRUCIAL
-					_, err = file.Seek(0, 0)
-					if err != nil {
-						app.logger.Println("ERRO CRÍTICO: Falha ao resetar ponteiro do arquivo:", err)
-						return
+					// RESET CRÍTICO: Garante que o arquivo seja lido do início no upload
+					if _, err := file.Seek(0, 0); err != nil {
+						return fmt.Errorf("falha ao resetar arquivo: %v", err)
 					}
 
-					// Nome do arquivo original
 					_, filename := filepath.Split(tempFilePath)
 					originalName := strings.TrimPrefix(filename, fmt.Sprintf("%d_", req.SchoolID))
 
-					app.logger.Printf("Iniciando upload Drive. Folder: %s, File: %s, Type: %s", folderName, originalName, contentType)
-
-					// Envia para o Drive
+					// Upload
 					link, err := app.drive.UploadSchoolPhoto(folderName, originalName, contentType, file)
 					if err != nil {
-						app.logger.Println("Erro upload Drive:", err)
-					} else {
-						app.logger.Printf("Sucesso upload Drive: %s", link)
-						// Só remove se deu certo
-						file.Close() 
-						os.Remove(tempFilePath)
+						return err
 					}
+					app.logger.Printf("Sucesso upload Drive: %s", link)
+					return nil
 				}()
-			} else {
-				if app.drive == nil {
-					app.logger.Println("AVISO: Serviço Drive não inicializado.")
+
+				if errUpload != nil {
+					app.logger.Println("ERRO CRÍTICO DRIVE:", errUpload)
+					uploadMsg = fmt.Sprintf(" (Erro ao salvar foto: %v)", errUpload)
+				} else {
+					os.Remove(tempFilePath) // Remove apenas se sucesso
 				}
 			}
-		} else {
-			app.logger.Println("Nenhuma foto temporária encontrada para upload.")
 		}
 	}
 
 	payload := jsonResponse{
 		Error:   false,
-		Message: "Censo salvo com sucesso",
+		Message: "Censo salvo com sucesso" + uploadMsg,
 		Data:    censo,
 	}
 
@@ -283,6 +270,7 @@ func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Garante diretório temporário
 	tempDir := "./tmp"
 	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
 		os.Mkdir(tempDir, 0755)
@@ -299,14 +287,10 @@ func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 	}
 	defer dst.Close()
 
-	// Copia o conteúdo para o disco
-	written, err := io.Copy(dst, file)
-	if err != nil {
+	if _, err := io.Copy(dst, file); err != nil {
 		app.errorJSON(w, fmt.Errorf("erro ao escrever arquivo: %v", err), http.StatusInternalServerError)
 		return
 	}
-
-	app.logger.Printf("Upload recebido: %s (%d bytes)", dstPath, written)
 
 	payload := jsonResponse{
 		Error:   false,

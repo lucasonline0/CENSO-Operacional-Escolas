@@ -179,23 +179,35 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 		}(censo)
 
 		// 2. Processar Upload da Foto (Síncrono para garantir envio)
-		// Verifica se existe arquivo temporário para esta escola
 		tempDir := "./tmp"
 		pattern := fmt.Sprintf("%d_*", req.SchoolID)
 		matches, _ := filepath.Glob(filepath.Join(tempDir, pattern))
 
 		if len(matches) > 0 {
-			// Pega o primeiro arquivo encontrado (assume 1 foto por vez)
+			// Pega o primeiro arquivo encontrado
 			tempFilePath := matches[0]
+			app.logger.Printf("[Handlers] Arquivo temporário encontrado: %s", tempFilePath)
 			
 			// Busca dados da escola para nomear pasta
 			school, err := app.models.Schools.Get(req.SchoolID)
 			if err == nil && app.drive != nil {
-				file, err := os.Open(tempFilePath)
-				if err == nil {
+				func() { // Função anônima para controlar o defer do arquivo
+					file, err := os.Open(tempFilePath)
+					if err != nil {
+						app.logger.Println("Erro ao abrir arquivo temporário:", err)
+						return
+					}
 					defer file.Close()
+
+					// Verifica tamanho do arquivo para garantir integridade
+					stat, _ := file.Stat()
+					if stat.Size() == 0 {
+						app.logger.Println("AVISO: Arquivo de foto está vazio (0 bytes). Upload cancelado.")
+						return
+					}
+					app.logger.Printf("Arquivo aberto. Tamanho: %d bytes", stat.Size())
 					
-					// Recria nome da pasta
+					// Sanitização de nome da pasta
 					sanitize := func(s string) string {
 						return strings.Map(func(r rune) rune {
 							if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == ' ' {
@@ -206,28 +218,42 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 					}
 					folderName := fmt.Sprintf("%s - %s - %s", sanitize(school.Nome), sanitize(school.Dre), sanitize(school.NomeDiretor))
 					
-					// Detecta Content-Type simples
+					// Detecta Content-Type
 					buffer := make([]byte, 512)
-					file.Read(buffer)
-					contentType := http.DetectContentType(buffer)
-					file.Seek(0, 0) // Reseta ponteiro
+					n, _ := file.Read(buffer)
+					contentType := http.DetectContentType(buffer[:n])
+					
+					// Reset do ponteiro do arquivo é CRUCIAL
+					_, err = file.Seek(0, 0)
+					if err != nil {
+						app.logger.Println("ERRO CRÍTICO: Falha ao resetar ponteiro do arquivo:", err)
+						return
+					}
 
-					// Nome do arquivo original (extraído do nome temporário)
+					// Nome do arquivo original
 					_, filename := filepath.Split(tempFilePath)
 					originalName := strings.TrimPrefix(filename, fmt.Sprintf("%d_", req.SchoolID))
 
+					app.logger.Printf("Iniciando upload Drive. Folder: %s, File: %s, Type: %s", folderName, originalName, contentType)
+
 					// Envia para o Drive
-					_, err = app.drive.UploadSchoolPhoto(folderName, originalName, contentType, file)
+					link, err := app.drive.UploadSchoolPhoto(folderName, originalName, contentType, file)
 					if err != nil {
 						app.logger.Println("Erro upload Drive:", err)
 					} else {
-						app.logger.Println("Sucesso upload Drive")
-						// Remove arquivo temporário após sucesso
-						file.Close()
+						app.logger.Printf("Sucesso upload Drive: %s", link)
+						// Só remove se deu certo
+						file.Close() 
 						os.Remove(tempFilePath)
 					}
+				}()
+			} else {
+				if app.drive == nil {
+					app.logger.Println("AVISO: Serviço Drive não inicializado.")
 				}
 			}
+		} else {
+			app.logger.Println("Nenhuma foto temporária encontrada para upload.")
 		}
 	}
 
@@ -257,7 +283,6 @@ func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Apenas salva no disco temporariamente
 	tempDir := "./tmp"
 	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
 		os.Mkdir(tempDir, 0755)
@@ -274,10 +299,14 @@ func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 	}
 	defer dst.Close()
 
-	if _, err := io.Copy(dst, file); err != nil {
+	// Copia o conteúdo para o disco
+	written, err := io.Copy(dst, file)
+	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro ao escrever arquivo: %v", err), http.StatusInternalServerError)
 		return
 	}
+
+	app.logger.Printf("Upload recebido: %s (%d bytes)", dstPath, written)
 
 	payload := jsonResponse{
 		Error:   false,

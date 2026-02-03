@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { UseFormReset, FieldValues } from "react-hook-form";
 
-// CORREÇÃO: Adicionado 'extends FieldValues' ao genérico T
 export function useCensusPersistence<T extends FieldValues>(
   schoolId: number | null | undefined,
   stepKey: string,
@@ -23,9 +22,15 @@ export function useCensusPersistence<T extends FieldValues>(
         let serverData = {};
 
         try {
+          const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+          
+          if (!baseUrl) {
+             console.warn("API URL não configurada");
+          }
+
           const url = endpoint === "schools" 
-            ? `http://localhost:8000/v1/schools?id=${schoolId}`
-            : `http://localhost:8000/v1/census?school_id=${schoolId}`;
+            ? `${baseUrl}/v1/schools?id=${schoolId}`
+            : `${baseUrl}/v1/census?school_id=${schoolId}`;
             
           const response = await fetch(url);
           if (response.ok) {
@@ -63,7 +68,6 @@ export function useCensusPersistence<T extends FieldValues>(
     };
 
     loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schoolId, stepKey, endpoint, reset]); 
 
   const saveLocalDraft = (data: T) => {

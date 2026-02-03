@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { gestaoSchema, GestaoFormValues } from "@/schemas/steps/gestao"; 
 import { Button } from "@/components/ui/button";
@@ -20,9 +20,19 @@ export function GestaoForm({ schoolId, onSuccess, onBack }: GestaoFormProps) {
   const [isSaving, setIsSaving] = useState(false);
 
   const form = useForm<GestaoFormValues>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(gestaoSchema) as any,
-    defaultValues: {}
+    resolver: zodResolver(gestaoSchema) as unknown as Resolver<GestaoFormValues>,
+    defaultValues: {
+      regularizada_cee: undefined,
+      conselho_escolar: undefined,
+      recursos_prodep: undefined,
+      valor_prodep: 0,
+      recursos_federais: undefined,
+      valor_federais: 0,
+      gremio_estudantil: undefined,
+      reunioes_comunidade: undefined,
+      plano_evacuacao: undefined,
+      politica_bullying: undefined,
+    }
   });
 
   const { isLoading, saveLocalDraft, clearLocalDraft } = useCensusPersistence(
@@ -34,11 +44,11 @@ export function GestaoForm({ schoolId, onSuccess, onBack }: GestaoFormProps) {
     return () => subscription.unsubscribe();
   }, [form, saveLocalDraft]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async function onSubmit(data: any) {
+  async function onSubmit(data: GestaoFormValues) {
     setIsSaving(true);
     try {
-      const response = await fetch("http://localhost:8000/v1/census", {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL; 
+      const response = await fetch(`${baseUrl}/v1/census`, {
         method: "POST", 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ school_id: schoolId, year: 2026, status: "draft", data: data }),
@@ -56,40 +66,39 @@ export function GestaoForm({ schoolId, onSuccess, onBack }: GestaoFormProps) {
   }
 
   if (isLoading) return <div className="text-center py-8 text-slate-500">Carregando Gestão...</div>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const control = form.control as any;
+  const control = form.control;
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         <div className="space-y-6">
             <h3 className="text-lg font-medium text-slate-800">Gestão, Participação e Política</h3>
-            <RadioInput control={control} name="regularizada_cee" label="A escola está regularizada junto ao CEE/PA?" options={["Sim", "Não"]} />
+            <RadioInput<GestaoFormValues> control={control} name="regularizada_cee" label="A escola está regularizada junto ao CEE/PA?" options={["Sim", "Não"]} />
             <div className="p-4 bg-slate-50 border rounded-md space-y-4">
-                <RadioInput control={control} name="conselho_escolar" label="A escola possui Conselho Escolar constituído?" options={["Sim", "Não"]} />
-                {form.watch("conselho_escolar") === "Sim" && (<RadioInput control={control} name="conselho_ativo" label="O Conselho Escolar está em funcionamento ativo?" options={["Sim", "Parcialmente", "Não"]} />)}
+                <RadioInput<GestaoFormValues> control={control} name="conselho_escolar" label="A escola possui Conselho Escolar constituído?" options={["Sim", "Não"]} />
+                {form.watch("conselho_escolar") === "Sim" && (<RadioInput<GestaoFormValues> control={control} name="conselho_ativo" label="O Conselho Escolar está em funcionamento ativo?" options={["Sim", "Parcialmente", "Não"]} />)}
             </div>
         </div>
         <Separator />
         <div className="space-y-6">
             <h3 className="text-lg font-medium text-slate-800">Recursos Financeiros</h3>
             <div className="p-4 border rounded-md bg-blue-50/30 space-y-4">
-                <RadioInput control={control} name="recursos_prodep" label="A escola recebeu recursos do PRODEP em 2024/2025?" options={["Sim", "Não", "Não sabe informar"]} />
+                <RadioInput<GestaoFormValues> control={control} name="recursos_prodep" label="A escola recebeu recursos do PRODEP em 2024/2025?" options={["Sim", "Não", "Não sabe informar"]} />
                 {form.watch("recursos_prodep") === "Sim" && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <NumberInput control={control} name="valor_prodep" label="Quanto a escola recebeu de recurso do PRODEP?" />
-                        <SelectInput control={control} name="execucao_prodep" label="Os recursos do PRODEP foram executados?" options={["Sim, totalmente", "Parcialmente", "Não executados"]} />
-                        <SelectInput control={control} name="pendencias_prodep" label="Há pendências na prestação de contas do PRODEP?" options={["Não", "Sim, em regularização", "Sim, pendente/atrasada"]} />
+                        <NumberInput<GestaoFormValues> control={control} name="valor_prodep" label="Quanto a escola recebeu de recurso do PRODEP?" />
+                        <SelectInput<GestaoFormValues> control={control} name="execucao_prodep" label="Os recursos do PRODEP foram executados?" options={["Sim, totalmente", "Parcialmente", "Não executados"]} />
+                        <SelectInput<GestaoFormValues> control={control} name="pendencias_prodep" label="Há pendências na prestação de contas do PRODEP?" options={["Não", "Sim, em regularização", "Sim, pendente/atrasada"]} />
                     </div>
                 )}
             </div>
             <div className="p-4 border rounded-md bg-green-50/30 space-y-4">
-                <RadioInput control={control} name="recursos_federais" label="A escola recebeu recursos federais em 2024/25?" options={["Sim", "Não"]} />
+                <RadioInput<GestaoFormValues> control={control} name="recursos_federais" label="A escola recebeu recursos federais em 2024/25?" options={["Sim", "Não"]} />
                 {form.watch("recursos_federais") === "Sim" && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <NumberInput control={control} name="valor_federais" label="Quanto a escola recebeu de recursos federais?" />
-                        <SelectInput control={control} name="execucao_federais" label="Os recursos federais foram executados?" options={["Sim, totalmente", "Parcialmente", "Não executados"]} />
-                        <SelectInput control={control} name="pendencias_federais" label="Há pendências na prestação de recursos federais?" options={["Não", "Sim, em regularização", "Sim, pendente/atrasada"]} />
+                        <NumberInput<GestaoFormValues> control={control} name="valor_federais" label="Quanto a escola recebeu de recursos federais?" />
+                        <SelectInput<GestaoFormValues> control={control} name="execucao_federais" label="Os recursos federais foram executados?" options={["Sim, totalmente", "Parcialmente", "Não executados"]} />
+                        <SelectInput<GestaoFormValues> control={control} name="pendencias_federais" label="Há pendências na prestação de recursos federais?" options={["Não", "Sim, em regularização", "Sim, pendente/atrasada"]} />
                     </div>
                 )}
             </div>
@@ -98,12 +107,12 @@ export function GestaoForm({ schoolId, onSuccess, onBack }: GestaoFormProps) {
         <div className="space-y-6">
             <h3 className="text-lg font-medium text-slate-800">Participação e Segurança</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 <RadioInput control={control} name="gremio_estudantil" label="A escola possui grêmio estudantil?" options={["Sim", "Não"]} />
-                 <SelectInput control={control} name="reunioes_comunidade" label="Reuniões com comunidade escolar" options={["Não ocorrem", "Eventuais (1–2 por ano)", "Regulares (semestrais)", "Frequentes (mensais ou mais)"]} />
+                 <RadioInput<GestaoFormValues> control={control} name="gremio_estudantil" label="A escola possui grêmio estudantil?" options={["Sim", "Não"]} />
+                 <SelectInput<GestaoFormValues> control={control} name="reunioes_comunidade" label="Reuniões com comunidade escolar" options={["Não ocorrem", "Eventuais (1–2 por ano)", "Regulares (semestrais)", "Frequentes (mensais ou mais)"]} />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <RadioInput control={control} name="plano_evacuacao" label="A escola possui plano de evacuação e emergência?" options={["Sim", "Não"]} />
-                <SelectInput control={control} name="politica_bullying" label="A escola possui política contra bullying/violência" options={["Sim, formalizada e aplicada", "Parcialmente (ações pontuais)", "Não possui"]} />
+                <RadioInput<GestaoFormValues> control={control} name="plano_evacuacao" label="A escola possui plano de evacuação e emergência?" options={["Sim", "Não"]} />
+                <SelectInput<GestaoFormValues> control={control} name="politica_bullying" label="A escola possui política contra bullying/violência" options={["Sim, formalizada e aplicada", "Parcialmente (ações pontuais)", "Não possui"]} />
             </div>
         </div>
         <div className="flex justify-between pt-6">

@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 
+	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
@@ -37,7 +38,28 @@ func NewDriveService() (*DriveService, error) {
 		}
 	}
 
-	srv, err := drive.NewService(ctx, option.WithCredentialsJSON(creds), option.WithScopes(drive.DriveScope))
+	// Tenta ler o email para Impersonation (Solução para Erro 403 Quota)
+	// Isso faz o bot agir em nome de um usuário com espaço (Workspace)
+	impersonateEmail := os.Getenv("GOOGLE_IMPERSONATE_EMAIL")
+	
+	var srv *drive.Service
+	var err error
+
+	if impersonateEmail != "" {
+		// Configura delegação JWT
+		config, err := google.JWTConfigFromJSON(creds, drive.DriveScope)
+		if err != nil {
+			return nil, fmt.Errorf("erro config JWT para delegação: %v", err)
+		}
+		config.Subject = impersonateEmail
+		
+		log.Printf("[Drive] Iniciando serviço com delegação (Impersonation) para: %s", impersonateEmail)
+		srv, err = drive.NewService(ctx, option.WithTokenSource(config.TokenSource(ctx)))
+	} else {
+		// Fluxo padrão (Service Account pura)
+		srv, err = drive.NewService(ctx, option.WithCredentialsJSON(creds), option.WithScopes(drive.DriveScope))
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("erro criar cliente drive: %v", err)
 	}
@@ -51,7 +73,7 @@ func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, con
 		return "", fmt.Errorf("DRIVER_ROOT_FOLDER_ID não configurado")
 	}
 
-	// Tenta rebobinar o arquivo se ele for um ReadSeeker (corrige erro comum de arquivo vazio)
+	// Tenta rebobinar o arquivo se ele for um ReadSeeker (segurança extra)
 	if seeker, ok := fileContent.(io.Seeker); ok {
 		_, err := seeker.Seek(0, 0)
 		if err != nil {
@@ -60,7 +82,6 @@ func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, con
 	}
 
 	// 1. Encontrar ou Criar a Pasta da Escola
-	// Aspas simples no nome para evitar erros com espaços ou caracteres especiais
 	query := fmt.Sprintf("name = '%s' and '%s' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false", folderName, rootFolderID)
 	
 	list, err := s.srv.Files.List().
@@ -106,17 +127,17 @@ func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, con
 
 	uploadedFile, err := s.srv.Files.Create(fileMetadata).
 		Media(fileContent, googleapi.ContentType(contentType)).
-		Fields("id, webViewLink, parents"). // Retorna parents para confirmar onde foi salvo
+		Fields("id, webViewLink, parents").
 		SupportsAllDrives(true).
 		Do()
 
 	if err != nil {
+		// Loga o erro exato para debug
 		return "", fmt.Errorf("erro upload arquivo: %v", err)
 	}
 
-	log.Printf("[Drive] Arquivo enviado com sucesso! ID: %s, Parents: %v", uploadedFile.Id, uploadedFile.Parents)
+	log.Printf("[Drive] Arquivo enviado com sucesso! ID: %s", uploadedFile.Id)
 
-	// Fallback: Se webViewLink vier vazio (às vezes acontece em drives compartilhados), construir manualmente
 	link := uploadedFile.WebViewLink
 	if link == "" {
 		link = fmt.Sprintf("https://drive.google.com/file/d/%s/view", uploadedFile.Id)

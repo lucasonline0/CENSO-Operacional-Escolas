@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { avaliacaoSchema, AvaliacaoFormValues } from "@/schemas/steps/avaliacao"; 
 import { Button } from "@/components/ui/button";
@@ -21,9 +21,14 @@ export function AvaliacaoForm({ schoolId, onSuccess, onBack }: AvaliacaoFormProp
   const [isSaving, setIsSaving] = useState(false);
 
   const form = useForm<AvaliacaoFormValues>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(avaliacaoSchema) as any,
-    defaultValues: {}
+    resolver: zodResolver(avaliacaoSchema) as unknown as Resolver<AvaliacaoFormValues>,
+    defaultValues: {
+      avaliacao_merendeiras: undefined,
+      avaliacao_portaria: undefined,
+      avaliacao_limpeza: undefined,
+      avaliacao_comunicacao: undefined,
+      avaliacao_supervisao: undefined,
+    }
   });
 
   const { isLoading, saveLocalDraft, clearLocalDraft } = useCensusPersistence(
@@ -34,19 +39,17 @@ export function AvaliacaoForm({ schoolId, onSuccess, onBack }: AvaliacaoFormProp
   );
 
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const subscription = form.watch((value: any) => {
-        saveLocalDraft(value);
+    const subscription = form.watch((value) => {
+        saveLocalDraft(value as AvaliacaoFormValues);
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return () => (subscription as any).unsubscribe();
+    return () => subscription.unsubscribe();
   }, [form, saveLocalDraft]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async function onSubmit(data: any) {
+  async function onSubmit(data: AvaliacaoFormValues) {
     setIsSaving(true);
     try {
-      const response = await fetch("http://localhost:8000/v1/census", {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+      const response = await fetch(`${baseUrl}/v1/census`, {
         method: "POST", 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -70,8 +73,7 @@ export function AvaliacaoForm({ schoolId, onSuccess, onBack }: AvaliacaoFormProp
 
   if (isLoading) return <div className="text-center py-8 text-slate-500">Carregando Avaliação...</div>;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const control = form.control as any;
+  const control = form.control;
 
   return (
     <Form {...form}>
@@ -81,11 +83,11 @@ export function AvaliacaoForm({ schoolId, onSuccess, onBack }: AvaliacaoFormProp
             <h3 className="text-lg font-medium text-slate-800">Avaliação e Notas</h3>
             
             <div className="grid grid-cols-1 gap-6">
-                <RadioInput control={control} name="avaliacao_merendeiras" label="Avaliação do serviço das merendeiras" options={OPCOES} />
-                <RadioInput control={control} name="avaliacao_portaria" label="Avaliação do serviço dos agentes de portaria" options={OPCOES} />
-                <RadioInput control={control} name="avaliacao_limpeza" label="Avaliação da prestação dos serviços dos limpeza" options={OPCOES} />
-                <RadioInput control={control} name="avaliacao_comunicacao" label="Avaliação da Comunicação com empresa terceirizada" options={OPCOES} />
-                <RadioInput control={control} name="avaliacao_supervisao" label="Avaliação do Atendimento da supervisão" options={OPCOES} />
+                <RadioInput<AvaliacaoFormValues> control={control} name="avaliacao_merendeiras" label="Avaliação do serviço das merendeiras" options={OPCOES} />
+                <RadioInput<AvaliacaoFormValues> control={control} name="avaliacao_portaria" label="Avaliação do serviço dos agentes de portaria" options={OPCOES} />
+                <RadioInput<AvaliacaoFormValues> control={control} name="avaliacao_limpeza" label="Avaliação da prestação dos serviços dos limpeza" options={OPCOES} />
+                <RadioInput<AvaliacaoFormValues> control={control} name="avaliacao_comunicacao" label="Avaliação da Comunicação com empresa terceirizada" options={OPCOES} />
+                <RadioInput<AvaliacaoFormValues> control={control} name="avaliacao_supervisao" label="Avaliação do Atendimento da supervisão" options={OPCOES} />
             </div>
         </div>
 

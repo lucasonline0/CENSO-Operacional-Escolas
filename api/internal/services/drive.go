@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 
 	"google.golang.org/api/drive/v3"
@@ -50,11 +51,21 @@ func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, con
 		return "", fmt.Errorf("DRIVER_ROOT_FOLDER_ID não configurado")
 	}
 
+	// Tenta rebobinar o arquivo se ele for um ReadSeeker (corrige erro comum de arquivo vazio)
+	if seeker, ok := fileContent.(io.Seeker); ok {
+		_, err := seeker.Seek(0, 0)
+		if err != nil {
+			log.Printf("[Drive] Aviso: Não foi possível fazer seek no arquivo: %v", err)
+		}
+	}
+
+	// 1. Encontrar ou Criar a Pasta da Escola
+	// Aspas simples no nome para evitar erros com espaços ou caracteres especiais
 	query := fmt.Sprintf("name = '%s' and '%s' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false", folderName, rootFolderID)
 	
 	list, err := s.srv.Files.List().
 		Q(query).
-		Fields("files(id)").
+		Fields("files(id, name)").
 		SupportsAllDrives(true).
 		IncludeItemsFromAllDrives(true).
 		Do()
@@ -67,6 +78,7 @@ func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, con
 
 	if len(list.Files) > 0 {
 		schoolFolderID = list.Files[0].Id
+		log.Printf("[Drive] Pasta existente encontrada: %s (%s)", list.Files[0].Name, schoolFolderID)
 	} else {
 		folderMetadata := &drive.File{
 			Name:     folderName,
@@ -82,8 +94,10 @@ func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, con
 			return "", fmt.Errorf("erro criar pasta: %v", err)
 		}
 		schoolFolderID = folder.Id
+		log.Printf("[Drive] Nova pasta criada: %s (%s)", folderName, schoolFolderID)
 	}
 
+	// 2. Upload do Arquivo
 	fileMetadata := &drive.File{
 		Name:     fileName,
 		Parents:  []string{schoolFolderID},
@@ -92,7 +106,7 @@ func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, con
 
 	uploadedFile, err := s.srv.Files.Create(fileMetadata).
 		Media(fileContent, googleapi.ContentType(contentType)).
-		Fields("id, webViewLink").
+		Fields("id, webViewLink, parents"). // Retorna parents para confirmar onde foi salvo
 		SupportsAllDrives(true).
 		Do()
 
@@ -100,5 +114,13 @@ func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, con
 		return "", fmt.Errorf("erro upload arquivo: %v", err)
 	}
 
-	return uploadedFile.WebViewLink, nil
+	log.Printf("[Drive] Arquivo enviado com sucesso! ID: %s, Parents: %v", uploadedFile.Id, uploadedFile.Parents)
+
+	// Fallback: Se webViewLink vier vazio (às vezes acontece em drives compartilhados), construir manualmente
+	link := uploadedFile.WebViewLink
+	if link == "" {
+		link = fmt.Sprintf("https://drive.google.com/file/d/%s/view", uploadedFile.Id)
+	}
+
+	return link, nil
 }

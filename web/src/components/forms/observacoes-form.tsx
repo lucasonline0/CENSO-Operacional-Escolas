@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { observacoesSchema, ObservacoesFormValues } from "@/schemas/steps/observacoes"; 
 import { Button } from "@/components/ui/button";
@@ -25,9 +25,15 @@ export function ObservacoesForm({ schoolId, onSuccess, onBack }: ObservacoesForm
   const [isSaving, setIsSaving] = useState(false);
 
   const form = useForm<ObservacoesFormValues>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(observacoesSchema) as any,
+    resolver: zodResolver(observacoesSchema) as unknown as Resolver<ObservacoesFormValues>,
     defaultValues: {
+        prioridade_1: "",
+        prioridade_2: "",
+        prioridade_3: "",
+        demanda_urgente: undefined,
+        sugestao_melhoria: undefined,
+        nome_responsavel: "",
+        cargo_funcao: "",
         declaracao_verdadeira: false
     }
   });
@@ -40,19 +46,17 @@ export function ObservacoesForm({ schoolId, onSuccess, onBack }: ObservacoesForm
   );
 
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const subscription = form.watch((value: any) => {
-        saveLocalDraft(value);
+    const subscription = form.watch((value) => {
+        saveLocalDraft(value as ObservacoesFormValues);
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return () => (subscription as any).unsubscribe();
+    return () => subscription.unsubscribe();
   }, [form, saveLocalDraft]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async function onSubmit(data: any) {
+  async function onSubmit(data: ObservacoesFormValues) {
     setIsSaving(true);
     try {
-      const response = await fetch("http://localhost:8000/v1/census", {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+      const response = await fetch(`${baseUrl}/v1/census`, {
         method: "POST", 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -76,8 +80,7 @@ export function ObservacoesForm({ schoolId, onSuccess, onBack }: ObservacoesForm
 
   if (isLoading) return <div className="text-center py-8 text-slate-500">Carregando Observações...</div>;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const control = form.control as any;
+  const control = form.control;
 
   return (
     <Form {...form}>
@@ -88,13 +91,13 @@ export function ObservacoesForm({ schoolId, onSuccess, onBack }: ObservacoesForm
             
             <div className="space-y-4">
                 <h4 className="text-sm font-medium text-slate-700">Cite três prioridades da escola</h4>
-                <TextInput control={control} name="prioridade_1" label="1. Prioridade" />
-                <TextInput control={control} name="prioridade_2" label="2. Prioridade" />
-                <TextInput control={control} name="prioridade_3" label="3. Prioridade" />
+                <TextInput<ObservacoesFormValues> control={control} name="prioridade_1" label="1. Prioridade" />
+                <TextInput<ObservacoesFormValues> control={control} name="prioridade_2" label="2. Prioridade" />
+                <TextInput<ObservacoesFormValues> control={control} name="prioridade_3" label="3. Prioridade" />
             </div>
 
             <div className="p-4 border rounded-md bg-red-50/50 space-y-4">
-                <RadioInput control={control} name="demanda_urgente" label="Existe alguma demanda considerada urgente?" options={["Sim", "Não"]} />
+                <RadioInput<ObservacoesFormValues> control={control} name="demanda_urgente" label="Existe alguma demanda considerada urgente?" options={["Sim", "Não"]} />
                 {form.watch("demanda_urgente") === "Sim" && (
                     <FormField control={form.control} name="descricao_urgencia" render={({ field }) => (
                         <FormItem>
@@ -107,7 +110,7 @@ export function ObservacoesForm({ schoolId, onSuccess, onBack }: ObservacoesForm
             </div>
 
             <div className="p-4 border rounded-md bg-green-50/50 space-y-4">
-                <RadioInput control={control} name="sugestao_melhoria" label="Deseja registrar alguma sugestão de melhoria?" options={["Sim", "Não"]} />
+                <RadioInput<ObservacoesFormValues> control={control} name="sugestao_melhoria" label="Deseja registrar alguma sugestão de melhoria?" options={["Sim", "Não"]} />
                 {form.watch("sugestao_melhoria") === "Sim" && (
                     <FormField control={form.control} name="descricao_sugestao" render={({ field }) => (
                         <FormItem>
@@ -126,9 +129,9 @@ export function ObservacoesForm({ schoolId, onSuccess, onBack }: ObservacoesForm
             <h3 className="text-lg font-medium text-slate-800">Responsável pelo Preenchimento</h3>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <TextInput control={control} name="nome_responsavel" label="Nome do responsável pelo preenchimento" />
-                <TextInput control={control} name="cargo_funcao" label="Cargo/Função" />
-                <TextInput control={control} name="matricula_funcional" label="Matrícula funcional" />
+                <TextInput<ObservacoesFormValues> control={control} name="nome_responsavel" label="Nome do responsável pelo preenchimento" />
+                <TextInput<ObservacoesFormValues> control={control} name="cargo_funcao" label="Cargo/Função" />
+                <TextInput<ObservacoesFormValues> control={control} name="matricula_funcional" label="Matrícula funcional" />
             </div>
 
             <FormField control={form.control} name="declaracao_verdadeira" render={({ field }) => (

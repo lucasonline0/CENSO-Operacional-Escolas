@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { generalDataSchema, GeneralDataFormValues } from "@/schemas/steps/general-data";
 import { Button } from "@/components/ui/button";
@@ -24,8 +24,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
   const [uploadMessage, setUploadMessage] = useState("");
 
   const form = useForm<GeneralDataFormValues>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(generalDataSchema) as any,
+    resolver: zodResolver(generalDataSchema) as unknown as Resolver<GeneralDataFormValues>,
     defaultValues: {
       etapas_ofertadas: [], 
       modalidades_ofertadas: [], 
@@ -43,6 +42,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
       banheiros_alunos: 0,
       banheiros_prof: 0, 
       banheiros_chuveiro: 0, 
+      banheiros_vasos_funcionais: "",
       salas_climatizadas: 0, 
       qtd_salas_aula: 0,
     }
@@ -53,8 +53,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
   );
 
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const subscription = form.watch((value: any) => saveLocalDraft(value as GeneralDataFormValues));
+    const subscription = form.watch((value) => saveLocalDraft(value as GeneralDataFormValues));
     return () => subscription.unsubscribe();
   }, [form, saveLocalDraft]);
 
@@ -88,8 +87,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async function onSubmit(data: any) {
+  async function onSubmit(data: GeneralDataFormValues) {
     setIsSaving(true);
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/census`, {
@@ -110,8 +108,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
   }
 
   if (isLoading) return <div className="text-center py-8 text-slate-500">Carregando Dados Gerais...</div>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const control = form.control as any;
+  const control = form.control;
 
   return (
     <Form {...form}>
@@ -119,13 +116,13 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
         
         <div className="space-y-6">
             <h3 className="text-lg font-medium text-slate-800">Infraestrutura Escolar</h3>
-            <RadioInput control={control} name="tipo_predio" label="Tipo de prédio *" options={["Próprio", "Alugado", "Compartilhado", "Cedido"]} />
+            <RadioInput<GeneralDataFormValues> control={control} name="tipo_predio" label="Tipo de prédio *" options={["Próprio", "Alugado", "Compartilhado", "Cedido"]} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <RadioInput control={control} name="possui_anexos" label="A escola possui anexos? *" options={["Sim", "Não"]} />
+                <RadioInput<GeneralDataFormValues> control={control} name="possui_anexos" label="A escola possui anexos? *" options={["Sim", "Não"]} />
                 {form.watch("possui_anexos") === "Sim" && (
                     <div className="space-y-4">
-                        <NumberInput control={control} name="qtd_anexos" label="Quantidade de anexos" />
-                        <RadioInput control={control} name="tipo_predio_anexo" label="Tipo de prédio do anexo" options={["Próprio", "Alugado", "Compartilhado", "Cedido"]} />
+                        <NumberInput<GeneralDataFormValues> control={control} name="qtd_anexos" label="Quantidade de anexos" />
+                        <RadioInput<GeneralDataFormValues> control={control} name="tipo_predio_anexo" label="Tipo de prédio do anexo" options={["Próprio", "Alugado", "Compartilhado", "Cedido"]} />
                     </div>
                 )}
             </div>
@@ -136,7 +133,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
             <h3 className="text-lg font-medium text-slate-800">Ensino</h3>
             
             <div className="p-4 bg-blue-50 border rounded-md">
-               <NumberInput control={control} name="qtd_salas_aula" label="Quantidade Total de Salas de Aula" />
+               <NumberInput<GeneralDataFormValues> control={control} name="qtd_salas_aula" label="Quantidade Total de Salas de Aula" />
             </div>
 
             <div className="space-y-3">
@@ -166,26 +163,26 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
                 </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-md">
-                <NumberInput control={control} name="turmas_manha" label="Qtd. Turmas (Manhã)" />
-                <NumberInput control={control} name="turmas_tarde" label="Qtd. Turmas (Tarde)" />
-                <NumberInput control={control} name="turmas_noite" label="Qtd. Turmas (Noite)" />
+                <NumberInput<GeneralDataFormValues> control={control} name="turmas_manha" label="Qtd. Turmas (Manhã)" />
+                <NumberInput<GeneralDataFormValues> control={control} name="turmas_tarde" label="Qtd. Turmas (Tarde)" />
+                <NumberInput<GeneralDataFormValues> control={control} name="turmas_noite" label="Qtd. Turmas (Noite)" />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <NumberInput control={control} name="total_alunos" label="Total de alunos matriculados" />
-                <NumberInput control={control} name="alunos_pcd" label="Qtd. alunos PcD" />
-                <NumberInput control={control} name="alunos_rural" label="Qtd. alunos residência rural" />
-                <NumberInput control={control} name="alunos_urbana" label="Qtd. alunos residência urbana" />
+                <NumberInput<GeneralDataFormValues> control={control} name="total_alunos" label="Total de alunos matriculados" />
+                <NumberInput<GeneralDataFormValues> control={control} name="alunos_pcd" label="Qtd. alunos PcD" />
+                <NumberInput<GeneralDataFormValues> control={control} name="alunos_rural" label="Qtd. alunos residência rural" />
+                <NumberInput<GeneralDataFormValues> control={control} name="alunos_urbana" label="Qtd. alunos residência urbana" />
             </div>
         </div>
         <Separator />
 
         <div className="space-y-6">
             <h3 className="text-lg font-medium text-slate-800">Segurança e Manutenção</h3>
-            <RadioInput control={control} name="muro_cerca" label="A escola possui muro ou cerca?" options={["Sim, muro", "Sim, cerca", "Sim, ambos", "Não possui"]} />
+            <RadioInput<GeneralDataFormValues> control={control} name="muro_cerca" label="A escola possui muro ou cerca?" options={["Sim, muro", "Sim, cerca", "Sim, ambos", "Não possui"]} />
             {form.watch("muro_cerca") !== "Não possui" && (
-                <RadioInput control={control} name="perimetro_fechado" label="O muro ou cerca fecham todo o perímetro?" options={["Sim, totalmente", "Parcialmente", "Não"]} />
+                <RadioInput<GeneralDataFormValues> control={control} name="perimetro_fechado" label="O muro ou cerca fecham todo o perímetro?" options={["Sim, totalmente", "Parcialmente", "Não"]} />
             )}
-            <SelectInput control={control} name="situacao_estrutura" label="Situação da estrutura da escola" options={["Necessita de reforma geral", "Necessita de reforma parcial (melhoria pontual)", "Reforma em andamento", "Está em reforma, porém a obra está parada", "Foi reformada recentemente"]} />
+            <SelectInput<GeneralDataFormValues> control={control} name="situacao_estrutura" label="Situação da estrutura da escola" options={["Necessita de reforma geral", "Necessita de reforma parcial (melhoria pontual)", "Reforma em andamento", "Está em reforma, porém a obra está parada", "Foi reformada recentemente"]} />
             
             <div className="p-4 border border-dashed border-blue-300 rounded-md bg-blue-50/50 text-center">
                 <p className="text-sm text-slate-700 mb-2 font-medium">Anexar Fotos para Análise</p>
@@ -203,7 +200,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
                 <p className="text-xs text-slate-400 mt-2">As fotos serão salvas na pasta da escola.</p>
             </div>
 
-            <TextInput control={control} name="data_ultima_reforma" label="Data da última reforma (dd/mm/aaaa)" placeholder="dd/mm/aaaa" />
+            <TextInput<GeneralDataFormValues> control={control} name="data_ultima_reforma" label="Data da última reforma (dd/mm/aaaa)" placeholder="dd/mm/aaaa" />
         </div>
         <Separator />
 
@@ -222,12 +219,12 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
                 {form.watch("ambientes")?.includes("Quadra Esportiva") && (
                     <div className="space-y-4 border p-4 rounded-md">
-                        <RadioInput control={control} name="quadra_coberta" label="A quadra esportiva é coberta?" options={["Sim", "Não"]} />
-                        <NumberInput control={control} name="qtd_quadras" label="Quantas quadras esportivas?" />
+                        <RadioInput<GeneralDataFormValues> control={control} name="quadra_coberta" label="A quadra esportiva é coberta?" options={["Sim", "Não"]} />
+                        <NumberInput<GeneralDataFormValues> control={control} name="qtd_quadras" label="Quantas quadras esportivas?" />
                     </div>
                 )}
                 <div className="p-4 border rounded-md h-fit">
-                    <RadioInput control={control} name="banda_fanfarra" label="A escola possui banda escolar/fanfarra?" options={["Sim", "Não"]} />
+                    <RadioInput<GeneralDataFormValues> control={control} name="banda_fanfarra" label="A escola possui banda escolar/fanfarra?" options={["Sim", "Não"]} />
                 </div>
             </div>
         </div>
@@ -236,13 +233,13 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
         <div className="space-y-6">
             <h3 className="text-lg font-medium text-slate-800">Sanitários e Climatização</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <NumberInput control={control} name="banheiros_alunos" label="Banheiros Alunos" />
-                <NumberInput control={control} name="banheiros_prof" label="Banheiros Prof/Adm" />
-                <NumberInput control={control} name="banheiros_chuveiro" label="Banheiros c/ Chuveiro" />
+                <NumberInput<GeneralDataFormValues> control={control} name="banheiros_alunos" label="Banheiros Alunos" />
+                <NumberInput<GeneralDataFormValues> control={control} name="banheiros_prof" label="Banheiros Prof/Adm" />
+                <NumberInput<GeneralDataFormValues> control={control} name="banheiros_chuveiro" label="Banheiros c/ Chuveiro" />
             </div>
-            <RadioInput control={control} name="banheiros_vasos_funcionais" label="Os banheiros possuem vasos sanitários funcionais?" options={["Todos", "Alguns", "Nenhum"]} />
+            <RadioInput<GeneralDataFormValues> control={control} name="banheiros_vasos_funcionais" label="Os banheiros possuem vasos sanitários funcionais?" options={["Todos", "Alguns", "Nenhum"]} />
             <div className="bg-blue-50 p-4 rounded-md">
-                <NumberInput control={control} name="salas_climatizadas" label="Quantidade de salas de aula climatizadas" />
+                <NumberInput<GeneralDataFormValues> control={control} name="salas_climatizadas" label="Quantidade de salas de aula climatizadas" />
             </div>
         </div>
         <Separator />
@@ -250,10 +247,10 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
         <div className="space-y-6">
             <h3 className="text-lg font-medium text-slate-800">Energia Elétrica e Câmeras</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <SelectInput control={control} name="energia" label="Fornecimento de energia" options={["Concessionária de energia - Equatorial", "Geração própria", "Outro"]} />
-                <RadioInput control={control} name="transformador" label="Atendida por transformadores?" options={["Sim", "Não"]} />
+                <SelectInput<GeneralDataFormValues> control={control} name="energia" label="Fornecimento de energia" options={["Concessionária de energia - Equatorial", "Geração própria", "Outro"]} />
+                <RadioInput<GeneralDataFormValues> control={control} name="transformador" label="Atendida por transformadores?" options={["Sim", "Não"]} />
             </div>
-            <RadioInput control={control} name="rede_eletrica_atende" label="A rede elétrica interna atende a demanda?" options={["Sim", "Parcialmente", "Não"]} />
+            <RadioInput<GeneralDataFormValues> control={control} name="rede_eletrica_atende" label="A rede elétrica interna atende a demanda?" options={["Sim", "Parcialmente", "Não"]} />
             <div className="space-y-3">
                 <label className="text-sm font-medium text-slate-700">Principais problemas elétricos</label>
                 <div className="grid grid-cols-2 gap-2">
@@ -268,13 +265,13 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
                 </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <SelectInput control={control} name="estrutura_climatizacao" label="Estrutura permite climatizar salas?" options={["Sim", "Não, somente com adequações", "Não, todas as salas são climatizadas"]} />
-                <RadioInput control={control} name="suporta_novos_equipamentos" label="Suporta novos equipamentos?" options={["Sim", "Parcialmente", "Não"]} />
+                <SelectInput<GeneralDataFormValues> control={control} name="estrutura_climatizacao" label="Estrutura permite climatizar salas?" options={["Sim", "Não, somente com adequações", "Não, todas as salas são climatizadas"]} />
+                <RadioInput<GeneralDataFormValues> control={control} name="suporta_novos_equipamentos" label="Suporta novos equipamentos?" options={["Sim", "Parcialmente", "Não"]} />
             </div>
             <div className="p-4 border rounded-md bg-slate-50 space-y-4">
-                <SelectInput control={control} name="cameras_funcionamento" label="Possui câmeras em funcionamento?" options={["Sim, funcionando plenamente", "Sim, parcialmente", "Não possui"]} />
+                <SelectInput<GeneralDataFormValues> control={control} name="cameras_funcionamento" label="Possui câmeras em funcionamento?" options={["Sim, funcionando plenamente", "Sim, parcialmente", "Não possui"]} />
                 {form.watch("cameras_funcionamento") !== "Não possui" && (
-                    <RadioInput control={control} name="cameras_cobrem" label="Cobrem áreas essenciais?" options={["Sim", "Parcialmente", "Não"]} />
+                    <RadioInput<GeneralDataFormValues> control={control} name="cameras_cobrem" label="Cobrem áreas essenciais?" options={["Sim", "Parcialmente", "Não"]} />
                 )}
             </div>
         </div>

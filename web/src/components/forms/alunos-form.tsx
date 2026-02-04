@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { alunosSchema, AlunosFormValues } from "@/schemas/steps/alunos"; 
 import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
-import { NumberInput } from "@/components/ui/form-components";
+import { NumberInput, TextInput } from "@/components/ui/form-components";
 import { Separator } from "@/components/ui/separator";
 import { useCensusPersistence } from "@/hooks/use-census-persistence";
 
@@ -100,15 +100,15 @@ export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
 
         <div className="space-y-6">
             <h3 className="text-lg font-medium text-slate-800">Rendimento Escolar (%)</h3>
-            <p className="text-sm text-slate-500">Utilize ponto para casas decimais (ex: 5.5).</p>
+            <p className="text-sm text-slate-500">Utilize vírgula ou ponto para casas decimais (ex: 5,5).</p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <NumberInput control={control} name="taxa_abandono" label="Taxa de Abandono/Desistência Geral (%)" />
+                <TextInput control={control} name="taxa_abandono" label="Taxa de Abandono/Desistência Geral (%)" />
                 <div className="hidden md:block"></div> {/* Spacer */}
                 
-                <NumberInput control={control} name="taxa_reprovacao_fund1" label="Reprovação - Fund. I (%)" />
-                <NumberInput control={control} name="taxa_reprovacao_fund2" label="Reprovação - Fund. II (%)" />
-                <NumberInput control={control} name="taxa_reprovacao_medio" label="Reprovação - Ensino Médio (%)" />
+                <TextInput control={control} name="taxa_reprovacao_fund1" label="Reprovação - Fund. I (%)" />
+                <TextInput control={control} name="taxa_reprovacao_fund2" label="Reprovação - Fund. II (%)" />
+                <TextInput control={control} name="taxa_reprovacao_medio" label="Reprovação - Ensino Médio (%)" />
             </div>
         </div>
 
@@ -118,9 +118,9 @@ export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
             <h3 className="text-lg font-medium text-slate-800">IDEB (Nota 0 a 10)</h3>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <NumberInput control={control} name="ideb_anos_iniciais" label="Ideb - Anos Iniciais" />
-                <NumberInput control={control} name="ideb_anos_finais" label="Ideb - Anos Finais" />
-                <NumberInput control={control} name="ideb_ensino_medio" label="Ideb - Ensino Médio" />
+                <TextInput control={control} name="ideb_anos_iniciais" label="Ideb - Anos Iniciais" />
+                <TextInput control={control} name="ideb_anos_finais" label="Ideb - Anos Finais" />
+                <TextInput control={control} name="ideb_ensino_medio" label="Ideb - Ensino Médio" />
             </div>
         </div>
 

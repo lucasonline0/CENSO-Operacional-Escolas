@@ -31,11 +31,7 @@ export function MerendaForm({ schoolId, onSuccess, onBack }: MerendaFormProps) {
         qtd_merendeiras_estatutaria: 0,
         qtd_merendeiras_terceirizada: 0,
         qtd_merendeiras_temporaria: 0,
-        qtd_atende_necessidade_merenda: undefined, 
-        empresa_terceirizada_merenda: undefined,
-        possui_supervisor_merenda: undefined,
-        nome_supervisor_merenda: "",
-        contato_supervisor_merenda: ""
+        quantitativo_necessario_merenda: 0
     }
   });
 
@@ -83,80 +79,71 @@ export function MerendaForm({ schoolId, onSuccess, onBack }: MerendaFormProps) {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         
-        <div className="space-y-4">
-            <h3 className="text-lg font-medium text-slate-800">Estrutura e Qualidade</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <RadioInput control={control} name="condicoes_cozinha" label="Condições da cozinha *" options={["Boa", "Regular", "Precária"]} />
-                <RadioInput control={control} name="tamanho_cozinha" label="Tamanho da cozinha *" options={["Pequena", "Média", "Grande"]} />
-            </div>
-            <Separator className="my-2" />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 <SelectInput control={control} name="oferta_regular" label="A merenda é ofertada regularmente? *" options={["Sim", "Sim, com falhas", "Não"]} />
-                <SelectInput control={control} name="qualidade_merenda" label="Qualidade da merenda *" options={["Boa", "Regular", "Ruim"]} />
-            </div>
-            <RadioInput control={control} name="atende_necessidades" label="Atende às necessidades dos alunos? *" options={["Sim", "Parcialmente", "Não"]} />
-            <div className="p-4 bg-slate-50 border rounded-md grid grid-cols-1 md:grid-cols-2 gap-6">
-                <RadioInput control={control} name="possui_refeitorio" label="Possui refeitório?" options={["Sim", "Não"]} />
-                {form.watch("possui_refeitorio") === "Sim" && (
-                    <RadioInput control={control} name="refeitorio_adequado" label="Atende adequadamente?" options={["Sim", "Não"]} />
-                )}
-            </div>
-             <RadioInput control={control} name="possui_balanca" label="Possui balança?" options={["Sim", "Não"]} />
-        </div>
-        <Separator />
         <div className="space-y-6">
-            <h3 className="text-lg font-medium text-slate-800">Inventário de Equipamentos</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8">
-                <div className="space-y-2 p-3 border rounded bg-white/50">
-                    <NumberInput control={control} name="qtd_freezers" label="Qtd. Freezers" />
-                    <SelectInput control={control} name="estado_freezers" label="Estado de Conservação" options={["Bom – funcionando plenamente", "Regular – funciona, com limitações", "Ruim – funcionamento comprometido", "Inoperante"]} />
-                </div>
-                <div className="space-y-2 p-3 border rounded bg-white/50">
-                    <NumberInput control={control} name="qtd_geladeiras" label="Qtd. Geladeiras" />
-                    <SelectInput control={control} name="estado_geladeiras" label="Estado de Conservação" options={["Bom – funcionando plenamente", "Regular – funciona, com limitações", "Ruim – funcionamento comprometido", "Inoperante"]} />
-                </div>
-                <div className="space-y-2 p-3 border rounded bg-white/50">
-                    <NumberInput control={control} name="qtd_fogoes" label="Qtd. Fogões Industriais" />
-                    <SelectInput control={control} name="estado_fogoes" label="Estado de Conservação" options={["Bom – funcionando plenamente", "Regular – funciona, com limitações", "Ruim – funcionamento comprometido", "Inoperante"]} />
-                </div>
-                 <div className="space-y-2 p-3 border rounded bg-white/50">
-                    <NumberInput control={control} name="qtd_fornos" label="Qtd. Fornos Elétricos/Gás" />
-                    <SelectInput control={control} name="estado_fornos" label="Estado de Conservação" options={["Bom – funcionando plenamente", "Regular – funciona, com limitações", "Ruim – funcionamento comprometido", "Inoperante"]} />
-                </div>
-                 <div className="space-y-2 p-3 border rounded bg-white/50">
-                    <NumberInput control={control} name="qtd_bebedouros" label="Qtd. Bebedouros" />
-                    <SelectInput control={control} name="estado_bebedouros" label="Estado de Conservação" options={["Bom – funcionando plenamente", "Regular – funciona, com limitações", "Ruim – funcionamento comprometido", "Inoperante"]} />
-                </div>
+            <h3 className="text-lg font-medium text-slate-800">Infraestrutura da Cozinha</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <SelectInput control={control} name="condicoes_cozinha" label="Condições gerais da cozinha" options={["Ótima", "Boa", "Regular", "Ruim", "Péssima"]} />
+                <SelectInput control={control} name="tamanho_cozinha" label="Tamanho da cozinha" options={["Adequado", "Pequeno", "Grande", "Insuficiente"]} />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                <RadioInput control={control} name="bancadas_inox" label="Possui bancadas de inox?" options={["Sim", "Não"]} />
-                <RadioInput control={control} name="sistema_exaustao" label="Possui sistema de exaustão?" options={["Sim", "Não"]} />
-                <RadioInput control={control} name="despensa_exclusiva" label="Despensa exclusiva p/ alimentos?" options={["Sim", "Não"]} />
-                <RadioInput control={control} name="deposito_conserva" label="Depósito conserva adequadamente?" options={["Sim", "Parcialmente", "Não"]} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <RadioInput control={control} name="sistema_exaustao" label="Possui sistema de exaustão?" options={["Sim", "Não"]} />
+                 <RadioInput control={control} name="bancadas_inox" label="Possui bancadas de inox?" options={["Sim", "Não"]} />
             </div>
-             <div className="p-4 bg-orange-50 border border-orange-200 rounded-md space-y-4">
-                <RadioInput control={control} name="estoque_epi_extintor" label="Estoque de EPIs e Extintor" options={["Completo", "Parcial", "Inexistente"]} />
-                <RadioInput control={control} name="manutencao_extintores" label="Manutenção dos Extintores" options={["Está na validade", "Validade vencida"]} />
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <RadioInput control={control} name="despensa_exclusiva" label="Possui despensa exclusiva?" options={["Sim", "Não"]} />
+                 <RadioInput control={control} name="deposito_conserva" label="Depósito conserva os alimentos adequadamente?" options={["Sim", "Parcialmente", "Não"]} />
             </div>
         </div>
         <Separator />
+
         <div className="space-y-6">
-            <h3 className="text-lg font-medium text-slate-800">Equipe de Merenda</h3>
+             <h3 className="text-lg font-medium text-slate-800">Equipamentos</h3>
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-md">
+                <NumberInput control={control} name="qtd_freezers" label="Qtd. Freezers" />
+                <NumberInput control={control} name="qtd_geladeiras" label="Qtd. Geladeiras" />
+                <NumberInput control={control} name="qtd_fogoes" label="Qtd. Fogões" />
+                <NumberInput control={control} name="qtd_fornos" label="Qtd. Fornos" />
+             </div>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <NumberInput control={control} name="qtd_bebedouros" label="Qtd. Bebedouros Industriais" />
+                <RadioInput control={control} name="possui_balanca" label="Possui balança para alimentos?" options={["Sim", "Não"]} />
+             </div>
+        </div>
+        <Separator />
+
+        <div className="space-y-6">
+            <h3 className="text-lg font-medium text-slate-800">Qualidade e Oferta</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <SelectInput control={control} name="oferta_regular" label="A oferta da merenda é regular?" options={["Sim, todos os dias", "Não, falha frequentemente", "Às vezes falha"]} />
+                <SelectInput control={control} name="qualidade_merenda" label="Qualidade da merenda (sabor/nutrição)" options={["Ótima", "Boa", "Regular", "Ruim"]} />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <RadioInput control={control} name="possui_refeitorio" label="Possui refeitório?" options={["Sim", "Não"]} />
+                 {form.watch("possui_refeitorio") === "Sim" && (
+                     <RadioInput control={control} name="refeitorio_adequado" label="O refeitório é adequado?" options={["Sim", "Não"]} />
+                 )}
+            </div>
+        </div>
+        <Separator />
+
+        <div className="space-y-6">
+            <h3 className="text-lg font-medium text-slate-800">Recursos Humanos (Merendeiras)</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <NumberInput control={control} name="qtd_merendeiras_estatutaria" label="Qtd. Estatutárias" />
-                <NumberInput control={control} name="qtd_merendeiras_terceirizada" label="Qtd. Terceirizadas" />
-                <NumberInput control={control} name="qtd_merendeiras_temporaria" label="Qtd. Temporários" />
+                 <NumberInput control={control} name="qtd_merendeiras_estatutaria" label="Qtd. Estatutárias" />
+                 <NumberInput control={control} name="qtd_merendeiras_terceirizada" label="Qtd. Terceirizadas" />
+                 <NumberInput control={control} name="qtd_merendeiras_temporaria" label="Qtd. Temporárias" />
             </div>
-            
+
+            {/* Lógica Quantitativa Adicionada */}
             <div className="p-4 bg-slate-50 border rounded-md grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                <RadioInput control={control} name="qtd_atende_necessidade_portaria" label="A quantidade atual atende a necessidade?" options={["Sim", "Não"]} />
+                <RadioInput control={control} name="qtd_atende_necessidade_merenda" label="A quantidade atual de merendeiras atende a necessidade?" options={["Sim", "Não"]} />
                 {form.watch("qtd_atende_necessidade_merenda") === "Não" && (
-                    <NumberInput control={control} name="quantitativo_necessario_portaria" label="Para atender plenamente à demanda atual da merenda escolar, quantas merendeiras faltam para completar a equipe da cozinha?" />
+                    <NumberInput control={control} name="quantitativo_necessario_merenda" label="Quantas merendeiras faltam para completar a equipe?" />
                 )}
             </div>
-            
+
             <div className="p-4 bg-blue-50/50 border rounded-md space-y-4">
-                <SelectInput control={control} name="empresa_terceirizada_merenda" label="Empresa Terceirizada (Merenda)" options={["AJ LOURENÇO", "DIAMOND", "E.B CARDOSO", "J.R LIMPEZA", "KAPA CAPITAL", "LG SERVIÇOS", "LIMPAR", "SAP - SERVICE ALIANCA PARA", "Outra"]} />
+                <SelectInput control={control} name="empresa_terceirizada_merenda" label="Empresa Terceirizada (Merenda)" options={["NUTRI+", "SABOR & ARTE", "MAIS SABOR", "Outra"]} />
                 <RadioInput control={control} name="possui_supervisor_merenda" label="Há supervisor da empresa?" options={["Sim", "Não"]} />
                 
                 {form.watch("possui_supervisor_merenda") === "Sim" && (
@@ -167,7 +154,7 @@ export function MerendaForm({ schoolId, onSuccess, onBack }: MerendaFormProps) {
                 )}
             </div>
         </div>
-        
+
         <div className="flex justify-between pt-6">
             <Button type="button" variant="outline" onClick={onBack}>← Voltar</Button>
             <Button type="submit" className="bg-blue-600 hover:bg-blue-700">{isSaving ? "Salvando..." : "Salvar e Continuar →"}</Button>

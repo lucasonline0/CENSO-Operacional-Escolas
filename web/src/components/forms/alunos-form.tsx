@@ -18,6 +18,7 @@ interface AlunosFormProps {
 
 export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
   const [isSaving, setIsSaving] = useState(false);
+  const [etapasOfertadas, setEtapasOfertadas] = useState<string[]>([]);
 
   const form = useForm<AlunosFormValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,6 +50,27 @@ export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return () => (subscription as any).unsubscribe();
   }, [form, saveLocalDraft]);
+
+  useEffect(() => {
+    const fetchEtapas = async () => {
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const response = await fetch(`${baseUrl}/v1/census?school_id=${schoolId}`);
+        if (response.ok) {
+          const json = await response.json();
+          const censusData = json.data;
+          if (censusData && censusData.data && Array.isArray(censusData.data.etapas_ofertadas)) {
+            setEtapasOfertadas(censusData.data.etapas_ofertadas);
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao buscar etapas:", error);
+      }
+    };
+    if (schoolId) {
+      fetchEtapas();
+    }
+  }, [schoolId]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function onSubmit(data: any) {
@@ -104,11 +126,17 @@ export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <TextInput control={control} name="taxa_abandono" label="Taxa de Abandono/Desistência Geral (%)" />
-                <div className="hidden md:block"></div> {/* Spacer */}
+                <div className="hidden md:block"></div> 
                 
-                <TextInput control={control} name="taxa_reprovacao_fund1" label="Reprovação - Fund. I (%)" />
-                <TextInput control={control} name="taxa_reprovacao_fund2" label="Reprovação - Fund. II (%)" />
-                <TextInput control={control} name="taxa_reprovacao_medio" label="Reprovação - Ensino Médio (%)" />
+                {etapasOfertadas.includes("Ensino Fundamental I") && (
+                  <TextInput control={control} name="taxa_reprovacao_fund1" label="Reprovação - Fund. I (%)" />
+                )}
+                {etapasOfertadas.includes("Ensino Fundamental II") && (
+                  <TextInput control={control} name="taxa_reprovacao_fund2" label="Reprovação - Fund. II (%)" />
+                )}
+                {etapasOfertadas.includes("Ensino Médio") && (
+                  <TextInput control={control} name="taxa_reprovacao_medio" label="Reprovação - Ensino Médio (%)" />
+                )}
             </div>
         </div>
 
@@ -118,9 +146,15 @@ export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
             <h3 className="text-lg font-medium text-slate-800">IDEB (Nota 0 a 10)</h3>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <TextInput control={control} name="ideb_anos_iniciais" label="Ideb - Anos Iniciais" />
-                <TextInput control={control} name="ideb_anos_finais" label="Ideb - Anos Finais" />
-                <TextInput control={control} name="ideb_ensino_medio" label="Ideb - Ensino Médio" />
+                {etapasOfertadas.includes("Ensino Fundamental I") && (
+                  <TextInput control={control} name="ideb_anos_iniciais" label="Ideb - Anos Iniciais" />
+                )}
+                {etapasOfertadas.includes("Ensino Fundamental II") && (
+                  <TextInput control={control} name="ideb_anos_finais" label="Ideb - Anos Finais" />
+                )}
+                {etapasOfertadas.includes("Ensino Médio") && (
+                  <TextInput control={control} name="ideb_ensino_medio" label="Ideb - Ensino Médio" />
+                )}
             </div>
         </div>
 

@@ -148,7 +148,12 @@ export function MerendaForm({ schoolId, onSuccess, onBack }: MerendaFormProps) {
                 <NumberInput control={control} name="qtd_merendeiras_temporaria" label="Qtd. Temporários" />
             </div>
             
-            <RadioInput control={control} name="qtd_atende_necessidade_merenda" label="A quantidade atual atende a necessidade?" options={["Sim", "Não"]} />
+            <div className="p-4 bg-slate-50 border rounded-md grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                <RadioInput control={control} name="qtd_atende_necessidade_portaria" label="A quantidade atual atende a necessidade?" options={["Sim", "Não"]} />
+                {form.watch("qtd_atende_necessidade_merenda") === "Não" && (
+                    <NumberInput control={control} name="quantitativo_necessario_portaria" label="Para atender plenamente à demanda atual da merenda escolar, quantas merendeiras faltam para completar a equipe da cozinha?" />
+                )}
+            </div>
             
             <div className="p-4 bg-blue-50/50 border rounded-md space-y-4">
                 <SelectInput control={control} name="empresa_terceirizada_merenda" label="Empresa Terceirizada (Merenda)" options={["AJ LOURENÇO", "DIAMOND", "E.B CARDOSO", "J.R LIMPEZA", "KAPA CAPITAL", "LG SERVIÇOS", "LIMPAR", "SAP - SERVICE ALIANCA PARA", "Outra"]} />

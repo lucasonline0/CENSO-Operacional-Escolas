@@ -197,7 +197,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
 
         <div className="space-y-6">
             <h3 className="text-lg font-medium text-slate-800">Segurança e Manutenção</h3>
-            <RadioInput<GeneralDataFormValues> control={control} name="muro_cerca" label="A escola possui muro ou cerca?" options={["Sim, muro", "Sim, cerca", "Sim, ambos", "Não possui"]} />
+            <RadioInput<GeneralDataFormValues> control={control} name="muro_cerca" label="A escola possui muro ou cerca?" options={["Sim, muro", "Sim, cerca", "Não possui"]} />
             {form.watch("muro_cerca") !== "Não possui" && (
                 <RadioInput<GeneralDataFormValues> control={control} name="perimetro_fechado" label="O muro ou cerca fecham todo o perímetro?" options={["Sim, totalmente", "Parcialmente", "Não"]} />
             )}
@@ -268,7 +268,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
             <h3 className="text-lg font-medium text-slate-800">Energia Elétrica e Câmeras</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <SelectInput<GeneralDataFormValues> control={control} name="energia" label="Fornecimento de energia" options={["Concessionária de energia - Equatorial", "Geração própria", "Outro"]} />
-                <RadioInput<GeneralDataFormValues> control={control} name="transformador" label="Atendida por transformadores?" options={["Sim", "Não"]} />
+                {/* Removido: transformador */}
             </div>
             <RadioInput<GeneralDataFormValues> control={control} name="rede_eletrica_atende" label="A rede elétrica interna atende a demanda?" options={["Sim", "Parcialmente", "Não"]} />
             <div className="space-y-3">

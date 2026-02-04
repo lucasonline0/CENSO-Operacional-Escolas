@@ -41,7 +41,6 @@ export const generalDataSchema = z.object({
   
   salas_climatizadas: numberSchema,
   energia: z.string().min(1, "Campo obrigatório"),
-  transformador: z.enum(["Sim", "Não"]),
   rede_eletrica_atende: z.enum(["Sim", "Parcialmente", "Não"]),
   problemas_eletricos: z.array(z.string()).optional(),
   estrutura_climatizacao: z.enum(["Sim", "Não", "Não, somente com adequações", "Não, todas as salas são climatizadas"]),

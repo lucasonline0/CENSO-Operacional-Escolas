@@ -60,31 +60,50 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     
-    setIsUploading(true);
-    setUploadMessage("");
-    const file = e.target.files[0];
-    const formData = new FormData();
-    formData.append("photo", file);
-    formData.append("school_id", schoolId.toString());
+    const files = Array.from(e.target.files);
 
-    try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/upload`, {
-            method: "POST",
-            body: formData,
-        });
-
-        if (response.ok) {
-            setUploadMessage("✅ Foto enviada com sucesso!");
-            e.target.value = "";
-        } else {
-            setUploadMessage("❌ Erro ao enviar foto.");
-        }
-    } catch (error) {
-        console.error(error);
-        setUploadMessage("❌ Erro de conexão.");
-    } finally {
-        setIsUploading(false);
+    if (files.length > 10) {
+        setUploadMessage("❌ Máximo de 10 fotos permitidas por vez.");
+        e.target.value = "";
+        return;
     }
+
+    setIsUploading(true);
+    setUploadMessage("Iniciando envio...");
+    
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const file of files) {
+        const formData = new FormData();
+        formData.append("photo", file);
+        formData.append("school_id", schoolId.toString());
+
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/upload`, {
+                method: "POST",
+                body: formData,
+            });
+
+            if (response.ok) {
+                successCount++;
+            } else {
+                errorCount++;
+            }
+        } catch (error) {
+            console.error(error);
+            errorCount++;
+        }
+    }
+
+    if (errorCount === 0) {
+        setUploadMessage(`✅ ${successCount} foto(s) enviada(s) com sucesso!`);
+    } else {
+        setUploadMessage(`⚠️ ${successCount} enviada(s), ${errorCount} falha(s).`);
+    }
+    
+    setIsUploading(false);
+    e.target.value = "";
   };
 
   async function onSubmit(data: GeneralDataFormValues) {
@@ -189,15 +208,16 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
                 <div className="max-w-xs mx-auto">
                     <Input 
                         type="file" 
-                        accept="image/*" 
+                        accept="image/*"
+                        multiple 
                         onChange={handleFileUpload} 
                         disabled={isUploading}
                         className="bg-white"
                     />
                 </div>
-                {isUploading && <p className="text-xs text-blue-600 mt-2 animate-pulse">Enviando para o Google Drive...</p>}
-                {uploadMessage && <p className={`text-xs mt-2 font-bold ${uploadMessage.includes("sucesso") ? "text-green-600" : "text-red-600"}`}>{uploadMessage}</p>}
-                <p className="text-xs text-slate-400 mt-2">As fotos serão salvas na pasta da escola.</p>
+                {isUploading && <p className="text-xs text-blue-600 mt-2 animate-pulse">Enviando fotos...</p>}
+                {uploadMessage && <p className={`text-xs mt-2 font-bold ${uploadMessage.includes("sucesso") ? "text-green-600" : uploadMessage.includes("falha") ? "text-orange-600" : "text-red-600"}`}>{uploadMessage}</p>}
+                <p className="text-xs text-slate-400 mt-2">Você pode selecionar até 10 fotos. Elas serão salvas na pasta da escola.</p>
             </div>
 
             <TextInput<GeneralDataFormValues> control={control} name="data_ultima_reforma" label="Data da última reforma (dd/mm/aaaa)" placeholder="dd/mm/aaaa" />

@@ -97,10 +97,13 @@ export default function CensusPage() {
   };
 
   const getStepData = (stepKey: string) => {
+    if (typeof window === "undefined") return {};
     try {
-      const data = localStorage.getItem(`census_storage_${stepKey}`);
+      // Correção: Usando o padrão definido no use-census-persistence.ts
+      const data = localStorage.getItem(`censo_draft_${stepKey}_v1`);
       return data ? JSON.parse(data) : {};
     } catch (e) {
+      console.error(`Erro ao ler dados de ${stepKey}`, e);
       return {};
     }
   };
@@ -109,15 +112,18 @@ export default function CensusPage() {
     const doc = new jsPDF();
     const currentDate = new Date();
     
+    // Busca os dados usando as chaves corretas do persistence hook e dos steps
     const identificationData = getStepData("identification");
     const observationsData = getStepData("observations");
 
-    const schoolName = identificationData.school_name || identificationData.nome_escola || identificationData.name || "Escola não identificada";
-    const schoolCnpj = identificationData.cnpj || identificationData.school_cnpj || "Não informado";
+    // Mapeamento correto baseado nos schemas (identification-form e observacoes-form)
+    const schoolName = identificationData.nome_escola || "Escola não identificada";
+    const schoolInep = identificationData.codigo_inep || schoolId || "N/A";
+    const schoolCnpj = identificationData.cnpj || "Não informado";
     
-    const responsibleName = observationsData.responsible_name || observationsData.nome_responsavel || observationsData.nome || "Não informado";
-    const responsibleRole = observationsData.responsible_role || observationsData.cargo || observationsData.funcao || "Não informado";
-    const responsibleMatricula = observationsData.matricula || observationsData.registration_number || "Não informado";
+    const responsibleName = observationsData.nome_responsavel || "Não informado";
+    const responsibleRole = observationsData.cargo_funcao || "Não informado";
+    const responsibleMatricula = observationsData.matricula_funcional || "Não informado";
 
     try {
         const img = new Image();
@@ -131,6 +137,7 @@ export default function CensusPage() {
         
         doc.addImage(img, "PNG", 15, 10, 25, 25);
     } catch (e) {
+        console.warn("Imagem do brasão falhou", e);
         doc.setFontSize(8);
         doc.text("[Brasão Oficial]", 20, 20);
     }
@@ -175,19 +182,20 @@ export default function CensusPage() {
     const splitSchoolName = doc.splitTextToSize(schoolName.toUpperCase(), 160);
     doc.text(splitSchoolName, 25, 108);
 
-    let currentY = 108 + (splitSchoolName.length * 5);
+    // Calcula a posição Y dinâmica caso o nome da escola ocupe mais de uma linha
+    const currentY = 108 + (splitSchoolName.length * 5);
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(50, 50, 50);
     doc.text("CNPJ:", 25, currentY + 10);
-    doc.text("INEP / ID:", 100, currentY + 10);
+    doc.text("CÓDIGO INEP:", 100, currentY + 10);
     
     doc.setFont("helvetica", "normal");
     doc.setFontSize(12);
     doc.setTextColor(0, 0, 0);
     doc.text(schoolCnpj, 25, currentY + 18);
-    doc.text(`${schoolId || "N/A"}`, 100, currentY + 18);
+    doc.text(`${schoolInep}`, 100, currentY + 18);
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
@@ -210,10 +218,13 @@ export default function CensusPage() {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
+    
+    // Nome
     doc.text("Nome:", 20, responsavelY + 15);
     doc.setFont("helvetica", "normal");
     doc.text(responsibleName.toUpperCase(), 35, responsavelY + 15);
 
+    // Cargo e Matrícula
     doc.setFont("helvetica", "bold");
     doc.text("Cargo/Função:", 20, responsavelY + 25);
     doc.setFont("helvetica", "normal");
@@ -237,6 +248,8 @@ export default function CensusPage() {
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
     doc.text("Secretaria de Estado de Educação do Pará - Sistema de Censo Escolar 2026", 105, 275, { align: "center" });
+    
+    // Autenticação Digital (Visual para fins estéticos/oficiais)
     doc.text(`Autenticação Digital: ${currentDate.getTime().toString(16).toUpperCase()}-${(schoolId || 0).toString(16)}`, 105, 280, { align: "center" });
 
     doc.save(`comprovante-censo-${schoolId}-${currentDate.getTime()}.pdf`);

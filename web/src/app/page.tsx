@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 /* eslint-disable @next/next/no-img-element */ 
 import { Stepper } from "@/components/ui/stepper";
-// CORREÇÃO: Importando com o nome certo para evitar erro de build
 import { CENSUS_STEPS } from "@/config/steps";
 import { IdentificationForm } from "@/components/forms/identification-form";
 import { GeneralDataForm } from "@/components/forms/general-data-form";
@@ -20,6 +19,8 @@ import { ObservacoesForm } from "@/components/forms/observacoes-form";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
+import { jsPDF } from "jspdf";
+import { FileText } from "lucide-react";
 
 const STORAGE_KEY_SCHOOL_ID = "census_current_school_id";
 const STORAGE_KEY_STEP = "census_current_step";
@@ -96,6 +97,45 @@ export default function CensusPage() {
       window.location.reload();
   };
 
+  const handleDownloadProof = () => {
+    const doc = new jsPDF();
+    const currentDate = new Date();
+    
+    doc.setFontSize(22);
+    doc.text("Comprovante de Preenchimento", 105, 30, { align: "center" });
+    
+    doc.setFontSize(14);
+    doc.text("Censo Operacional e Estrutural das Escolas", 105, 40, { align: "center" });
+    doc.text("Secretaria de Estado de Educação", 105, 48, { align: "center" });
+
+    doc.setLineWidth(0.5);
+    doc.line(20, 55, 190, 55);
+
+    doc.setFontSize(12);
+    doc.text(`ID da Escola: ${schoolId || "N/A"}`, 20, 70);
+    doc.text(`Data de Finalização: ${currentDate.toLocaleDateString()}`, 20, 80);
+    doc.text(`Horário: ${currentDate.toLocaleTimeString()}`, 20, 90);
+    
+    doc.setFontSize(16);
+    doc.setTextColor(0, 128, 0); 
+    doc.text("STATUS: FINALIZADO COM SUCESSO", 105, 110, { align: "center" });
+    doc.setTextColor(0, 0, 0); 
+
+    doc.setFontSize(11);
+    doc.text("Certificamos que todos os formulários e dados solicitados pelo Censo", 20, 130);
+    doc.text("Operacional foram preenchidos e salvos corretamente no sistema.", 20, 136);
+    
+    doc.text("Este documento serve como comprovante temporário de que a escola", 20, 150);
+    doc.text("realizou o procedimento de atualização cadastral exigido.", 20, 156);
+
+    doc.setLineWidth(0.5);
+    doc.line(20, 250, 190, 250);
+    doc.setFontSize(10);
+    doc.text("Sistema de Censo Escolar - SEDUC", 105, 260, { align: "center" });
+    
+    doc.save(`comprovante-censo-${schoolId}-${currentDate.getTime()}.pdf`);
+  };
+
   if (!isInitialized) return null;
 
   if (isCompleted) {
@@ -111,9 +151,17 @@ export default function CensusPage() {
                   <p className="text-slate-600 mb-8">
                       Todas as informações foram salvas no sistema da SEDUC. Obrigado pela sua colaboração.
                   </p>
-                  <Button onClick={handleConfirmReset} className="w-full bg-blue-600 hover:bg-blue-700">
-                      Iniciar Novo Censo
-                  </Button>
+                  
+                  <div className="space-y-3 w-full">
+                    <Button onClick={handleDownloadProof} variant="outline" className="w-full border-blue-200 hover:bg-blue-50 text-blue-700">
+                        <FileText className="mr-2 h-4 w-4" />
+                        Baixar Comprovante PDF
+                    </Button>
+                    
+                    <Button onClick={handleConfirmReset} className="w-full bg-blue-600 hover:bg-blue-700">
+                        Iniciar Novo Censo
+                    </Button>
+                  </div>
               </Card>
           </div>
       )

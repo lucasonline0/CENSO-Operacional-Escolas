@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-/* eslint-disable @next/next/no-img-element */ 
 import { Stepper } from "@/components/ui/stepper";
 import { CENSUS_STEPS } from "@/config/steps";
 import { IdentificationForm } from "@/components/forms/identification-form";
@@ -97,10 +96,29 @@ export default function CensusPage() {
       window.location.reload();
   };
 
+  const getStepData = (stepKey: string) => {
+    try {
+      const data = localStorage.getItem(`census_storage_${stepKey}`);
+      return data ? JSON.parse(data) : {};
+    } catch (e) {
+      return {};
+    }
+  };
+
   const handleDownloadProof = async () => {
     const doc = new jsPDF();
     const currentDate = new Date();
     
+    const identificationData = getStepData("identification");
+    const observationsData = getStepData("observations");
+
+    const schoolName = identificationData.school_name || identificationData.nome_escola || identificationData.name || "Escola não identificada";
+    const schoolCnpj = identificationData.cnpj || identificationData.school_cnpj || "Não informado";
+    
+    const responsibleName = observationsData.responsible_name || observationsData.nome_responsavel || observationsData.nome || "Não informado";
+    const responsibleRole = observationsData.responsible_role || observationsData.cargo || observationsData.funcao || "Não informado";
+    const responsibleMatricula = observationsData.matricula || observationsData.registration_number || "Não informado";
+
     try {
         const img = new Image();
         img.crossOrigin = "Anonymous";
@@ -113,7 +131,6 @@ export default function CensusPage() {
         
         doc.addImage(img, "PNG", 15, 10, 25, 25);
     } catch (e) {
-        console.error("Erro ao carregar imagem", e);
         doc.setFontSize(8);
         doc.text("[Brasão Oficial]", 20, 20);
     }
@@ -140,86 +157,87 @@ export default function CensusPage() {
     
     doc.setFont("helvetica", "normal");
     doc.setFontSize(11);
-    const introText = "A Secretaria de Estado de Educação certifica que os dados referentes ao levantamento estrutural e operacional foram registrados com sucesso no sistema central de monitoramento escolar.";
+    const introText = "Este documento certifica que os dados referentes ao levantamento estrutural e operacional da unidade escolar abaixo identificada foram preenchidos e registrados com sucesso no sistema central de monitoramento escolar.";
     const splitIntro = doc.splitTextToSize(introText, 170);
     doc.text(splitIntro, 20, 75);
 
     doc.setFillColor(248, 249, 250);
     doc.setDrawColor(200, 200, 200);
-    doc.rect(20, 90, 170, 45, "FD");
+    doc.rect(20, 90, 170, 55, "FD");
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(50, 50, 50);
-    doc.text("IDENTIFICADOR DA ESCOLA (ID):", 25, 100);
-    
-    doc.setFontSize(14);
-    doc.setTextColor(0, 0, 0);
-    doc.text(`${schoolId || "N/A"}`, 25, 108);
-
-    doc.setFontSize(10);
-    doc.setTextColor(50, 50, 50);
-    doc.text("DATA DE REGISTRO:", 100, 100);
+    doc.text("NOME DA ESCOLA:", 25, 100);
     
     doc.setFontSize(12);
     doc.setTextColor(0, 0, 0);
-    doc.text(currentDate.toLocaleDateString("pt-BR"), 100, 108);
+    const splitSchoolName = doc.splitTextToSize(schoolName.toUpperCase(), 160);
+    doc.text(splitSchoolName, 25, 108);
 
+    let currentY = 108 + (splitSchoolName.length * 5);
+
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(50, 50, 50);
-    doc.text("HORÁRIO:", 150, 100);
+    doc.text("CNPJ:", 25, currentY + 10);
+    doc.text("INEP / ID:", 100, currentY + 10);
     
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(12);
     doc.setTextColor(0, 0, 0);
-    doc.text(currentDate.toLocaleTimeString("pt-BR"), 150, 108);
+    doc.text(schoolCnpj, 25, currentY + 18);
+    doc.text(`${schoolId || "N/A"}`, 100, currentY + 18);
 
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(50, 50, 50);
-    doc.text("SITUAÇÃO:", 25, 122);
+    doc.text("DATA DE REGISTRO:", 25, currentY + 30);
     
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(12);
-    doc.setTextColor(0, 128, 0);
-    doc.text("DADOS ENVIADOS COM SUCESSO", 25, 129);
-    
     doc.setTextColor(0, 0, 0);
+    doc.text(`${currentDate.toLocaleDateString("pt-BR")} às ${currentDate.toLocaleTimeString("pt-BR")}`, 25, currentY + 38);
 
+    const responsavelY = 170;
+    
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
-    doc.text("DADOS DO RESPONSÁVEL PELO PREENCHIMENTO", 20, 155);
+    doc.text("DADOS DO RESPONSÁVEL PELO PREENCHIMENTO", 20, responsavelY);
     
     doc.setLineWidth(0.2);
-    doc.line(20, 158, 190, 158);
+    doc.line(20, responsavelY + 3, 190, responsavelY + 3);
 
-    doc.setFont("helvetica", "normal");
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
-    
-    doc.text("Nome do Responsável:", 20, 170);
-    doc.setDrawColor(0, 0, 0);
-    doc.line(60, 170, 190, 170);
-    
-    doc.text("Cargo / Função:", 20, 185);
-    doc.line(50, 185, 110, 185);
+    doc.text("Nome:", 20, responsavelY + 15);
+    doc.setFont("helvetica", "normal");
+    doc.text(responsibleName.toUpperCase(), 35, responsavelY + 15);
 
-    doc.text("Matrícula / CPF:", 115, 185);
-    doc.line(145, 185, 190, 185);
+    doc.setFont("helvetica", "bold");
+    doc.text("Cargo/Função:", 20, responsavelY + 25);
+    doc.setFont("helvetica", "normal");
+    doc.text(responsibleRole.toUpperCase(), 50, responsavelY + 25);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Matrícula:", 120, responsavelY + 25);
+    doc.setFont("helvetica", "normal");
+    doc.text(responsibleMatricula, 140, responsavelY + 25);
 
     doc.setFontSize(9);
     doc.setFont("helvetica", "italic");
     doc.setTextColor(80, 80, 80);
-    const declarationText = "Declaro que as informações prestadas neste formulário são verdadeiras e refletem a realidade da unidade escolar na presente data, estando ciente da responsabilidade administrativa, civil e penal pela veracidade dos dados.";
+    const declarationText = "Ao enviar este formulário, o responsável declarou que as informações prestadas são verdadeiras e refletem a realidade da unidade escolar na presente data, estando ciente da responsabilidade administrativa, civil e penal pela veracidade dos dados.";
     const splitDeclaration = doc.splitTextToSize(declarationText, 170);
-    doc.text(splitDeclaration, 20, 205);
+    doc.text(splitDeclaration, 20, responsavelY + 45);
 
-    doc.setDrawColor(0, 0, 0);
-    doc.line(55, 240, 155, 240);
+    doc.setLineWidth(0.5);
+    doc.line(20, 270, 190, 270);
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(0, 0, 0);
-    doc.text("Assinatura do Declarante", 105, 245, { align: "center" });
-
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
-    doc.text("Secretaria de Estado de Educação do Pará - Sistema de Censo Escolar 2026", 105, 280, { align: "center" });
-    doc.text(`Hash de Autenticação: ${currentDate.getTime().toString(16).toUpperCase()}-${(schoolId || 0).toString(16)}`, 105, 285, { align: "center" });
+    doc.text("Secretaria de Estado de Educação do Pará - Sistema de Censo Escolar 2026", 105, 275, { align: "center" });
+    doc.text(`Autenticação Digital: ${currentDate.getTime().toString(16).toUpperCase()}-${(schoolId || 0).toString(16)}`, 105, 280, { align: "center" });
 
     doc.save(`comprovante-censo-${schoolId}-${currentDate.getTime()}.pdf`);
   };

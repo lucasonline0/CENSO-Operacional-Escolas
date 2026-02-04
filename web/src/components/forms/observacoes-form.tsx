@@ -10,7 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator"; 
 import { 
   RadioInput, 
-  TextInput 
+  TextInput,
+  SelectInput 
 } from "@/components/ui/form-components";
 import { Textarea } from "@/components/ui/textarea";
 import { useCensusPersistence } from "@/hooks/use-census-persistence";
@@ -130,7 +131,20 @@ export function ObservacoesForm({ schoolId, onSuccess, onBack }: ObservacoesForm
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <TextInput<ObservacoesFormValues> control={control} name="nome_responsavel" label="Nome do responsável pelo preenchimento" />
-                <TextInput<ObservacoesFormValues> control={control} name="cargo_funcao" label="Cargo/Função" />
+                
+                <SelectInput<ObservacoesFormValues>
+                    control={control}
+                    name="cargo_funcao"
+                    label="Cargo/Função"
+                    options={[
+                        "Direção Escolar",
+                        "Vice-Diretor Administrativo",
+                        "Vice-Diretor Pedagógico",
+                        "Secretário Escolar",
+                        "Coordenador Pedagógico"
+                    ]}
+                />
+
                 <TextInput<ObservacoesFormValues> control={control} name="matricula_funcional" label="Matrícula funcional" />
             </div>
 

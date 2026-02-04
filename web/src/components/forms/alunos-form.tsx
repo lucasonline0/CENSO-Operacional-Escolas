@@ -100,7 +100,7 @@ export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
 
         <div className="space-y-6">
             <h3 className="text-lg font-medium text-slate-800">Rendimento Escolar (%)</h3>
-            <p className="text-sm text-slate-500">Utilize vírgula ou ponto para casas decimais (ex: 5,5).</p>
+            <p className="text-sm text-slate-500">Utilize <strong>apenas vírgula</strong> para casas decimais (ex: 5,5). Pontos não são aceitos.</p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <TextInput control={control} name="taxa_abandono" label="Taxa de Abandono/Desistência Geral (%)" />

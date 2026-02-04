@@ -120,7 +120,6 @@ export default function CensusPage() {
     setIsGeneratingPdf(true);
 
     try {
-        // Buscar dados reais do servidor
         const [schoolData, censusData] = await Promise.all([
             fetchApiData("schools", "id", schoolId),
             fetchApiData("census", "school_id", schoolId)
@@ -129,12 +128,10 @@ export default function CensusPage() {
         const doc = new jsPDF();
         const currentDate = new Date();
         
-        // Mapeamento dos dados vindos da API
         const schoolName = schoolData?.nome_escola || "Escola não identificada";
         const schoolInep = schoolData?.codigo_inep || schoolId || "N/A";
         const schoolCnpj = schoolData?.cnpj || "Não informado";
         
-        // Dados do censo podem estar aninhados em 'data' dependendo da estrutura do JSONB
         const censusFields = censusData?.data || censusData || {};
         const responsibleName = censusFields.nome_responsavel || "Não informado";
         const responsibleRole = censusFields.cargo_funcao || "Não informado";
@@ -183,9 +180,11 @@ export default function CensusPage() {
         const splitIntro = doc.splitTextToSize(introText, 170);
         doc.text(splitIntro, 20, 75);
 
+        // --- CAIXA DE DADOS DA ESCOLA ---
+        // Aumentei a altura para 85 (antes era 50) para caber todos os dados
         doc.setFillColor(248, 249, 250);
         doc.setDrawColor(200, 200, 200);
-        doc.rect(20, 95, 170, 50, "FD");
+        doc.rect(20, 95, 170, 85, "FD");
 
         doc.setFont("helvetica", "bold");
         doc.setFontSize(10);
@@ -221,7 +220,8 @@ export default function CensusPage() {
         doc.setTextColor(0, 0, 0);
         doc.text(`${currentDate.toLocaleDateString("pt-BR")} às ${currentDate.toLocaleTimeString("pt-BR")}`, 25, currentY + 38);
 
-        const responsavelY = 175;
+        // Ajustei o Y do responsável para não colar na caixa de cima
+        const responsavelY = 200;
         
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);

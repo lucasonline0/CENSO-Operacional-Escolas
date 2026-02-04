@@ -19,7 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { jsPDF } from "jspdf";
-import { FileText } from "lucide-react";
+import { FileText, Loader2 } from "lucide-react";
 
 const STORAGE_KEY_SCHOOL_ID = "census_current_school_id";
 const STORAGE_KEY_STEP = "census_current_step";
@@ -30,6 +30,7 @@ export default function CensusPage() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -96,163 +97,180 @@ export default function CensusPage() {
       window.location.reload();
   };
 
-  const getStepData = (stepKey: string) => {
-    if (typeof window === "undefined") return {};
+  const fetchApiData = async (endpoint: string, idParam: string, idValue: number) => {
     try {
-      // Correção: Usando o padrão definido no use-census-persistence.ts
-      const data = localStorage.getItem(`censo_draft_${stepKey}_v1`);
-      return data ? JSON.parse(data) : {};
-    } catch (e) {
-      console.error(`Erro ao ler dados de ${stepKey}`, e);
-      return {};
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const response = await fetch(`${baseUrl}/v1/${endpoint}?${idParam}=${idValue}`, {
+            headers: {
+                "Content-Type": "application/json",
+                "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || ""
+            }
+        });
+        if (!response.ok) return null;
+        const json = await response.json();
+        return json.data;
+    } catch (error) {
+        console.error(`Erro ao buscar ${endpoint}:`, error);
+        return null;
     }
   };
 
   const handleDownloadProof = async () => {
-    const doc = new jsPDF();
-    const currentDate = new Date();
-    
-    // Busca os dados usando as chaves corretas do persistence hook e dos steps
-    const identificationData = getStepData("identification");
-    const observationsData = getStepData("observations");
-
-    // Mapeamento correto baseado nos schemas (identification-form e observacoes-form)
-    const schoolName = identificationData.nome_escola || "Escola não identificada";
-    const schoolInep = identificationData.codigo_inep || schoolId || "N/A";
-    const schoolCnpj = identificationData.cnpj || "Não informado";
-    
-    const responsibleName = observationsData.nome_responsavel || "Não informado";
-    const responsibleRole = observationsData.cargo_funcao || "Não informado";
-    const responsibleMatricula = observationsData.matricula_funcional || "Não informado";
+    if (!schoolId) return;
+    setIsGeneratingPdf(true);
 
     try {
-        const img = new Image();
-        img.crossOrigin = "Anonymous";
-        img.src = "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/Bras%C3%A3o_do_Par%C3%A1.svg/200px-Bras%C3%A3o_do_Par%C3%A1.svg.png";
+        // Buscar dados reais do servidor
+        const [schoolData, censusData] = await Promise.all([
+            fetchApiData("schools", "id", schoolId),
+            fetchApiData("census", "school_id", schoolId)
+        ]);
+
+        const doc = new jsPDF();
+        const currentDate = new Date();
         
-        await new Promise((resolve, reject) => {
-            img.onload = resolve;
-            img.onerror = reject;
-        });
+        // Mapeamento dos dados vindos da API
+        const schoolName = schoolData?.nome_escola || "Escola não identificada";
+        const schoolInep = schoolData?.codigo_inep || schoolId || "N/A";
+        const schoolCnpj = schoolData?.cnpj || "Não informado";
         
-        doc.addImage(img, "PNG", 15, 10, 25, 25);
-    } catch (e) {
-        console.warn("Imagem do brasão falhou", e);
+        // Dados do censo podem estar aninhados em 'data' dependendo da estrutura do JSONB
+        const censusFields = censusData?.data || censusData || {};
+        const responsibleName = censusFields.nome_responsavel || "Não informado";
+        const responsibleRole = censusFields.cargo_funcao || "Não informado";
+        const responsibleMatricula = censusFields.matricula_funcional || "Não informado";
+
+        try {
+            const img = new Image();
+            img.crossOrigin = "Anonymous";
+            img.src = "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/Bras%C3%A3o_do_Par%C3%A1.svg/200px-Bras%C3%A3o_do_Par%C3%A1.svg.png";
+            
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+            });
+            
+            doc.addImage(img, "PNG", 15, 10, 25, 25);
+        } catch (e) {
+            console.warn("Imagem do brasão falhou", e);
+            doc.setFontSize(8);
+            doc.text("[Brasão Oficial]", 20, 20);
+        }
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.text("GOVERNO DO ESTADO DO PARÁ", 50, 18);
+        
+        doc.setFontSize(12);
+        doc.text("SECRETARIA DE ESTADO DE EDUCAÇÃO - SEDUC", 50, 25);
+        
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11);
+        doc.text("CENSO OPERACIONAL E ESTRUTURAL DAS ESCOLAS", 50, 32);
+
+        doc.setLineWidth(0.5);
+        doc.line(15, 40, 195, 40);
+        doc.setLineWidth(0.2);
+        doc.line(15, 42, 195, 42);
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(18);
+        doc.text("COMPROVANTE DE PREENCHIMENTO", 105, 60, { align: "center" });
+        
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11);
+        const introText = "Este documento serve como comprovante oficial de que os dados referentes ao levantamento estrutural e operacional da unidade escolar abaixo identificada foram preenchidos e registrados com sucesso no sistema central de monitoramento escolar.";
+        const splitIntro = doc.splitTextToSize(introText, 170);
+        doc.text(splitIntro, 20, 75);
+
+        doc.setFillColor(248, 249, 250);
+        doc.setDrawColor(200, 200, 200);
+        doc.rect(20, 95, 170, 50, "FD");
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(50, 50, 50);
+        doc.text("NOME DA ESCOLA:", 25, 105);
+        
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        const splitSchoolName = doc.splitTextToSize(String(schoolName).toUpperCase(), 160);
+        doc.text(splitSchoolName, 25, 113);
+
+        const currentY = 113 + (splitSchoolName.length * 5);
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(50, 50, 50);
+        doc.text("CNPJ:", 25, currentY + 10);
+        doc.text("CÓDIGO INEP:", 100, currentY + 10);
+        
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        doc.text(String(schoolCnpj), 25, currentY + 18);
+        doc.text(String(schoolInep), 100, currentY + 18);
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(50, 50, 50);
+        doc.text("DATA DE REGISTRO:", 25, currentY + 30);
+        
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`${currentDate.toLocaleDateString("pt-BR")} às ${currentDate.toLocaleTimeString("pt-BR")}`, 25, currentY + 38);
+
+        const responsavelY = 175;
+        
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text("DADOS DO RESPONSÁVEL PELO PREENCHIMENTO", 20, responsavelY);
+        
+        doc.setLineWidth(0.2);
+        doc.line(20, responsavelY + 3, 190, responsavelY + 3);
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        
+        doc.text("Nome:", 20, responsavelY + 15);
+        doc.setFont("helvetica", "normal");
+        doc.text(String(responsibleName).toUpperCase(), 35, responsavelY + 15);
+
+        doc.setFont("helvetica", "bold");
+        doc.text("Cargo/Função:", 20, responsavelY + 25);
+        doc.setFont("helvetica", "normal");
+        doc.text(String(responsibleRole).toUpperCase(), 50, responsavelY + 25);
+
+        doc.setFont("helvetica", "bold");
+        doc.text("Matrícula:", 120, responsavelY + 25);
+        doc.setFont("helvetica", "normal");
+        doc.text(String(responsibleMatricula), 140, responsavelY + 25);
+
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "italic");
+        doc.setTextColor(80, 80, 80);
+        const declarationText = "Ao enviar este formulário e gerar este comprovante, o responsável declara que as informações prestadas são verdadeiras e refletem a realidade da unidade escolar na presente data, estando ciente da responsabilidade administrativa, civil e penal pela veracidade dos dados.";
+        const splitDeclaration = doc.splitTextToSize(declarationText, 170);
+        doc.text(splitDeclaration, 20, responsavelY + 45);
+
+        doc.setLineWidth(0.5);
+        doc.line(20, 270, 190, 270);
+        doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
-        doc.text("[Brasão Oficial]", 20, 20);
+        doc.setTextColor(150, 150, 150);
+        doc.text("Secretaria de Estado de Educação do Pará - Sistema de Censo Escolar 2026", 105, 275, { align: "center" });
+        
+        doc.text(`Autenticação Digital: ${currentDate.getTime().toString(16).toUpperCase()}-${(schoolId || 0).toString(16)}`, 105, 280, { align: "center" });
+
+        doc.save(`comprovante-censo-${schoolId}-${currentDate.getTime()}.pdf`);
+
+    } catch (error) {
+        console.error("Erro ao gerar PDF:", error);
+        alert("Não foi possível gerar o comprovante no momento. Tente novamente.");
+    } finally {
+        setIsGeneratingPdf(false);
     }
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("GOVERNO DO ESTADO DO PARÁ", 50, 18);
-    
-    doc.setFontSize(12);
-    doc.text("SECRETARIA DE ESTADO DE EDUCAÇÃO - SEDUC", 50, 25);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    doc.text("CENSO OPERACIONAL E ESTRUTURAL DAS ESCOLAS", 50, 32);
-
-    doc.setLineWidth(0.5);
-    doc.line(15, 40, 195, 40);
-    doc.setLineWidth(0.2);
-    doc.line(15, 42, 195, 42);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.text("COMPROVANTE DE PREENCHIMENTO", 105, 60, { align: "center" });
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    const introText = "Este documento certifica que os dados referentes ao levantamento estrutural e operacional da unidade escolar abaixo identificada foram preenchidos e registrados com sucesso no sistema central de monitoramento escolar.";
-    const splitIntro = doc.splitTextToSize(introText, 170);
-    doc.text(splitIntro, 20, 75);
-
-    doc.setFillColor(248, 249, 250);
-    doc.setDrawColor(200, 200, 200);
-    doc.rect(20, 90, 170, 55, "FD");
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(50, 50, 50);
-    doc.text("NOME DA ESCOLA:", 25, 100);
-    
-    doc.setFontSize(12);
-    doc.setTextColor(0, 0, 0);
-    const splitSchoolName = doc.splitTextToSize(schoolName.toUpperCase(), 160);
-    doc.text(splitSchoolName, 25, 108);
-
-    // Calcula a posição Y dinâmica caso o nome da escola ocupe mais de uma linha
-    const currentY = 108 + (splitSchoolName.length * 5);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(50, 50, 50);
-    doc.text("CNPJ:", 25, currentY + 10);
-    doc.text("CÓDIGO INEP:", 100, currentY + 10);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(12);
-    doc.setTextColor(0, 0, 0);
-    doc.text(schoolCnpj, 25, currentY + 18);
-    doc.text(`${schoolInep}`, 100, currentY + 18);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(50, 50, 50);
-    doc.text("DATA DE REGISTRO:", 25, currentY + 30);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(12);
-    doc.setTextColor(0, 0, 0);
-    doc.text(`${currentDate.toLocaleDateString("pt-BR")} às ${currentDate.toLocaleTimeString("pt-BR")}`, 25, currentY + 38);
-
-    const responsavelY = 170;
-    
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text("DADOS DO RESPONSÁVEL PELO PREENCHIMENTO", 20, responsavelY);
-    
-    doc.setLineWidth(0.2);
-    doc.line(20, responsavelY + 3, 190, responsavelY + 3);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    
-    // Nome
-    doc.text("Nome:", 20, responsavelY + 15);
-    doc.setFont("helvetica", "normal");
-    doc.text(responsibleName.toUpperCase(), 35, responsavelY + 15);
-
-    // Cargo e Matrícula
-    doc.setFont("helvetica", "bold");
-    doc.text("Cargo/Função:", 20, responsavelY + 25);
-    doc.setFont("helvetica", "normal");
-    doc.text(responsibleRole.toUpperCase(), 50, responsavelY + 25);
-
-    doc.setFont("helvetica", "bold");
-    doc.text("Matrícula:", 120, responsavelY + 25);
-    doc.setFont("helvetica", "normal");
-    doc.text(responsibleMatricula, 140, responsavelY + 25);
-
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "italic");
-    doc.setTextColor(80, 80, 80);
-    const declarationText = "Ao enviar este formulário, o responsável declarou que as informações prestadas são verdadeiras e refletem a realidade da unidade escolar na presente data, estando ciente da responsabilidade administrativa, civil e penal pela veracidade dos dados.";
-    const splitDeclaration = doc.splitTextToSize(declarationText, 170);
-    doc.text(splitDeclaration, 20, responsavelY + 45);
-
-    doc.setLineWidth(0.5);
-    doc.line(20, 270, 190, 270);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text("Secretaria de Estado de Educação do Pará - Sistema de Censo Escolar 2026", 105, 275, { align: "center" });
-    
-    // Autenticação Digital (Visual para fins estéticos/oficiais)
-    doc.text(`Autenticação Digital: ${currentDate.getTime().toString(16).toUpperCase()}-${(schoolId || 0).toString(16)}`, 105, 280, { align: "center" });
-
-    doc.save(`comprovante-censo-${schoolId}-${currentDate.getTime()}.pdf`);
   };
 
   if (!isInitialized) return null;
@@ -272,9 +290,18 @@ export default function CensusPage() {
                   </p>
                   
                   <div className="space-y-3 w-full">
-                    <Button onClick={handleDownloadProof} variant="outline" className="w-full border-blue-200 hover:bg-blue-50 text-blue-700">
-                        <FileText className="mr-2 h-4 w-4" />
-                        Baixar Comprovante PDF
+                    <Button 
+                        onClick={handleDownloadProof} 
+                        variant="outline" 
+                        disabled={isGeneratingPdf}
+                        className="w-full border-blue-200 hover:bg-blue-50 text-blue-700"
+                    >
+                        {isGeneratingPdf ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                            <FileText className="mr-2 h-4 w-4" />
+                        )}
+                        {isGeneratingPdf ? "Gerando PDF..." : "Baixar Comprovante PDF"}
                     </Button>
                     
                     <Button onClick={handleConfirmReset} className="w-full bg-blue-600 hover:bg-blue-700">

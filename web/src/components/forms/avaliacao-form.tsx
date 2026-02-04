@@ -80,7 +80,6 @@ export function AvaliacaoForm({ schoolId, onSuccess, onBack }: AvaliacaoFormProp
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         
         <div className="space-y-6">
-            <h3 className="text-lg font-medium text-slate-800">Avaliação e Notas</h3>
             
             <div className="grid grid-cols-1 gap-6">
                 <RadioInput<AvaliacaoFormValues> control={control} name="avaliacao_merendeiras" label="Avaliação do serviço das merendeiras" options={OPCOES} />

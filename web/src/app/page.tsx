@@ -97,42 +97,130 @@ export default function CensusPage() {
       window.location.reload();
   };
 
-  const handleDownloadProof = () => {
+  const handleDownloadProof = async () => {
     const doc = new jsPDF();
     const currentDate = new Date();
     
-    doc.setFontSize(22);
-    doc.text("Comprovante de Preenchimento", 105, 30, { align: "center" });
+    try {
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        img.src = "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/Bras%C3%A3o_do_Par%C3%A1.svg/200px-Bras%C3%A3o_do_Par%C3%A1.svg.png";
+        
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+        });
+        
+        doc.addImage(img, "PNG", 15, 10, 25, 25);
+    } catch (e) {
+        console.error("Erro ao carregar imagem", e);
+        doc.setFontSize(8);
+        doc.text("[Brasão Oficial]", 20, 20);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("GOVERNO DO ESTADO DO PARÁ", 50, 18);
+    
+    doc.setFontSize(12);
+    doc.text("SECRETARIA DE ESTADO DE EDUCAÇÃO - SEDUC", 50, 25);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.text("CENSO OPERACIONAL E ESTRUTURAL DAS ESCOLAS", 50, 32);
+
+    doc.setLineWidth(0.5);
+    doc.line(15, 40, 195, 40);
+    doc.setLineWidth(0.2);
+    doc.line(15, 42, 195, 42);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text("COMPROVANTE DE PREENCHIMENTO", 105, 60, { align: "center" });
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    const introText = "A Secretaria de Estado de Educação certifica que os dados referentes ao levantamento estrutural e operacional foram registrados com sucesso no sistema central de monitoramento escolar.";
+    const splitIntro = doc.splitTextToSize(introText, 170);
+    doc.text(splitIntro, 20, 75);
+
+    doc.setFillColor(248, 249, 250);
+    doc.setDrawColor(200, 200, 200);
+    doc.rect(20, 90, 170, 45, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(50, 50, 50);
+    doc.text("IDENTIFICADOR DA ESCOLA (ID):", 25, 100);
     
     doc.setFontSize(14);
-    doc.text("Censo Operacional e Estrutural das Escolas", 105, 40, { align: "center" });
-    doc.text("Secretaria de Estado de Educação", 105, 48, { align: "center" });
+    doc.setTextColor(0, 0, 0);
+    doc.text(`${schoolId || "N/A"}`, 25, 108);
 
-    doc.setLineWidth(0.5);
-    doc.line(20, 55, 190, 55);
-
-    doc.setFontSize(12);
-    doc.text(`ID da Escola: ${schoolId || "N/A"}`, 20, 70);
-    doc.text(`Data de Finalização: ${currentDate.toLocaleDateString()}`, 20, 80);
-    doc.text(`Horário: ${currentDate.toLocaleTimeString()}`, 20, 90);
-    
-    doc.setFontSize(16);
-    doc.setTextColor(0, 128, 0); 
-    doc.text("STATUS: FINALIZADO COM SUCESSO", 105, 110, { align: "center" });
-    doc.setTextColor(0, 0, 0); 
-
-    doc.setFontSize(11);
-    doc.text("Certificamos que todos os formulários e dados solicitados pelo Censo", 20, 130);
-    doc.text("Operacional foram preenchidos e salvos corretamente no sistema.", 20, 136);
-    
-    doc.text("Este documento serve como comprovante temporário de que a escola", 20, 150);
-    doc.text("realizou o procedimento de atualização cadastral exigido.", 20, 156);
-
-    doc.setLineWidth(0.5);
-    doc.line(20, 250, 190, 250);
     doc.setFontSize(10);
-    doc.text("Sistema de Censo Escolar - SEDUC", 105, 260, { align: "center" });
+    doc.setTextColor(50, 50, 50);
+    doc.text("DATA DE REGISTRO:", 100, 100);
     
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text(currentDate.toLocaleDateString("pt-BR"), 100, 108);
+
+    doc.setFontSize(10);
+    doc.setTextColor(50, 50, 50);
+    doc.text("HORÁRIO:", 150, 100);
+    
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text(currentDate.toLocaleTimeString("pt-BR"), 150, 108);
+
+    doc.setFontSize(10);
+    doc.setTextColor(50, 50, 50);
+    doc.text("SITUAÇÃO:", 25, 122);
+    
+    doc.setFontSize(12);
+    doc.setTextColor(0, 128, 0);
+    doc.text("DADOS ENVIADOS COM SUCESSO", 25, 129);
+    
+    doc.setTextColor(0, 0, 0);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("DADOS DO RESPONSÁVEL PELO PREENCHIMENTO", 20, 155);
+    
+    doc.setLineWidth(0.2);
+    doc.line(20, 158, 190, 158);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    
+    doc.text("Nome do Responsável:", 20, 170);
+    doc.setDrawColor(0, 0, 0);
+    doc.line(60, 170, 190, 170);
+    
+    doc.text("Cargo / Função:", 20, 185);
+    doc.line(50, 185, 110, 185);
+
+    doc.text("Matrícula / CPF:", 115, 185);
+    doc.line(145, 185, 190, 185);
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(80, 80, 80);
+    const declarationText = "Declaro que as informações prestadas neste formulário são verdadeiras e refletem a realidade da unidade escolar na presente data, estando ciente da responsabilidade administrativa, civil e penal pela veracidade dos dados.";
+    const splitDeclaration = doc.splitTextToSize(declarationText, 170);
+    doc.text(splitDeclaration, 20, 205);
+
+    doc.setDrawColor(0, 0, 0);
+    doc.line(55, 240, 155, 240);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0, 0, 0);
+    doc.text("Assinatura do Declarante", 105, 245, { align: "center" });
+
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text("Secretaria de Estado de Educação do Pará - Sistema de Censo Escolar 2026", 105, 280, { align: "center" });
+    doc.text(`Hash de Autenticação: ${currentDate.getTime().toString(16).toUpperCase()}-${(schoolId || 0).toString(16)}`, 105, 285, { align: "center" });
+
     doc.save(`comprovante-censo-${schoolId}-${currentDate.getTime()}.pdf`);
   };
 

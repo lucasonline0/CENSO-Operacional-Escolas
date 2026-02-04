@@ -68,7 +68,7 @@ export function TextInput<T extends FieldValues>({
   );
 }
 
-// CORREÇÃO APLICADA AQUI: NumberInput com bloqueio de negativos
+// CORREÇÃO APLICADA AQUI: NumberInput com bloqueio de negativos e limpeza do zero ao clicar
 export function NumberInput<T extends FieldValues>({
   control,
   name,
@@ -92,12 +92,16 @@ export function NumberInput<T extends FieldValues>({
           <FormControl>
             <Input
               type="number"
-              min={0} // Define o mínimo no HTML
-              onKeyDown={blockInvalidChar} // Bloqueia a digitação
+              min={0}
+              onKeyDown={blockInvalidChar} 
               placeholder={placeholder}
               {...field}
+              onFocus={(e) => {
+                if (field.value === 0) {
+                    field.onChange("");
+                }
+              }}
               onChange={(e) => {
-                // Garante que se o usuário colar algo negativo, será tratado (opcional, mas seguro)
                 const val = e.target.valueAsNumber;
                 if (val < 0) return; 
                 field.onChange(val);

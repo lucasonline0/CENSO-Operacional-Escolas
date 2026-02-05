@@ -95,7 +95,7 @@ export function PortariaForm({ schoolId, onSuccess, onBack }: PortariaFormProps)
             <div className="p-4 bg-slate-50 border rounded-md grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                 <RadioInput control={control} name="qtd_atende_necessidade_portaria" label="A quantidade atual atende a necessidade?" options={["Sim", "Não"]} />
                 {form.watch("qtd_atende_necessidade_portaria") === "Não" && (
-                    <NumberInput control={control} name="quantitativo_necessario_portaria" label="Qual o quantitativo necessário?" />
+                    <NumberInput control={control} name="quantitativo_necessario_portaria" label="Para atender plenamente à demanda atual da escola, quantos agentes de portaria faltam para completar a equipe?" />
                 )}
             </div>
 

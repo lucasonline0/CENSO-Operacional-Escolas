@@ -58,7 +58,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
     return () => subscription.unsubscribe();
   }, [form, saveLocalDraft]);
 
-  // Busca os dados da escola para saber os turnos (Identificação)
+  // Busca os dados da escola para saber os turnos
   useEffect(() => {
     if (schoolId) {
         const fetchSchoolData = async () => {
@@ -78,20 +78,32 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
     }
   }, [schoolId]);
 
-  // Lógica de Autopreenchimento: Total - Rural = Urbana
+  // Lógica de Autopreenchimento Bidirecional (Rural <-> Urbana)
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
-      if (name === "total_alunos" || name === "alunos_rural") {
-        const total = Number(form.getValues("total_alunos") || 0);
-        const rural = Number(form.getValues("alunos_rural") || 0);
-        
+      const total = Number(form.getValues("total_alunos") || 0);
+
+      // Se mudar o total, recalculamos a urbana (mantendo a rural como âncora)
+      if (name === "total_alunos") {
+         const rural = Number(form.getValues("alunos_rural") || 0);
+         if (total >= rural) {
+             form.setValue("alunos_urbana", total - rural, { shouldValidate: true });
+         }
+      }
+
+      // Se preencher Rural -> Calcula Urbana
+      if (name === "alunos_rural") {
+        const rural = Number(value.alunos_rural || 0);
         if (total >= rural) {
-            const calculatedUrbana = total - rural;
-            const currentUrbana = Number(form.getValues("alunos_urbana") || 0);
-            
-            if (currentUrbana !== calculatedUrbana) {
-                form.setValue("alunos_urbana", calculatedUrbana, { shouldValidate: true });
-            }
+            form.setValue("alunos_urbana", total - rural, { shouldValidate: true });
+        }
+      }
+
+      // Se preencher Urbana -> Calcula Rural
+      if (name === "alunos_urbana") {
+        const urbana = Number(value.alunos_urbana || 0);
+        if (total >= urbana) {
+            form.setValue("alunos_rural", total - urbana, { shouldValidate: true });
         }
       }
     });
@@ -228,7 +240,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
                 </div>
             </div>
             
-            {/* Campos de Turmas Condicionais */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-md">
                 {showManha && (
                     <NumberInput<GeneralDataFormValues> control={control} name="turmas_manha" label="Qtd. Turmas (Manhã)" />
@@ -249,7 +260,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <NumberInput<GeneralDataFormValues> control={control} name="total_alunos" label="Total de alunos matriculados" />
-                <NumberInput<GeneralDataFormValues> control={control} name="alunos_pcd" label="Qtd. alunos PcD" />
+                <NumberInput<GeneralDataFormValues> control={control} name="alunos_pcd" label="Qtd. alunos PcD (Preenchimento Manual)" />
                 <NumberInput<GeneralDataFormValues> control={control} name="alunos_rural" label="Qtd. alunos residência rural" />
                 <NumberInput<GeneralDataFormValues> control={control} name="alunos_urbana" label="Qtd. alunos residência urbana" />
             </div>

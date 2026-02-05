@@ -19,6 +19,7 @@ interface AlunosFormProps {
 export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [etapasOfertadas, setEtapasOfertadas] = useState<string[]>([]);
+  const [totalAlunosMatriculados, setTotalAlunosMatriculados] = useState<number>(0);
 
   const form = useForm<AlunosFormValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -51,9 +52,8 @@ export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
     return () => (subscription as any).unsubscribe();
   }, [form, saveLocalDraft]);
 
-  // Busca as etapas ofertadas salvas no passo "Dados Gerais"
   useEffect(() => {
-    const fetchEtapas = async () => {
+    const fetchCensusData = async () => {
       if (!schoolId) return;
       try {
         const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -63,20 +63,30 @@ export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
           const json = await response.json();
           const censusData = json.data; 
           
-          if (censusData && Array.isArray(censusData.etapas_ofertadas)) {
-            setEtapasOfertadas(censusData.etapas_ofertadas);
+          if (censusData) {
+            if (Array.isArray(censusData.etapas_ofertadas)) {
+              setEtapasOfertadas(censusData.etapas_ofertadas);
+            }
+            if (censusData.total_alunos) {
+              setTotalAlunosMatriculados(Number(censusData.total_alunos));
+            }
           }
         }
       } catch (error) {
-        console.error("Erro ao buscar etapas:", error);
+        console.error("Erro ao buscar dados do censo:", error);
       }
     };
     
-    fetchEtapas();
+    fetchCensusData();
   }, [schoolId]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function onSubmit(data: any) {
+    if (data.total_beneficiarios > totalAlunosMatriculados) {
+      alert(`O número de beneficiários (${data.total_beneficiarios}) não pode ser maior que o total de alunos matriculados (${totalAlunosMatriculados}). Verifique os dados.`);
+      return;
+    }
+
     setIsSaving(true);
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/census`, {
@@ -118,6 +128,11 @@ export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
                     name="total_beneficiarios" 
                     label="Total de Beneficiários de programas sociais" 
                 />
+                {totalAlunosMatriculados > 0 && (
+                  <p className="text-xs text-slate-500 mt-2">
+                    Total de matriculados registrados: {totalAlunosMatriculados}
+                  </p>
+                )}
             </div>
         </div>
 
@@ -159,7 +174,6 @@ export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
                   <TextInput control={control} name="ideb_ensino_medio" label="Ideb - Ensino Médio" />
                 )}
                 
-                {/* Mensagem caso nenhuma etapa relevante esteja selecionada */}
                 {!etapasOfertadas.includes("Ensino Fundamental I") && 
                  !etapasOfertadas.includes("Ensino Fundamental II") && 
                  !etapasOfertadas.includes("Ensino Médio") && (

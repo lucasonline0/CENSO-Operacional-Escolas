@@ -51,25 +51,28 @@ export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
     return () => (subscription as any).unsubscribe();
   }, [form, saveLocalDraft]);
 
+  // Busca as etapas ofertadas salvas no passo "Dados Gerais"
   useEffect(() => {
     const fetchEtapas = async () => {
+      if (!schoolId) return;
       try {
         const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
         const response = await fetch(`${baseUrl}/v1/census?school_id=${schoolId}`);
+        
         if (response.ok) {
           const json = await response.json();
-          const censusData = json.data;
-          if (censusData && censusData.data && Array.isArray(censusData.data.etapas_ofertadas)) {
-            setEtapasOfertadas(censusData.data.etapas_ofertadas);
+          const censusData = json.data; 
+          
+          if (censusData && Array.isArray(censusData.etapas_ofertadas)) {
+            setEtapasOfertadas(censusData.etapas_ofertadas);
           }
         }
       } catch (error) {
         console.error("Erro ao buscar etapas:", error);
       }
     };
-    if (schoolId) {
-      fetchEtapas();
-    }
+    
+    fetchEtapas();
   }, [schoolId]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -154,6 +157,15 @@ export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
                 )}
                 {etapasOfertadas.includes("Ensino Médio") && (
                   <TextInput control={control} name="ideb_ensino_medio" label="Ideb - Ensino Médio" />
+                )}
+                
+                {/* Mensagem caso nenhuma etapa relevante esteja selecionada */}
+                {!etapasOfertadas.includes("Ensino Fundamental I") && 
+                 !etapasOfertadas.includes("Ensino Fundamental II") && 
+                 !etapasOfertadas.includes("Ensino Médio") && (
+                  <div className="col-span-full text-slate-500 italic text-sm">
+                    Nenhuma etapa de ensino com IDEB (Fundamental ou Médio) foi marcada nos Dados Gerais.
+                  </div>
                 )}
             </div>
         </div>

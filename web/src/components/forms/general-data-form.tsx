@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm, Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { generalDataSchema, GeneralDataFormValues } from "@/schemas/steps/general-data";
@@ -23,6 +23,9 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const [availableTurnos, setAvailableTurnos] = useState<string[]>([]);
+  
+  // Ref para controlar atualizações internas e evitar loop infinito nos cálculos
+  const isInternalUpdate = useRef(false);
 
   const form = useForm<GeneralDataFormValues>({
     resolver: zodResolver(generalDataSchema) as unknown as Resolver<GeneralDataFormValues>,
@@ -78,32 +81,51 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
     }
   }, [schoolId]);
 
-  // Lógica de Autopreenchimento Bidirecional (Rural <-> Urbana)
+  // Lógica de Autopreenchimento Bidirecional (Rural <-> Urbana) com proteção contra loop
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
+      // Se a alteração foi causada pelo próprio código (cálculo), ignoramos para não travar a digitação
+      if (isInternalUpdate.current) return;
+
       const total = Number(form.getValues("total_alunos") || 0);
 
-      // Se mudar o total, recalculamos a urbana (mantendo a rural como âncora)
+      // Cenário 1: Mudou o Total -> Recalcula Urbana (mantém Rural fixa)
       if (name === "total_alunos") {
          const rural = Number(form.getValues("alunos_rural") || 0);
          if (total >= rural) {
-             form.setValue("alunos_urbana", total - rural, { shouldValidate: true });
+             const newUrbana = total - rural;
+             if (Number(form.getValues("alunos_urbana")) !== newUrbana) {
+                 isInternalUpdate.current = true;
+                 form.setValue("alunos_urbana", newUrbana, { shouldValidate: true });
+                 isInternalUpdate.current = false;
+             }
          }
       }
 
-      // Se preencher Rural -> Calcula Urbana
+      // Cenário 2: Preencheu Rural -> Calcula Urbana
       if (name === "alunos_rural") {
         const rural = Number(value.alunos_rural || 0);
         if (total >= rural) {
-            form.setValue("alunos_urbana", total - rural, { shouldValidate: true });
+            const newUrbana = total - rural;
+            // Só atualiza se o valor for diferente para evitar re-render desnecessário
+            if (Number(form.getValues("alunos_urbana")) !== newUrbana) {
+                isInternalUpdate.current = true;
+                form.setValue("alunos_urbana", newUrbana, { shouldValidate: true });
+                isInternalUpdate.current = false;
+            }
         }
       }
 
-      // Se preencher Urbana -> Calcula Rural
+      // Cenário 3: Preencheu Urbana -> Calcula Rural
       if (name === "alunos_urbana") {
         const urbana = Number(value.alunos_urbana || 0);
         if (total >= urbana) {
-            form.setValue("alunos_rural", total - urbana, { shouldValidate: true });
+            const newRural = total - urbana;
+            if (Number(form.getValues("alunos_rural")) !== newRural) {
+                isInternalUpdate.current = true;
+                form.setValue("alunos_rural", newRural, { shouldValidate: true });
+                isInternalUpdate.current = false;
+            }
         }
       }
     });

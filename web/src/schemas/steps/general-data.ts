@@ -48,6 +48,14 @@ export const generalDataSchema = z.object({
   
   cameras_funcionamento: z.string().min(1, "Selecione uma opção"),
   cameras_cobrem: z.string().optional(),
+}).refine((data) => {
+  const total = data.total_alunos || 0;
+  const rural = data.alunos_rural || 0;
+  const urbana = data.alunos_urbana || 0;
+  return total === (rural + urbana);
+}, {
+  message: "O total de alunos deve ser igual à soma de alunos da zona rural e urbana",
+  path: ["total_alunos"],
 });
 
 export type GeneralDataFormValues = z.infer<typeof generalDataSchema>;

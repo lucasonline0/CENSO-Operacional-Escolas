@@ -22,6 +22,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
+  const [availableTurnos, setAvailableTurnos] = useState<string[]>([]);
 
   const form = useForm<GeneralDataFormValues>({
     resolver: zodResolver(generalDataSchema) as unknown as Resolver<GeneralDataFormValues>,
@@ -56,6 +57,46 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
     const subscription = form.watch((value) => saveLocalDraft(value as GeneralDataFormValues));
     return () => subscription.unsubscribe();
   }, [form, saveLocalDraft]);
+
+  // Busca os dados da escola para saber os turnos (Identificação)
+  useEffect(() => {
+    if (schoolId) {
+        const fetchSchoolData = async () => {
+            try {
+                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/schools?id=${schoolId}`);
+                if (response.ok) {
+                    const json = await response.json();
+                    if (json.data && Array.isArray(json.data.turnos)) {
+                        setAvailableTurnos(json.data.turnos);
+                    }
+                }
+            } catch (error) {
+                console.error("Erro ao buscar turnos da escola:", error);
+            }
+        };
+        fetchSchoolData();
+    }
+  }, [schoolId]);
+
+  // Lógica de Autopreenchimento: Total - Rural = Urbana
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === "total_alunos" || name === "alunos_rural") {
+        const total = Number(form.getValues("total_alunos") || 0);
+        const rural = Number(form.getValues("alunos_rural") || 0);
+        
+        if (total >= rural) {
+            const calculatedUrbana = total - rural;
+            const currentUrbana = Number(form.getValues("alunos_urbana") || 0);
+            
+            if (currentUrbana !== calculatedUrbana) {
+                form.setValue("alunos_urbana", calculatedUrbana, { shouldValidate: true });
+            }
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
@@ -129,6 +170,11 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
   if (isLoading) return <div className="text-center py-8 text-slate-500">Carregando Dados Gerais...</div>;
   const control = form.control;
 
+  // Helpers para verificar visibilidade dos turnos
+  const showManha = availableTurnos.includes("Manhã") || availableTurnos.includes("Integral");
+  const showTarde = availableTurnos.includes("Tarde") || availableTurnos.includes("Integral");
+  const showNoite = availableTurnos.includes("Noite");
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
@@ -181,11 +227,26 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
                     ))}
                 </div>
             </div>
+            
+            {/* Campos de Turmas Condicionais */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-md">
-                <NumberInput<GeneralDataFormValues> control={control} name="turmas_manha" label="Qtd. Turmas (Manhã)" />
-                <NumberInput<GeneralDataFormValues> control={control} name="turmas_tarde" label="Qtd. Turmas (Tarde)" />
-                <NumberInput<GeneralDataFormValues> control={control} name="turmas_noite" label="Qtd. Turmas (Noite)" />
+                {showManha && (
+                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_manha" label="Qtd. Turmas (Manhã)" />
+                )}
+                {showTarde && (
+                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_tarde" label="Qtd. Turmas (Tarde)" />
+                )}
+                {showNoite && (
+                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_noite" label="Qtd. Turmas (Noite)" />
+                )}
+                
+                {!showManha && !showTarde && !showNoite && (
+                    <div className="col-span-full text-center text-sm text-slate-500 italic">
+                        Nenhum turno foi selecionado na etapa de Identificação.
+                    </div>
+                )}
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <NumberInput<GeneralDataFormValues> control={control} name="total_alunos" label="Total de alunos matriculados" />
                 <NumberInput<GeneralDataFormValues> control={control} name="alunos_pcd" label="Qtd. alunos PcD" />

@@ -224,7 +224,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8" noValidate>
         
         <div className="space-y-6">
             <h3 className="text-lg font-medium text-slate-800">Infraestrutura Escolar</h3>

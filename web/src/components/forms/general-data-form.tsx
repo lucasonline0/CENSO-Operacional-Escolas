@@ -81,22 +81,32 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
     }
   }, [schoolId]);
 
-  // Lógica de Autopreenchimento Bidirecional (Rural <-> Urbana) com proteção contra loop
+  // Lógica de Autopreenchimento Bidirecional (Rural <-> Urbana)
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
-      // Se a alteração foi causada pelo próprio código (cálculo), ignoramos para não travar a digitação
+      // Se a alteração foi causada pelo próprio código, ignoramos para não travar
       if (isInternalUpdate.current) return;
 
-      const total = Number(form.getValues("total_alunos") || 0);
+      // Helper seguro para converter valor
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const getNum = (val: any) => {
+         const n = Number(val);
+         return isNaN(n) ? 0 : n;
+      };
+
+      // Pegamos os valores atuais do formulário
+      const currentValues = form.getValues();
+      const total = getNum(currentValues.total_alunos);
+      const rural = getNum(currentValues.alunos_rural);
+      const urbana = getNum(currentValues.alunos_urbana);
 
       // Cenário 1: Mudou o Total -> Recalcula Urbana (mantém Rural fixa)
       if (name === "total_alunos") {
-         const rural = Number(form.getValues("alunos_rural") || 0);
          if (total >= rural) {
              const newUrbana = total - rural;
-             if (Number(form.getValues("alunos_urbana")) !== newUrbana) {
+             if (urbana !== newUrbana) {
                  isInternalUpdate.current = true;
-                 form.setValue("alunos_urbana", newUrbana, { shouldValidate: true });
+                 form.setValue("alunos_urbana", newUrbana); // Sem shouldValidate para não travar
                  isInternalUpdate.current = false;
              }
          }
@@ -104,13 +114,11 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
 
       // Cenário 2: Preencheu Rural -> Calcula Urbana
       if (name === "alunos_rural") {
-        const rural = Number(value.alunos_rural || 0);
         if (total >= rural) {
             const newUrbana = total - rural;
-            // Só atualiza se o valor for diferente para evitar re-render desnecessário
-            if (Number(form.getValues("alunos_urbana")) !== newUrbana) {
+            if (urbana !== newUrbana) {
                 isInternalUpdate.current = true;
-                form.setValue("alunos_urbana", newUrbana, { shouldValidate: true });
+                form.setValue("alunos_urbana", newUrbana);
                 isInternalUpdate.current = false;
             }
         }
@@ -118,12 +126,11 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
 
       // Cenário 3: Preencheu Urbana -> Calcula Rural
       if (name === "alunos_urbana") {
-        const urbana = Number(value.alunos_urbana || 0);
         if (total >= urbana) {
             const newRural = total - urbana;
-            if (Number(form.getValues("alunos_rural")) !== newRural) {
+            if (rural !== newRural) {
                 isInternalUpdate.current = true;
-                form.setValue("alunos_rural", newRural, { shouldValidate: true });
+                form.setValue("alunos_rural", newRural);
                 isInternalUpdate.current = false;
             }
         }

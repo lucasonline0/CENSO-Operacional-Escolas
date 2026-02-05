@@ -19,7 +19,6 @@ import {
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
-// Interface base (mantida igual ao original)
 interface BaseProps<T extends FieldValues> {
   control: Control<T>;
   name: Path<T>;
@@ -27,6 +26,13 @@ interface BaseProps<T extends FieldValues> {
   placeholder?: string;
   description?: string;
   disabled?: boolean;
+}
+
+// Interface estendida para suportar atributos numéricos
+interface NumberProps<T extends FieldValues> extends BaseProps<T> {
+  min?: number;
+  max?: number;
+  step?: number;
 }
 
 interface SelectProps<T extends FieldValues> extends BaseProps<T> {
@@ -68,7 +74,6 @@ export function TextInput<T extends FieldValues>({
   );
 }
 
-// CORREÇÃO APLICADA AQUI: NumberInput com bloqueio de negativos e limpeza do zero ao clicar
 export function NumberInput<T extends FieldValues>({
   control,
   name,
@@ -76,9 +81,11 @@ export function NumberInput<T extends FieldValues>({
   placeholder,
   description,
   disabled,
-}: BaseProps<T>) {
+  min, // Recebendo min
+  max, // Recebendo max
+  step, // Recebendo step
+}: NumberProps<T>) { // Usando a nova interface
   
-  // Função para bloquear caracteres inválidos (negativo, e, +)
   const blockInvalidChar = (e: React.KeyboardEvent<HTMLInputElement>) => 
     ["e", "E", "+", "-"].includes(e.key) && e.preventDefault();
 
@@ -92,7 +99,9 @@ export function NumberInput<T extends FieldValues>({
           <FormControl>
             <Input
               type="number"
-              min={0}
+              min={min ?? 0} // Usa o min passado ou 0 por padrão
+              max={max}
+              step={step}
               onKeyDown={blockInvalidChar} 
               placeholder={placeholder}
               {...field}
@@ -103,6 +112,11 @@ export function NumberInput<T extends FieldValues>({
               }}
               onChange={(e) => {
                 const val = e.target.valueAsNumber;
+                // Permite limpar o campo (NaN) ou valores válidos
+                if (isNaN(val)) {
+                   field.onChange("");
+                   return;
+                }
                 if (val < 0) return; 
                 field.onChange(val);
               }}

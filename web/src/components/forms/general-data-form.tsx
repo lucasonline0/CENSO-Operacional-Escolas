@@ -24,7 +24,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
   const [uploadMessage, setUploadMessage] = useState("");
   const [availableTurnos, setAvailableTurnos] = useState<string[]>([]);
   
-  // Ref para controlar atualizações internas e evitar loop infinito nos cálculos
   const isInternalUpdate = useRef(false);
 
   const form = useForm<GeneralDataFormValues>({
@@ -61,7 +60,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
     return () => subscription.unsubscribe();
   }, [form, saveLocalDraft]);
 
-  // Busca os dados da escola para saber os turnos
   useEffect(() => {
     if (schoolId) {
         const fetchSchoolData = async () => {
@@ -81,38 +79,31 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
     }
   }, [schoolId]);
 
-  // Lógica de Autopreenchimento Bidirecional (Rural <-> Urbana)
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
-      // Se a alteração foi causada pelo próprio código, ignoramos para não travar
       if (isInternalUpdate.current) return;
 
-      // Helper seguro para converter valor
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const getNum = (val: any) => {
+      const getNum = (val: unknown) => {
          const n = Number(val);
          return isNaN(n) ? 0 : n;
       };
 
-      // Pegamos os valores atuais do formulário
       const currentValues = form.getValues();
       const total = getNum(currentValues.total_alunos);
       const rural = getNum(currentValues.alunos_rural);
       const urbana = getNum(currentValues.alunos_urbana);
 
-      // Cenário 1: Mudou o Total -> Recalcula Urbana (mantém Rural fixa)
       if (name === "total_alunos") {
          if (total >= rural) {
              const newUrbana = total - rural;
              if (urbana !== newUrbana) {
                  isInternalUpdate.current = true;
-                 form.setValue("alunos_urbana", newUrbana); // Sem shouldValidate para não travar
+                 form.setValue("alunos_urbana", newUrbana); 
                  isInternalUpdate.current = false;
              }
          }
       }
 
-      // Cenário 2: Preencheu Rural -> Calcula Urbana
       if (name === "alunos_rural") {
         if (total >= rural) {
             const newUrbana = total - rural;
@@ -124,7 +115,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
         }
       }
 
-      // Cenário 3: Preencheu Urbana -> Calcula Rural
       if (name === "alunos_urbana") {
         if (total >= urbana) {
             const newRural = total - urbana;
@@ -188,7 +178,28 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
     e.target.value = "";
   };
 
+  const showManha = availableTurnos.includes("Manhã") || availableTurnos.includes("Integral");
+  const showTarde = availableTurnos.includes("Tarde") || availableTurnos.includes("Integral");
+  const showNoite = availableTurnos.includes("Noite");
+
   async function onSubmit(data: GeneralDataFormValues) {
+    let hasError = false;
+
+    if (showManha && (data.turmas_manha || 0) <= 0) {
+        form.setError("turmas_manha", { type: "manual", message: "Mínimo de 1 turma" });
+        hasError = true;
+    }
+    if (showTarde && (data.turmas_tarde || 0) <= 0) {
+        form.setError("turmas_tarde", { type: "manual", message: "Mínimo de 1 turma" });
+        hasError = true;
+    }
+    if (showNoite && (data.turmas_noite || 0) <= 0) {
+        form.setError("turmas_noite", { type: "manual", message: "Mínimo de 1 turma" });
+        hasError = true;
+    }
+
+    if (hasError) return;
+
     setIsSaving(true);
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/census`, {
@@ -210,11 +221,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
 
   if (isLoading) return <div className="text-center py-8 text-slate-500">Carregando Dados Gerais...</div>;
   const control = form.control;
-
-  // Helpers para verificar visibilidade dos turnos
-  const showManha = availableTurnos.includes("Manhã") || availableTurnos.includes("Integral");
-  const showTarde = availableTurnos.includes("Tarde") || availableTurnos.includes("Integral");
-  const showNoite = availableTurnos.includes("Noite");
 
   return (
     <Form {...form}>
@@ -271,13 +277,13 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-md">
                 {showManha && (
-                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_manha" label="Qtd. Turmas (Manhã)" />
+                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_manha" label="Qtd. Turmas (Manhã)" min={1} />
                 )}
                 {showTarde && (
-                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_tarde" label="Qtd. Turmas (Tarde)" />
+                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_tarde" label="Qtd. Turmas (Tarde)" min={1} />
                 )}
                 {showNoite && (
-                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_noite" label="Qtd. Turmas (Noite)" />
+                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_noite" label="Qtd. Turmas (Noite)" min={1} />
                 )}
                 
                 {!showManha && !showTarde && !showNoite && (

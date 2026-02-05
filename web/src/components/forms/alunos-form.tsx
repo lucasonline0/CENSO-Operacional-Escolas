@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { alunosSchema, AlunosFormValues } from "@/schemas/steps/alunos"; 
 import { Button } from "@/components/ui/button";
-import { Form } from "@/components/ui/form";
+import { Form, FormField, FormItem, FormControl, FormLabel, FormMessage } from "@/components/ui/form";
 import { NumberInput, TextInput } from "@/components/ui/form-components";
 import { Separator } from "@/components/ui/separator";
 import { useCensusPersistence } from "@/hooks/use-census-persistence";
@@ -52,6 +52,7 @@ export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
     return () => (subscription as any).unsubscribe();
   }, [form, saveLocalDraft]);
 
+  // Busca as etapas e o total de alunos salvos no passo "Dados Gerais"
   useEffect(() => {
     const fetchCensusData = async () => {
       if (!schoolId) return;
@@ -80,13 +81,26 @@ export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
     fetchCensusData();
   }, [schoolId]);
 
+  // Validação em tempo real
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === 'total_beneficiarios') {
+        const beneficiarios = Number(value.total_beneficiarios || 0);
+        if (totalAlunosMatriculados > 0 && beneficiarios > totalAlunosMatriculados) {
+          form.setError('total_beneficiarios', {
+            type: 'manual',
+            message: `O número de beneficiários não pode ser maior que o total de alunos matriculados (${totalAlunosMatriculados}).`
+          });
+        } else {
+          form.clearErrors('total_beneficiarios');
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form, totalAlunosMatriculados]);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function onSubmit(data: any) {
-    if (data.total_beneficiarios > totalAlunosMatriculados) {
-      alert(`O número de beneficiários (${data.total_beneficiarios}) não pode ser maior que o total de alunos matriculados (${totalAlunosMatriculados}). Verifique os dados.`);
-      return;
-    }
-
     setIsSaving(true);
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/census`, {
@@ -123,16 +137,33 @@ export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
         <div className="space-y-6">
             <h3 className="text-lg font-medium text-slate-800">Indicadores Sociais</h3>
             <div className="p-4 bg-slate-50 border rounded-md">
-                <NumberInput 
-                    control={control} 
-                    name="total_beneficiarios" 
-                    label="Total de Beneficiários de programas sociais" 
+                {/* Usamos FormField diretamente para ter acesso ao FormMessage */}
+                <FormField
+                  control={control}
+                  name="total_beneficiarios"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Total de Beneficiários de programas sociais</FormLabel>
+                      <FormControl>
+                        {/* Reutilizamos o input do NumberInput, mas sem o wrapper do FormItem */}
+                        <div className="relative">
+                          <input
+                            type="number"
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            {...field}
+                            onChange={(e) => field.onChange(e.target.valueAsNumber)}
+                          />
+                        </div>
+                      </FormControl>
+                      {totalAlunosMatriculados > 0 && (
+                        <p className="text-xs text-slate-500">
+                          Total de matriculados: {totalAlunosMatriculados}
+                        </p>
+                      )}
+                      <FormMessage className="text-red-600" />
+                    </FormItem>
+                  )}
                 />
-                {totalAlunosMatriculados > 0 && (
-                  <p className="text-xs text-slate-500 mt-2">
-                    Total de matriculados registrados: {totalAlunosMatriculados}
-                  </p>
-                )}
             </div>
         </div>
 
@@ -174,6 +205,7 @@ export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
                   <TextInput control={control} name="ideb_ensino_medio" label="Ideb - Ensino Médio" />
                 )}
                 
+                {/* Mensagem caso nenhuma etapa relevante esteja selecionada */}
                 {!etapasOfertadas.includes("Ensino Fundamental I") && 
                  !etapasOfertadas.includes("Ensino Fundamental II") && 
                  !etapasOfertadas.includes("Ensino Médio") && (

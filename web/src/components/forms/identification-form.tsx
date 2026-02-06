@@ -188,16 +188,93 @@ export function IdentificationForm({ onSuccess, initialId }: IdentificationFormP
           </div>
           <div className="md:col-span-4">
             <FormField control={form.control} name="codigo_inep" render={({ field }) => (
-                <FormItem><FormLabel>Código INEP *</FormLabel><FormControl><Input placeholder="00000000" maxLength={8} {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
+                <FormItem>
+                  <FormLabel>Código INEP *</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="00000000" 
+                      maxLength={8} 
+                      {...field} 
+                      value={field.value || ""} 
+                      onChange={(e) => field.onChange(e.target.value.replace(/\D/g, ""))} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
             />
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <FormField control={form.control} name="cnpj" render={({ field }) => (<FormItem><FormLabel>CNPJ</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="telefone_institucional" render={({ field }) => (<FormItem><FormLabel>Telefone</FormLabel><FormControl><Input placeholder="(91) 00000-0000" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>)} />
-            <FormField control={form.control} name="cep" render={({ field }) => (<FormItem><FormLabel>CEP *</FormLabel><FormControl><Input placeholder="00000-000" maxLength={9} {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>)} />
+            <FormField control={form.control} name="cnpj" render={({ field }) => (
+              <FormItem>
+                <FormLabel>CNPJ</FormLabel>
+                <FormControl>
+                  <Input 
+                    placeholder="00.000.000/0000-00" 
+                    maxLength={18} 
+                    {...field} 
+                    value={field.value || ""} 
+                    onChange={(e) => {
+                      const value = e.target.value
+                        .replace(/\D/g, "")
+                        .replace(/^(\d{2})(\d)/, "$1.$2")
+                        .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+                        .replace(/\.(\d{3})(\d)/, ".$1/$2")
+                        .replace(/(\d{4})(\d)/, "$1-$2")
+                        .substring(0, 18);
+                      field.onChange(value);
+                    }}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            
+            <FormField control={form.control} name="telefone_institucional" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Telefone</FormLabel>
+                <FormControl>
+                  <Input 
+                    placeholder="(91) 00000-0000" 
+                    maxLength={15} 
+                    {...field} 
+                    value={field.value || ""} 
+                    onChange={(e) => {
+                      let value = e.target.value.replace(/\D/g, "");
+                      if (value.length > 11) value = value.substring(0, 11);
+                      value = value.replace(/^(\d{2})(\d)/, "($1) $2");
+                      value = value.replace(/(\d)(\d{4})$/, "$1-$2");
+                      field.onChange(value);
+                    }}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="cep" render={({ field }) => (
+              <FormItem>
+                <FormLabel>CEP *</FormLabel>
+                <FormControl>
+                  <Input 
+                    placeholder="00000-000" 
+                    maxLength={9} 
+                    {...field} 
+                    value={field.value || ""} 
+                    onChange={(e) => {
+                      const value = e.target.value
+                        .replace(/\D/g, "")
+                        .replace(/^(\d{5})(\d)/, "$1-$2")
+                        .substring(0, 9);
+                      field.onChange(value);
+                    }}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
         </div>
 
         <FormField control={form.control} name="endereco" render={({ field }) => (<FormItem><FormLabel>Endereço Completo *</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>)} />

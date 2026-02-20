@@ -178,18 +178,19 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
     e.target.value = "";
   };
 
-  const showManha = availableTurnos.includes("Manhã") || availableTurnos.includes("Integral");
-  const showTarde = availableTurnos.includes("Tarde") || availableTurnos.includes("Integral");
+  const hasIntegral = availableTurnos.includes("Integral");
+  const showManha = availableTurnos.includes("Manhã") || hasIntegral;
+  const showTarde = availableTurnos.includes("Tarde") || hasIntegral;
   const showNoite = availableTurnos.includes("Noite");
 
   async function onSubmit(data: GeneralDataFormValues) {
     let hasError = false;
 
-    if (showManha && (data.turmas_manha || 0) <= 0) {
+    if (showManha && !hasIntegral && (data.turmas_manha || 0) <= 0) {
         form.setError("turmas_manha", { type: "manual", message: "Mínimo de 1 turma" });
         hasError = true;
     }
-    if (showTarde && (data.turmas_tarde || 0) <= 0) {
+    if (showTarde && !hasIntegral && (data.turmas_tarde || 0) <= 0) {
         form.setError("turmas_tarde", { type: "manual", message: "Mínimo de 1 turma" });
         hasError = true;
     }
@@ -277,10 +278,10 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-md">
                 {showManha && (
-                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_manha" label="Qtd. Turmas (Manhã)" min={1} />
+                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_manha" label="Qtd. Turmas (Manhã)" min={hasIntegral ? 0 : 1} />
                 )}
                 {showTarde && (
-                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_tarde" label="Qtd. Turmas (Tarde)" min={1} />
+                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_tarde" label="Qtd. Turmas (Tarde)" min={hasIntegral ? 0 : 1} />
                 )}
                 {showNoite && (
                     <NumberInput<GeneralDataFormValues> control={control} name="turmas_noite" label="Qtd. Turmas (Noite)" min={1} />
@@ -308,7 +309,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
             {form.watch("muro_cerca") !== "Não possui" && (
                 <RadioInput<GeneralDataFormValues> control={control} name="perimetro_fechado" label="O muro ou cerca fecham todo o perímetro?" options={["Sim, totalmente", "Parcialmente", "Não"]} />
             )}
-            <SelectInput<GeneralDataFormValues> control={control} name="situacao_estrutura" label="Situação da estrutura da escola" options={["Necessita de reforma geral", "Necessita de reforma parcial (melhoria pontual)", "Reforma em andamento", "Está em reforma, porém a obra está parada", "Foi reformada recentemente"]} />
+            <SelectInput<GeneralDataFormValues> control={control} name="situacao_estrutura" label="Situação da estrutura da escola" options={["Necessita de reforma geral", "Necessita de reforma parcial (melhoria pontual)", "Reforma em andamento", "Está em reforma, porém a obra está parada", "Foi reformada recentemente", "Não necessita de reforma."]} />
             
             <div className="p-4 border border-dashed border-blue-300 rounded-md bg-blue-50/50 text-center">
                 <p className="text-sm text-slate-700 mb-2 font-medium">Anexar Fotos para Análise</p>

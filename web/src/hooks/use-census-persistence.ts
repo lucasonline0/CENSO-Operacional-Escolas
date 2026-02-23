@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { UseFormReset, FieldValues } from "react-hook-form";
 
 export function useCensusPersistence<T extends FieldValues>(
@@ -9,6 +9,7 @@ export function useCensusPersistence<T extends FieldValues>(
   endpoint: string = "census" 
 ) {
   const [isLoading, setIsLoading] = useState(true);
+  const isClearedRef = useRef(false);
 
   useEffect(() => {
     if (!schoolId) {
@@ -71,10 +72,12 @@ export function useCensusPersistence<T extends FieldValues>(
   }, [schoolId, stepKey, endpoint, reset]); 
 
   const saveLocalDraft = (data: T) => {
+    if (isClearedRef.current) return;
     localStorage.setItem(`censo_draft_${stepKey}_v1`, JSON.stringify(data));
   };
 
   const clearLocalDraft = () => {
+    isClearedRef.current = true;
     localStorage.removeItem(`censo_draft_${stepKey}_v1`);
   };
 

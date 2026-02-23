@@ -202,11 +202,29 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
     if (hasError) return;
 
     setIsSaving(true);
+    
+    const payload = { ...data };
+    
+    if (payload.possui_anexos !== "Sim") {
+        delete payload.qtd_anexos;
+        delete payload.tipo_predio_anexo;
+    }
+    if (!payload.ambientes?.includes("Quadra Esportiva")) {
+        delete payload.quadra_coberta;
+        delete payload.qtd_quadras;
+    }
+    if (payload.muro_cerca === "Não possui") {
+        delete payload.perimetro_fechado;
+    }
+    if (payload.cameras_funcionamento === "Não possui") {
+        delete payload.cameras_cobrem;
+    }
+
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/census`, {
         method: "POST", 
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ school_id: schoolId, year: 2026, status: "draft", data: data }),
+        body: JSON.stringify({ school_id: schoolId, year: 2026, status: "draft", data: payload }),
       });
 
       if (!response.ok) throw new Error("erro ao salvar");
@@ -376,7 +394,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
             <h3 className="text-lg font-medium text-slate-800">Energia Elétrica e Câmeras</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <SelectInput<GeneralDataFormValues> control={control} name="energia" label="Fornecimento de energia" options={["Concessionária de energia - Equatorial", "Geração própria", "Outro"]} />
-                {/* Removido: transformador */}
             </div>
             <RadioInput<GeneralDataFormValues> control={control} name="rede_eletrica_atende" label="A rede elétrica interna atende a demanda?" options={["Sim", "Parcialmente", "Não"]} />
             <div className="space-y-3">

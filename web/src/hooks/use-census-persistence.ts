@@ -45,7 +45,7 @@ export function useCensusPersistence<T extends FieldValues>(
         }
 
         let localData = {};
-        const localJson = localStorage.getItem(`censo_draft_${stepKey}_v1`);
+        const localJson = localStorage.getItem(`censo_draft_${schoolId}_${stepKey}_v1`);
         if (localJson) {
           try {
             localData = JSON.parse(localJson);
@@ -72,13 +72,15 @@ export function useCensusPersistence<T extends FieldValues>(
   }, [schoolId, stepKey, endpoint, reset]); 
 
   const saveLocalDraft = (data: T) => {
-    if (isClearedRef.current) return;
-    localStorage.setItem(`censo_draft_${stepKey}_v1`, JSON.stringify(data));
+    if (isClearedRef.current || !schoolId) return;
+    localStorage.setItem(`censo_draft_${schoolId}_${stepKey}_v1`, JSON.stringify(data));
   };
 
   const clearLocalDraft = () => {
     isClearedRef.current = true;
-    localStorage.removeItem(`censo_draft_${stepKey}_v1`);
+    if (schoolId) {
+        localStorage.removeItem(`censo_draft_${schoolId}_${stepKey}_v1`);
+    }
   };
 
   return { isLoading, saveLocalDraft, clearLocalDraft };

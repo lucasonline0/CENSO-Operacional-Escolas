@@ -95,15 +95,9 @@ export default function CensusPage() {
   };
 
   const handleConfirmReset = () => {
-      setSchoolId(null);
-      setCurrentStep(0);
-      setFurthestStep(0);
-      setIsCompleted(false);
-      
-      setTimeout(() => {
-          localStorage.clear(); 
-          window.location.reload();
-      }, 50);
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.replace(window.location.pathname);
   };
 
   const fetchApiData = async (endpoint: string, idParam: string, idValue: number) => {

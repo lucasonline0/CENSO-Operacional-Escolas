@@ -33,7 +33,14 @@ export function useCensusPersistence<T extends FieldValues>(
             ? `${baseUrl}/v1/schools?id=${schoolId}`
             : `${baseUrl}/v1/census?school_id=${schoolId}`;
             
-          const response = await fetch(url);
+          const response = await fetch(url, {
+              cache: "no-store",
+              headers: {
+                  "Cache-Control": "no-cache",
+                  "Pragma": "no-cache"
+              }
+          });
+          
           if (response.ok) {
             const json = await response.json();
             if (json.data) {

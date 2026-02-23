@@ -26,6 +26,7 @@ const STORAGE_KEY_STEP = "census_current_step";
 
 export default function CensusPage() {
   const [currentStep, setCurrentStep] = useState(0);
+  const [furthestStep, setFurthestStep] = useState(0);
   const [schoolId, setSchoolId] = useState<number | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
@@ -49,6 +50,7 @@ export default function CensusPage() {
                 const step = parseInt(savedStep);
                 if (step >= 12) setIsCompleted(true);
                 setCurrentStep(step);
+                setFurthestStep(step);
             }
         }
         setIsInitialized(true);
@@ -66,11 +68,14 @@ export default function CensusPage() {
   useEffect(() => {
     if (isInitialized) {
       localStorage.setItem(STORAGE_KEY_STEP, currentStep.toString());
+      if (currentStep > furthestStep) {
+        setFurthestStep(currentStep);
+      }
     }
-  }, [currentStep, isInitialized]);
+  }, [currentStep, furthestStep, isInitialized]);
 
   const handleStepClick = (index: number) => {
-    if (schoolId && !isCompleted) setCurrentStep(index);
+    if (schoolId && !isCompleted && index <= furthestStep) setCurrentStep(index);
   };
 
   const handleIdentificationSuccess = (id: number) => {
@@ -93,6 +98,7 @@ export default function CensusPage() {
       localStorage.clear(); 
       setSchoolId(null);
       setCurrentStep(0);
+      setFurthestStep(0);
       setIsCompleted(false);
       window.location.reload();
   };
@@ -180,8 +186,6 @@ export default function CensusPage() {
         const splitIntro = doc.splitTextToSize(introText, 170);
         doc.text(splitIntro, 20, 75);
 
-        // --- CAIXA DE DADOS DA ESCOLA ---
-        // Aumentei a altura para 85 (antes era 50) para caber todos os dados
         doc.setFillColor(248, 249, 250);
         doc.setDrawColor(200, 200, 200);
         doc.rect(20, 95, 170, 85, "FD");
@@ -220,7 +224,6 @@ export default function CensusPage() {
         doc.setTextColor(0, 0, 0);
         doc.text(`${currentDate.toLocaleDateString("pt-BR")} às ${currentDate.toLocaleTimeString("pt-BR")}`, 25, currentY + 38);
 
-        // Ajustei o Y do responsável para não colar na caixa de cima
         const responsavelY = 200;
         
         doc.setFont("helvetica", "bold");

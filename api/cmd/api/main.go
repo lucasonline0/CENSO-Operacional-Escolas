@@ -134,19 +134,12 @@ func (app *application) routes() http.Handler {
 	mux.Use(middleware.Recoverer)
 	mux.Use(middleware.Logger)
 
-	// ==========================================
-	// CONFIGURAÇÃO DE CORS CORRIGIDA
-	// Permite requisições de qualquer URL Vercel ou Local
-	// ==========================================
 	mux.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{
-			"https://*", // Permite qualquer subdomínio HTTPS (como os previews da Vercel)
-			"http://*",  // Permite qualquer requisição HTTP (como localhost na sua máquina)
-		},
+		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-API-Key"},
 		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: true,
+		AllowCredentials: false,
 		MaxAge:           300,
 	}))
 

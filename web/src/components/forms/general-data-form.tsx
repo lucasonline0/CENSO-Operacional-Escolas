@@ -28,6 +28,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
 
   const form = useForm<GeneralDataFormValues>({
     resolver: zodResolver(generalDataSchema) as unknown as Resolver<GeneralDataFormValues>,
+    shouldUnregister: true,
     defaultValues: {
       etapas_ofertadas: [], 
       modalidades_ofertadas: [], 
@@ -367,7 +368,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
                 {!isUploadDisabled && !uploadMessage && <p className="text-xs text-slate-400 mt-2">Você pode selecionar até 10 fotos. Elas serão salvas na pasta da escola.</p>}
             </div>
 
-            {/* Máscara direta no Input para Data da Reforma */}
             <FormField control={form.control} name="data_ultima_reforma" render={({ field }) => (
                 <FormItem>
                     <FormLabel>Data da última reforma (deixe em branco se não houve)</FormLabel>
@@ -377,10 +377,9 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
                             placeholder="dd/mm/aaaa" 
                             maxLength={10}
                             onChange={(e) => {
-                                let v = e.target.value.replace(/\D/g, ""); // Remove tudo que não for número
-                                if (v.length > 8) v = v.slice(0, 8); // Limita a 8 números
+                                let v = e.target.value.replace(/\D/g, "");
+                                if (v.length > 8) v = v.slice(0, 8);
                                 
-                                // Adiciona as barras conforme a digitação
                                 if (v.length > 4) {
                                     v = `${v.slice(0, 2)}/${v.slice(2, 4)}/${v.slice(4)}`;
                                 } else if (v.length > 2) {

@@ -61,7 +61,6 @@ export const generalDataSchema = z.object({
     });
   }
 
-  // Torna "perímetro fechado" obrigatório se houver muro/cerca
   if (data.muro_cerca !== "Não possui" && !data.perimetro_fechado) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -70,13 +69,46 @@ export const generalDataSchema = z.object({
     });
   }
 
-  // Torna "câmeras cobrem" obrigatório se houver câmeras
   if (data.cameras_funcionamento !== "Não possui" && !data.cameras_cobrem) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: "Campo obrigatório",
       path: ["cameras_cobrem"],
     });
+  }
+
+  if (data.possui_anexos === "Sim") {
+    if (!data.qtd_anexos || data.qtd_anexos < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Informe a quantidade de anexos",
+        path: ["qtd_anexos"],
+      });
+    }
+    if (!data.tipo_predio_anexo) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione o tipo de prédio do anexo",
+        path: ["tipo_predio_anexo"],
+      });
+    }
+  }
+
+  if (data.ambientes?.includes("Quadra Esportiva")) {
+    if (!data.quadra_coberta) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Campo obrigatório",
+        path: ["quadra_coberta"],
+      });
+    }
+    if (!data.qtd_quadras || data.qtd_quadras < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Informe a quantidade",
+        path: ["qtd_quadras"],
+      });
+    }
   }
 });
 

@@ -204,17 +204,13 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
   async function onSubmit(data: GeneralDataFormValues) {
     let hasError = false;
 
-    // As validações de turmas exigem ao menos 1 caso o turno seja ofertado
-    if (showManha && !hasIntegral && (data.turmas_manha || 0) <= 0) {
-        form.setError("turmas_manha", { type: "manual", message: "Mínimo de 1 turma" });
-        hasError = true;
-    }
-    if (showTarde && !hasIntegral && (data.turmas_tarde || 0) <= 0) {
-        form.setError("turmas_tarde", { type: "manual", message: "Mínimo de 1 turma" });
-        hasError = true;
-    }
-    if (showNoite && (data.turmas_noite || 0) <= 0) {
-        form.setError("turmas_noite", { type: "manual", message: "Mínimo de 1 turma" });
+    // Regra: A soma das turmas preenchidas deve ser maior que 0
+    const totalTurmas = (data.turmas_manha || 0) + (data.turmas_tarde || 0) + (data.turmas_noite || 0);
+
+    if ((showManha || showTarde || showNoite) && totalTurmas <= 0) {
+        if (showManha) form.setError("turmas_manha", { type: "manual", message: "A soma total de turmas da escola deve ser maior que 0" });
+        if (showTarde) form.setError("turmas_tarde", { type: "manual", message: "A soma total de turmas da escola deve ser maior que 0" });
+        if (showNoite) form.setError("turmas_noite", { type: "manual", message: "A soma total de turmas da escola deve ser maior que 0" });
         hasError = true;
     }
 
@@ -319,13 +315,13 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-md">
                 {showManha && (
-                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_manha" label="Qtd. Turmas (Manhã) *" min={hasIntegral ? 0 : 1} />
+                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_manha" label="Qtd. Turmas (Manhã) *" min={0} />
                 )}
                 {showTarde && (
-                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_tarde" label="Qtd. Turmas (Tarde) *" min={hasIntegral ? 0 : 1} />
+                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_tarde" label="Qtd. Turmas (Tarde) *" min={0} />
                 )}
                 {showNoite && (
-                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_noite" label="Qtd. Turmas (Noite) *" min={1} />
+                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_noite" label="Qtd. Turmas (Noite) *" min={0} />
                 )}
                 
                 {!showManha && !showTarde && !showNoite && (

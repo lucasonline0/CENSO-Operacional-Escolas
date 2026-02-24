@@ -43,8 +43,21 @@ export function useCensusPersistence<T extends FieldValues>(
           
           if (response.ok) {
             const json = await response.json();
+            
             if (json.data) {
-                serverData = json.data;
+                // CORREÇÃO: Se for censo, os campos estão dentro de json.data.data
+                if (endpoint === "census") {
+                    if (json.data.data) {
+                        // Garante que se vier como string JSON do banco, ele faça o parse
+                        serverData = typeof json.data.data === 'string' 
+                            ? JSON.parse(json.data.data) 
+                            : json.data.data;
+                    } else {
+                        serverData = json.data;
+                    }
+                } else {
+                    serverData = json.data;
+                }
             }
           }
         } catch (e) {
@@ -61,6 +74,8 @@ export function useCensusPersistence<T extends FieldValues>(
           }
         }
 
+        // O merge garante que o cache local (se houver) sobrescreva o servidor, 
+        // e o servidor sobrescreva os defaultValues vazios.
         const finalData = {
           ...defaultValues,
           ...serverData,

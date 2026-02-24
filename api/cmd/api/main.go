@@ -44,7 +44,7 @@ func main() {
 	_ = godotenv.Load("../../.env")
 
 	var cfg config
-	
+
 	cfg.port = os.Getenv("PORT")
 	if cfg.port == "" {
 		cfg.port = "8000"
@@ -117,7 +117,7 @@ func openDB(cfg config) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	db.SetMaxOpenConns(150)
 	db.SetMaxIdleConns(50)
 	db.SetConnMaxLifetime(time.Hour)
@@ -130,14 +130,18 @@ func openDB(cfg config) (*sql.DB, error) {
 
 func (app *application) routes() http.Handler {
 	mux := chi.NewRouter()
-	
+
 	mux.Use(middleware.Recoverer)
 	mux.Use(middleware.Logger)
 
+	// ==========================================
+	// CONFIGURAÇÃO DE CORS CORRIGIDA
+	// Permite requisições de qualquer URL Vercel ou Local
+	// ==========================================
 	mux.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{
-			"https://censo-operacional-escolas.vercel.app",
-			"http://localhost:3000",
+			"https://*", // Permite qualquer subdomínio HTTPS (como os previews da Vercel)
+			"http://*",  // Permite qualquer requisição HTTP (como localhost na sua máquina)
 		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-API-Key"},

@@ -13,7 +13,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
 )
@@ -79,7 +78,7 @@ func main() {
 
 	sheetsService, err := services.NewSheetsService()
 	if err != nil {
-		logger.Println("AVISO: SheetsService erro (escrita no sheets pode falhar):", err)
+		logger.Println("AVISO: SheetsService erro:", err)
 	} else {
 		logger.Println("SheetsService iniciado.")
 	}
@@ -134,14 +133,7 @@ func (app *application) routes() http.Handler {
 	mux.Use(middleware.Recoverer)
 	mux.Use(middleware.Logger)
 
-	mux.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-API-Key"},
-		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: false,
-		MaxAge:           300,
-	}))
+	mux.Use(app.enableCORS)
 
 	mux.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

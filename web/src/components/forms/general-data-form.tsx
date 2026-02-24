@@ -7,7 +7,7 @@ import { generalDataSchema, GeneralDataFormValues } from "@/schemas/steps/genera
 import { Button } from "@/components/ui/button";
 import { Form, FormField, FormItem, FormControl, FormLabel, FormMessage } from "@/components/ui/form";
 import { Checkbox } from "@/components/ui/checkbox";
-import { SelectInput, RadioInput, NumberInput, TextInput } from "@/components/ui/form-components";
+import { SelectInput, RadioInput, NumberInput } from "@/components/ui/form-components";
 import { Separator } from "@/components/ui/separator";
 import { useCensusPersistence } from "@/hooks/use-census-persistence";
 import { Input } from "@/components/ui/input";
@@ -140,26 +140,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
           form.setValue("qtd_quadras", 0);
           isInternalUpdate.current = false;
       }
-
-      // Formatador automático de data para "dd/mm/aaaa"
-      if (name === "data_ultima_reforma") {
-          const currentVal = currentValues.data_ultima_reforma || "";
-          // Remove tudo que não for número
-          const numbersOnly = currentVal.replace(/\D/g, "");
-          let formatted = numbersOnly;
-          
-          if (numbersOnly.length > 4) {
-              formatted = `${numbersOnly.slice(0, 2)}/${numbersOnly.slice(2, 4)}/${numbersOnly.slice(4, 8)}`;
-          } else if (numbersOnly.length > 2) {
-              formatted = `${numbersOnly.slice(0, 2)}/${numbersOnly.slice(2)}`;
-          }
-          
-          if (currentVal !== formatted) {
-              isInternalUpdate.current = true;
-              form.setValue("data_ultima_reforma", formatted);
-              isInternalUpdate.current = false;
-          }
-      }
     });
     return () => subscription.unsubscribe();
   }, [form]);
@@ -224,7 +204,6 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
   async function onSubmit(data: GeneralDataFormValues) {
     let hasError = false;
 
-    // Regra: A soma das turmas preenchidas deve ser maior que 0
     const totalTurmas = (data.turmas_manha || 0) + (data.turmas_tarde || 0) + (data.turmas_noite || 0);
 
     if ((showManha || showTarde || showNoite) && totalTurmas <= 0) {
@@ -388,7 +367,32 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
                 {!isUploadDisabled && !uploadMessage && <p className="text-xs text-slate-400 mt-2">Você pode selecionar até 10 fotos. Elas serão salvas na pasta da escola.</p>}
             </div>
 
-            <TextInput<GeneralDataFormValues> control={control} name="data_ultima_reforma" label="Data da última reforma (dd/mm/aaaa)" placeholder="dd/mm/aaaa" />
+            {/* Máscara direta no Input para Data da Reforma */}
+            <FormField control={form.control} name="data_ultima_reforma" render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Data da última reforma (deixe em branco se não houve)</FormLabel>
+                    <FormControl>
+                        <Input 
+                            {...field} 
+                            placeholder="dd/mm/aaaa" 
+                            maxLength={10}
+                            onChange={(e) => {
+                                let v = e.target.value.replace(/\D/g, ""); // Remove tudo que não for número
+                                if (v.length > 8) v = v.slice(0, 8); // Limita a 8 números
+                                
+                                // Adiciona as barras conforme a digitação
+                                if (v.length > 4) {
+                                    v = `${v.slice(0, 2)}/${v.slice(2, 4)}/${v.slice(4)}`;
+                                } else if (v.length > 2) {
+                                    v = `${v.slice(0, 2)}/${v.slice(2)}`;
+                                }
+                                field.onChange(v);
+                            }}
+                        />
+                    </FormControl>
+                    <FormMessage />
+                </FormItem>
+            )} />
         </div>
         <Separator />
 

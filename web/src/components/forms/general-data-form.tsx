@@ -125,6 +125,20 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
             }
         }
       }
+
+      if (name === "possui_anexos" && currentValues.possui_anexos !== "Sim") {
+          isInternalUpdate.current = true;
+          form.setValue("qtd_anexos", 0);
+          form.setValue("tipo_predio_anexo", undefined as never);
+          isInternalUpdate.current = false;
+      }
+
+      if (name === "ambientes" && !currentValues.ambientes?.includes("Quadra Esportiva")) {
+          isInternalUpdate.current = true;
+          form.setValue("quadra_coberta", undefined as never);
+          form.setValue("qtd_quadras", 0);
+          isInternalUpdate.current = false;
+      }
     });
     return () => subscription.unsubscribe();
   }, [form]);
@@ -203,22 +217,24 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
 
     setIsSaving(true);
     
-    const payload = { ...data };
+    const payload = { ...data } as Record<string, unknown>;
     
-    if (payload.possui_anexos !== "Sim") {
-        delete payload.qtd_anexos;
-        delete payload.tipo_predio_anexo;
+    if (data.possui_anexos !== "Sim") {
+        payload.qtd_anexos = null;
+        payload.tipo_predio_anexo = null;
     }
-    if (!payload.ambientes?.includes("Quadra Esportiva")) {
-        delete payload.quadra_coberta;
-        delete payload.qtd_quadras;
+    if (!data.ambientes?.includes("Quadra Esportiva")) {
+        payload.quadra_coberta = null;
+        payload.qtd_quadras = null;
     }
-    if (payload.muro_cerca === "Não possui") {
-        delete payload.perimetro_fechado;
+    if (data.muro_cerca === "Não possui") {
+        payload.perimetro_fechado = null;
     }
-    if (payload.cameras_funcionamento === "Não possui") {
-        delete payload.cameras_cobrem;
+    if (data.cameras_funcionamento === "Não possui") {
+        payload.cameras_cobrem = null;
     }
+
+    delete payload.transformadores;
 
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/census`, {

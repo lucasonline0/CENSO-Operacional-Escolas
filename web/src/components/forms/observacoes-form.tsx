@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm, Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { observacoesSchema, ObservacoesFormValues } from "@/schemas/steps/observacoes"; 
@@ -24,6 +24,7 @@ interface ObservacoesFormProps {
 
 export function ObservacoesForm({ schoolId, onSuccess, onBack }: ObservacoesFormProps) {
   const [isSaving, setIsSaving] = useState(false);
+  const isInternalUpdate = useRef(false);
 
   const form = useForm<ObservacoesFormValues>({
     resolver: zodResolver(observacoesSchema) as unknown as Resolver<ObservacoesFormValues>,
@@ -35,6 +36,7 @@ export function ObservacoesForm({ schoolId, onSuccess, onBack }: ObservacoesForm
         sugestao_melhoria: undefined,
         nome_responsavel: "",
         cargo_funcao: "",
+        matricula_funcional: "",
         declaracao_verdadeira: false
     }
   });
@@ -47,8 +49,19 @@ export function ObservacoesForm({ schoolId, onSuccess, onBack }: ObservacoesForm
   );
 
   useEffect(() => {
-    const subscription = form.watch((value) => {
-        saveLocalDraft(value as ObservacoesFormValues);
+    const subscription = form.watch((value, { name }) => {
+        if (isInternalUpdate.current) return;
+        
+        if (name === "nome_responsavel" && value.nome_responsavel) {
+            const upper = value.nome_responsavel.toUpperCase();
+            if (value.nome_responsavel !== upper) {
+                isInternalUpdate.current = true;
+                form.setValue("nome_responsavel", upper);
+                isInternalUpdate.current = false;
+            }
+        }
+        
+        saveLocalDraft(form.getValues() as ObservacoesFormValues);
     });
     return () => subscription.unsubscribe();
   }, [form, saveLocalDraft]);

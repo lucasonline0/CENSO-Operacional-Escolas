@@ -13,7 +13,7 @@ export const observacoesSchema = z.object({
   
   nome_responsavel: z.string().min(3, "Nome do responsável pelo preenchimento é obrigatório"),
   cargo_funcao: z.string().min(3, "Cargo/Função é obrigatório"),
-  matricula_funcional: z.string().optional(),
+  matricula_funcional: z.string().min(1, "A matrícula funcional é obrigatória"),
   
   declaracao_verdadeira: z.boolean().refine(val => val === true, {
     message: "Você deve declarar que as informações são verdadeiras."

@@ -27,7 +27,7 @@ export const generalDataSchema = z.object({
   muro_cerca: z.string().min(1, "Campo obrigatório"),
   perimetro_fechado: z.enum(["Sim, totalmente", "Parcialmente", "Não"]).optional(),
   situacao_estrutura: z.string().min(1, "Campo obrigatório"),
-  data_ultima_reforma: z.string().min(1, "Campo obrigatório"),
+  data_ultima_reforma: z.string().optional(),
   
   ambientes: z.array(z.string()).optional(),
   quadra_coberta: z.enum(["Sim", "Não"]).optional(),

@@ -140,6 +140,26 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
           form.setValue("qtd_quadras", 0);
           isInternalUpdate.current = false;
       }
+
+      // Formatador automático de data para "dd/mm/aaaa"
+      if (name === "data_ultima_reforma") {
+          const currentVal = currentValues.data_ultima_reforma || "";
+          // Remove tudo que não for número
+          const numbersOnly = currentVal.replace(/\D/g, "");
+          let formatted = numbersOnly;
+          
+          if (numbersOnly.length > 4) {
+              formatted = `${numbersOnly.slice(0, 2)}/${numbersOnly.slice(2, 4)}/${numbersOnly.slice(4, 8)}`;
+          } else if (numbersOnly.length > 2) {
+              formatted = `${numbersOnly.slice(0, 2)}/${numbersOnly.slice(2)}`;
+          }
+          
+          if (currentVal !== formatted) {
+              isInternalUpdate.current = true;
+              form.setValue("data_ultima_reforma", formatted);
+              isInternalUpdate.current = false;
+          }
+      }
     });
     return () => subscription.unsubscribe();
   }, [form]);
@@ -368,7 +388,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
                 {!isUploadDisabled && !uploadMessage && <p className="text-xs text-slate-400 mt-2">Você pode selecionar até 10 fotos. Elas serão salvas na pasta da escola.</p>}
             </div>
 
-            <TextInput<GeneralDataFormValues> control={control} name="data_ultima_reforma" label="Data da última reforma (dd/mm/aaaa) ou 'Não Houve' *" placeholder="Ex: 01/01/2023 ou Não Houve" />
+            <TextInput<GeneralDataFormValues> control={control} name="data_ultima_reforma" label="Data da última reforma (dd/mm/aaaa)" placeholder="dd/mm/aaaa" />
         </div>
         <Separator />
 

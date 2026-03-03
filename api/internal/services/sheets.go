@@ -76,19 +76,17 @@ func (s *SheetsService) GetLocations() (map[string]map[string][]string, error) {
 	mapping := make(map[string]map[string][]string)
 
 	for i, row := range rows {
-		if i == 0 { // Pula cabeçalho
+		if i == 0 {
 			continue
 		}
 
-		// Verifica se a linha tem colunas suficientes (até a coluna G/índice 6)
-		if len(row) <= 6 {
+		if len(row) <= 2 {
 			continue
 		}
 
-		// Mapeamento: Coluna B (índice 1), Coluna E (índice 4), Coluna G (índice 6)
-		dre := strings.TrimSpace(row[1])
-		municipio := strings.TrimSpace(row[4])
-		escola := strings.TrimSpace(row[6])
+		dre := strings.TrimSpace(row[0])
+		municipio := strings.TrimSpace(row[1])
+		escola := strings.TrimSpace(row[2])
 
 		if dre == "" || municipio == "" || escola == "" {
 			continue
@@ -154,7 +152,6 @@ func (s *SheetsService) AppendCenso(censo models.CensusResponse, school models.S
 		return strings.Trim(string(raw), "\"")
 	}
 
-	// 1. Gravação na Base_dados (Principal)
 	row := []interface{}{
 		school.NomeDiretor,
 		school.MatriculaDiretor,
@@ -264,10 +261,6 @@ func (s *SheetsService) AppendCenso(censo models.CensusResponse, school models.S
 		return fmt.Errorf("erro ao escrever na planilha do censo: %v", err)
 	}
 
-	// 2. Regra de Abas de Perguntas Específicas
-	// Tenta salvar nas abas dedicadas se os valores existirem
-	
-	// Portaria
 	if v := val("quantitativo_necessario_portaria"); v != "" && v != 0 {
 		_ = s.ensureAndAppendDeficit(
 			"Deficit_Portaria", 
@@ -276,7 +269,6 @@ func (s *SheetsService) AppendCenso(censo models.CensusResponse, school models.S
 		)
 	}
 
-	// Serviços Gerais
 	if v := val("quantitativo_necessario_sg"); v != "" && v != 0 {
 		_ = s.ensureAndAppendDeficit(
 			"Deficit_Servicos_Gerais", 
@@ -285,7 +277,6 @@ func (s *SheetsService) AppendCenso(censo models.CensusResponse, school models.S
 		)
 	}
 
-	// Merenda
 	if v := val("quantitativo_necessario_merenda"); v != "" && v != 0 {
 		_ = s.ensureAndAppendDeficit(
 			"Deficit_Merenda", 
@@ -297,9 +288,7 @@ func (s *SheetsService) AppendCenso(censo models.CensusResponse, school models.S
 	return nil
 }
 
-// Helper para verificar/criar aba e adicionar linha de deficit
 func (s *SheetsService) ensureAndAppendDeficit(sheetTitle string, questionText string, value interface{}, school models.School) error {
-	// 1. Verificar se a aba existe
 	spreadsheet, err := s.srv.Spreadsheets.Get(s.censusSpreadsheetID).Do()
 	if err != nil {
 		return err
@@ -313,7 +302,6 @@ func (s *SheetsService) ensureAndAppendDeficit(sheetTitle string, questionText s
 		}
 	}
 
-	// 2. Se não existir, criar e adicionar cabeçalho
 	if !exists {
 		addSheetReq := &sheets.Request{
 			AddSheet: &sheets.AddSheetRequest{
@@ -331,7 +319,6 @@ func (s *SheetsService) ensureAndAppendDeficit(sheetTitle string, questionText s
 			return fmt.Errorf("erro ao criar aba %s: %v", sheetTitle, err)
 		}
 
-		// Adicionar Cabeçalho
 		header := []interface{}{"INEP", "Escola", "DRE", "Município", questionText}
 		headerVr := &sheets.ValueRange{Values: [][]interface{}{header}}
 		_, err = s.srv.Spreadsheets.Values.Append(s.censusSpreadsheetID, fmt.Sprintf("%s!A1", sheetTitle), headerVr).ValueInputOption("USER_ENTERED").Do()
@@ -340,7 +327,6 @@ func (s *SheetsService) ensureAndAppendDeficit(sheetTitle string, questionText s
 		}
 	}
 
-	// 3. Adicionar o dado (Append)
 	row := []interface{}{
 		school.INEP,
 		school.Nome,

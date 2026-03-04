@@ -175,7 +175,7 @@ func (s *SheetsService) AppendCenso(censo models.CensusResponse, school models.S
 		val("modalidades_ofertadas"),
 		val("qtd_salas_aula"),
 
-		val("turmas_manha"), val("turmas_tarde"), val("turmas_noite"),
+		val("turmas_manha"), val("turmas_tarde"), val("turmas_noite"), val("turmas_integral"),
 		val("total_alunos"), val("alunos_pcd"), val("alunos_rural"), val("alunos_urbana"),
 		val("muro_cerca"), val("perimetro_fechado"), val("situacao_estrutura"), val("data_ultima_reforma"),
 		val("ambientes"), val("quadra_coberta"), val("qtd_quadras"), val("banda_fanfarra"),

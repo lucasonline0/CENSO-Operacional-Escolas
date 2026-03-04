@@ -37,6 +37,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
       turmas_manha: 0, 
       turmas_tarde: 0, 
       turmas_noite: 0, 
+      turmas_integral: 0,
       total_alunos: 0, 
       alunos_pcd: 0,
       alunos_rural: 0, 
@@ -195,9 +196,10 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
   };
 
   const hasIntegral = availableTurnos.includes("Integral");
-  const showManha = availableTurnos.includes("Manhã") || hasIntegral;
-  const showTarde = availableTurnos.includes("Tarde") || hasIntegral;
+  const showManha = availableTurnos.includes("Manhã");
+  const showTarde = availableTurnos.includes("Tarde");
   const showNoite = availableTurnos.includes("Noite");
+  const showIntegral = hasIntegral;
 
   const situacaoEstrutura = form.watch("situacao_estrutura");
   const isUploadDisabled = isUploading || situacaoEstrutura === "Não necessita de reforma.";
@@ -205,12 +207,13 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
   async function onSubmit(data: GeneralDataFormValues) {
     let hasError = false;
 
-    const totalTurmas = (data.turmas_manha || 0) + (data.turmas_tarde || 0) + (data.turmas_noite || 0);
+    const totalTurmas = (data.turmas_manha || 0) + (data.turmas_tarde || 0) + (data.turmas_noite || 0) + (data.turmas_integral || 0);
 
-    if ((showManha || showTarde || showNoite) && totalTurmas <= 0) {
+    if ((showManha || showTarde || showNoite || showIntegral) && totalTurmas <= 0) {
         if (showManha) form.setError("turmas_manha", { type: "manual", message: "A soma total de turmas da escola deve ser maior que 0" });
         if (showTarde) form.setError("turmas_tarde", { type: "manual", message: "A soma total de turmas da escola deve ser maior que 0" });
         if (showNoite) form.setError("turmas_noite", { type: "manual", message: "A soma total de turmas da escola deve ser maior que 0" });
+        if (showIntegral) form.setError("turmas_integral", { type: "manual", message: "A soma total de turmas da escola deve ser maior que 0" });
         hasError = true;
     }
 
@@ -323,8 +326,11 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
                 {showNoite && (
                     <NumberInput<GeneralDataFormValues> control={control} name="turmas_noite" label="Qtd. Turmas (Noite) *" min={0} />
                 )}
+                {showIntegral && (
+                    <NumberInput<GeneralDataFormValues> control={control} name="turmas_integral" label="Qtd. Turmas (Integral) *" min={0} />
+                )}
                 
-                {!showManha && !showTarde && !showNoite && (
+                {!showManha && !showTarde && !showNoite && !showIntegral && (
                     <div className="col-span-full text-center text-sm text-slate-500 italic">
                         Nenhum turno foi selecionado na etapa de Identificação.
                     </div>

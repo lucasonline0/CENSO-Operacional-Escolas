@@ -18,6 +18,7 @@ export const generalDataSchema = z.object({
   turmas_manha: numberSchema.optional(),
   turmas_tarde: numberSchema.optional(),
   turmas_noite: numberSchema.optional(),
+  turmas_integral: numberSchema.optional(),
   
   total_alunos: numberSchema.pipe(z.number().min(1, "Obrigatório ter pelo menos 1 aluno")),
   alunos_pcd: numberSchema,

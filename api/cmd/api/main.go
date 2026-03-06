@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"censo-api/internal/models"
@@ -38,9 +39,19 @@ type application struct {
 func main() {
 	logger := log.New(os.Stdout, "[CENSO-API] ", log.Ldate|log.Ltime|log.Lshortfile)
 
-	_ = godotenv.Load()
-	_ = godotenv.Load("../.env")
-	_ = godotenv.Load("../../.env")
+	// --- CORREÇÃO DE PATH ---
+	// Verifica o diretório atual para debug
+	cwd, _ := os.Getwd()
+	logger.Printf("Executando a partir de: %s", cwd)
+
+	// Tenta carregar o .env. Ajuste o caminho se necessário.
+	// Se você estiver na pasta /api, talvez precise subir um nível para achar a pasta /infra
+	envPath := filepath.Join(cwd, "..", "infra", ".env")
+	err := godotenv.Load(envPath)
+	if err != nil {
+		logger.Printf("Aviso: Não encontrou .env em %s, tentando caminho local...", envPath)
+		_ = godotenv.Load(".env")
+	}
 
 	var cfg config
 
@@ -64,7 +75,7 @@ func main() {
 	}
 
 	if dsn == "" {
-		logger.Fatal("ERRO FATAL: Variáveis de banco não encontradas.")
+		logger.Fatal("ERRO FATAL: Variáveis de banco (DB_HOST ou DSN) não foram encontradas.")
 	}
 	cfg.db.dsn = dsn
 
@@ -76,6 +87,7 @@ func main() {
 	defer db.Close()
 	logger.Println("Banco conectado!")
 
+	// ... (Resto do seu código permanece igual)
 	sheetsService, err := services.NewSheetsService()
 	if err != nil {
 		logger.Println("AVISO: SheetsService erro:", err)
@@ -129,10 +141,8 @@ func openDB(cfg config) (*sql.DB, error) {
 
 func (app *application) routes() http.Handler {
 	mux := chi.NewRouter()
-
 	mux.Use(middleware.Recoverer)
 	mux.Use(middleware.Logger)
-
 	mux.Use(app.enableCORS)
 
 	mux.Get("/", func(w http.ResponseWriter, r *http.Request) {

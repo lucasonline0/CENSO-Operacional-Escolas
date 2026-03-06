@@ -278,15 +278,15 @@ export default function CensusPage() {
   if (isCompleted) {
       return (
           <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-              <Card className="w-full max-w-md text-center p-8 shadow-xl border-green-200 bg-white">
+              <Card className="w-full max-w-md text-center p-8 shadow-md border-slate-200 bg-white">
                   <div className="mb-6 flex justify-center">
-                      <div className="h-24 w-24 bg-green-100 rounded-full flex items-center justify-center">
+                      <div className="h-24 w-24 bg-green-50 rounded-full flex items-center justify-center border border-green-100">
                           <span className="text-5xl">✅</span>
                       </div>
                   </div>
                   <h1 className="text-2xl font-bold text-slate-900 mb-2">Censo Finalizado com Sucesso!</h1>
                   <p className="text-slate-600 mb-8">
-                      Todas as informações foram salvas no sistema da SEDUC. Obrigado pela sua colaboração.
+                      Todas as informações foram salvas no sistema da SEDUC. Obrigado pela colaboração.
                   </p>
                   
                   <div className="space-y-3 w-full">
@@ -294,7 +294,7 @@ export default function CensusPage() {
                         onClick={handleDownloadProof} 
                         variant="outline" 
                         disabled={isGeneratingPdf}
-                        className="w-full border-blue-200 hover:bg-blue-50 text-blue-700"
+                        className="w-full border-primary/20 hover:bg-primary/5 text-primary"
                     >
                         {isGeneratingPdf ? (
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -304,7 +304,7 @@ export default function CensusPage() {
                         {isGeneratingPdf ? "Gerando PDF..." : "Baixar Comprovante PDF"}
                     </Button>
                     
-                    <Button onClick={handleConfirmReset} className="w-full bg-blue-600 hover:bg-blue-700">
+                    <Button onClick={handleConfirmReset} className="w-full bg-primary hover:bg-primary/90 text-white">
                         Iniciar Novo Censo
                     </Button>
                   </div>
@@ -314,7 +314,7 @@ export default function CensusPage() {
   }
 
   return (
-    <div className="min-h-screen pb-12">
+    <div className="min-h-screen pb-12 bg-background">
       <ConfirmationModal 
         isOpen={showResetModal}
         onClose={() => setShowResetModal(false)}
@@ -325,20 +325,24 @@ export default function CensusPage() {
         variant="destructive"
       />
 
-      <header className="sticky top-0 z-50 w-full border-b border-white/20 bg-white/40 backdrop-blur-md shadow-sm mb-8">
+      {/* Cabeçalho Institucional */}
+      <header className="w-full bg-white shadow-sm mb-8 border-b border-slate-200">
+        {/* Faixa superior com as cores da bandeira do Pará (opcional, dá um toque governamental) */}
+        <div className="h-1.5 w-full bg-gradient-to-r from-red-600 via-white to-blue-700 border-b border-slate-100"></div>
+        
         <div className="container mx-auto px-4 h-24 flex items-center gap-6">
-            <div className="shrink-0 drop-shadow-md">
+            <div className="shrink-0">
                 <img 
                     src="https://upload.wikimedia.org/wikipedia/commons/b/bc/Bras%C3%A3o_do_Par%C3%A1.svg" 
                     alt="Brasão do Pará" 
-                    className="h-16 w-auto"
+                    className="h-14 w-auto"
                 />
             </div>
-            <div className="flex flex-col justify-center text-slate-800">
-                <h2 className="text-sm font-medium uppercase tracking-wide opacity-80">
-                    Secretaria de Estado de Educação
+            <div className="flex flex-col justify-center">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">
+                    Governo do Estado do Pará • SEDUC
                 </h2>
-                <h1 className="text-xl md:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-blue-900 py-0.5">
+                <h1 className="text-xl md:text-2xl font-bold text-slate-900">
                     Censo Operacional e Estrutural das Escolas
                 </h1>
             </div>
@@ -349,21 +353,23 @@ export default function CensusPage() {
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[280px_1fr]">
           
           <aside className="hidden lg:block">
-            <div className="sticky top-32 space-y-4">
-              <div className="rounded-2xl border border-white/40 bg-white/40 p-4 backdrop-blur-md shadow-lg">
+            <div className="sticky top-8 space-y-4">
+              {/* Stepper com design limpo e sólido */}
+              <div className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+                <h3 className="text-sm font-semibold text-slate-900 mb-4 uppercase tracking-wide">Progresso do Censo</h3>
                 <Stepper 
                   steps={CENSUS_STEPS} 
                   currentStep={currentStep} 
                   onStepClick={handleStepClick}
                 />
-                <div className="mt-6 pt-4 border-t border-white/20">
+                <div className="mt-6 pt-4 border-t border-slate-100">
                   <Button 
                     variant="ghost" 
                     size="sm" 
                     onClick={handleRequestReset} 
-                    className="w-full justify-start text-xs text-red-500 hover:bg-red-50"
+                    className="w-full justify-start text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
                   >
-                    Nova Escola / Limpar
+                    Nova Escola / Limpar Progresso
                   </Button>
                 </div>
               </div>
@@ -371,12 +377,12 @@ export default function CensusPage() {
           </aside>
 
           <main className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>{CENSUS_STEPS[currentStep]?.title || "Finalização"}</CardTitle>
-                <CardDescription>Preencha os dados abaixo com atenção.</CardDescription>
+            <Card className="shadow-sm border-slate-200">
+              <CardHeader className="bg-slate-50 border-b border-slate-100 pb-6 rounded-t-md">
+                <CardTitle className="text-2xl text-slate-900">{CENSUS_STEPS[currentStep]?.title || "Finalização"}</CardTitle>
+                <CardDescription className="text-slate-600">Preencha os dados abaixo com atenção aos detalhes estruturais da unidade.</CardDescription>
               </CardHeader>
-              <CardContent className="p-6">
+              <CardContent className="p-8">
                 
                 {currentStep === 0 && <IdentificationForm onSuccess={handleIdentificationSuccess} initialId={schoolId} />}
 

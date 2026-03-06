@@ -19,7 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { jsPDF } from "jspdf";
-import { FileText, Loader2 } from "lucide-react";
+import { FileText, Loader2, Menu, X } from "lucide-react";
 
 const STORAGE_KEY_SCHOOL_ID = "census_current_school_id";
 const STORAGE_KEY_STEP = "census_current_step";
@@ -32,6 +32,7 @@ export default function CensusPage() {
   const [showResetModal, setShowResetModal] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -75,7 +76,10 @@ export default function CensusPage() {
   }, [currentStep, furthestStep, isInitialized]);
 
   const handleStepClick = (index: number) => {
-    if (schoolId && !isCompleted && index <= furthestStep) setCurrentStep(index);
+    if (schoolId && !isCompleted && index <= furthestStep) {
+        setCurrentStep(index);
+        setIsMobileMenuOpen(false);
+    }
   };
 
   const handleIdentificationSuccess = (id: number) => {
@@ -92,6 +96,7 @@ export default function CensusPage() {
 
   const handleRequestReset = () => {
     setShowResetModal(true);
+    setIsMobileMenuOpen(false);
   };
 
   const handleConfirmReset = () => {
@@ -314,7 +319,7 @@ export default function CensusPage() {
   }
 
   return (
-    <div className="min-h-screen pb-12 bg-background">
+    <div className="min-h-screen pb-12 bg-background relative">
       <ConfirmationModal 
         isOpen={showResetModal}
         onClose={() => setShowResetModal(false)}
@@ -326,40 +331,84 @@ export default function CensusPage() {
       />
 
       {/* Cabeçalho Institucional */}
-      <header className="w-full bg-white shadow-sm mb-8 border-b border-slate-200">
-        {/* Faixa superior com as cores da bandeira do Pará (opcional, dá um toque governamental) */}
+      <header className="w-full bg-white shadow-sm mb-8 border-b border-slate-200 relative z-50">
         <div className="h-1.5 w-full bg-gradient-to-r from-red-600 via-white to-blue-700 border-b border-slate-100"></div>
         
-        <div className="container mx-auto px-4 h-24 flex items-center gap-6">
-            <div className="shrink-0">
-                <img 
-                    src="https://upload.wikimedia.org/wikipedia/commons/b/bc/Bras%C3%A3o_do_Par%C3%A1.svg" 
-                    alt="Brasão do Pará" 
-                    className="h-14 w-auto"
-                />
+        <div className="container mx-auto px-4 h-24 flex items-center justify-between gap-2 sm:gap-6">
+            <div className="flex items-center gap-3 sm:gap-6">
+                <div className="shrink-0">
+                    <img 
+                        src="https://upload.wikimedia.org/wikipedia/commons/b/bc/Bras%C3%A3o_do_Par%C3%A1.svg" 
+                        alt="Brasão do Pará" 
+                        // MUDANÇA: Removido 'hidden sm:block' e ajustado o tamanho para não estourar no celular
+                        className="h-10 sm:h-12 md:h-14 w-auto" 
+                    />
+                </div>
+                <div className="flex flex-col justify-center">
+                    {/* MUDANÇA: Fonte ligeiramente menor no celular para evitar quebra de linha indesejada */}
+                    <h2 className="text-[9px] sm:text-[10px] md:text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">
+                        Governo do Estado • SEDUC
+                    </h2>
+                    <h1 className="text-xs sm:text-sm md:text-xl lg:text-2xl font-bold text-slate-900 leading-tight">
+                        Censo Operacional e Estrutural
+                    </h1>
+                </div>
             </div>
-            <div className="flex flex-col justify-center">
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">
-                    Governo do Estado do Pará • SEDUC
-                </h2>
-                <h1 className="text-xl md:text-2xl font-bold text-slate-900">
-                    Censo Operacional e Estrutural das Escolas
-                </h1>
-            </div>
+
+            {/* Botão Hambúrguer (Mobile) */}
+            <button 
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-md transition-colors shrink-0"
+                aria-label="Abrir menu"
+            >
+                {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
         </div>
       </header>
+
+      {/* Menu Lateral para Celular */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+            <div 
+                className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" 
+                onClick={() => setIsMobileMenuOpen(false)}
+            />
+            <div className="fixed top-[102px] bottom-0 left-0 w-4/5 max-w-[300px] bg-white shadow-2xl border-r border-slate-200 overflow-y-auto z-50 p-6 animate-in slide-in-from-left-4 duration-200">
+                <h3 className="text-sm font-semibold text-slate-900 mb-6 uppercase tracking-wide border-b border-slate-100 pb-2">
+                  Progresso do Censo
+                </h3>
+                <Stepper 
+                  steps={CENSUS_STEPS} 
+                  currentStep={currentStep} 
+                  furthestStep={furthestStep}
+                  onStepClick={handleStepClick}
+                />
+                <div className="mt-8 pt-4 border-t border-slate-100">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={handleRequestReset} 
+                    className="w-full justify-start text-xs text-red-600 hover:bg-red-50 hover:text-red-700 font-semibold"
+                  >
+                    Nova Escola / Limpar Progresso
+                  </Button>
+                </div>
+            </div>
+        </div>
+      )}
 
       <div className="container mx-auto px-4 md:px-8">
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[280px_1fr]">
           
+          {/* Stepper no PC */}
           <aside className="hidden lg:block">
             <div className="sticky top-8 space-y-4">
-              {/* Stepper com design limpo e sólido */}
               <div className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
                 <h3 className="text-sm font-semibold text-slate-900 mb-4 uppercase tracking-wide">Progresso do Censo</h3>
                 <Stepper 
                   steps={CENSUS_STEPS} 
                   currentStep={currentStep} 
+                  furthestStep={furthestStep}
                   onStepClick={handleStepClick}
                 />
                 <div className="mt-6 pt-4 border-t border-slate-100">
@@ -382,28 +431,18 @@ export default function CensusPage() {
                 <CardTitle className="text-2xl text-slate-900">{CENSUS_STEPS[currentStep]?.title || "Finalização"}</CardTitle>
                 <CardDescription className="text-slate-600">Preencha os dados abaixo com atenção aos detalhes estruturais da unidade.</CardDescription>
               </CardHeader>
-              <CardContent className="p-8">
+              <CardContent className="p-4 md:p-8">
                 
                 {currentStep === 0 && <IdentificationForm onSuccess={handleIdentificationSuccess} initialId={schoolId} />}
-
                 {currentStep === 1 && schoolId && <GeneralDataForm schoolId={schoolId} onSuccess={() => { setCurrentStep(2); window.scrollTo({ top: 0, behavior: "smooth" }); }} onBack={() => setCurrentStep(0)} />}
-
                 {currentStep === 2 && schoolId && <MerendaForm schoolId={schoolId} onSuccess={() => { setCurrentStep(3); window.scrollTo({ top: 0, behavior: "smooth" }); }} onBack={() => setCurrentStep(1)} />}
-
                 {currentStep === 3 && schoolId && <ServicosGeraisForm schoolId={schoolId} onSuccess={() => { setCurrentStep(4); window.scrollTo({ top: 0, behavior: "smooth" }); }} onBack={() => setCurrentStep(2)} />}
-
                 {currentStep === 4 && schoolId && <PortariaForm schoolId={schoolId} onSuccess={() => { setCurrentStep(5); window.scrollTo({ top: 0, behavior: "smooth" }); }} onBack={() => setCurrentStep(3)} />}
-
                 {currentStep === 5 && schoolId && <TecnologiaForm schoolId={schoolId} onSuccess={() => { setCurrentStep(6); window.scrollTo({ top: 0, behavior: "smooth" }); }} onBack={() => setCurrentStep(4)} />}
-
                 {currentStep === 6 && schoolId && <ServidoresForm schoolId={schoolId} onSuccess={() => { setCurrentStep(7); window.scrollTo({ top: 0, behavior: "smooth" }); }} onBack={() => setCurrentStep(5)} />}
-
                 {currentStep === 7 && schoolId && <AlunosForm schoolId={schoolId} onSuccess={() => { setCurrentStep(8); window.scrollTo({ top: 0, behavior: "smooth" }); }} onBack={() => setCurrentStep(6)} />}
-
                 {currentStep === 8 && schoolId && <GestaoForm schoolId={schoolId} onSuccess={() => { setCurrentStep(9); window.scrollTo({ top: 0, behavior: "smooth" }); }} onBack={() => setCurrentStep(7)} />}
-
                 {currentStep === 9 && schoolId && <AvaliacaoForm schoolId={schoolId} onSuccess={() => { setCurrentStep(10); window.scrollTo({ top: 0, behavior: "smooth" }); }} onBack={() => setCurrentStep(8)} />}
-
                 {currentStep === 10 && schoolId && <ObservacoesForm schoolId={schoolId} onSuccess={handleCompletion} onBack={() => setCurrentStep(9)} />}
 
               </CardContent>

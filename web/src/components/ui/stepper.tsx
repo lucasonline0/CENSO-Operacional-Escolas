@@ -1,66 +1,61 @@
-"use client";
-
-import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
-
-interface Step {
-  title: string;
-}
+import { cn } from "@/lib/utils";
 
 interface StepperProps {
-  steps: Step[];
+  steps: { id: string; title: string }[];
   currentStep: number;
-  onStepClick?: (index: number) => void; // CORREÇÃO: Adicionado '?' para ser opcional
+  furthestStep?: number; // Propriedade que mantém o rastro de onde o usuário já foi
+  onStepClick: (index: number) => void;
 }
 
-export function Stepper({ steps, currentStep, onStepClick }: StepperProps) {
+export function Stepper({ steps, currentStep, furthestStep = 0, onStepClick }: StepperProps) {
   return (
-    <nav className="flex flex-col space-y-1">
+    <div className="flex flex-col gap-4">
       {steps.map((step, index) => {
-        const isCompleted = index < currentStep;
-        const isCurrent = index === currentStep;
+        const isActive = index === currentStep;
+        // Se o índice for menor ou igual ao mais distante alcançado E não for o atual, está concluído.
+        const isCompleted = index <= furthestStep && index !== currentStep;
+        // Bloqueia apenas os passos que o usuário ainda não alcançou
+        const isLocked = index > furthestStep;
 
         return (
           <button
-            key={index}
-            type="button"
-            // Só executa se a função existir
-            onClick={() => onStepClick && onStepClick(index)}
-            // Desabilita o botão se não houver função de clique
-            disabled={!onStepClick}
+            key={step.id}
+            onClick={() => !isLocked && onStepClick(index)}
+            disabled={isLocked}
             className={cn(
-              "group flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors text-left",
-              // Remove cursor de clique se não for interativo
-              !onStepClick && "cursor-default pointer-events-none",
-              isCurrent
-                ? "bg-blue-50 text-blue-700"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              "flex items-center gap-3 text-left w-full group transition-all",
+              isLocked ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
             )}
           >
             <div
               className={cn(
-                "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] transition-colors",
-                isCompleted
-                  ? "border-blue-600 bg-blue-600 text-white"
-                  : isCurrent
-                  ? "border-blue-600 text-blue-600"
-                  : "border-slate-300 group-hover:border-slate-400"
+                // MUDANÇA AQUI: Trocamos rounded-sm por rounded-full
+                "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-semibold transition-colors", 
+                isActive
+                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                  : isCompleted
+                  ? "border-green-600 bg-green-50 text-green-700" // Verde para passos verificados
+                  : "border-slate-200 bg-slate-50 text-slate-400 group-hover:border-slate-300"
               )}
             >
-              {isCompleted ? (
-                <Check className="h-3 w-3" />
-              ) : isCurrent ? (
-                <div className="h-1.5 w-1.5 rounded-full bg-blue-600" />
-              ) : (
-                <span className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">•</span>
-              )}
+              {isCompleted ? <Check className="h-4 w-4" strokeWidth={3} /> : index + 1}
             </div>
-            <span className={cn("truncate", isCurrent ? "font-semibold" : "")}>
+            <span
+              className={cn(
+                "text-sm font-medium transition-colors",
+                isActive
+                  ? "text-primary font-bold"
+                  : isCompleted
+                  ? "text-slate-700"
+                  : "text-slate-400"
+              )}
+            >
               {step.title}
             </span>
           </button>
         );
       })}
-    </nav>
+    </div>
   );
 }

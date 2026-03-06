@@ -28,11 +28,10 @@ interface BaseProps<T extends FieldValues> {
   disabled?: boolean;
 }
 
-// Interface estendida para suportar atributos numéricos
 interface NumberProps<T extends FieldValues> extends BaseProps<T> {
   min?: number;
   max?: number;
-  step?: number;
+  step?: number | string;
 }
 
 interface SelectProps<T extends FieldValues> extends BaseProps<T> {
@@ -81,10 +80,10 @@ export function NumberInput<T extends FieldValues>({
   placeholder,
   description,
   disabled,
-  min, // Recebendo min
-  max, // Recebendo max
-  step, // Recebendo step
-}: NumberProps<T>) { // Usando a nova interface
+  min,
+  max,
+  step,
+}: NumberProps<T>) { 
   
   const blockInvalidChar = (e: React.KeyboardEvent<HTMLInputElement>) => 
     ["e", "E", "+", "-"].includes(e.key) && e.preventDefault();
@@ -99,9 +98,9 @@ export function NumberInput<T extends FieldValues>({
           <FormControl>
             <Input
               type="number"
-              min={min ?? 0} // Usa o min passado ou 0 por padrão
+              min={min ?? 0}
               max={max}
-              step={step}
+              step={step ?? "any"}
               onKeyDown={blockInvalidChar} 
               placeholder={placeholder}
               {...field}
@@ -112,7 +111,7 @@ export function NumberInput<T extends FieldValues>({
               }}
               onChange={(e) => {
                 const val = e.target.valueAsNumber;
-                // Permite limpar o campo (NaN) ou valores válidos
+                
                 if (isNaN(val)) {
                    field.onChange("");
                    return;

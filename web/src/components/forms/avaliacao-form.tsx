@@ -10,6 +10,7 @@ import { RadioInput } from "@/components/ui/form-components";
 import { useCensusPersistence } from "@/hooks/use-census-persistence";
 
 const OPCOES = ["Ruim", "Regular", "Bom", "Excelente"];
+const OPCOES_COM_NAO_APLICA = ["Ruim", "Regular", "Bom", "Excelente", "Não se aplica"];
 
 interface AvaliacaoFormProps {
   schoolId: number;
@@ -80,11 +81,10 @@ export function AvaliacaoForm({ schoolId, onSuccess, onBack }: AvaliacaoFormProp
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         
         <div className="space-y-6">
-            
             <div className="grid grid-cols-1 gap-6">
-                <RadioInput<AvaliacaoFormValues> control={control} name="avaliacao_merendeiras" label="Avaliação do serviço das merendeiras" options={OPCOES} />
-                <RadioInput<AvaliacaoFormValues> control={control} name="avaliacao_portaria" label="Avaliação do serviço dos agentes de portaria" options={OPCOES} />
-                <RadioInput<AvaliacaoFormValues> control={control} name="avaliacao_limpeza" label="Avaliação da prestação dos serviços dos limpeza" options={OPCOES} />
+                <RadioInput<AvaliacaoFormValues> control={control} name="avaliacao_merendeiras" label="Avaliação do serviço das merendeiras" options={OPCOES_COM_NAO_APLICA} />
+                <RadioInput<AvaliacaoFormValues> control={control} name="avaliacao_portaria" label="Avaliação do serviço dos agentes de portaria" options={OPCOES_COM_NAO_APLICA} />
+                <RadioInput<AvaliacaoFormValues> control={control} name="avaliacao_limpeza" label="Avaliação da prestação dos serviços de limpeza" options={OPCOES_COM_NAO_APLICA} />
                 <RadioInput<AvaliacaoFormValues> control={control} name="avaliacao_comunicacao" label="Avaliação da Comunicação com empresa terceirizada" options={OPCOES} />
                 <RadioInput<AvaliacaoFormValues> control={control} name="avaliacao_supervisao" label="Avaliação do Atendimento da supervisão" options={OPCOES} />
             </div>

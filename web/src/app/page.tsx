@@ -147,7 +147,7 @@ export default function CensusPage() {
         const responsibleMatricula = censusFields.matricula_funcional || "Não informado";
 
         try {
-            const img = new Image();
+            const img = new globalThis.Image();
             img.crossOrigin = "Anonymous";
             img.src = "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/Bras%C3%A3o_do_Par%C3%A1.svg/200px-Bras%C3%A3o_do_Par%C3%A1.svg.png";
             

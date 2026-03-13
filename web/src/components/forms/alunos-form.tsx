@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { alunosSchema, AlunosFormValues } from "@/schemas/steps/alunos"; 
 import { Button } from "@/components/ui/button";
 import { Form, FormField, FormItem, FormControl, FormLabel, FormMessage } from "@/components/ui/form";
-import { TextInput } from "@/components/ui/form-components";
+import { NumberInput, TextInput } from "@/components/ui/form-components";
 import { Separator } from "@/components/ui/separator";
 import { useCensusPersistence } from "@/hooks/use-census-persistence";
 

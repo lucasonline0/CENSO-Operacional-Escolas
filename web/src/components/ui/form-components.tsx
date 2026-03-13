@@ -104,7 +104,7 @@ export function NumberInput<T extends FieldValues>({
               onKeyDown={blockInvalidChar} 
               placeholder={placeholder}
               {...field}
-              onFocus={() => {
+              onFocus={(e) => {
                 if (field.value === 0) {
                     field.onChange("");
                 }

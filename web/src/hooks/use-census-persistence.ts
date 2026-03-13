@@ -91,7 +91,7 @@ export function useCensusPersistence<T extends FieldValues>(
     };
 
     loadData();
-  }, [schoolId, stepKey, endpoint, reset, defaultValues]); 
+  }, [schoolId, stepKey, endpoint, reset]); 
 
   const saveLocalDraft = (data: T) => {
     if (isClearedRef.current || !schoolId) return;

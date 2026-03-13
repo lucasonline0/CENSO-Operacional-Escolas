@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useState, useEffect } from "react";
 import { Stepper } from "@/components/ui/stepper";
 import { CENSUS_STEPS } from "@/config/steps";
@@ -147,7 +146,7 @@ export default function CensusPage() {
         const responsibleMatricula = censusFields.matricula_funcional || "Não informado";
 
         try {
-            const img = new globalThis.Image();
+            const img = new Image();
             img.crossOrigin = "Anonymous";
             img.src = "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/Bras%C3%A3o_do_Par%C3%A1.svg/200px-Bras%C3%A3o_do_Par%C3%A1.svg.png";
             
@@ -338,13 +337,11 @@ export default function CensusPage() {
         <div className="container mx-auto px-4 h-24 flex items-center justify-between gap-2 sm:gap-6">
             <div className="flex items-center gap-3 sm:gap-6">
                 <div className="shrink-0">
-                    <Image
-                        src="https://upload.wikimedia.org/wikipedia/commons/b/bc/Bras%C3%A3o_do_Par%C3%A1.svg"
-                        alt="Brasão do Pará"
-                        width={56}
-                        height={56}
-                        className="h-10 sm:h-12 md:h-14 w-auto"
-                        priority
+                    <img 
+                        src="https://upload.wikimedia.org/wikipedia/commons/b/bc/Bras%C3%A3o_do_Par%C3%A1.svg" 
+                        alt="Brasão do Pará" 
+                        // MUDANÇA: Removido 'hidden sm:block' e ajustado o tamanho para não estourar no celular
+                        className="h-10 sm:h-12 md:h-14 w-auto" 
                     />
                 </div>
                 <div className="flex flex-col justify-center">

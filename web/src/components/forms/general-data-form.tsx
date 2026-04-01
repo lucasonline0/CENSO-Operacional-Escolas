@@ -304,7 +304,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
             <div className="space-y-3">
                 <label className="text-sm font-medium text-slate-700">Modalidades ofertadas *</label>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {["Ensino Regular", "Ensino Integral", "Educação de Jovens e Adultos (EJA)", "Educação Especial", "Educação Profissional e Tecnológica", "Educação do Campo", "Educação Escolar Indígena", "Educação Quilombola", "CEMEP", "SOME", "PPL"].map((item) => (
+                    {["Ensino Regular", "Ensino Integral", "Educação de Jovens e Adultos (EJA)", "Educação Profissional e Tecnológica", "PPL"].map((item) => (
                         <FormField key={item} control={form.control} name="modalidades_ofertadas" render={({ field, fieldState }) => (
                             <FormItem className="flex flex-row items-start space-x-3 space-y-0">
                                 <FormControl><Checkbox checked={field.value?.includes(item)} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), item]) : field.onChange(field.value?.filter((v: string) => v !== item))} /></FormControl>

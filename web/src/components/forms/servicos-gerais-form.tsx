@@ -52,7 +52,7 @@ export function ServicosGeraisForm({ schoolId, onSuccess, onBack }: ServicosGera
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             school_id: schoolId,
-            year: 2026,
+            year: new Date().getFullYear(),
             status: "draft", 
             data: data 
         }),

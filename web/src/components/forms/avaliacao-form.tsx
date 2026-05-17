@@ -48,13 +48,13 @@ export function AvaliacaoForm({ schoolId, onSuccess, onBack }: AvaliacaoFormProp
   async function onSubmit(data: AvaliacaoFormValues) {
     setIsSaving(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const response = await fetch(`${baseUrl}/v1/census`, {
-        method: "POST", 
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             school_id: schoolId,
-            year: 2026,
+            year: new Date().getFullYear(),
             status: "draft", 
             data: data 
         }),

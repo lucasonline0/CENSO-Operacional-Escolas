@@ -31,6 +31,9 @@ func (app *application) enableCORS(next http.Handler) http.Handler {
 					break
 				}
 			}
+			// Vary: Origin obrigatório quando a resposta varia por origem,
+			// evita que CDN/proxy cache a resposta de uma origem e sirva a outra
+			w.Header().Set("Vary", "Origin")
 			if allowed {
 				w.Header().Set("Access-Control-Allow-Origin", requestOrigin)
 				w.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -42,6 +45,11 @@ func (app *application) enableCORS(next http.Handler) http.Handler {
 
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-API-Key, Cache-Control, Pragma")
+
+		// Previne MIME sniffing (browser interpretar JSON como script/HTML)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		// Previne clickjacking via <iframe>
+		w.Header().Set("X-Frame-Options", "DENY")
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)

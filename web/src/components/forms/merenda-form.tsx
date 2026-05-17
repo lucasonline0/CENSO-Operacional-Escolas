@@ -58,7 +58,7 @@ export function MerendaForm({ schoolId, onSuccess, onBack }: MerendaFormProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             school_id: schoolId,
-            year: 2026,
+            year: new Date().getFullYear(),
             status: "draft", 
             data: data 
         }),

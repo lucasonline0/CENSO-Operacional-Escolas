@@ -56,7 +56,7 @@ export function ServidoresForm({ schoolId, onSuccess, onBack }: ServidoresFormPr
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             school_id: schoolId,
-            year: 2026,
+            year: new Date().getFullYear(),
             status: "draft", 
             data: data 
         }),

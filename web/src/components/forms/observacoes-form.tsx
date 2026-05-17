@@ -69,13 +69,13 @@ export function ObservacoesForm({ schoolId, onSuccess, onBack }: ObservacoesForm
   async function onSubmit(data: ObservacoesFormValues) {
     setIsSaving(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const response = await fetch(`${baseUrl}/v1/census`, {
-        method: "POST", 
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             school_id: schoolId,
-            year: 2026,
+            year: new Date().getFullYear(),
             status: "completed", 
             data: data 
         }),

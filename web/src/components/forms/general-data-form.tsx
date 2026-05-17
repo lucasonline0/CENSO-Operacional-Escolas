@@ -244,7 +244,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/census`, {
         method: "POST", 
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ school_id: schoolId, year: 2026, status: "draft", data: payload }),
+        body: JSON.stringify({ school_id: schoolId, year: new Date().getFullYear(), status: "draft", data: payload }),
       });
 
       if (!response.ok) throw new Error("erro ao salvar");

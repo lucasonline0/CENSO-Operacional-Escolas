@@ -212,7 +212,10 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 					defer file.Close()
 
 					// Verifica se o arquivo tem conteúdo
-					stat, _ := file.Stat()
+					stat, err := file.Stat()
+					if err != nil {
+						return fmt.Errorf("erro ao verificar arquivo: %v", err)
+					}
 					if stat.Size() == 0 {
 						return fmt.Errorf("arquivo vazio")
 					}
@@ -306,7 +309,7 @@ func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 	// Garante diretório temporário
 	tempDir := "./tmp"
 	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
-		os.Mkdir(tempDir, 0755)
+		os.Mkdir(tempDir, 0700)
 	}
 
 	// Formato: ID_NomeOriginal

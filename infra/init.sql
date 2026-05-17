@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS census_responses (
       REFERENCES schools(id)
       ON DELETE CASCADE,
       
-    CONSTRAINT unique_school_year 
+    sheet_synced_at TIMESTAMP DEFAULT NULL,
+
+    CONSTRAINT unique_school_year
       UNIQUE (school_id, year)
 );

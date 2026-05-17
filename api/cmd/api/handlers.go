@@ -177,21 +177,28 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 
 	// LÓGICA DE FINALIZAÇÃO: Planilha e Google Drive
 	if req.Status == "completed" {
-		// 1. Enviar para Planilha (Goroutine)
-		go func(c models.CensusResponse) {
-			if app.sheets == nil {
-				return
-			}
-			school, err := app.models.Schools.Get(c.SchoolID)
-			if err != nil {
-				app.logger.Println("Erro ao buscar escola para planilha:", err)
-				return
-			}
-			err = app.sheets.AppendCenso(c, *school)
-			if err != nil {
-				app.logger.Println("Erro ao salvar na planilha:", err)
-			}
-		}(censo)
+		// 1. Enviar para Planilha — apenas se ainda não sincronizado.
+		// Re-submissions com status "completed" não geram linha duplicada na planilha.
+		alreadySynced := existingCenso != nil && existingCenso.SheetSyncedAt != nil
+		if !alreadySynced {
+			go func(c models.CensusResponse) {
+				if app.sheets == nil {
+					return
+				}
+				school, err := app.models.Schools.Get(c.SchoolID)
+				if err != nil {
+					app.logger.Println("Erro ao buscar escola para planilha:", err)
+					return
+				}
+				if err = app.sheets.AppendCenso(c, *school); err != nil {
+					app.logger.Println("Erro ao salvar na planilha:", err)
+					return
+				}
+				if err = app.models.Census.MarkSheetSynced(c.ID); err != nil {
+					app.logger.Println("Erro ao marcar sheet_synced_at:", err)
+				}
+			}(censo)
+		}
 
 		// 2. Processar Upload da Foto
 		tempDir := "./tmp"
@@ -338,4 +345,47 @@ func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 		Data:    "temp_ok",
 	}
 	app.writeJSON(w, http.StatusCreated, payload)
+}
+
+// AdminSyncSheets força a re-sincronização imediata de todos os censos
+// completed que ainda não foram gravados na planilha.
+// Protegido por SYNC_SECRET para evitar uso não autorizado.
+func (app *application) AdminSyncSheets(w http.ResponseWriter, r *http.Request) {
+	secret := os.Getenv("SYNC_SECRET")
+	if secret != "" && r.Header.Get("X-Sync-Secret") != secret {
+		app.errorJSON(w, fmt.Errorf("não autorizado"), http.StatusUnauthorized)
+		return
+	}
+
+	pending, err := app.models.Census.GetPendingSheetSync()
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao buscar pendentes: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	synced := 0
+	failed := 0
+	for _, c := range pending {
+		school, err := app.models.Schools.Get(c.SchoolID)
+		if err != nil {
+			app.logger.Printf("adminSync: erro escola %d: %v", c.SchoolID, err)
+			failed++
+			continue
+		}
+		if err = app.sheets.AppendCenso(*c, *school); err != nil {
+			app.logger.Printf("adminSync: erro ao enviar escola %d: %v", c.SchoolID, err)
+			failed++
+			continue
+		}
+		if err = app.models.Census.MarkSheetSynced(c.ID); err != nil {
+			app.logger.Printf("adminSync: erro ao marcar sincronizado %d: %v", c.ID, err)
+		}
+		synced++
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{
+		Error:   false,
+		Message: fmt.Sprintf("Sync concluído: %d sincronizados, %d falhas", synced, failed),
+		Data:    map[string]int{"pending": len(pending), "synced": synced, "failed": failed},
+	})
 }

@@ -31,13 +31,14 @@ type School struct {
 }
 
 type CensusResponse struct {
-	ID        int             `json:"id"`
-	SchoolID  int             `json:"school_id"`
-	Year      int             `json:"year"`
-	Status    string          `json:"status"`
-	Data      json.RawMessage `json:"data"`
-	CreatedAt time.Time       `json:"created_at"`
-	UpdatedAt time.Time       `json:"updated_at"`
+	ID             int             `json:"id"`
+	SchoolID       int             `json:"school_id"`
+	Year           int             `json:"year"`
+	Status         string          `json:"status"`
+	Data           json.RawMessage `json:"data"`
+	SheetSyncedAt  *time.Time      `json:"sheet_synced_at,omitempty"`
+	CreatedAt      time.Time       `json:"created_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
 }
 
 type SchoolModel struct {
@@ -205,6 +206,7 @@ func (m *SchoolModel) GetAll() ([]*School, error) {
 func (m *CensusModel) Upsert(response CensusResponse) error {
 	// O merge de dados já foi feito na camada de handler (Go), então aqui
 	// sobrescrevemos diretamente sem double-merge no SQL.
+	// sheet_synced_at é preservado — não resetamos ao re-salvar.
 	stmt := `
 		INSERT INTO census_responses (school_id, year, status, data, updated_at)
 		VALUES ($1, $2, $3, $4, NOW())
@@ -223,15 +225,48 @@ func (m *CensusModel) Upsert(response CensusResponse) error {
 	).Scan(&response.ID)
 }
 
-func (m *CensusModel) GetBySchoolID(schoolID int, year int) (*CensusResponse, error) {
+func (m *CensusModel) MarkSheetSynced(id int) error {
+	_, err := m.DB.ExecContext(context.Background(),
+		`UPDATE census_responses SET sheet_synced_at = NOW() WHERE id = $1`, id)
+	return err
+}
+
+// GetPendingSheetSync retorna todos os censos completed que ainda não foram
+// enviados para a planilha. Usado pelo job de retry e pela rota de resync.
+func (m *CensusModel) GetPendingSheetSync() ([]*CensusResponse, error) {
 	stmt := `SELECT id, school_id, year, status, data, created_at, updated_at
+	         FROM census_responses
+	         WHERE status = 'completed' AND sheet_synced_at IS NULL
+	         ORDER BY updated_at`
+
+	rows, err := m.DB.QueryContext(context.Background(), stmt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []*CensusResponse
+	for rows.Next() {
+		var c CensusResponse
+		var data []byte
+		if err := rows.Scan(&c.ID, &c.SchoolID, &c.Year, &c.Status, &data, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, err
+		}
+		c.Data = json.RawMessage(data)
+		results = append(results, &c)
+	}
+	return results, nil
+}
+
+func (m *CensusModel) GetBySchoolID(schoolID int, year int) (*CensusResponse, error) {
+	stmt := `SELECT id, school_id, year, status, data, sheet_synced_at, created_at, updated_at
 	         FROM census_responses WHERE school_id = $1 AND year = $2`
 
 	var c CensusResponse
 	var data []byte
 
 	err := m.DB.QueryRowContext(context.Background(), stmt, schoolID, year).Scan(
-		&c.ID, &c.SchoolID, &c.Year, &c.Status, &data, &c.CreatedAt, &c.UpdatedAt,
+		&c.ID, &c.SchoolID, &c.Year, &c.Status, &data, &c.SheetSyncedAt, &c.CreatedAt, &c.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil

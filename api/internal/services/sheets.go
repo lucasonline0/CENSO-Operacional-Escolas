@@ -256,32 +256,33 @@ func (s *SheetsService) AppendCenso(censo models.CensusResponse, school models.S
 
 	vr := &sheets.ValueRange{Values: [][]interface{}{row}}
 
-	_, err = s.srv.Spreadsheets.Values.Append(s.censusSpreadsheetID, SheetRange, vr).ValueInputOption("USER_ENTERED").Do()
+	_, err = s.srv.Spreadsheets.Values.Append(s.censusSpreadsheetID, SheetRange, vr).ValueInputOption("RAW").Do()
 	if err != nil {
 		return fmt.Errorf("erro ao escrever na planilha do censo: %v", err)
 	}
 
-	if v := val("quantitativo_necessario_portaria"); v != "" && v != 0 {
+	// Valores JSON chegam como float64; usar fmt.Sprint evita comparação errada de tipos (interface{float64} != int(0))
+	if str := fmt.Sprint(val("quantitativo_necessario_portaria")); str != "" && str != "0" {
 		_ = s.ensureAndAppendDeficit(
-			"Deficit_Portaria", 
+			"Deficit_Portaria",
 			"Para atender plenamente à demanda atual da escola, quantos agentes de portaria faltam para completar a equipe?",
-			v, school,
+			str, school,
 		)
 	}
 
-	if v := val("quantitativo_necessario_sg"); v != "" && v != 0 {
+	if str := fmt.Sprint(val("quantitativo_necessario_sg")); str != "" && str != "0" {
 		_ = s.ensureAndAppendDeficit(
-			"Deficit_Servicos_Gerais", 
+			"Deficit_Servicos_Gerais",
 			"Para atender plenamente à demanda atual da escola, quantas serviços gerais faltam para completar a equipe?",
-			v, school,
+			str, school,
 		)
 	}
 
-	if v := val("quantitativo_necessario_merenda"); v != "" && v != 0 {
+	if str := fmt.Sprint(val("quantitativo_necessario_merenda")); str != "" && str != "0" {
 		_ = s.ensureAndAppendDeficit(
-			"Deficit_Merenda", 
+			"Deficit_Merenda",
 			"Para atender plenamente à demanda atual da merenda escolar, quantas merendeiras faltam para completar a equipe da cozinha?",
-			v, school,
+			str, school,
 		)
 	}
 
@@ -321,7 +322,7 @@ func (s *SheetsService) ensureAndAppendDeficit(sheetTitle string, questionText s
 
 		header := []interface{}{"INEP", "Escola", "DRE", "Município", questionText}
 		headerVr := &sheets.ValueRange{Values: [][]interface{}{header}}
-		_, err = s.srv.Spreadsheets.Values.Append(s.censusSpreadsheetID, fmt.Sprintf("%s!A1", sheetTitle), headerVr).ValueInputOption("USER_ENTERED").Do()
+		_, err = s.srv.Spreadsheets.Values.Append(s.censusSpreadsheetID, fmt.Sprintf("%s!A1", sheetTitle), headerVr).ValueInputOption("RAW").Do()
 		if err != nil {
 			return fmt.Errorf("erro ao escrever cabeçalho na aba %s: %v", sheetTitle, err)
 		}
@@ -335,7 +336,7 @@ func (s *SheetsService) ensureAndAppendDeficit(sheetTitle string, questionText s
 		value,
 	}
 	vr := &sheets.ValueRange{Values: [][]interface{}{row}}
-	_, err = s.srv.Spreadsheets.Values.Append(s.censusSpreadsheetID, fmt.Sprintf("%s!A:A", sheetTitle), vr).ValueInputOption("USER_ENTERED").Do()
+	_, err = s.srv.Spreadsheets.Values.Append(s.censusSpreadsheetID, fmt.Sprintf("%s!A:A", sheetTitle), vr).ValueInputOption("RAW").Do()
 	
 	return err
 }

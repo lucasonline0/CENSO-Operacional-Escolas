@@ -256,7 +256,7 @@ func (s *SheetsService) AppendCenso(censo models.CensusResponse, school models.S
 
 	vr := &sheets.ValueRange{Values: [][]interface{}{row}}
 
-	_, err = s.srv.Spreadsheets.Values.Append(s.censusSpreadsheetID, SheetRange, vr).ValueInputOption("USER_ENTERED").Do()
+	_, err = s.srv.Spreadsheets.Values.Append(s.censusSpreadsheetID, SheetRange, vr).ValueInputOption("RAW").Do()
 	if err != nil {
 		return fmt.Errorf("erro ao escrever na planilha do censo: %v", err)
 	}
@@ -322,7 +322,7 @@ func (s *SheetsService) ensureAndAppendDeficit(sheetTitle string, questionText s
 
 		header := []interface{}{"INEP", "Escola", "DRE", "Município", questionText}
 		headerVr := &sheets.ValueRange{Values: [][]interface{}{header}}
-		_, err = s.srv.Spreadsheets.Values.Append(s.censusSpreadsheetID, fmt.Sprintf("%s!A1", sheetTitle), headerVr).ValueInputOption("USER_ENTERED").Do()
+		_, err = s.srv.Spreadsheets.Values.Append(s.censusSpreadsheetID, fmt.Sprintf("%s!A1", sheetTitle), headerVr).ValueInputOption("RAW").Do()
 		if err != nil {
 			return fmt.Errorf("erro ao escrever cabeçalho na aba %s: %v", sheetTitle, err)
 		}
@@ -336,7 +336,7 @@ func (s *SheetsService) ensureAndAppendDeficit(sheetTitle string, questionText s
 		value,
 	}
 	vr := &sheets.ValueRange{Values: [][]interface{}{row}}
-	_, err = s.srv.Spreadsheets.Values.Append(s.censusSpreadsheetID, fmt.Sprintf("%s!A:A", sheetTitle), vr).ValueInputOption("USER_ENTERED").Do()
+	_, err = s.srv.Spreadsheets.Values.Append(s.censusSpreadsheetID, fmt.Sprintf("%s!A:A", sheetTitle), vr).ValueInputOption("RAW").Do()
 	
 	return err
 }

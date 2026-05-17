@@ -288,6 +288,10 @@ func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 		app.errorJSON(w, fmt.Errorf("school_id obrigatório"), http.StatusBadRequest)
 		return
 	}
+	if _, err := strconv.Atoi(schoolIDStr); err != nil {
+		app.errorJSON(w, fmt.Errorf("school_id inválido"), http.StatusBadRequest)
+		return
+	}
 
 	// Valida extensão (apenas imagens)
 	safeBase := filepath.Base(handler.Filename)

@@ -24,5 +24,8 @@ credentials.json
 key.json
 *.key
 
+# Lock files temporários do Excel/Office
+~$*
+
 # Dev Tools (Tests)
 src/dev/

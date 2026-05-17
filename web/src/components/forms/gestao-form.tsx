@@ -47,11 +47,11 @@ export function GestaoForm({ schoolId, onSuccess, onBack }: GestaoFormProps) {
   async function onSubmit(data: GestaoFormValues) {
     setIsSaving(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL; 
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const response = await fetch(`${baseUrl}/v1/census`, {
-        method: "POST", 
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ school_id: schoolId, year: 2026, status: "draft", data: data }),
+        body: JSON.stringify({ school_id: schoolId, year: new Date().getFullYear(), status: "draft", data: data }),
       });
 
       if (!response.ok) throw new Error("erro ao salvar");

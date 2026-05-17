@@ -203,36 +203,38 @@ func (m *SchoolModel) GetAll() ([]*School, error) {
 }
 
 func (m *CensusModel) Upsert(response CensusResponse) error {
+	// O merge de dados já foi feito na camada de handler (Go), então aqui
+	// sobrescrevemos diretamente sem double-merge no SQL.
 	stmt := `
 		INSERT INTO census_responses (school_id, year, status, data, updated_at)
 		VALUES ($1, $2, $3, $4, NOW())
-		ON CONFLICT (school_id, year) 
-		DO UPDATE SET 
+		ON CONFLICT (school_id, year)
+		DO UPDATE SET
 			status = EXCLUDED.status,
-			data = COALESCE(census_responses.data, '{}'::jsonb) || EXCLUDED.data, 
+			data = EXCLUDED.data,
 			updated_at = NOW()
 		RETURNING id`
 
-	return m.DB.QueryRow(stmt, 
-		response.SchoolID, 
-		response.Year, 
-		response.Status, 
+	return m.DB.QueryRowContext(context.Background(), stmt,
+		response.SchoolID,
+		response.Year,
+		response.Status,
 		response.Data,
 	).Scan(&response.ID)
 }
 
 func (m *CensusModel) GetBySchoolID(schoolID int, year int) (*CensusResponse, error) {
-	stmt := `SELECT id, school_id, year, status, data, created_at, updated_at 
+	stmt := `SELECT id, school_id, year, status, data, created_at, updated_at
 	         FROM census_responses WHERE school_id = $1 AND year = $2`
 
 	var c CensusResponse
-	var data []byte 
+	var data []byte
 
-	err := m.DB.QueryRow(stmt, schoolID, year).Scan(
+	err := m.DB.QueryRowContext(context.Background(), stmt, schoolID, year).Scan(
 		&c.ID, &c.SchoolID, &c.Year, &c.Status, &data, &c.CreatedAt, &c.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
-		return nil, nil 
+		return nil, nil
 	}
 	if err != nil {
 		return nil, err

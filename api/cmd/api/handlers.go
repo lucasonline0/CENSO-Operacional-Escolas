@@ -92,13 +92,24 @@ func (app *application) CreateSchool(w http.ResponseWriter, r *http.Request) {
 func (app *application) GetCenso(w http.ResponseWriter, r *http.Request) {
 	schoolIDStr := r.URL.Query().Get("school_id")
 	if schoolIDStr == "" {
-		app.errorJSON(w, nil, http.StatusBadRequest)
+		app.errorJSON(w, fmt.Errorf("school_id é obrigatório"), http.StatusBadRequest)
 		return
 	}
 
-	schoolID, _ := strconv.Atoi(schoolIDStr)
-	censo, err := app.models.Census.GetBySchoolID(schoolID, 2026)
-	
+	schoolID, err := strconv.Atoi(schoolIDStr)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("school_id inválido"), http.StatusBadRequest)
+		return
+	}
+
+	yearStr := r.URL.Query().Get("year")
+	year, err := strconv.Atoi(yearStr)
+	if err != nil || year == 0 {
+		year = time.Now().Year()
+	}
+
+	censo, err := app.models.Census.GetBySchoolID(schoolID, year)
+
 	if err != nil || censo == nil {
 		payload := jsonResponse{Error: false, Data: nil}
 		app.writeJSON(w, http.StatusOK, payload)
@@ -123,7 +134,12 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	existingCenso, err := app.models.Census.GetBySchoolID(req.SchoolID, 2026)
+	year := req.Year
+	if year == 0 {
+		year = time.Now().Year()
+	}
+
+	existingCenso, err := app.models.Census.GetBySchoolID(req.SchoolID, year)
 	var finalData []byte
 
 	if err == nil && existingCenso != nil {
@@ -145,7 +161,7 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 
 	censo := models.CensusResponse{
 		SchoolID:  req.SchoolID,
-		Year:      req.Year,
+		Year:      year,
 		Status:    req.Status,
 		Data:      finalData,
 		UpdatedAt: time.Now(),
@@ -270,6 +286,23 @@ func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Valida extensão (apenas imagens)
+	safeBase := filepath.Base(handler.Filename)
+	ext := strings.ToLower(filepath.Ext(safeBase))
+	allowedExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".webp": true, ".gif": true}
+	if !allowedExts[ext] {
+		app.errorJSON(w, fmt.Errorf("tipo de arquivo não permitido. Use: jpg, jpeg, png ou webp"), http.StatusBadRequest)
+		return
+	}
+
+	// Sanitiza o nome: mantém apenas caracteres seguros
+	safeBase = strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
+			return r
+		}
+		return '_'
+	}, safeBase)
+
 	// Garante diretório temporário
 	tempDir := "./tmp"
 	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
@@ -277,7 +310,7 @@ func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Formato: ID_NomeOriginal
-	tempFilename := fmt.Sprintf("%s_%s", schoolIDStr, handler.Filename)
+	tempFilename := fmt.Sprintf("%s_%s", schoolIDStr, safeBase)
 	dstPath := filepath.Join(tempDir, tempFilename)
 
 	dst, err := os.Create(dstPath)

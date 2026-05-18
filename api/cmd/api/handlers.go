@@ -167,7 +167,7 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 		UpdatedAt: time.Now(),
 	}
 
-	err = app.models.Census.Upsert(censo)
+	err = app.models.Census.Upsert(&censo)
 	if err != nil {
 		app.errorJSON(w, err, http.StatusInternalServerError)
 		return
@@ -180,24 +180,24 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 		// 1. Enviar para Planilha — apenas se ainda não sincronizado.
 		// Re-submissions com status "completed" não geram linha duplicada na planilha.
 		alreadySynced := existingCenso != nil && existingCenso.SheetSyncedAt != nil
-		if !alreadySynced {
-			go func(c models.CensusResponse) {
-				if app.sheets == nil {
-					return
-				}
-				school, err := app.models.Schools.Get(c.SchoolID)
-				if err != nil {
-					app.logger.Println("Erro ao buscar escola para planilha:", err)
-					return
-				}
-				if err = app.sheets.AppendCenso(c, *school); err != nil {
-					app.logger.Println("Erro ao salvar na planilha:", err)
-					return
-				}
-				if err = app.models.Census.MarkSheetSynced(c.ID); err != nil {
-					app.logger.Println("Erro ao marcar sheet_synced_at:", err)
-				}
-			}(censo)
+		if !alreadySynced && app.sheets != nil {
+			// Busca a escola aqui (request context, conexão saudável) para não
+			// depender de DB dentro da goroutine onde a conexão pode estar stale.
+			school, err := app.models.Schools.Get(censo.SchoolID)
+			if err != nil {
+				app.logger.Println("Erro ao buscar escola para planilha:", err)
+			} else {
+				censoCopy := censo
+				go func(c models.CensusResponse, s models.School) {
+					if err = app.sheets.AppendCenso(c, s); err != nil {
+						app.logger.Println("Erro ao salvar na planilha:", err)
+						return
+					}
+					if err = app.models.Census.MarkSheetSynced(c.ID); err != nil {
+						app.logger.Println("Erro ao marcar sheet_synced_at:", err)
+					}
+				}(censoCopy, *school)
+			}
 		}
 
 		// 2. Processar Upload da Foto

@@ -214,7 +214,8 @@ func (m *CensusModel) Upsert(response *CensusResponse) error {
 		DO UPDATE SET
 			status = EXCLUDED.status,
 			data = EXCLUDED.data,
-			updated_at = NOW()
+			updated_at = NOW(),
+			sheet_synced_at = CASE WHEN EXCLUDED.status = 'completed' THEN NULL ELSE census_responses.sheet_synced_at END
 		RETURNING id`
 
 	return m.DB.QueryRowContext(context.Background(), stmt,

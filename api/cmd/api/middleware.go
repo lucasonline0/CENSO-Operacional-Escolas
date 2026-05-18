@@ -46,10 +46,12 @@ func (app *application) enableCORS(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-API-Key, Cache-Control, Pragma")
 
-		// Previne MIME sniffing (browser interpretar JSON como script/HTML)
+		// Previne MIME sniffing e clickjacking
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		// Previne clickjacking via <iframe>
 		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Permissions-Policy", "geolocation=(), camera=(), microphone=()")
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)

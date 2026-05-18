@@ -210,8 +210,15 @@ func (app *application) routes() http.Handler {
 		r.Get("/census", app.GetCenso)
 		r.Post("/census", app.CreateOrUpdateCenso)
 		r.Post("/upload", app.uploadPhoto)
-		// Re-sincroniza manualmente todos os censos completed ainda sem planilha
-		r.Post("/admin/sync-sheets", app.AdminSyncSheets)
+
+		// Admin: login público + rotas protegidas por JWT
+		r.Post("/admin/login", app.AdminLogin)
+		r.Group(func(protected chi.Router) {
+			protected.Use(app.requireAdminAuth)
+			protected.Get("/admin/dashboard", app.AdminDashboard)
+			protected.Get("/admin/census", app.AdminGetCensus)
+			protected.Post("/admin/sync-sheets", app.AdminSyncSheets)
+		})
 	})
 
 	return mux

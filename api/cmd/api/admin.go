@@ -1,0 +1,336 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
+)
+
+// ─── Rate Limiter ────────────────────────────────────────────────────────────
+
+type rateLimiter struct {
+	mu       sync.Mutex
+	attempts map[string][]time.Time
+}
+
+var loginRL = &rateLimiter{attempts: make(map[string][]time.Time)}
+
+const (
+	maxLoginAttempts = 5
+	rlWindow         = 15 * time.Minute
+	jwtExpiry        = 2 * time.Hour
+)
+
+func (rl *rateLimiter) check(ip string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	cutoff := time.Now().Add(-rlWindow)
+	var recent []time.Time
+	for _, t := range rl.attempts[ip] {
+		if t.After(cutoff) {
+			recent = append(recent, t)
+		}
+	}
+	rl.attempts[ip] = recent
+
+	if len(recent) >= maxLoginAttempts {
+		return false
+	}
+	rl.attempts[ip] = append(rl.attempts[ip], time.Now())
+	return true
+}
+
+func clientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		return strings.TrimSpace(strings.SplitN(xff, ",", 2)[0])
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return xri
+	}
+	// Strip port from RemoteAddr
+	addr := r.RemoteAddr
+	if i := strings.LastIndex(addr, ":"); i != -1 {
+		return addr[:i]
+	}
+	return addr
+}
+
+// ─── JWT ─────────────────────────────────────────────────────────────────────
+
+type adminClaims struct {
+	Username string `json:"username"`
+	jwt.RegisteredClaims
+}
+
+func jwtSecret() []byte {
+	s := os.Getenv("ADMIN_JWT_SECRET")
+	if s == "" {
+		return []byte("INSECURE-default-set-ADMIN_JWT_SECRET")
+	}
+	return []byte(s)
+}
+
+// ─── Handlers ────────────────────────────────────────────────────────────────
+
+func (app *application) AdminLogin(w http.ResponseWriter, r *http.Request) {
+	// Limit body to 1KB to prevent DoS
+	r.Body = http.MaxBytesReader(w, r.Body, 1024)
+
+	ip := clientIP(r)
+	if !loginRL.check(ip) {
+		w.Header().Set("Retry-After", "900")
+		app.errorJSON(w, fmt.Errorf("muitas tentativas. Aguarde 15 minutos"), http.StatusTooManyRequests)
+		return
+	}
+
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := app.readJSON(w, r, &req); err != nil {
+		app.errorJSON(w, fmt.Errorf("dados inválidos"), http.StatusBadRequest)
+		return
+	}
+
+	// Sanitize: reject inputs with control chars or excessive length
+	if len(req.Username) > 64 || len(req.Password) > 128 {
+		app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
+		return
+	}
+
+	adminUser := os.Getenv("ADMIN_USERNAME")
+	adminHash := os.Getenv("ADMIN_PASSWORD_HASH") // bcrypt hash
+
+	if adminUser == "" || adminHash == "" {
+		app.logger.Println("AVISO SEGURANÇA: ADMIN_USERNAME ou ADMIN_PASSWORD_HASH não definidos")
+		app.errorJSON(w, fmt.Errorf("autenticação não configurada no servidor"), http.StatusInternalServerError)
+		return
+	}
+
+	// Always run bcrypt (even on wrong username) to prevent timing attacks
+	hashToCheck := adminHash
+	usernameOK := req.Username == adminUser
+	pwErr := bcrypt.CompareHashAndPassword([]byte(hashToCheck), []byte(req.Password))
+
+	if !usernameOK || pwErr != nil {
+		// Artificial delay discourages automated brute force
+		time.Sleep(600 * time.Millisecond)
+		app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
+		return
+	}
+
+	claims := adminClaims{
+		Username: req.Username,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(jwtExpiry)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "censo-admin",
+			Subject:   "admin",
+		},
+	}
+	tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(jwtSecret())
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro interno ao gerar token"), http.StatusInternalServerError)
+		return
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{
+		Error:   false,
+		Message: "Login realizado com sucesso",
+		Data: map[string]interface{}{
+			"token":      tok,
+			"expires_in": int(jwtExpiry.Seconds()),
+		},
+	})
+}
+
+// requireAdminAuth is a chi middleware that validates the Bearer JWT token.
+func (app *application) requireAdminAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			app.errorJSON(w, fmt.Errorf("token de autenticação necessário"), http.StatusUnauthorized)
+			return
+		}
+
+		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+		claims := &adminClaims{}
+
+		tok, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("algoritmo de assinatura inválido")
+			}
+			return jwtSecret(), nil
+		}, jwt.WithIssuer("censo-admin"), jwt.WithExpirationRequired())
+
+		if err != nil || !tok.Valid {
+			app.errorJSON(w, fmt.Errorf("token inválido ou expirado"), http.StatusUnauthorized)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), contextKeyAdminUser, claims.Username)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+type contextKey string
+
+const contextKeyAdminUser contextKey = "admin_username"
+
+// ─── Dashboard data types ─────────────────────────────────────────────────────
+
+type DashboardStats struct {
+	TotalSchools      int              `json:"total_schools"`
+	CompletedCensuses int              `json:"completed_censuses"`
+	DraftCensuses     int              `json:"draft_censuses"`
+	PendingSync       int              `json:"pending_sync"`
+	ByDre             []DreStats       `json:"by_dre"`
+	Recent            []CensusRow      `json:"recent"`
+}
+
+type DreStats struct {
+	Dre       string `json:"dre"`
+	Total     int    `json:"total"`
+	Completed int    `json:"completed"`
+	Draft     int    `json:"draft"`
+}
+
+type CensusRow struct {
+	CensusID   int       `json:"census_id"`
+	SchoolID   int       `json:"school_id"`
+	Nome       string    `json:"nome_escola"`
+	INEP       string    `json:"codigo_inep"`
+	Municipio  string    `json:"municipio"`
+	Dre        string    `json:"dre"`
+	Year       int       `json:"year"`
+	Status     string    `json:"status"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	Synced     bool      `json:"synced"`
+}
+
+// ─── AdminDashboard ───────────────────────────────────────────────────────────
+
+func (app *application) AdminDashboard(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	db := app.models.Schools.DB // same *sql.DB for both models
+
+	var s DashboardStats
+
+	// Counts — single query avoids multiple round-trips
+	err := db.QueryRowContext(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM schools),
+			COUNT(*) FILTER (WHERE cr.status = 'completed'),
+			COUNT(*) FILTER (WHERE cr.status = 'draft'),
+			COUNT(*) FILTER (WHERE cr.status = 'completed' AND cr.sheet_synced_at IS NULL)
+		FROM census_responses cr`).Scan(
+		&s.TotalSchools, &s.CompletedCensuses, &s.DraftCensuses, &s.PendingSync)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao buscar totais"), http.StatusInternalServerError)
+		return
+	}
+
+	// By DRE — parameterized, no interpolation
+	rows, err := db.QueryContext(ctx, `
+		SELECT
+			s.dre,
+			COUNT(DISTINCT s.id)                                              AS total,
+			COUNT(DISTINCT s.id) FILTER (WHERE cr.status = 'completed')      AS completed,
+			COUNT(DISTINCT s.id) FILTER (WHERE cr.status = 'draft')          AS draft
+		FROM schools s
+		LEFT JOIN census_responses cr ON cr.school_id = s.id
+		GROUP BY s.dre
+		ORDER BY s.dre`)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao buscar por DRE"), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var d DreStats
+		if err := rows.Scan(&d.Dre, &d.Total, &d.Completed, &d.Draft); err != nil {
+			app.errorJSON(w, err, http.StatusInternalServerError)
+			return
+		}
+		s.ByDre = append(s.ByDre, d)
+	}
+
+	// Recent 50 census submissions
+	rows2, err := db.QueryContext(ctx, `
+		SELECT
+			cr.id, cr.school_id, s.nome_escola, s.codigo_inep, s.municipio, s.dre,
+			cr.year, cr.status, cr.updated_at,
+			(cr.sheet_synced_at IS NOT NULL)
+		FROM census_responses cr
+		JOIN schools s ON s.id = cr.school_id
+		ORDER BY cr.updated_at DESC
+		LIMIT 50`)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao buscar censos recentes"), http.StatusInternalServerError)
+		return
+	}
+	defer rows2.Close()
+	for rows2.Next() {
+		var c CensusRow
+		if err := rows2.Scan(&c.CensusID, &c.SchoolID, &c.Nome, &c.INEP, &c.Municipio,
+			&c.Dre, &c.Year, &c.Status, &c.UpdatedAt, &c.Synced); err != nil {
+			app.errorJSON(w, err, http.StatusInternalServerError)
+			return
+		}
+		s.Recent = append(s.Recent, c)
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: s})
+}
+
+// AdminGetCensus returns all census entries with optional status/DRE filters.
+// All filtering is done via parameterized queries — no string interpolation.
+func (app *application) AdminGetCensus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	db := app.models.Schools.DB
+
+	statusFilter := r.URL.Query().Get("status") // "completed" | "draft" | ""
+	dreFilter := r.URL.Query().Get("dre")        // DRE name or ""
+
+	// $1 and $2 are safe parameterized filters; empty string matches all via OR trick
+	rows, err := db.QueryContext(ctx, `
+		SELECT
+			cr.id, cr.school_id, s.nome_escola, s.codigo_inep, s.municipio, s.dre,
+			cr.year, cr.status, cr.updated_at,
+			(cr.sheet_synced_at IS NOT NULL)
+		FROM census_responses cr
+		JOIN schools s ON s.id = cr.school_id
+		WHERE ($1 = '' OR cr.status = $1)
+		  AND ($2 = '' OR s.dre = $2)
+		ORDER BY cr.updated_at DESC`,
+		statusFilter, dreFilter)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao listar censos"), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var results []CensusRow
+	for rows.Next() {
+		var c CensusRow
+		if err := rows.Scan(&c.CensusID, &c.SchoolID, &c.Nome, &c.INEP, &c.Municipio,
+			&c.Dre, &c.Year, &c.Status, &c.UpdatedAt, &c.Synced); err != nil {
+			app.errorJSON(w, err, http.StatusInternalServerError)
+			return
+		}
+		results = append(results, c)
+	}
+	if results == nil {
+		results = []CensusRow{}
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: results})
+}

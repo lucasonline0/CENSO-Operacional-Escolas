@@ -217,6 +217,7 @@ func (app *application) routes() http.Handler {
 			protected.Use(app.requireAdminAuth)
 			protected.Get("/admin/dashboard", app.AdminDashboard)
 			protected.Get("/admin/census", app.AdminGetCensus)
+			protected.Get("/admin/census/{id}", app.AdminGetCensusByID)
 			protected.Post("/admin/sync-sheets", app.AdminSyncSheets)
 		})
 	})

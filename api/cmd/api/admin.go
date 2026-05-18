@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -333,4 +336,52 @@ func (app *application) AdminGetCensus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: results})
+}
+
+// CensusFullRecord representa a resposta completa de um censo, incluindo o JSON bruto.
+type CensusFullRecord struct {
+	CensusID  int             `json:"census_id"`
+	SchoolID  int             `json:"school_id"`
+	Nome      string          `json:"nome_escola"`
+	INEP      string          `json:"codigo_inep"`
+	Municipio string          `json:"municipio"`
+	Dre       string          `json:"dre"`
+	Year      int             `json:"year"`
+	Status    string          `json:"status"`
+	Data      json.RawMessage `json:"data"`
+	CreatedAt time.Time       `json:"created_at"`
+	UpdatedAt time.Time       `json:"updated_at"`
+	Synced    bool            `json:"synced"`
+}
+
+// AdminGetCensusByID retorna o JSON completo de uma resposta de censo específica.
+// Usado pelo botão "Ver JSON" no painel admin.
+func (app *application) AdminGetCensusByID(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		app.errorJSON(w, fmt.Errorf("id inválido"), http.StatusBadRequest)
+		return
+	}
+
+	var c CensusFullRecord
+	var rawData []byte
+
+	err = app.models.Schools.DB.QueryRowContext(r.Context(), `
+		SELECT cr.id, cr.school_id, s.nome_escola, s.codigo_inep, s.municipio, s.dre,
+		       cr.year, cr.status, cr.data, cr.created_at, cr.updated_at,
+		       (cr.sheet_synced_at IS NOT NULL)
+		FROM census_responses cr
+		JOIN schools s ON s.id = cr.school_id
+		WHERE cr.id = $1`, id).Scan(
+		&c.CensusID, &c.SchoolID, &c.Nome, &c.INEP, &c.Municipio, &c.Dre,
+		&c.Year, &c.Status, &rawData, &c.CreatedAt, &c.UpdatedAt, &c.Synced,
+	)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("censo não encontrado"), http.StatusNotFound)
+		return
+	}
+
+	c.Data = json.RawMessage(rawData)
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: c})
 }

@@ -177,10 +177,8 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 
 	// LÓGICA DE FINALIZAÇÃO: Planilha e Google Drive
 	if req.Status == "completed" {
-		// 1. Enviar para Planilha — apenas se ainda não sincronizado.
-		// Re-submissions com status "completed" não geram linha duplicada na planilha.
-		alreadySynced := existingCenso != nil && existingCenso.SheetSyncedAt != nil
-		if !alreadySynced && app.sheets != nil {
+		// 1. Enviar para Planilha — sempre que status for completed.
+		if app.sheets != nil {
 			// Busca a escola aqui (request context, conexão saudável) para não
 			// depender de DB dentro da goroutine onde a conexão pode estar stale.
 			school, err := app.models.Schools.Get(censo.SchoolID)

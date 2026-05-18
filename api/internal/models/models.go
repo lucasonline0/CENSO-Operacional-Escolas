@@ -203,7 +203,7 @@ func (m *SchoolModel) GetAll() ([]*School, error) {
 	return schools, nil
 }
 
-func (m *CensusModel) Upsert(response CensusResponse) error {
+func (m *CensusModel) Upsert(response *CensusResponse) error {
 	// O merge de dados já foi feito na camada de handler (Go), então aqui
 	// sobrescrevemos diretamente sem double-merge no SQL.
 	// sheet_synced_at é preservado — não resetamos ao re-salvar.

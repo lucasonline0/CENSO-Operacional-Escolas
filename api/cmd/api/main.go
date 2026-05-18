@@ -141,9 +141,10 @@ func openDB(cfg config) (*sql.DB, error) {
 		return nil, err
 	}
 
-	db.SetMaxOpenConns(150)
-	db.SetMaxIdleConns(50)
-	db.SetConnMaxLifetime(time.Hour)
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetConnMaxIdleTime(2 * time.Minute)
 
 	if err = db.Ping(); err != nil {
 		return nil, err

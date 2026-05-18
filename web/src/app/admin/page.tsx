@@ -65,8 +65,6 @@ async function apiFetch<T>(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
-      // Custom header helps detect pre-flight on CORS-restricted APIs
-      "X-Requested-With": "XMLHttpRequest",
       ...(options?.headers ?? {}),
     },
   });
@@ -147,10 +145,7 @@ function LoginForm({ onLogin }: { onLogin: (token: string) => void }) {
     try {
       const res = await fetch(`${API}/v1/admin/login`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Requested-With": "XMLHttpRequest",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: u, password: p }),
       });
 
@@ -302,7 +297,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     try {
       const res = await fetch(`${API}/v1/admin/sync-sheets`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "X-Requested-With": "XMLHttpRequest" },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
       alert(json.message ?? "Sync concluído.");

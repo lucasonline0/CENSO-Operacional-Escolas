@@ -7,11 +7,15 @@ web/.env*.local
 # Build do Go
 api/bin
 api/dist
+api/api
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
+
+# TypeScript build cache
+web/tsconfig.tsbuildinfo
 
 # Variaveis de Ambiente e Logs
 .env

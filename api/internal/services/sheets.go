@@ -454,7 +454,7 @@ func (s *SheetsService) GetSheetMetrics() (*SheetMetrics, error) {
 	}
 
 	// DRE ordenado por escolas desc
-	var dres []DreStat
+	dres := make([]DreStat, 0, len(dreMap))
 	for _, d := range dreMap { dres = append(dres, *d) }
 	sort.Slice(dres, func(i, j int) bool { return dres[i].Escolas > dres[j].Escolas })
 
@@ -526,7 +526,11 @@ func (s *SheetsService) GetIndicadoresMetrics() (*IndicadoresMetrics, error) {
 		return nil, fmt.Errorf("erro ao ler Indicadores_Flags: %v", err)
 	}
 	if len(resp.Values) < 2 {
-		return &IndicadoresMetrics{}, nil
+		return &IndicadoresMetrics{
+			PorFaixaBenef:    []BenefStat{},
+			PorFaixaAbandono: []AbandonoStat{},
+			TopDreAbandono:   []DreAbandonoStat{},
+		}, nil
 	}
 
 	headers := resp.Values[0]
@@ -605,7 +609,7 @@ func (s *SheetsService) GetIndicadoresMetrics() (*IndicadoresMetrics, error) {
 	}
 
 	// Top 10 DREs por taxa média de abandono
-	var dreStats []DreAbandonoStat
+	dreStats := make([]DreAbandonoStat, 0)
 	for dre, taxas := range dreAbandono {
 		if dre == "" || len(taxas) == 0 { continue }
 		sum := 0.0

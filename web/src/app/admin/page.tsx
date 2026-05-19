@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
-  Building2, CheckCircle2, FileText, RefreshCw, LogOut, Search,
+  Building2, CheckCircle2, FileText, LogOut, Search,
   Eye, X, LayoutDashboard, Database, MapPinned, Lock, User as UserIcon,
   AlertCircle, Loader2, Copy, Download, Filter, CloudUpload, Clock,
-  TrendingUp, Users, GraduationCap, BarChart2,
+  TrendingUp, Users, GraduationCap, BarChart2, Activity, AlertTriangle,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -27,6 +27,15 @@ interface SheetMetrics {
   total_escolas: number; total_alunos: number; total_alunos_pcd: number;
   media_alunos_por_escola: number;
   por_zona: ZonaStat[]; por_porte: PorteStat[]; por_dre: DreSheetsStats[];
+}
+interface BenefStat     { faixa: string; count: number; }
+interface AbandonoStat  { faixa: string; count: number; }
+interface DreAbandono   { dre: string; media: number; count: number; }
+interface IndicadoresMetrics {
+  escolas_risco_fluxo: number;
+  por_faixa_benef:     BenefStat[];
+  por_faixa_abandono:  AbandonoStat[];
+  top_dre_abandono:    DreAbandono[];
 }
 interface CensusFull extends CensusRow { data: unknown; created_at: string; }
 
@@ -128,6 +137,46 @@ function Donut({
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+// ─── Vertical bar chart (estilo Looker Studio) ────────────────────────────────
+
+function VBarChart({
+  rows,
+  color = C.primary,
+  showPct = true,
+}: {
+  rows: { label: string; value: number }[];
+  color?: string;
+  showPct?: boolean;
+}) {
+  const total = rows.reduce((s, r) => s + r.value, 0);
+  const max   = Math.max(...rows.map((r) => r.value), 1);
+  return (
+    <div className="flex items-end justify-around gap-3 w-full h-52 pt-6 relative">
+      {rows.map((r) => {
+        const pct    = total > 0 ? ((r.value / total) * 100).toFixed(1) : "0.0";
+        const height = total > 0 ? (r.value / max) * 100 : 0;
+        return (
+          <div key={r.label} className="flex flex-col items-center gap-1 flex-1 min-w-0">
+            {/* label acima da barra */}
+            <span className="text-xs font-bold tabular-nums" style={{ color }}>
+              {showPct ? `${pct}%` : r.value.toLocaleString("pt-BR")}
+            </span>
+            {/* barra */}
+            <div className="w-full max-w-[56px] flex items-end" style={{ height: "120px" }}>
+              <div
+                className="w-full rounded-t-md transition-all duration-500"
+                style={{ height: `${Math.max(height, 2)}%`, background: color }}
+              />
+            </div>
+            {/* rótulo abaixo */}
+            <span className="text-xs text-slate-500 text-center leading-tight line-clamp-2 w-full">{r.label}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -474,6 +523,147 @@ function PerfilDaRede({ token, onUnauth }: { token: string; onUnauth: () => void
   );
 }
 
+// ─── Perfil dos Alunos e Resultados ──────────────────────────────────────────
+
+function PerfilAlunos({ token, onUnauth }: { token: string; onUnauth: () => void }) {
+  const [metrics, setMetrics] = useState<IndicadoresMetrics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr]         = useState("");
+
+  useEffect(() => {
+    apiFetch<IndicadoresMetrics>("/v1/admin/indicadores-metrics", token)
+      .then(setMetrics)
+      .catch((e) => {
+        if ((e as Error).message === "UNAUTHORIZED") { onUnauth(); return; }
+        setErr((e as Error).message);
+      })
+      .finally(() => setLoading(false));
+  }, [token, onUnauth]);
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-24 text-slate-400">
+      <Loader2 className="animate-spin mr-2" size={22} style={{ color: C.primary }} /> Lendo Indicadores_Flags…
+    </div>
+  );
+  if (err) return (
+    <div className="flex items-start gap-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl px-4 py-3 text-sm">
+      <AlertCircle size={16} /> {err}
+    </div>
+  );
+  if (!metrics) return null;
+
+  const totalBenef   = metrics.por_faixa_benef.reduce((s, r) => s + r.count, 0);
+  const totalAbandono = metrics.por_faixa_abandono.reduce((s, r) => s + r.count, 0);
+
+  return (
+    <div className="space-y-5">
+      {/* Label do subtab — igual Looker Studio */}
+      <div className="bg-orange-50 border border-orange-200 rounded-xl px-5 py-3">
+        <p className="text-sm text-orange-800 italic font-medium">
+          Qual é o perfil socioeconômico dos estudantes e como está a permanência e o fluxo escolar na rede?
+        </p>
+      </div>
+
+      {/* Stat card de risco — big number */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard
+          label="Escolas com Risco de Fluxo"
+          value={metrics.escolas_risco_fluxo}
+          Icon={AlertTriangle}
+          tone="orange"
+          sub="flag ativa de risco"
+        />
+        <StatCard
+          label="Escolas Analisadas (Beneficiários)"
+          value={totalBenef}
+          Icon={Users}
+          tone="blue"
+        />
+        <StatCard
+          label="Escolas Analisadas (Abandono)"
+          value={totalAbandono}
+          Icon={Activity}
+          tone="amber"
+        />
+      </div>
+
+      {/* Linha 1: dois gráficos de barra vertical */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1">
+            Distribuição por Faixa de Beneficiários
+          </h3>
+          <p className="text-xs text-slate-400 mb-4">% escolas por faixa de beneficiários sociais</p>
+          {metrics.por_faixa_benef.some((r) => r.count > 0) ? (
+            <VBarChart
+              rows={metrics.por_faixa_benef.filter((r) => r.count > 0).map((r) => ({
+                label: r.faixa,
+                value: r.count,
+              }))}
+              color={C.primary}
+              showPct={true}
+            />
+          ) : (
+            <p className="text-sm text-slate-400 text-center py-10">Dados não encontrados na planilha.</p>
+          )}
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1">
+            Distribuição da Taxa de Abandono
+          </h3>
+          <p className="text-xs text-slate-400 mb-4">% escolas por faixa de taxa de abandono</p>
+          {metrics.por_faixa_abandono.some((r) => r.count > 0) ? (
+            <VBarChart
+              rows={metrics.por_faixa_abandono.filter((r) => r.count > 0).map((r) => ({
+                label: r.faixa,
+                value: r.count,
+              }))}
+              color={C.primary}
+              showPct={true}
+            />
+          ) : (
+            <p className="text-sm text-slate-400 text-center py-10">Dados não encontrados na planilha.</p>
+          )}
+        </div>
+      </div>
+
+      {/* Linha 2: Top 10 DREs + card risco */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1">
+            Top 10 DREs com maior taxa média de abandono
+          </h3>
+          <p className="text-xs text-slate-400 mb-4">taxa média de abandono (%)</p>
+          {metrics.top_dre_abandono.length > 0 ? (
+            <VBarChart
+              rows={metrics.top_dre_abandono.map((d) => ({
+                label: d.dre,
+                value: d.media,
+              }))}
+              color={C.primary}
+              showPct={false}
+            />
+          ) : (
+            <p className="text-sm text-slate-400 text-center py-10">Dados não encontrados.</p>
+          )}
+        </div>
+
+        {/* Escolas com Risco de Fluxo — big number estilo Looker */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col items-center justify-center text-center">
+          <h3 className="font-semibold text-slate-700 text-sm mb-2">Escolas com Risco de Fluxo</h3>
+          <p className="text-7xl font-bold text-slate-900 tabular-nums my-4">
+            {metrics.escolas_risco_fluxo}
+          </p>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
+            <AlertTriangle size={12} /> flag ativa
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Login ────────────────────────────────────────────────────────────────────
 
 function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
@@ -546,7 +736,7 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
-type Tab = "perfil" | "operacional" | "census" | "dre";
+type Tab = "perfil" | "alunos" | "operacional" | "census" | "dre";
 
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [dbData,       setDbData]       = useState<DashboardData | null>(null);
@@ -606,10 +796,11 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const filteredCensus  = (allCensus       ?? []).filter((r) => !search || match(r, search));
 
   const tabs: { id: Tab; label: string; Icon: React.ComponentType<{ size?: number; strokeWidth?: number }> }[] = [
-    { id: "perfil",      label: "Dimensão e Perfil da Rede", Icon: BarChart2      },
-    { id: "operacional", label: "Operacional",               Icon: LayoutDashboard },
-    { id: "census",      label: "Todos os Censos",           Icon: Database       },
-    { id: "dre",         label: "Por DRE",                   Icon: MapPinned      },
+    { id: "perfil",      label: "Caracterização da Rede",         Icon: BarChart2      },
+    { id: "alunos",      label: "Perfil dos Alunos e Resultados", Icon: Activity       },
+    { id: "operacional", label: "Operacional",                    Icon: LayoutDashboard },
+    { id: "census",      label: "Todos os Censos",                Icon: Database       },
+    { id: "dre",         label: "Por DRE",                        Icon: MapPinned      },
   ];
 
   if (loading) return (
@@ -670,9 +861,14 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
           </div>
         )}
 
-        {/* ── Perfil da Rede (Looker-style) ─────────────────────── */}
+        {/* ── Caracterização da Rede ────────────────────────────── */}
         {tab === "perfil" && (
           <PerfilDaRede token={token} onUnauth={logout} />
+        )}
+
+        {/* ── Perfil dos Alunos e Resultados ───────────────────── */}
+        {tab === "alunos" && (
+          <PerfilAlunos token={token} onUnauth={logout} />
         )}
 
         {/* ── Operacional (DB stats + envios recentes) ───────────── */}

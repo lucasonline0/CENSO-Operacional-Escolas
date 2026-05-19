@@ -469,6 +469,161 @@ func (s *SheetsService) GetSheetMetrics() (*SheetMetrics, error) {
 	}, nil
 }
 
+// ─── Indicadores_Flags metrics ────────────────────────────────────────────────
+
+type BenefStat struct {
+	Faixa string `json:"faixa"`
+	Count int    `json:"count"`
+}
+type AbandonoStat struct {
+	Faixa string  `json:"faixa"`
+	Count int     `json:"count"`
+}
+type DreAbandonoStat struct {
+	Dre   string  `json:"dre"`
+	Media float64 `json:"media"`
+	Count int     `json:"count"`
+}
+type IndicadoresMetrics struct {
+	EscolasRiscoFluxo    int               `json:"escolas_risco_fluxo"`
+	PorFaixaBenef        []BenefStat       `json:"por_faixa_benef"`
+	PorFaixaAbandono     []AbandonoStat    `json:"por_faixa_abandono"`
+	TopDreAbandono       []DreAbandonoStat `json:"top_dre_abandono"`
+}
+
+// findCol retorna o índice (0-based) do primeiro header que contenha algum dos padrões.
+func findCol(headers []interface{}, patterns ...string) int {
+	for _, pat := range patterns {
+		patL := strings.ToLower(strings.TrimSpace(pat))
+		for i, h := range headers {
+			if strings.ToLower(strings.TrimSpace(fmt.Sprint(h))) == patL {
+				return i
+			}
+		}
+	}
+	// segunda passagem: contains
+	for _, pat := range patterns {
+		patL := strings.ToLower(strings.TrimSpace(pat))
+		for i, h := range headers {
+			if strings.Contains(strings.ToLower(fmt.Sprint(h)), patL) {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+var benefOrder = []string{"Até 25%", "26% a 50%", "51% a 75%", "Acima de 75%", "Não informado"}
+var abandonoOrder = []string{"Até 2%", "2% a 5%", "5% a 10%", "Acima de 10%"}
+
+// GetIndicadoresMetrics lê Indicadores_Flags e agrega os dados de perfil dos alunos.
+func (s *SheetsService) GetIndicadoresMetrics() (*IndicadoresMetrics, error) {
+	resp, err := s.srv.Spreadsheets.Values.Get(
+		s.censusSpreadsheetID,
+		"Indicadores_Flags!A1:DZ1023",
+	).Do()
+	if err != nil {
+		return nil, fmt.Errorf("erro ao ler Indicadores_Flags: %v", err)
+	}
+	if len(resp.Values) < 2 {
+		return &IndicadoresMetrics{}, nil
+	}
+
+	headers := resp.Values[0]
+
+	// Localiza colunas por nome (flexível)
+	colDre         := findCol(headers, "dre")
+	colBenef       := findCol(headers, "faixa_beneficiarios", "faixa_benef", "beneficiarios_faixa", "beneficiarios")
+	colFxAbandono  := findCol(headers, "faixa_abandono", "abandono_faixa")
+	colTxAbandono  := findCol(headers, "taxa_abandono", "tx_abandono", "abandono")
+	colRiscoFluxo  := findCol(headers, "flag_risco_fluxo", "risco_fluxo", "flag_fluxo", "risco_de_fluxo")
+
+	benefCount    := map[string]int{}
+	abandonoCount := map[string]int{}
+	dreAbandono   := map[string][]float64{} // dre → lista de taxas
+	riscoFluxo    := 0
+
+	for _, row := range resp.Values[1:] {
+		if len(row) == 0 { continue }
+
+		dre := ""
+		if colDre >= 0 && colDre < len(row) { dre = strings.TrimSpace(fmt.Sprint(row[colDre])) }
+
+		// Faixa Beneficiários
+		if colBenef >= 0 && colBenef < len(row) {
+			v := strings.TrimSpace(fmt.Sprint(row[colBenef]))
+			if v == "" || v == "0" || strings.EqualFold(v, "não informado") {
+				v = "Não informado"
+			}
+			benefCount[v]++
+		}
+
+		// Faixa / Taxa de Abandono
+		fxAbandono := ""
+		if colFxAbandono >= 0 && colFxAbandono < len(row) {
+			fxAbandono = strings.TrimSpace(fmt.Sprint(row[colFxAbandono]))
+		}
+		if fxAbandono != "" {
+			abandonoCount[fxAbandono]++
+		}
+
+		// Taxa abandono numérica para média por DRE
+		if colTxAbandono >= 0 && colTxAbandono < len(row) && dre != "" {
+			raw := strings.TrimSpace(fmt.Sprint(row[colTxAbandono]))
+			raw = strings.ReplaceAll(raw, ",", ".")
+			raw = strings.ReplaceAll(raw, "%", "")
+			if f, err := strconv.ParseFloat(raw, 64); err == nil {
+				dreAbandono[dre] = append(dreAbandono[dre], f)
+			}
+		}
+
+		// Risco de Fluxo
+		if colRiscoFluxo >= 0 && colRiscoFluxo < len(row) {
+			v := strings.TrimSpace(fmt.Sprint(row[colRiscoFluxo]))
+			if v == "1" || strings.EqualFold(v, "sim") || strings.EqualFold(v, "true") {
+				riscoFluxo++
+			}
+		}
+	}
+
+	// Ordena faixas de beneficiários
+	var benefStats []BenefStat
+	for _, f := range benefOrder {
+		benefStats = append(benefStats, BenefStat{Faixa: f, Count: benefCount[f]})
+	}
+	// Adiciona faixas não previstas
+	for f, c := range benefCount {
+		known := false
+		for _, o := range benefOrder { if o == f { known = true; break } }
+		if !known { benefStats = append(benefStats, BenefStat{Faixa: f, Count: c}) }
+	}
+
+	// Ordena faixas de abandono
+	var abandonoStats []AbandonoStat
+	for _, f := range abandonoOrder {
+		abandonoStats = append(abandonoStats, AbandonoStat{Faixa: f, Count: abandonoCount[f]})
+	}
+
+	// Top 10 DREs por taxa média de abandono
+	var dreStats []DreAbandonoStat
+	for dre, taxas := range dreAbandono {
+		if dre == "" || len(taxas) == 0 { continue }
+		sum := 0.0
+		for _, t := range taxas { sum += t }
+		media := math.Round((sum/float64(len(taxas)))*100) / 100
+		dreStats = append(dreStats, DreAbandonoStat{Dre: dre, Media: media, Count: len(taxas)})
+	}
+	sort.Slice(dreStats, func(i, j int) bool { return dreStats[i].Media > dreStats[j].Media })
+	if len(dreStats) > 10 { dreStats = dreStats[:10] }
+
+	return &IndicadoresMetrics{
+		EscolasRiscoFluxo: riscoFluxo,
+		PorFaixaBenef:     benefStats,
+		PorFaixaAbandono:  abandonoStats,
+		TopDreAbandono:    dreStats,
+	}, nil
+}
+
 func (s *SheetsService) ensureAndAppendDeficit(sheetTitle string, questionText string, value interface{}, school models.School) error {
 	spreadsheet, err := s.srv.Spreadsheets.Get(s.censusSpreadsheetID).Do()
 	if err != nil {

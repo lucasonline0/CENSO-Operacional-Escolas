@@ -368,6 +368,20 @@ func (app *application) AdminSheetMetrics(w http.ResponseWriter, r *http.Request
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: metrics})
 }
 
+// AdminIndicadoresMetrics retorna métricas de perfil dos alunos da aba Indicadores_Flags.
+func (app *application) AdminIndicadoresMetrics(w http.ResponseWriter, r *http.Request) {
+	if app.sheets == nil {
+		app.errorJSON(w, fmt.Errorf("serviço de planilhas não configurado"), http.StatusServiceUnavailable)
+		return
+	}
+	metrics, err := app.sheets.GetIndicadoresMetrics()
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao ler Indicadores_Flags: %v", err), http.StatusInternalServerError)
+		return
+	}
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: metrics})
+}
+
 // AdminGetCensusByID retorna o JSON completo de uma resposta de censo específica.
 // Usado pelo botão "Ver JSON" no painel admin.
 func (app *application) AdminGetCensusByID(w http.ResponseWriter, r *http.Request) {

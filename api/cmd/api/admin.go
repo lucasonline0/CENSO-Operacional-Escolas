@@ -354,6 +354,20 @@ type CensusFullRecord struct {
 	Synced    bool            `json:"synced"`
 }
 
+// AdminSheetMetrics retorna os indicadores calculados a partir da planilha Base_dados.
+func (app *application) AdminSheetMetrics(w http.ResponseWriter, r *http.Request) {
+	if app.sheets == nil {
+		app.errorJSON(w, fmt.Errorf("serviço de planilhas não configurado"), http.StatusServiceUnavailable)
+		return
+	}
+	metrics, err := app.sheets.GetSheetMetrics()
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao ler planilha: %v", err), http.StatusInternalServerError)
+		return
+	}
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: metrics})
+}
+
 // AdminGetCensusByID retorna o JSON completo de uma resposta de censo específica.
 // Usado pelo botão "Ver JSON" no painel admin.
 func (app *application) AdminGetCensusByID(w http.ResponseWriter, r *http.Request) {

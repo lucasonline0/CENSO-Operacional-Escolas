@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
@@ -287,6 +289,184 @@ func (s *SheetsService) AppendCenso(censo models.CensusResponse, school models.S
 	}
 
 	return nil
+}
+
+// ─── Dashboard metrics ────────────────────────────────────────────────────────
+
+// Colunas em Base_dados (0-based, mesma ordem do AppendCenso):
+// 0:NomeDiretor 1:Matricula 2:Contato 3:DRE 4:Nome 5:INEP 6:CNPJ
+// 7:Endereco 8:Telefone 9:Municipio 10:CEP 11:Zona 12:Turnos
+// 13:tipo_predio 14:possui_anexos 15:qtd_anexos 16:tipo_predio_anexo
+// 17:etapas_ofertadas 18:modalidades_ofertadas 19:qtd_salas_aula
+// 20:turmas_manha 21:turmas_tarde 22:turmas_noite 23:turmas_integral
+// 24:total_alunos 25:alunos_pcd 26:alunos_rural 27:alunos_urbana
+
+const (
+	colDre       = 3
+	colNome      = 4
+	colINEP      = 5
+	colZona      = 11
+	colEtapas    = 17
+	colModalidades = 18
+	colSalas     = 19
+	colTurnosManha = 20
+	colTurnosTarde = 21
+	colTurnosNoite = 22
+	colTurnosIntegral = 23
+	colTotalAlunos = 24
+	colAlunosPCD = 25
+)
+
+// PorteLabel categoriza a escola pelo número de alunos, igual ao Looker Studio.
+func PorteLabel(alunos int) string {
+	switch {
+	case alunos <= 50:   return "0–50"
+	case alunos <= 150:  return "50–150"
+	case alunos <= 300:  return "150–300"
+	case alunos <= 500:  return "300–500"
+	case alunos <= 1000: return "500–1.000"
+	default:             return "1.000+"
+	}
+}
+
+// PorteOrder define a ordem de exibição dos grupos de porte.
+var PorteOrder = []string{"0–50", "50–150", "150–300", "300–500", "500–1.000", "1.000+"}
+
+type ZonaStat struct {
+	Zona  string `json:"zona"`
+	Count int    `json:"count"`
+}
+type PorteStat struct {
+	Porte  string `json:"porte"`
+	Count  int    `json:"count"`
+	Alunos int    `json:"alunos"`
+}
+type DreStat struct {
+	Dre    string `json:"dre"`
+	Escolas int   `json:"escolas"`
+	Alunos int    `json:"alunos"`
+	Salas  int    `json:"salas"`
+}
+type SheetMetrics struct {
+	TotalEscolas        int         `json:"total_escolas"`
+	TotalAlunos         int         `json:"total_alunos"`
+	TotalAlunosPCD      int         `json:"total_alunos_pcd"`
+	MediaAlunosPorEscola float64    `json:"media_alunos_por_escola"`
+	PorZona             []ZonaStat  `json:"por_zona"`
+	PorPorte            []PorteStat `json:"por_porte"`
+	PorDre              []DreStat   `json:"por_dre"`
+}
+
+func toInt(v interface{}) int {
+	if v == nil { return 0 }
+	s := strings.TrimSpace(fmt.Sprint(v))
+	if s == "" { return 0 }
+	// Remove pontos de milhar que podem vir do Sheets
+	s = strings.ReplaceAll(s, ".", "")
+	s = strings.ReplaceAll(s, ",", "")
+	n, _ := strconv.Atoi(s)
+	return n
+}
+
+func cell(row []interface{}, idx int) string {
+	if idx >= len(row) { return "" }
+	if row[idx] == nil { return "" }
+	return strings.TrimSpace(fmt.Sprint(row[idx]))
+}
+
+// GetSheetMetrics lê Base_dados e devolve os indicadores agregados para o dashboard.
+func (s *SheetsService) GetSheetMetrics() (*SheetMetrics, error) {
+	resp, err := s.srv.Spreadsheets.Values.Get(
+		s.censusSpreadsheetID,
+		"Base_dados!A:AB",
+	).Do()
+	if err != nil {
+		return nil, fmt.Errorf("erro ao ler Base_dados: %v", err)
+	}
+
+	zonaCount := map[string]int{}
+	porteSchools := map[string]int{}
+	porteAlunos  := map[string]int{}
+	dreMap       := map[string]*DreStat{}
+
+	var totalAlunos, totalPCD, escolas int
+
+	for i, row := range resp.Values {
+		// Pula header se a primeira linha tiver texto no campo INEP
+		if i == 0 {
+			inep := cell(row, colINEP)
+			if _, err := strconv.Atoi(inep); err != nil {
+				continue // é header
+			}
+		}
+		if len(row) <= colINEP { continue }
+		if cell(row, colINEP) == "" { continue }
+
+		dre  := cell(row, colDre)
+		zona := cell(row, colZona)
+		alunos := toInt(cell(row, colTotalAlunos))
+		salas  := toInt(cell(row, colSalas))
+		pcd    := toInt(cell(row, colAlunosPCD))
+
+		if zona == "" { zona = "Não informado" }
+		porte := PorteLabel(alunos)
+
+		escolas++
+		totalAlunos += alunos
+		totalPCD    += pcd
+		zonaCount[zona]++
+		porteSchools[porte]++
+		porteAlunos[porte] += alunos
+
+		if dre != "" {
+			if _, ok := dreMap[dre]; !ok {
+				dreMap[dre] = &DreStat{Dre: dre}
+			}
+			dreMap[dre].Escolas++
+			dreMap[dre].Alunos += alunos
+			dreMap[dre].Salas  += salas
+		}
+	}
+
+	media := 0.0
+	if escolas > 0 {
+		media = math.Round(float64(totalAlunos)/float64(escolas)*10) / 10
+	}
+
+	// Zonas
+	zonaOrder := []string{"Urbana", "Rural", "Ribeirinha", "Não informado"}
+	var zonas []ZonaStat
+	for _, z := range zonaOrder {
+		if c, ok := zonaCount[z]; ok {
+			zonas = append(zonas, ZonaStat{Zona: z, Count: c})
+		}
+	}
+	for z, c := range zonaCount {
+		found := false
+		for _, zo := range zonaOrder { if zo == z { found = true; break } }
+		if !found { zonas = append(zonas, ZonaStat{Zona: z, Count: c}) }
+	}
+
+	// Porte (ordenado)
+	var portes []PorteStat
+	for _, p := range PorteOrder {
+		portes = append(portes, PorteStat{Porte: p, Count: porteSchools[p], Alunos: porteAlunos[p]})
+	}
+
+	// DRE ordenado por escolas desc
+	var dres []DreStat
+	for _, d := range dreMap { dres = append(dres, *d) }
+	sort.Slice(dres, func(i, j int) bool { return dres[i].Escolas > dres[j].Escolas })
+
+	return &SheetMetrics{
+		TotalEscolas:         escolas,
+		TotalAlunos:          totalAlunos,
+		TotalAlunosPCD:       totalPCD,
+		MediaAlunosPorEscola: media,
+		PorZona:              zonas,
+		PorPorte:             portes,
+		PorDre:               dres,
+	}, nil
 }
 
 func (s *SheetsService) ensureAndAppendDeficit(sheetTitle string, questionText string, value interface{}, school models.School) error {

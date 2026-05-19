@@ -225,7 +225,10 @@ func (app *application) AdminDashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	db := app.models.Schools.DB // same *sql.DB for both models
 
-	var s DashboardStats
+	s := DashboardStats{
+		ByDre:  []DreStats{},
+		Recent: []CensusRow{},
+	}
 
 	// Counts — single query avoids multiple round-trips
 	err := db.QueryRowContext(ctx, `

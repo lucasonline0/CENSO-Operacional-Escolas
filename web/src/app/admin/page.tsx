@@ -348,8 +348,9 @@ function JsonModal({ censusId, token, onClose }: { censusId: number; token: stri
 
 // ─── Census table ─────────────────────────────────────────────────────────────
 
-function CensusTable({ rows, onView, formatDate }: { rows: CensusRow[]; onView: (id: number) => void; formatDate: (s: string) => string }) {
-  if (!rows.length) return (
+function CensusTable({ rows, onView, formatDate }: { rows: CensusRow[] | null; onView: (id: number) => void; formatDate: (s: string) => string }) {
+  const safeRows = rows ?? [];
+  if (!safeRows.length) return (
     <div className="bg-white rounded-2xl border border-slate-200 py-14 text-center text-slate-400 text-sm shadow-sm">
       <Database size={28} className="mx-auto mb-2 opacity-40" /> Nenhum registro encontrado.
     </div>
@@ -365,7 +366,7 @@ function CensusTable({ rows, onView, formatDate }: { rows: CensusRow[]; onView: 
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
+          {safeRows.map((r, i) => (
             <tr key={r.census_id} className={`border-t border-slate-100 ${i%2===0?"bg-white":"bg-slate-50/40"} hover:bg-blue-50/50 transition-colors`}>
               <td className="px-4 py-3 font-medium text-slate-800 max-w-[200px] truncate" title={r.nome_escola}>{r.nome_escola}</td>
               <td className="px-4 py-3 text-slate-500 font-mono text-xs">{r.codigo_inep}</td>
@@ -390,7 +391,7 @@ function CensusTable({ rows, onView, formatDate }: { rows: CensusRow[]; onView: 
           ))}
         </tbody>
       </table>
-      <p className="text-xs text-slate-400 text-right px-4 py-2 border-t border-slate-100">{rows.length} registro(s)</p>
+      <p className="text-xs text-slate-400 text-right px-4 py-2 border-t border-slate-100">{safeRows.length} registro(s)</p>
     </div>
   );
 }
@@ -424,14 +425,18 @@ function PerfilDaRede({ token, onUnauth }: { token: string; onUnauth: () => void
   );
   if (!metrics) return null;
 
-  const porteDonut = metrics.por_porte.map((p, i) => ({
+  const safePorPorte = metrics.por_porte ?? [];
+  const safePorZona  = metrics.por_zona  ?? [];
+  const safePorDre   = metrics.por_dre   ?? [];
+
+  const porteDonut = safePorPorte.map((p, i) => ({
     label: p.porte, value: p.count, color: PORTE_COLORS[i] ?? "#94A3B8",
   }));
-  const zonaDonut = metrics.por_zona.map((z) => ({
+  const zonaDonut = safePorZona.map((z) => ({
     label: z.zona, value: z.count, color: ZONA_COLORS[z.zona] ?? "#94A3B8",
   }));
-  const matriculasBar = metrics.por_porte.map((p) => ({ label: p.porte, value: p.alunos }));
-  const dreBar = metrics.por_dre.slice(0, 15).map((d) => ({ label: d.dre, value: d.escolas }));
+  const matriculasBar = safePorPorte.map((p) => ({ label: p.porte, value: p.alunos }));
+  const dreBar = safePorDre.slice(0, 15).map((d) => ({ label: d.dre, value: d.escolas }));
 
   return (
     <div className="space-y-6">
@@ -503,7 +508,7 @@ function PerfilDaRede({ token, onUnauth }: { token: string; onUnauth: () => void
               </tr>
             </thead>
             <tbody>
-              {metrics.por_dre.map((d, i) => {
+              {safePorDre.map((d, i) => {
                 const media = d.escolas > 0 ? Math.round(d.alunos / d.escolas) : 0;
                 return (
                   <tr key={d.dre} className={i%2===0?"bg-white":"bg-slate-50/50"}>
@@ -552,8 +557,12 @@ function PerfilAlunos({ token, onUnauth }: { token: string; onUnauth: () => void
   );
   if (!metrics) return null;
 
-  const totalBenef   = metrics.por_faixa_benef.reduce((s, r) => s + r.count, 0);
-  const totalAbandono = metrics.por_faixa_abandono.reduce((s, r) => s + r.count, 0);
+  const safeBenef    = metrics.por_faixa_benef    ?? [];
+  const safeAbandono = metrics.por_faixa_abandono ?? [];
+  const safeDreAban  = metrics.top_dre_abandono   ?? [];
+
+  const totalBenef    = safeBenef.reduce((s, r) => s + r.count, 0);
+  const totalAbandono = safeAbandono.reduce((s, r) => s + r.count, 0);
 
   return (
     <div className="space-y-5">
@@ -594,9 +603,9 @@ function PerfilAlunos({ token, onUnauth }: { token: string; onUnauth: () => void
             Distribuição por Faixa de Beneficiários
           </h3>
           <p className="text-xs text-slate-400 mb-4">% escolas por faixa de beneficiários sociais</p>
-          {metrics.por_faixa_benef.some((r) => r.count > 0) ? (
+          {safeBenef.some((r) => r.count > 0) ? (
             <VBarChart
-              rows={metrics.por_faixa_benef.filter((r) => r.count > 0).map((r) => ({
+              rows={safeBenef.filter((r) => r.count > 0).map((r) => ({
                 label: r.faixa,
                 value: r.count,
               }))}
@@ -613,9 +622,9 @@ function PerfilAlunos({ token, onUnauth }: { token: string; onUnauth: () => void
             Distribuição da Taxa de Abandono
           </h3>
           <p className="text-xs text-slate-400 mb-4">% escolas por faixa de taxa de abandono</p>
-          {metrics.por_faixa_abandono.some((r) => r.count > 0) ? (
+          {safeAbandono.some((r) => r.count > 0) ? (
             <VBarChart
-              rows={metrics.por_faixa_abandono.filter((r) => r.count > 0).map((r) => ({
+              rows={safeAbandono.filter((r) => r.count > 0).map((r) => ({
                 label: r.faixa,
                 value: r.count,
               }))}
@@ -635,9 +644,9 @@ function PerfilAlunos({ token, onUnauth }: { token: string; onUnauth: () => void
             Top 10 DREs com maior taxa média de abandono
           </h3>
           <p className="text-xs text-slate-400 mb-4">taxa média de abandono (%)</p>
-          {metrics.top_dre_abandono.length > 0 ? (
+          {safeDreAban.length > 0 ? (
             <VBarChart
-              rows={metrics.top_dre_abandono.map((d) => ({
+              rows={safeDreAban.map((d) => ({
                 label: d.dre,
                 value: d.media,
               }))}

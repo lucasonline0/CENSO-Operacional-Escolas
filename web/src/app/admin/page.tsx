@@ -37,6 +37,19 @@ interface IndicadoresMetrics {
   por_faixa_abandono:  AbandonoStat[];
   top_dre_abandono:    DreAbandono[];
 }
+// ── Fase 1: overview analítico vindo do PostgreSQL (/v1/admin/analytics/overview).
+// Substitui apenas os cards principais; donuts/barras/DRE seguem em sheet-metrics.
+interface AnalyticsZonaStat { zona: string; total: number; }
+interface AnalyticsOverview {
+  total_schools:           number;
+  total_censuses:          number;
+  completed:               number;
+  drafts:                  number;
+  total_alunos:            number;
+  alunos_pcd:              number;
+  media_alunos_por_escola: number;
+  por_zona:                AnalyticsZonaStat[];
+}
 interface CensusFull extends CensusRow { data: unknown; created_at: string; }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -400,22 +413,42 @@ function CensusTable({ rows, onView, formatDate }: { rows: CensusRow[] | null; o
 
 function PerfilDaRede({ token, onUnauth }: { token: string; onUnauth: () => void }) {
   const [metrics, setMetrics] = useState<SheetMetrics | null>(null);
+  // Fase 1: cards principais passam a consumir analytics/overview (PostgreSQL).
+  // O restante da aba continua em sheet-metrics até a Fase 2.
+  const [overview, setOverview]       = useState<AnalyticsOverview | null>(null);
+  const [overviewErr, setOverviewErr] = useState("");
   const [loading, setLoading] = useState(true);
   const [err, setErr]         = useState("");
 
   useEffect(() => {
-    apiFetch<SheetMetrics>("/v1/admin/sheet-metrics", token)
-      .then(setMetrics)
+    let cancelled = false;
+
+    // Carrega os dois endpoints em paralelo. Cada um trata seu próprio erro
+    // para que a UI degrade graciosamente caso um deles falhe.
+    const pSheet = apiFetch<SheetMetrics>("/v1/admin/sheet-metrics", token)
+      .then((m) => { if (!cancelled) setMetrics(m); })
       .catch((e) => {
-        if ((e as Error).message === "UNAUTHORIZED") { onUnauth(); return; }
-        setErr((e as Error).message);
-      })
-      .finally(() => setLoading(false));
+        if ((e as Error).message === "UNAUTHORIZED") { if (!cancelled) onUnauth(); return; }
+        if (!cancelled) setErr((e as Error).message);
+      });
+
+    const pOverview = apiFetch<AnalyticsOverview>("/v1/admin/analytics/overview", token)
+      .then((o) => { if (!cancelled) setOverview(o); })
+      .catch((e) => {
+        if ((e as Error).message === "UNAUTHORIZED") { if (!cancelled) onUnauth(); return; }
+        if (!cancelled) setOverviewErr((e as Error).message);
+      });
+
+    Promise.all([pSheet, pOverview]).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+
+    return () => { cancelled = true; };
   }, [token, onUnauth]);
 
   if (loading) return (
     <div className="flex items-center justify-center py-24 text-slate-400">
-      <Loader2 className="animate-spin mr-2" size={22} style={{ color: C.primary }} /> Lendo planilha…
+      <Loader2 className="animate-spin mr-2" size={22} style={{ color: C.primary }} /> Carregando indicadores…
     </div>
   );
   if (err) return (
@@ -438,14 +471,34 @@ function PerfilDaRede({ token, onUnauth }: { token: string; onUnauth: () => void
   const matriculasBar = safePorPorte.map((p) => ({ label: p.porte, value: p.alunos }));
   const dreBar = safePorDre.slice(0, 15).map((d) => ({ label: d.dre, value: d.escolas }));
 
+  // Fase 1 — fonte dos 4 cards principais.
+  // Preferimos o endpoint analítico (PostgreSQL); se ele falhar ou ainda
+  // não estiver disponível, caímos para os valores vindos da planilha.
+  const useOverview     = overview !== null;
+  const totalEscolas    = useOverview ? overview!.completed                : metrics.total_escolas;
+  const totalAlunos     = useOverview ? Math.round(overview!.total_alunos) : metrics.total_alunos;
+  const mediaAlunos     = useOverview
+    ? Number(overview!.media_alunos_por_escola.toFixed(1)).toLocaleString("pt-BR")
+    : metrics.media_alunos_por_escola.toLocaleString("pt-BR");
+  const totalAlunosPcd  = useOverview ? Math.round(overview!.alunos_pcd)   : metrics.total_alunos_pcd;
+  const cardsSourceSub  = useOverview ? "Censos concluídos · PostgreSQL"   : "Censos concluídos";
+
   return (
     <div className="space-y-6">
-      {/* Stat cards — igual Looker Studio */}
+      {overviewErr && (
+        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+          <AlertCircle size={15} className="shrink-0 mt-0.5" />
+          <span>
+            Indicadores principais via PostgreSQL indisponíveis ({overviewErr}). Exibindo valores da planilha como fallback.
+          </span>
+        </div>
+      )}
+      {/* Stat cards — Fase 1: lêem analytics/overview (PostgreSQL) com fallback p/ sheet-metrics. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total de Escolas" value={metrics.total_escolas} Icon={Building2} tone="blue" sub="Censos concluídos" />
-        <StatCard label="Total de Alunos" value={metrics.total_alunos} Icon={Users} tone="green" />
-        <StatCard label="Média por Escola" value={metrics.media_alunos_por_escola.toLocaleString("pt-BR")} Icon={TrendingUp} tone="amber" sub="alunos/escola" />
-        <StatCard label="Alunos PcD" value={metrics.total_alunos_pcd} Icon={GraduationCap} tone="purple" />
+        <StatCard label="Total de Escolas" value={totalEscolas} Icon={Building2} tone="blue" sub={cardsSourceSub} />
+        <StatCard label="Total de Alunos" value={totalAlunos} Icon={Users} tone="green" />
+        <StatCard label="Média por Escola" value={mediaAlunos} Icon={TrendingUp} tone="amber" sub="alunos/escola" />
+        <StatCard label="Alunos PcD" value={totalAlunosPcd} Icon={GraduationCap} tone="purple" />
       </div>
 
       {/* Linha de donuts — Distribuição por Porte e por Zona */}

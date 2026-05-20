@@ -1,63 +1,29 @@
--- Tabela de Escolas (Identificação e Dados Fixos)
-CREATE TABLE IF NOT EXISTS schools (
-    id SERIAL PRIMARY KEY,
-    nome_escola VARCHAR(255),
-    codigo_inep VARCHAR(20) UNIQUE,
-    municipio VARCHAR(100),
-    dre VARCHAR(100),
-    zona VARCHAR(50),
-    endereco TEXT,
-    
-    -- Campos de Contato e Direção
-    cnpj VARCHAR(30),
-    telefone VARCHAR(50),
-    email VARCHAR(150),
-    cep VARCHAR(20),
-    nome_diretor VARCHAR(150),
-    matricula_diretor VARCHAR(50),
-    contato_diretor VARCHAR(50),
-    
-    -- Campos JSON Armazenados como Texto (Arrays)
-    turnos TEXT,
-    etapas_ofertadas TEXT,
-    modalidades_ofertadas TEXT,
-    
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Tabela de Respostas do Censo (Dados Variáveis)
-CREATE TABLE IF NOT EXISTS census_responses (
-    id SERIAL PRIMARY KEY,
-    school_id INT NOT NULL,
-    year INT NOT NULL,
-    status VARCHAR(50) DEFAULT 'draft',
-    data JSONB, -- Onde ficam todas as respostas do formulário
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    CONSTRAINT fk_school
-      FOREIGN KEY(school_id) 
-      REFERENCES schools(id)
-      ON DELETE CASCADE,
-      
-    sheet_synced_at TIMESTAMP DEFAULT NULL,
-
-    CONSTRAINT unique_school_year
-      UNIQUE (school_id, year)
-);
-
 -- =====================================================================
--- Camada analítica — Fase 1 (espelho de infra/migrations/0001_vw_censo_base.sql)
+-- Migration 0001 — vw_censo_base
 -- =====================================================================
--- View base do dashboard analítico próprio. 1 linha por escola (LEFT JOIN
--- com census_responses). Casts numéricos protegidos por regex para
--- tolerar valores ausentes/vazios/não-numéricos em data JSONB.
--- Para detalhes, ver docs/roadmap-dashboard-proprio.md e
--- docs/dashboard/jsonb-field-inventory.md.
+-- Fase 1 do roadmap do dashboard analítico próprio.
+-- Cria a primeira view fundacional, com 1 linha por (school_id, year)
+-- ou por escola sem censo (LEFT JOIN), expondo as colunas tabulares de
+-- "schools" + os campos básicos extraídos do JSONB em
+-- "census_responses.data".
+--
+-- Casts numéricos são protegidos por regex para tolerar:
+--   - chave ausente             (data ? 'campo' = false)
+--   - valor null no JSON        (data->>'campo' IS NULL)
+--   - string vazia              (data->>'campo' = '')
+--   - valor não-numérico        (qualquer string que não case com regex)
+--
+-- Em todos esses casos o resultado é NULL — nunca quebra.
+--
+-- Aplicação idempotente:
+--   - CREATE OR REPLACE VIEW garante reexecução segura.
+--   - O loader em api/cmd/api/main.go aplica este arquivo no startup.
+--   - Também é replicado em infra/init.sql para ambientes novos.
 -- =====================================================================
 
 CREATE OR REPLACE VIEW vw_censo_base AS
 SELECT
+    -- Identificação (schools) ------------------------------------------
     s.id                                                AS school_id,
     s.codigo_inep,
     s.nome_escola,
@@ -65,6 +31,7 @@ SELECT
     s.municipio,
     s.zona,
 
+    -- Operacional (census_responses) -----------------------------------
     cr.id                                               AS census_id,
     cr.year,
     cr.status,
@@ -72,6 +39,7 @@ SELECT
     cr.updated_at,
     cr.sheet_synced_at,
 
+    -- Quantitativos numéricos extraídos com cast seguro ----------------
     CASE WHEN cr.data->>'total_alunos'       ~ '^-?[0-9]+(\.[0-9]+)?$'
          THEN (cr.data->>'total_alunos')::numeric       END AS total_alunos,
     CASE WHEN cr.data->>'alunos_pcd'         ~ '^-?[0-9]+(\.[0-9]+)?$'
@@ -93,6 +61,7 @@ SELECT
     CASE WHEN cr.data->>'turmas_integral'    ~ '^-?[0-9]+(\.[0-9]+)?$'
          THEN (cr.data->>'turmas_integral')::numeric    END AS turmas_integral,
 
+    -- Categóricos básicos (string vazia ⇒ NULL) ------------------------
     NULLIF(cr.data->>'tipo_predio',           '')       AS tipo_predio,
     NULLIF(cr.data->>'possui_anexos',         '')       AS possui_anexos,
     NULLIF(cr.data->>'situacao_estrutura',    '')       AS situacao_estrutura,

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"censo-api/internal/models"
@@ -95,6 +96,13 @@ func main() {
 		logger.Println("Migração sheet_synced_at OK")
 	}
 
+	// Aplica as migrations idempotentes em infra/migrations/*.sql.
+	// Todas devem usar CREATE OR REPLACE / IF NOT EXISTS e poder rodar
+	// várias vezes sem efeito colateral.
+	if err = applyMigrations(db, logger, cwd); err != nil {
+		logger.Printf("AVISO: applyMigrations: %v", err)
+	}
+
 	// ... (Resto do seu código permanece igual)
 	sheetsService, err := services.NewSheetsService()
 	if err != nil {
@@ -150,6 +158,70 @@ func openDB(cfg config) (*sql.DB, error) {
 		return nil, err
 	}
 	return db, nil
+}
+
+// applyMigrations executa, em ordem alfabética, todos os arquivos .sql
+// em infra/migrations/. Cada arquivo deve ser idempotente
+// (CREATE OR REPLACE VIEW, IF NOT EXISTS, etc.) — não há tabela de
+// controle de versão nesta fase. Erros são apenas logados; o servidor
+// segue subindo para preservar o comportamento atual do startup.
+func applyMigrations(db *sql.DB, logger *log.Logger, cwd string) error {
+	// Tenta primeiro o caminho relativo ao processo (mesmo padrão
+	// adotado para o .env), depois um caminho local como fallback.
+	candidates := []string{
+		filepath.Join(cwd, "..", "infra", "migrations"),
+		filepath.Join(cwd, "infra", "migrations"),
+		"./infra/migrations",
+	}
+
+	var dir string
+	for _, c := range candidates {
+		if info, err := os.Stat(c); err == nil && info.IsDir() {
+			dir = c
+			break
+		}
+	}
+	if dir == "" {
+		logger.Println("applyMigrations: nenhum diretório infra/migrations encontrado, pulando.")
+		return nil
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("ler %s: %w", dir, err)
+	}
+
+	files := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if filepath.Ext(e.Name()) != ".sql" {
+			continue
+		}
+		files = append(files, e.Name())
+	}
+	sort.Strings(files)
+
+	if len(files) == 0 {
+		logger.Printf("applyMigrations: nenhum .sql em %s", dir)
+		return nil
+	}
+
+	for _, name := range files {
+		path := filepath.Join(dir, name)
+		content, err := os.ReadFile(path)
+		if err != nil {
+			logger.Printf("applyMigrations: erro lendo %s: %v", name, err)
+			continue
+		}
+		if _, err := db.Exec(string(content)); err != nil {
+			logger.Printf("applyMigrations: erro aplicando %s: %v", name, err)
+			continue
+		}
+		logger.Printf("applyMigrations: %s aplicada", name)
+	}
+	return nil
 }
 
 func (app *application) sheetSyncRetryJob() {
@@ -221,6 +293,10 @@ func (app *application) routes() http.Handler {
 			protected.Get("/admin/census", app.AdminGetCensus)
 			protected.Get("/admin/census/{id}", app.AdminGetCensusByID)
 			protected.Post("/admin/sync-sheets", app.AdminSyncSheets)
+
+			// Fase 1 — camada analítica baseada em PostgreSQL.
+			// Endpoints adicionais; não substituem sheet-metrics nem indicadores-metrics.
+			protected.Get("/admin/analytics/overview", app.AdminAnalyticsOverview)
 		})
 	})
 

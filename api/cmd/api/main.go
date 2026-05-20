@@ -2,7 +2,9 @@ package main
 
 import (
 	"database/sql"
+	"embed"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -18,6 +20,19 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
 )
+
+// migrationsFS embute, no próprio binário, todos os .sql em
+// api/cmd/api/migrations/. Isso elimina a dependência de um caminho
+// relativo em runtime (problema observado no deploy Railway, onde
+// o working directory do processo não contém o diretório
+// infra/migrations/ que existe no monorepo).
+//
+// A cópia em infra/migrations/ é mantida como referência operacional
+// e fonte de verdade documental — qualquer mudança numa view deve ser
+// refletida nas DUAS pastas.
+//
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
 
 const version = "1.0.0"
 
@@ -96,10 +111,11 @@ func main() {
 		logger.Println("Migração sheet_synced_at OK")
 	}
 
-	// Aplica as migrations idempotentes em infra/migrations/*.sql.
-	// Todas devem usar CREATE OR REPLACE / IF NOT EXISTS e poder rodar
-	// várias vezes sem efeito colateral.
-	if err = applyMigrations(db, logger, cwd); err != nil {
+	// Aplica as migrations idempotentes embarcadas no binário via
+	// go:embed (api/cmd/api/migrations/*.sql). Todas devem usar
+	// CREATE OR REPLACE / IF NOT EXISTS e poder rodar várias vezes
+	// sem efeito colateral.
+	if err = applyMigrations(db, logger); err != nil {
 		logger.Printf("AVISO: applyMigrations: %v", err)
 	}
 
@@ -161,34 +177,21 @@ func openDB(cfg config) (*sql.DB, error) {
 }
 
 // applyMigrations executa, em ordem alfabética, todos os arquivos .sql
-// em infra/migrations/. Cada arquivo deve ser idempotente
-// (CREATE OR REPLACE VIEW, IF NOT EXISTS, etc.) — não há tabela de
-// controle de versão nesta fase. Erros são apenas logados; o servidor
-// segue subindo para preservar o comportamento atual do startup.
-func applyMigrations(db *sql.DB, logger *log.Logger, cwd string) error {
-	// Tenta primeiro o caminho relativo ao processo (mesmo padrão
-	// adotado para o .env), depois um caminho local como fallback.
-	candidates := []string{
-		filepath.Join(cwd, "..", "infra", "migrations"),
-		filepath.Join(cwd, "infra", "migrations"),
-		"./infra/migrations",
-	}
-
-	var dir string
-	for _, c := range candidates {
-		if info, err := os.Stat(c); err == nil && info.IsDir() {
-			dir = c
-			break
-		}
-	}
-	if dir == "" {
-		logger.Println("applyMigrations: nenhum diretório infra/migrations encontrado, pulando.")
-		return nil
-	}
-
-	entries, err := os.ReadDir(dir)
+// embarcados em migrationsFS (api/cmd/api/migrations/*.sql). Cada arquivo
+// deve ser idempotente (CREATE OR REPLACE VIEW, IF NOT EXISTS, etc.) —
+// não há tabela de controle de versão nesta fase.
+//
+// Como o conteúdo está embarcado no binário via go:embed, o resultado é
+// independente do working directory do processo — funciona igual no
+// docker local, no Railway e em qualquer outro ambiente.
+//
+// Erros ao aplicar uma migration individual são logados com detalhe e
+// não derrubam o servidor: o startup segue, e o operador vê no log
+// qual arquivo falhou e por quê.
+func applyMigrations(db *sql.DB, logger *log.Logger) error {
+	entries, err := fs.ReadDir(migrationsFS, "migrations")
 	if err != nil {
-		return fmt.Errorf("ler %s: %w", dir, err)
+		return fmt.Errorf("applyMigrations: ler embed migrations/: %w", err)
 	}
 
 	files := make([]string, 0, len(entries))
@@ -204,22 +207,23 @@ func applyMigrations(db *sql.DB, logger *log.Logger, cwd string) error {
 	sort.Strings(files)
 
 	if len(files) == 0 {
-		logger.Printf("applyMigrations: nenhum .sql em %s", dir)
+		logger.Println("applyMigrations: nenhum .sql embarcado, pulando.")
 		return nil
 	}
 
+	logger.Printf("applyMigrations: %d migration(s) encontrada(s): %v", len(files), files)
+
 	for _, name := range files {
-		path := filepath.Join(dir, name)
-		content, err := os.ReadFile(path)
+		content, err := fs.ReadFile(migrationsFS, "migrations/"+name)
 		if err != nil {
-			logger.Printf("applyMigrations: erro lendo %s: %v", name, err)
+			logger.Printf("applyMigrations: ERRO lendo %s do embed: %v", name, err)
 			continue
 		}
 		if _, err := db.Exec(string(content)); err != nil {
-			logger.Printf("applyMigrations: erro aplicando %s: %v", name, err)
+			logger.Printf("applyMigrations: ERRO aplicando %s: %v", name, err)
 			continue
 		}
-		logger.Printf("applyMigrations: %s aplicada", name)
+		logger.Printf("applyMigrations: %s aplicada com sucesso", name)
 	}
 	return nil
 }

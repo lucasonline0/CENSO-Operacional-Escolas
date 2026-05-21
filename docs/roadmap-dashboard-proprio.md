@@ -129,10 +129,12 @@ Princípios:
 A refatoração é feita por **fases independentes**. Cada fase é entregue como PR pequeno, com paridade de números validada contra a aba correspondente do admin antes da próxima fase começar.
 
 ```txt
-Fase 0  — Inventário do JSONB                     (documentação)
-Fase 1  — View base + endpoint overview           (primeira entrega de código)
-Fase 2  — Caracterização da Rede via PostgreSQL   (substitui sheet-metrics)
-Fase 3  — Perfil dos Alunos via PostgreSQL        (substitui indicadores-metrics)
+Fase 0  — Inventário do JSONB                              (documentação)
+Fase 1  — View base + endpoint overview                    (primeira entrega de código)
+Fase 1B — Critérios de contagem e qualidade dos dados      (documentação)
+Fase 2A — Backend analítico da Caracterização da Rede      (PostgreSQL → endpoints)
+Fase 2B — Migração incremental da UI da Caracterização     (substitui sheet-metrics na UI)
+Fase 3  — Perfil dos Alunos via PostgreSQL                 (substitui indicadores-metrics)
 Fase 4  — Views normalizadas (turnos/etapas/...)
 Fase 5  — Indicadores derivados + flags
 Fase 6  — Demais painéis (gestão, merenda, tecnologia, serviços, infra)
@@ -178,15 +180,54 @@ O Fase 1 é o primeiro incremento prático recomendado: pequeno, seguro e sem ri
 
 **Critérios de aceite Fase 1:** ver seção 9.
 
-### Fase 2 — Caracterização da Rede (substitui `sheet-metrics`)
+### Fase 1B — Critérios de contagem e qualidade dos dados *(somente documentação)*
 
-**Objetivo:** reconstruir todos os gráficos da aba `perfil` a partir do banco.
+**Objetivo:** formalizar a semântica de contagem que o PostgreSQL passou a usar como fonte oficial dos cards principais, antes de avançar para novos endpoints analíticos.
+
+**Contexto:**
+- A Fase 1 já validou que o PostgreSQL é a fonte oficial dos KPIs principais da aba "Caracterização da Rede". O número entregue pela view `vw_censo_base` + `analytics/overview` é tratado como **válido para esta fase**.
+- Durante a validação foram observadas **diferenças entre PostgreSQL e Google Sheets**. Parte vem de preenchimentos repetidos pelo mesmo diretor, parte de correções feitas após sincronização, parte de **casos legítimos de escolas/anexos com o mesmo `codigo_inep`**.
+- A **deduplicação automática não será aplicada** nesta fase. Não vamos "corrigir" silenciosamente o banco; vamos documentar a regra de contagem e como divergências legítimas se manifestam.
+- Os próximos endpoints (Fase 2A em diante) **devem manter os mesmos critérios** de contagem documentados aqui, para evitar números inconsistentes entre cards/abas.
+
+**Entregáveis:**
+- Documento `docs/dashboard/criterios-contagem-e-qualidade-dados.md` com:
+  - distinção entre `school_id`, `codigo_inep`, `census_id` e `status` — qual identificador é canônico para qual recorte;
+  - registro de que existem casos legítimos de mesmo INEP para escola/anexo, e como são (ou não) diferenciados;
+  - queries de diagnóstico para INEP repetido, possíveis respostas duplicadas, escolas sem censo, censos `draft` e censos `completed`;
+  - semântica por indicador (ex.: `total_alunos` ↔ `SUM` somente em `completed` e filtrado por ano corrente);
+  - decisão explícita de **não** aplicar deduplicação automática nesta fase;
+  - lista de divergências conhecidas (PostgreSQL × Sheets) com hipótese de causa.
+- Atualização de `docs/dashboard/validacao-fase-1.md` apontando para o novo documento como referência sobre divergências aceitas.
+
+**Não-objetivos:**
+- Não alterar `vw_censo_base`, endpoints ou UI.
+- Não remover ou alterar registros do banco.
+- Não mudar o critério de sincronização com Sheets.
+
+### Fase 2A — Backend analítico da Caracterização da Rede
+
+**Objetivo:** entregar a camada PostgreSQL que substituirá `sheet-metrics` na aba "Caracterização da Rede", **sem ainda migrar a UI inteira**.
 
 **Entregáveis:**
 - View `vw_censo_enriquecida` derivada de `vw_censo_base`, adicionando `porte_escola`, `porte_escola_cod`, `qtd_turmas_total`, `qtd_salas_nao_climatizadas`, `situacao_climatizacao_salas`.
 - Endpoints `GET /v1/admin/analytics/caracterizacao/perfil` (KPIs + donuts) e `GET /v1/admin/analytics/caracterizacao/dre` (tabela detalhada).
-- Página `/admin` da aba `perfil` totalmente migrada para os novos endpoints.
-- `/v1/admin/sheet-metrics` permanece ativo, mas desconectado da UI; documentado como deprecated com data prevista de remoção.
+- Os endpoints devem respeitar a semântica de contagem registrada em `docs/dashboard/criterios-contagem-e-qualidade-dados.md` (Fase 1B).
+- Documento `docs/dashboard/validacao-fase-2.md` (paridade endpoint-a-endpoint contra `sheet-metrics`).
+- `/v1/admin/sheet-metrics` permanece ativo e segue alimentando a UI nesta fase.
+
+**Não-objetivos:**
+- Não migrar a UI inteira da aba "Caracterização da Rede".
+- Não tocar em `indicadores-metrics`, no formulário, no job de sync ou em `/v1/locations`.
+
+### Fase 2B — Migração incremental da UI da Caracterização da Rede
+
+**Objetivo:** trocar a aba "Caracterização da Rede" para os endpoints da Fase 2A, **uma seção por vez**.
+
+**Entregáveis:**
+- Migração incremental dos donuts, barras e tabela DRE em `web/src/app/admin/page.tsx` para `analytics/caracterizacao/*`.
+- Cada PR substitui no máximo um bloco visual e mantém os demais consumindo `sheet-metrics` até o próximo PR.
+- Ao final: aba `perfil` 100% migrada; `/v1/admin/sheet-metrics` permanece ativo, mas desconectado da UI; documentado como deprecated com data prevista de remoção.
 
 ### Fase 3 — Perfil dos Alunos (substitui `indicadores-metrics`)
 
@@ -241,8 +282,8 @@ Todos protegidos por `requireAdminAuth` (JWT). Todos aceitam, quando aplicável,
 ```txt
 GET /v1/admin/analytics/overview                                  (Fase 1)
 
-GET /v1/admin/analytics/caracterizacao/perfil                     (Fase 2)
-GET /v1/admin/analytics/caracterizacao/dre                        (Fase 2)
+GET /v1/admin/analytics/caracterizacao/perfil                     (Fase 2A)
+GET /v1/admin/analytics/caracterizacao/dre                        (Fase 2A)
 GET /v1/admin/analytics/caracterizacao/oferta-funcionamento       (Fase 4)
 GET /v1/admin/analytics/caracterizacao/infraestrutura-educacional (Fase 4)
 
@@ -326,7 +367,7 @@ LEFT JOIN census_responses cr ON cr.school_id = s.id;
 
 > **Atenção ao cast.** Se algum registro tiver string não-numérica nesses campos, o `::numeric` falha. Antes da migration, validar via `WHERE data->>'campo' !~ '^[0-9]+(\.[0-9]+)?$'` e tratar com `regexp_replace` ou marcação `NULL` explícita. A regra exata será confirmada na Fase 0.
 
-### 7.2 `vw_censo_enriquecida` (Fase 2)
+### 7.2 `vw_censo_enriquecida` (Fase 2A)
 
 Adiciona campos derivados (`porte_escola`, `porte_escola_cod`, `qtd_turmas_total`, `qtd_salas_nao_climatizadas`, `situacao_climatizacao_salas`) — ver guia, seção 7.
 
@@ -371,9 +412,26 @@ Concentra flags, faixas e indicadores por escola — pode começar mínima na Fa
 - [ ] Os mesmos cards na planilha (`sheet-metrics`) ainda funcionam e batem com os novos números (margem ≤ 1% por arredondamento).
 - [ ] PR pequeno (idealmente ≤ 400 linhas líquidas), reversível, sem mexer em `CreateOrUpdateCenso`, `SheetsService` nem no job de retry.
 
-### Fase 2 — Caracterização da Rede
-- [ ] Aba `perfil` 100% migrada para endpoints `analytics/caracterizacao/*`.
-- [ ] Tabela "Detalhamento por DRE" reproduz os mesmos totais que a versão atual (Sheets) escola a escola.
+### Fase 1B — Critérios de contagem e qualidade dos dados
+- [ ] Documento `docs/dashboard/criterios-contagem-e-qualidade-dados.md` publicado.
+- [ ] Distinção `school_id` × `codigo_inep` × `census_id` × `status` documentada com exemplos.
+- [ ] Queries de diagnóstico (INEP repetido, possíveis duplicidades, escolas sem censo, contagens por `status`) registradas e reproduzíveis.
+- [ ] Decisão registrada de **não** aplicar deduplicação automática nesta fase.
+- [ ] Lista de divergências conhecidas (PostgreSQL × Sheets) com hipótese de causa.
+- [ ] `docs/dashboard/validacao-fase-1.md` aponta para o novo documento como referência sobre divergências aceitas.
+
+### Fase 2A — Backend analítico da Caracterização da Rede
+- [ ] Migration `0002_vw_censo_enriquecida.sql` aplicada (idempotente, espelhada em `infra/init.sql` quando aplicável).
+- [ ] Endpoint `GET /v1/admin/analytics/caracterizacao/perfil` retorna 200 com KPIs + donuts + barras por porte.
+- [ ] Endpoint `GET /v1/admin/analytics/caracterizacao/dre` retorna 200 com a tabela detalhada por DRE.
+- [ ] Endpoints respeitam a semântica de contagem do documento de critérios (Fase 1B).
+- [ ] Documento `docs/dashboard/validacao-fase-2.md` criado com tabela de paridade endpoint × `sheet-metrics`.
+- [ ] UI da aba `perfil` **ainda não migrada** (isso é Fase 2B).
+- [ ] `sheet-metrics`, `indicadores-metrics`, job de sync e `/v1/locations` intactos.
+
+### Fase 2B — Migração incremental da UI da Caracterização da Rede
+- [ ] Aba `perfil` 100% migrada para endpoints `analytics/caracterizacao/*`, em PRs incrementais (uma seção por vez).
+- [ ] Tabela "Detalhamento por DRE" reproduz os mesmos totais que a versão atual (Sheets) escola a escola, conforme critérios da Fase 1B.
 - [ ] `sheet-metrics` rotulado como deprecated em código (comentário) e em changelog interno.
 
 ### Fase 3 — Perfil dos Alunos

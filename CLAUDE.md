@@ -137,6 +137,15 @@ Do **not** remove or disable any of the following:
 - Do **not** remove existing endpoints without a deprecation phase.
 - Prefer **small, reversible PRs** with a paired validation note (numbers compared against the current Sheets-backed view).
 
+### Parallel work after Phase 1
+
+After Phase 1 landed, the track is intentionally split into two frentes that can progress in parallel without scope conflict:
+
+- **Frente A — documentação/qualidade de dados:** formaliza critérios de contagem, INEP repetido e divergências PostgreSQL × Sheets. Toca apenas em `docs/`.
+- **Frente B — backend analítico:** entrega `vw_censo_enriquecida` e os endpoints `/v1/admin/analytics/caracterizacao/*` (Fase 2A), **sem migrar a UI inteira**.
+
+See `docs/dashboard/plano-trabalho-paralelo.md` for what each frente may and may not touch.
+
 ### Analytical migrations
 
 - Place new SQL in `infra/migrations/NNNN_<descricao>.sql`. A loader in `main.go` (`applyMigrations`) runs every `.sql` in that directory at startup, in alphabetical order.
@@ -160,4 +169,5 @@ When working on this track, consult (in this order):
 - `docs/checklist-dashboard-proprio.md` — executable checklist per phase.
 - `docs/dashboard/jsonb-field-inventory.md` — what is actually stored in `census_responses.data`.
 - `docs/dashboard/validacao-fase-1.md` — Phase 1 parity template (filled in homologação).
+- `docs/dashboard/plano-trabalho-paralelo.md` — escopo das frentes A (docs/qualidade) e B (backend Fase 2A).
 - `docs/guia_views_analiticas_baseado_repositorio_censo.md` — methodological reference for the full set of views.

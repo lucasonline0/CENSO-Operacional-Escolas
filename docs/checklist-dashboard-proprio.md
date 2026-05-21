@@ -107,23 +107,88 @@
 
 ---
 
-## Fase 2 — Caracterização da Rede via PostgreSQL
+## Fase 1B — Critérios de contagem e qualidade dos dados *(somente documentação)*
 
-### 2.1 View enriquecida
-- [ ] Migration `0002_vw_censo_enriquecida.sql` com `porte_escola`, `porte_escola_cod`, `qtd_turmas_total`, `qtd_salas_nao_climatizadas`, `situacao_climatizacao_salas`.
+> **Pré-requisito:** Fase 1 já validada em homologação. O quantitativo PostgreSQL atual é considerado **válido para a Fase 1**; esta fase formaliza por escrito as regras que sustentam essa decisão e que os próximos endpoints (Fase 2A em diante) deverão seguir.
+
+### 1B.1 Distinção entre identificadores e status
+- [ ] Documentar a diferença entre `school_id` (PK em `schools`), `codigo_inep` (8 dígitos, "único" mas com casos legítimos de repetição), `census_id` (PK em `census_responses`) e `status` (`draft` vs. `completed`).
+- [ ] Registrar qual identificador é canônico para qual recorte (contagem de escolas, contagem de censos, soma de alunos).
+
+### 1B.2 Casos legítimos de mesmo INEP
+- [ ] Registrar que existem casos legítimos de escolas/anexos compartilhando o mesmo `codigo_inep` no contexto do SEDUC-PA.
+- [ ] Decidir e documentar como esses casos aparecem hoje (uma linha em `schools` por unidade administrativa? múltiplas linhas?), sem alterar o banco.
+
+### 1B.3 Queries de diagnóstico (somente leitura)
+- [ ] Query: INEPs repetidos em `schools` (com `dre`, `municipio`, `nome_escola`).
+- [ ] Query: possíveis respostas duplicadas em `census_responses` (mesma escola, mesmo ano, múltiplas atualizações; mesma escola entre anos).
+- [ ] Query: escolas sem nenhum censo (`schools` sem linha em `census_responses`).
+- [ ] Query: censos `draft` × `completed` por DRE.
+- [ ] Query: divergências PostgreSQL × Sheets para os indicadores do `analytics/overview` (referência cruzada).
+
+### 1B.4 Semântica por indicador
+- [ ] Para cada indicador hoje em `analytics/overview`, registrar a fórmula em SQL e a justificativa:
+  - `total_schools` / `completed` / `drafts` — `COUNT(DISTINCT school_id) FILTER (WHERE status = ...)`;
+  - `total_alunos` / `alunos_pcd` — `SUM(... FILTER (WHERE status = 'completed' AND year = ano_corrente))`;
+  - `media_alunos_por_escola` — `AVG(... FILTER (WHERE status = 'completed' AND total_alunos IS NOT NULL AND year = ano_corrente))`;
+  - distribuição por zona — `COUNT(DISTINCT school_id) GROUP BY zona`.
+- [ ] Registrar que os endpoints da Fase 2A devem reusar exatamente esses recortes.
+
+### 1B.5 Decisão sobre deduplicação
+- [ ] Registrar explicitamente: **nesta fase, não haverá deduplicação automática**. Divergências serão documentadas, não corrigidas silenciosamente.
+- [ ] Listar critérios que disparariam uma futura proposta de deduplicação (volume, impacto em KPI, autorização do produto).
+
+### 1B.6 Entregável
+- [ ] Criar `docs/dashboard/criterios-contagem-e-qualidade-dados.md` com tudo acima.
+- [ ] Atualizar `docs/dashboard/validacao-fase-1.md` apontando para o novo documento como referência sobre divergências aceitas.
+
+### 1B.7 Aceite
+- [ ] Documento revisado por pelo menos 1 outra pessoa.
+- [ ] Lista de divergências conhecidas (PostgreSQL × Sheets) anexada, com hipótese de causa para cada uma.
+- [ ] Nenhuma alteração feita em `api/`, `web/`, `infra/migrations/` ou endpoints existentes.
+
+---
+
+## Fase 2A — Backend analítico da Caracterização da Rede
+
+> **Foco:** entregar a camada PostgreSQL que substituirá `sheet-metrics`, **sem migrar a UI inteira**. A migração visual fica para a Fase 2B.
+
+### 2A.1 View enriquecida
+- [ ] Migration `infra/migrations/0002_vw_censo_enriquecida.sql` com `porte_escola`, `porte_escola_cod`, `qtd_turmas_total`, `qtd_salas_nao_climatizadas`, `situacao_climatizacao_salas`.
+- [ ] Replicar (ou referenciar via loader) em `api/cmd/api/migrations/0002_vw_censo_enriquecida.sql` para o `go:embed` do backend (Railway).
 - [ ] Validar contagens por `porte_escola` contra amostra manual.
+- [ ] Recortes seguem a semântica fixada em `docs/dashboard/criterios-contagem-e-qualidade-dados.md` (Fase 1B).
 
-### 2.2 Endpoints
+### 2A.2 Endpoints
 - [ ] `GET /v1/admin/analytics/caracterizacao/perfil` — devolve KPIs + donut por porte + donut por zona + barras matrículas por porte.
 - [ ] `GET /v1/admin/analytics/caracterizacao/dre` — devolve a tabela detalhada por DRE.
 - [ ] Suporte a filtros `?year=&dre=&municipio=&zona=&porte_escola=`.
+- [ ] Handlers em `api/cmd/api/analytics.go`, registrados no grupo protegido em `api/cmd/api/main.go`.
+- [ ] SQL parametrizado (`$1`, `$2`, ...).
 
-### 2.3 UI
-- [ ] Migrar `PerfilDaRede` em `web/src/app/admin/page.tsx` para consumir os dois novos endpoints.
+### 2A.3 Validação
+- [ ] Criar `docs/dashboard/validacao-fase-2.md` com tabela: métrica × PostgreSQL × Sheets × delta.
+- [ ] Divergências interpretadas à luz da Fase 1B (não corrigir silenciosamente).
+
+### 2A.4 Não-objetivos
+- [ ] **Não** migrar a UI da aba "Caracterização da Rede" — isso é Fase 2B.
+- [ ] **Não** tocar em `indicadores-metrics`, no formulário, no job de sync ou em `/v1/locations`.
+- [ ] **Não** implementar deduplicação automática.
+
+---
+
+## Fase 2B — Migração incremental da UI da Caracterização da Rede
+
+### 2B.1 Migração por blocos
+- [ ] Migrar donut por porte → `analytics/caracterizacao/perfil`.
+- [ ] Migrar donut por zona → `analytics/caracterizacao/perfil`.
+- [ ] Migrar barras "matrículas por porte" → `analytics/caracterizacao/perfil`.
+- [ ] Migrar tabela "Detalhamento por DRE" → `analytics/caracterizacao/dre`.
+- [ ] Cada PR substitui no máximo um bloco e mantém os demais consumindo `sheet-metrics` até o próximo PR.
+
+### 2B.2 Aceite
+- [ ] Aba `perfil` 100% migrada para endpoints `analytics/caracterizacao/*`.
 - [ ] Remover o `useEffect` que chama `sheet-metrics` da aba (sem ainda remover o endpoint no backend).
-
-### 2.4 Aceite
-- [ ] Paridade documentada em `docs/dashboard/validacao-fase-2.md`.
 - [ ] `sheet-metrics` marcado como deprecated no comentário do handler.
 
 ---

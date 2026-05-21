@@ -133,12 +133,14 @@
 > ✅ Queries entregues em `docs/dashboard/criterios-contagem-e-qualidade-dados.md` — seção 1.
 
 ### 1B.4 Semântica por indicador
-- [ ] Para cada indicador hoje em `analytics/overview`, registrar a fórmula em SQL e a justificativa:
+- [x] Para cada indicador hoje em `analytics/overview`, registrar a fórmula em SQL e a justificativa:
   - `total_schools` / `completed` / `drafts` — `COUNT(DISTINCT school_id) FILTER (WHERE status = ...)`;
   - `total_alunos` / `alunos_pcd` — `SUM(... FILTER (WHERE status = 'completed' AND year = ano_corrente))`;
   - `media_alunos_por_escola` — `AVG(... FILTER (WHERE status = 'completed' AND total_alunos IS NOT NULL AND year = ano_corrente))`;
   - distribuição por zona — `COUNT(DISTINCT school_id) GROUP BY zona`.
-- [ ] Registrar que os endpoints da Fase 2A devem reusar exatamente esses recortes.
+- [x] Registrar que os endpoints da Fase 2A devem reusar exatamente esses recortes.
+
+> ✅ Documentado em `docs/dashboard/criterios-contagem-e-qualidade-dados.md` — seção 4.
 
 ### 1B.5 Decisão sobre deduplicação
 - [ ] Registrar explicitamente: **nesta fase, não haverá deduplicação automática**. Divergências serão documentadas, não corrigidas silenciosamente.

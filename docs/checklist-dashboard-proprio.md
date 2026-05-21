@@ -120,11 +120,13 @@
 - [ ] Decidir e documentar como esses casos aparecem hoje (uma linha em `schools` por unidade administrativa? múltiplas linhas?), sem alterar o banco.
 
 ### 1B.3 Queries de diagnóstico (somente leitura)
-- [ ] Query: INEPs repetidos em `schools` (com `dre`, `municipio`, `nome_escola`).
-- [ ] Query: possíveis respostas duplicadas em `census_responses` (mesma escola, mesmo ano, múltiplas atualizações; mesma escola entre anos).
-- [ ] Query: escolas sem nenhum censo (`schools` sem linha em `census_responses`).
-- [ ] Query: censos `draft` × `completed` por DRE.
-- [ ] Query: divergências PostgreSQL × Sheets para os indicadores do `analytics/overview` (referência cruzada).
+- [x] Query: INEPs repetidos em `schools` (com `dre`, `municipio`, `nome_escola`).
+- [x] Query: possíveis respostas duplicadas em `census_responses` (mesma escola, mesmo ano, múltiplas atualizações; mesma escola entre anos).
+- [x] Query: escolas sem nenhum censo (`schools` sem linha em `census_responses`).
+- [x] Query: censos `draft` × `completed` por DRE.
+- [x] Query: divergências PostgreSQL × Sheets para os indicadores do `analytics/overview` (referência cruzada).
+
+> ✅ Queries entregues em `docs/dashboard/criterios-contagem-e-qualidade-dados.md` — seção 1.
 
 ### 1B.4 Semântica por indicador
 - [ ] Para cada indicador hoje em `analytics/overview`, registrar a fórmula em SQL e a justificativa:

@@ -258,16 +258,120 @@ curl -s \
 
 ## 2. Distinção entre identificadores e status
 
-> ⬜ **A preencher — Task 1B.1**
+> ✅ **Task 1B.1 — concluída**
 
-Documentar a diferença semântica entre:
-- `school_id` — PK em `schools`
-- `codigo_inep` — código externo do INEP (8 dígitos), `UNIQUE` no banco
-- `census_id` — PK em `census_responses`
-- `status` — `'draft'` ou `'completed'`
+### 2.1 Os quatro identificadores
 
-E qual identificador é canônico para cada recorte analítico (contagem de escolas, contagem de
-censos, soma de alunos).
+#### `school_id`
+
+| Atributo | Detalhe |
+|---|---|
+| Tipo | `SERIAL PRIMARY KEY` em `schools` |
+| Gerado por | Backend (auto-increment do PostgreSQL) |
+| Exposição | **Interno** — nunca exibido ao diretor. Armazenado no `localStorage` do front após cadastro da escola (Step 1) para vincular os passos seguintes do formulário. |
+| Unicidade | Absoluta — uma linha em `schools` por `school_id`. |
+
+`school_id` é o **elo relacional** do sistema: `census_responses.school_id` aponta para ele via FK
+com `ON DELETE CASCADE`. Toda análise SQL que une escolas e censos passa por esse vínculo.
+
+---
+
+#### `codigo_inep`
+
+| Atributo | Detalhe |
+|---|---|
+| Tipo | `VARCHAR(20) UNIQUE` em `schools` |
+| Origem | INEP (Instituto Nacional de Estudos e Pesquisas Educacionais) — 8 dígitos |
+| Exposição | **Público** — o diretor informa o código INEP no Step 1 para localizar sua escola. |
+| Unicidade | Garantida por constraint no banco (`UNIQUE`). |
+
+`codigo_inep` é o **identificador institucional**: é o código que o SEDUC, INEP e demais órgãos
+usam para referenciar a escola externamente. No formulário, ele serve de chave de busca na Step 1.
+
+> **Relação com `school_id`:** cada `codigo_inep` mapeia para exatamente um `school_id`. Como a
+> constraint é `UNIQUE`, a query `SELECT id FROM schools WHERE codigo_inep = $1` retorna no máximo
+> uma linha — e esse `id` é o `school_id` usado em todo o restante do sistema.
+
+---
+
+#### `census_id`
+
+| Atributo | Detalhe |
+|---|---|
+| Tipo | `SERIAL PRIMARY KEY` em `census_responses` (`cr.id`) |
+| Gerado por | Backend (auto-increment do PostgreSQL) |
+| Unicidade por | Par `(school_id, year)` — constraint `UNIQUE (school_id, year)` impede dois registros para a mesma escola no mesmo ciclo anual. |
+
+`census_id` identifica **uma resposta de censo específica**: a combinação escola × ano. Uma mesma
+escola gera um `census_id` por ciclo anual.
+
+> **Importante:** o merge no handler `CreateOrUpdateCenso` (`handlers.go:142–157`) **atualiza** o
+> registro existente quando `(school_id, year)` já existe — não cria uma nova linha. Portanto,
+> `census_id` não muda durante o preenchimento incremental do formulário.
+
+---
+
+#### `status`
+
+| Valor | Significado |
+|---|---|
+| `'draft'` | Preenchimento em andamento. O censo ainda não foi submetido. Não sincroniza para o Google Sheets. |
+| `'completed'` | Censo finalizado e submetido. Dispara o job de sync para o Sheets (`sheet_synced_at IS NULL → pendente`). |
+
+`status` é o **filtro analítico primário**: praticamente todos os KPIs do dashboard usam
+`WHERE status = 'completed'` para excluir rascunhos inacabados.
+
+---
+
+### 2.2 Identificador canônico por recorte analítico
+
+| Recorte | Identificador canônico | SQL canônico | Justificativa |
+|---|---|---|---|
+| **Total de escolas cadastradas** | `school_id` | `COUNT(*) FROM schools` | Conta todas as escolas, com ou sem censo. Fonte: tabela `schools`. |
+| **Escolas com censo concluído** | `school_id` | `COUNT(DISTINCT school_id) FILTER (WHERE status = 'completed')` via `vw_censo_base` | `DISTINCT` evita inflação quando uma escola tem censos `completed` em múltiplos anos. |
+| **Escolas com censo em andamento** | `school_id` | `COUNT(DISTINCT school_id) FILTER (WHERE status = 'draft')` via `vw_censo_base` | Idem — conta escolas, não registros. |
+| **Escolas sem nenhum censo** | `school_id` | `LEFT JOIN census_responses … WHERE cr.id IS NULL` | Usa `school_id` para o `LEFT JOIN`. |
+| **Total de registros de censo** | `census_id` | `COUNT(*) FILTER (WHERE census_id IS NOT NULL)` via `vw_censo_base` | Conta linhas de censo (escola × ano). Inclui `draft` e `completed`. |
+| **Total de alunos** | `census_id` + filtro `status`/`year` | `SUM(total_alunos) FILTER (WHERE status = 'completed' AND year = ano_corrente)` | Restringe ao ciclo atual para evitar inflação acumulada entre anos. Ver seção 4. |
+| **Alunos PcD** | idem | `SUM(alunos_pcd) FILTER (WHERE status = 'completed' AND year = ano_corrente)` | Idem. |
+| **Média de alunos por escola** | idem | `AVG(total_alunos) FILTER (WHERE status = 'completed' AND total_alunos IS NOT NULL AND year = ano_corrente)` | `IS NOT NULL` exclui escolas sem dado preenchido da média. |
+| **Distribuição por zona** | `school_id` | `COUNT(DISTINCT school_id) GROUP BY zona` via `vw_censo_base` | Agrupa escolas (não censos). Uma escola com dois anos conta uma vez por zona. |
+| **Lookup externo / comunicação institucional** | `codigo_inep` | `WHERE codigo_inep = $1` | Único identificador reconhecido externamente por INEP/SEDUC. |
+
+---
+
+### 2.3 Resumo do fluxo de identificadores no formulário
+
+```
+Diretor informa codigo_inep (Step 1)
+  → GET /v1/schools?inep=<codigo>
+  → Retorna { id: <school_id>, ... }
+  → Front armazena school_id no localStorage
+
+Diretor preenche Steps 2–11
+  → POST /v1/census { school_id, year, status: 'draft', data: {...} }
+  → Backend faz merge JSONB se (school_id, year) já existe
+  → census_id permanece o mesmo durante todo o preenchimento
+
+Diretor finaliza (Step 11 — declaração)
+  → POST /v1/census { school_id, year, status: 'completed', data: {...} }
+  → sheet_synced_at = NULL (pendente de sync)
+  → Job de 10 min sincroniza para Google Sheets
+```
+
+A rastreabilidade completa de uma resposta é: `codigo_inep → school_id → census_id (school_id, year)`.
+
+---
+
+### 2.4 O que cada identificador **não** representa
+
+- `school_id` **não** é o código INEP — não deve ser exposto em relatórios externos.
+- `codigo_inep` **não** deve ser usado como FK no banco (é `VARCHAR`, não `INT`, e pode conter
+  variações de formatação). O vínculo relacional usa sempre `school_id`.
+- `census_id` **não** identifica uma "submissão" — ele é estável durante todo o ciclo (vide merge).
+  Para rastrear a última atualização, usar `census_responses.updated_at`.
+- `status = 'completed'` **não** significa que o censo foi sincronizado para o Sheets —
+  isso é indicado por `sheet_synced_at IS NOT NULL`.
 
 ---
 

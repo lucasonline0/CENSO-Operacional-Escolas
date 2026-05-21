@@ -221,10 +221,221 @@ ORDER BY 2 DESC;
 - `vw_censo_base` não foi alterada nesta task.
 - Faixas de porte usam hífen ASCII (`-`); o guia metodológico usa en-dash (`–`). Se a UI tiver textos legados baseados em en-dash, o mapeamento será feito na Fase 2B.
 
+## Validação online — Fase 2A
+
+> Registro da validação técnica feita em **produção (Railway)** após o deploy da migration `0002_vw_censo_enriquecida.sql` e dos dois novos endpoints. Esta seção fixa os números observados na janela de validação — não é a tabela de paridade contra Sheets (essa segue em "Métricas comparadas").
+
+### Ambiente
+
+- **Plataforma:** Railway.
+- **Domínio público:** `https://censo-operacional-escolas-production.up.railway.app`.
+- **Observação:** o domínio interno `*.railway.internal` **não resolve fora da rede interna do Railway**. Validações externas devem usar exclusivamente o domínio `production.up.railway.app`.
+
+### Migrations
+
+Logs de startup do binário Go no Railway:
+
+```txt
+applyMigrations: 2 migration(s) encontrada(s): [0001_vw_censo_base.sql 0002_vw_censo_enriquecida.sql]
+applyMigrations: 0001_vw_censo_base.sql aplicada com sucesso
+applyMigrations: 0002_vw_censo_enriquecida.sql aplicada com sucesso
+```
+
+Mensagens auxiliares observadas na mesma inicialização:
+
+```txt
+Banco conectado
+SheetsService iniciado
+DriveService iniciado
+Servidor rodando na porta 8080
+```
+
+Conclusão: as duas migrations rodaram em ordem (0001 antes de 0002), de forma idempotente e sem erro. `SheetsService` segue ativo — Google Sheets, `sheet-metrics`, `indicadores-metrics` e `/v1/locations` preservados.
+
+### Health check
+
+`GET /v1/health`:
+
+```json
+{"error":false,"message":"system operational"}
+```
+
+`GET /`:
+
+```txt
+Censo API Online
+```
+
+### Endpoint `/v1/admin/analytics/overview`
+
+Resposta capturada em produção (Fase 1, mantida intacta — referência cruzada com os KPIs da Fase 2A):
+
+```json
+{
+  "error": false,
+  "data": {
+    "total_schools": 894,
+    "total_censuses": 858,
+    "completed": 818,
+    "drafts": 40,
+    "total_alunos": 413934.03,
+    "alunos_pcd": 15337,
+    "media_alunos_por_escola": 506.03182151589243,
+    "por_zona": [
+      { "zona": "Urbana", "total": 646 },
+      { "zona": "Rural", "total": 234 },
+      { "zona": "Ribeirinha", "total": 14 }
+    ]
+  }
+}
+```
+
+Observação importante para casamento com a Fase 2A:
+
+- `total_schools = 894` conta **todas** as escolas em `schools`, incluindo as que ainda não têm censo (LEFT JOIN em `vw_censo_base`).
+- `completed = 818` é a contagem `COUNT(DISTINCT school_id) FILTER (status='completed')` — é esse número que vira `kpis.total_escolas` na Fase 2A.
+- `por_zona` aqui agrega **todas** as escolas (não filtra por `completed`/ano), por isso os valores (646/234/14) são maiores que os de `caracterizacao/perfil.por_zona` (608/197/13), que respeita o recorte completed + ano corrente. Diferença esperada por construção, não é divergência.
+
+### Endpoint `/v1/admin/analytics/caracterizacao/perfil`
+
+Resposta capturada em produção:
+
+```json
+{
+  "error": false,
+  "data": {
+    "kpis": {
+      "total_escolas": 818,
+      "total_alunos": 413934.03,
+      "media_alunos_por_escola": 506.03182151589243,
+      "alunos_pcd": 15337
+    },
+    "por_porte": [
+      { "porte": "0-50", "escolas": 22, "percentual": 2.69 },
+      { "porte": "50-150", "escolas": 74, "percentual": 9.05 },
+      { "porte": "150-300", "escolas": 204, "percentual": 24.94 },
+      { "porte": "300-500", "escolas": 174, "percentual": 21.27 },
+      { "porte": "500-1000", "escolas": 260, "percentual": 31.78 },
+      { "porte": "1000+", "escolas": 84, "percentual": 10.27 }
+    ],
+    "por_zona": [
+      { "zona": "Urbana", "escolas": 608, "percentual": 74.33 },
+      { "zona": "Rural", "escolas": 197, "percentual": 24.08 },
+      { "zona": "Ribeirinha", "escolas": 13, "percentual": 1.59 }
+    ],
+    "matriculas_por_porte": [
+      { "porte": "0-50", "total_alunos": 343.03 },
+      { "porte": "50-150", "total_alunos": 7617 },
+      { "porte": "150-300", "total_alunos": 45832 },
+      { "porte": "300-500", "total_alunos": 67471 },
+      { "porte": "500-1000", "total_alunos": 186622 },
+      { "porte": "1000+", "total_alunos": 106049 }
+    ]
+  }
+}
+```
+
+Validações automáticas feitas sobre o payload:
+
+| Check | Resultado |
+|---|---|
+| `error == false` | OK |
+| Soma de `por_porte[*].escolas` | 22 + 74 + 204 + 174 + 260 + 84 = **818** — bate com `kpis.total_escolas` |
+| Soma de `por_porte[*].percentual` | 2.69 + 9.05 + 24.94 + 21.27 + 31.78 + 10.27 = **100.00%** |
+| Soma de `por_zona[*].escolas` | 608 + 197 + 13 = **818** — bate com `kpis.total_escolas` |
+| Soma de `por_zona[*].percentual` | 74.33 + 24.08 + 1.59 = **100.00%** |
+| Soma de `matriculas_por_porte[*].total_alunos` | 343.03 + 7617 + 45832 + 67471 + 186622 + 106049 = **413.934,03** — bate com `kpis.total_alunos` |
+| Nenhuma escola caiu em `porte = "Não informado"` no recorte completed | OK (faixa não aparece no array, conforme `GROUP BY`) |
+| Nenhuma escola caiu em `zona = "Não informado"` no recorte completed | OK |
+
+### Endpoint `/v1/admin/analytics/caracterizacao/dre`
+
+Resultado validado em produção:
+
+- `error == false`.
+- Payload contém `top_dres` e `detalhamento`.
+- `top_dres[*].escolas` e `detalhamento[*].escolas` são iguais elemento a elemento (construídos no mesmo loop em Go, mesmo `ORDER BY escolas DESC, dre`).
+- Soma de `detalhamento[*].escolas` fecha em **818** — bate com `kpis.total_escolas` do `/caracterizacao/perfil` e com `completed` do `/overview`.
+- Valores consistentes com o critério provisório (`status='completed'`, ano corrente, `COUNT(DISTINCT school_id)`, sem dedup por INEP).
+
+Amostra do `detalhamento` (DREs com maior contagem):
+
+| DRE        | Escolas | Total de alunos | Salas de aula |
+|------------|--------:|----------------:|--------------:|
+| CASTANHAL  | 48      | 25.488          | 470           |
+| ABAETETUBA | 47      | 27.559          | 900           |
+| SANTAREM   | 43      | 23.518          | 440           |
+| CAPANEMA   | 35      | 18.801          | 1.530         |
+| BRAGANCA   | 33      | 15.452          | 278           |
+
+`top_dres` retorna **todas** as DREs ordenadas por `escolas DESC`, não um Top 10 — a limitação visual fica para a Fase 2B (slicing client-side).
+
+### Teste de autenticação
+
+Requisição sem header `Authorization`:
+
+```http
+GET /v1/admin/analytics/caracterizacao/perfil
+```
+
+Resposta:
+
+```json
+{"error":true,"message":"token de autenticação necessário"}
+```
+
+Endpoint corretamente protegido por `requireAdminAuth`. O mesmo comportamento se aplica ao `/caracterizacao/dre` (mesmo grupo Chi).
+
+### Observações e pendências
+
+1. **Valores decimais em `total_alunos`.** Foram observados decimais em campo que conceitualmente é inteiro:
+   - total geral: `413934.03`;
+   - porte `0-50`: `343.03`;
+   - amostras por DRE:
+     - BELEM 8: `9187.661`
+     - BELEM 9: `9179.496`
+     - BENEVIDES: `10109.726`
+     - BREVES: `9823.147`
+
+   A view trata `total_alunos` como `numeric` (cast seguro via regex em `vw_censo_base`) — qualquer valor numérico válido é aceito, inclusive decimais. A presença de fracionários sugere preenchimento atípico no formulário (possivelmente percentuais sendo digitados no campo errado, ou valores médios). **Não bloqueia a validação técnica da Fase 2A**; deve ser investigado pela Frente A (qualidade dos dados) e, se necessário, mitigado por validação no front ou na ingestão.
+
+2. **Critério provisório aplicado.** Os endpoints da Fase 2A seguem o critério herdado da Fase 1:
+   - `status = 'completed'`;
+   - ano corrente (`EXTRACT(YEAR FROM CURRENT_DATE)::int`);
+   - `COUNT(DISTINCT school_id)` para contagem de escolas;
+   - **sem** deduplicação automática por INEP;
+   - **sem** exclusão automática de registros.
+   Divergências legítimas (escola/anexo com mesmo INEP, drafts não migrados, correções pós-sync na planilha) ficam para a Frente A documentar em `criterios-contagem-e-qualidade-dados.md`.
+
+3. **Estado da UI.** A aba "Caracterização da Rede" **ainda não foi migrada**. Continua consumindo `/v1/admin/sheet-metrics`. A migração visual é a Fase 2B.
+
+4. **`top_dres` sem limite.** Retorna todas as DREs ordenadas. A limitação a Top N (10/20) é decisão de apresentação e ficará na Fase 2B.
+
+5. **Preservação confirmada em runtime.** Em produção continuam ativos e funcionais:
+   - `SheetsService` (logs de startup);
+   - `sheetSyncRetryJob` (job de 10 min);
+   - `POST /v1/admin/sync-sheets`;
+   - `GET /v1/locations`;
+   - `GET /v1/admin/sheet-metrics`;
+   - `GET /v1/admin/indicadores-metrics`;
+   - `POST /v1/census`.
+
+### Veredito
+
+**Fase 2A validada tecnicamente em produção.**
+
+Ressalvas:
+
+- investigar valores decimais em `total_alunos` (responsabilidade da Frente A — qualidade dos dados);
+- UI ainda não migrada — Fase 2B trata da substituição visual;
+- deduplicação / INEP repetido será tratado pela Frente A;
+- `top_dres` retorna todas as DREs e pode ser limitado visualmente na Fase 2B.
+
 ## Pendências
 
-- [ ] Rodar `go build ./cmd/api/...` em ambiente com Go instalado e anexar saída.
-- [ ] Aplicar as migrations 0001+0002 em homologação e validar que ambas são idempotentes (rerun deve ser no-op).
-- [ ] Coletar os números reais e preencher a tabela "Métricas comparadas".
+- [x] ~~Rodar `go build ./cmd/api/...` em ambiente com Go instalado e anexar saída.~~ — Implicitamente validado pelo deploy bem-sucedido no Railway (binário compilado, iniciado e respondendo).
+- [x] ~~Aplicar as migrations 0001+0002 em homologação e validar que ambas são idempotentes (rerun deve ser no-op).~~ — Aplicadas com sucesso no startup do Railway (logs em "Validação online — Fase 2A › Migrations"). Idempotência garantida pelo `CREATE OR REPLACE VIEW`; rerun nas reinicializações do container confirma o comportamento.
+- [ ] Coletar os números reais contra `sheet-metrics` e preencher a tabela "Métricas comparadas". (Os números do PostgreSQL já estão fixados em "Validação online".)
 - [ ] Confirmar com a Frente A se os critérios de contagem usados aqui são os definitivos antes da Fase 2B.
 - [ ] Se a Frente A introduzir um recorte distinto de "ano corrente" (por exemplo, ano mais recente com ao menos N respostas), realinhar `WHERE year = ...` nos handlers.
+- [ ] Investigar com a Frente A a origem dos valores decimais em `total_alunos` (campo conceitualmente inteiro recebendo `xxxx.yyy`).

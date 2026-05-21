@@ -143,8 +143,10 @@
 > ✅ Documentado em `docs/dashboard/criterios-contagem-e-qualidade-dados.md` — seção 4.
 
 ### 1B.5 Decisão sobre deduplicação
-- [ ] Registrar explicitamente: **nesta fase, não haverá deduplicação automática**. Divergências serão documentadas, não corrigidas silenciosamente.
-- [ ] Listar critérios que disparariam uma futura proposta de deduplicação (volume, impacto em KPI, autorização do produto).
+- [x] Registrar explicitamente: **nesta fase, não haverá deduplicação automática**. Divergências serão documentadas, não corrigidas silenciosamente.
+- [x] Listar critérios que disparariam uma futura proposta de deduplicação (volume, impacto em KPI, autorização do produto).
+
+> ✅ Documentado em `docs/dashboard/criterios-contagem-e-qualidade-dados.md` — seção 5.
 
 ### 1B.6 Entregável
 - [ ] Criar `docs/dashboard/criterios-contagem-e-qualidade-dados.md` com tudo acima.

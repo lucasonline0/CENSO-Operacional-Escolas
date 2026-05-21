@@ -20,7 +20,8 @@
 | 3. Casos legítimos de INEP repetido | 1B.2 | ✅ Completa |
 | 4. Semântica por indicador | 1B.4 | ✅ Completa |
 | 5. Decisão sobre deduplicação | 1B.5 | ✅ Completa |
-| 6. Divergências PostgreSQL × Sheets | 1B.6 | ⏳ Aguarda execução em homologação |
+| 6. Divergências PostgreSQL × Sheets | 1B.6 | ⏳ Estruturada — aguarda valores de homologação |
+| 7. Aceite (1B.7) | 1B.7 | ⏳ Aguarda revisão humana + tabela 6.2 preenchida |
 
 ---
 
@@ -838,6 +839,54 @@ divergências são:
 - [ ] Para deltas > 1%, abrir item de investigação antes de avançar para Fase 2A.
 - [ ] Após preenchimento, atualizar `validacao-fase-1.md` com os mesmos valores
       (as duas tabelas devem estar em sincronia).
+
+---
+
+---
+
+## 7. Aceite — Frente A
+
+> **Task 1B.7**
+
+### 7.1 Auditoria de escopo
+
+Todos os commits da Frente A foram auditados. **Nenhum arquivo fora de `docs/` foi modificado.**
+
+| Commit | Arquivos alterados |
+|---|---|
+| `06bda60` — Task 1B.3 | `docs/checklist-dashboard-proprio.md`, `docs/dashboard/criterios-contagem-e-qualidade-dados.md` |
+| `838d729` — Task 1B.1 | idem |
+| `635f982` — Task 1B.2 | idem |
+| `d03b032` — Task 1B.4 | idem |
+| `2d9761e` — Task 1B.5 | idem |
+| `1a17a04` — Task 1B.6 | idem + `docs/dashboard/validacao-fase-1.md` |
+
+Nenhum dos seguintes foi tocado: `api/`, `web/`, `infra/migrations/`, endpoints, formulário, job de sync.
+
+---
+
+### 7.2 Checklist de aceite (1B.7)
+
+| Item | Status | Observação |
+|---|---|---|
+| Distinção `school_id` × `codigo_inep` × `census_id` × `status` | ✅ | Seção 2 |
+| Queries de diagnóstico reproduzíveis | ✅ | Seção 1 — 5 queries prontas |
+| Semântica por indicador alinhada ao `analytics/overview` | ✅ | Seção 4 — 8 KPIs documentados com SQL exato |
+| Decisão explícita de não deduplicar automaticamente | ✅ | Seção 5 |
+| Lista de divergências PG × Sheets com hipótese de causa | ⏳ | Seção 6 — hipóteses documentadas; valores reais aguardam homologação |
+| Nenhum arquivo fora de `docs/` alterado | ✅ | Auditado via `git show --name-only` em cada commit |
+| Revisão por outra pessoa | ⏳ | **Ação humana pendente** |
+
+---
+
+### 7.3 Pendências para encerramento formal
+
+1. **Preencher a tabela 6.2** com os valores reais dos endpoints em homologação.
+2. **Revisão humana** do documento por ao menos uma outra pessoa da equipe.
+3. Após revisão e preenchimento, atualizar os itens ⏳ acima para ✅ e registrar a data de aceite aqui.
+
+**Data de aceite:** `____-__-__`  
+**Revisor(a):** `_________________________`
 
 ---
 

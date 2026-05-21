@@ -156,9 +156,11 @@
 > `validacao-fase-1.md` atualizado com seção "Divergências aceitas" e link para seção 6.2.
 
 ### 1B.7 Aceite
-- [ ] Documento revisado por pelo menos 1 outra pessoa.
-- [ ] Lista de divergências conhecidas (PostgreSQL × Sheets) anexada, com hipótese de causa para cada uma.
-- [ ] Nenhuma alteração feita em `api/`, `web/`, `infra/migrations/` ou endpoints existentes.
+- [ ] Documento revisado por pelo menos 1 outra pessoa. ← **ação humana pendente**
+- [x] Lista de divergências conhecidas (PostgreSQL × Sheets) com hipótese de causa documentada — ver seção 6.3 e tabela 6.2 de `criterios-contagem-e-qualidade-dados.md`. Valores reais a preencher em homologação.
+- [x] Nenhuma alteração feita em `api/`, `web/`, `infra/migrations/` ou endpoints existentes — **verificado por auditoria de commits** (ver seção 7 de `criterios-contagem-e-qualidade-dados.md`).
+
+> ⏳ Aguarda: (1) revisão humana do documento; (2) preenchimento da tabela 6.2 com valores reais de homologação.
 
 ---
 

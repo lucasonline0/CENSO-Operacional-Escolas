@@ -125,19 +125,21 @@ function Donut({
 }) {
   const total = segments.reduce((s, x) => s + x.value, 0);
   const r = 38, cx = 50, cy = 50, circ = 2 * Math.PI * r;
-  let offset = 0;
-  const arcs = segments.map((seg) => {
-    const len = total === 0 ? 0 : (seg.value / total) * circ;
-    const arc = (
-      <circle key={seg.label} cx={cx} cy={cy} r={r} fill="none"
-        stroke={seg.color} strokeWidth="15"
-        strokeDasharray={`${len} ${circ - len}`}
-        strokeDashoffset={-offset}
-        transform={`rotate(-90 ${cx} ${cy})`} />
-    );
-    offset += len;
-    return arc;
-  });
+  // Pré-computa o comprimento e o offset cumulativo de cada arco. Evita
+  // mutar uma variável `let` dentro de .map() — incompatível com a regra
+  // react-hooks/immutability do ESLint Next 16.
+  const lens = segments.map((seg) => (total === 0 ? 0 : (seg.value / total) * circ));
+  const offsets = lens.reduce<number[]>(
+    (acc, len) => [...acc, (acc[acc.length - 1] ?? 0) + len],
+    [0],
+  );
+  const arcs = segments.map((seg, i) => (
+    <circle key={seg.label} cx={cx} cy={cy} r={r} fill="none"
+      stroke={seg.color} strokeWidth="15"
+      strokeDasharray={`${lens[i]} ${circ - lens[i]}`}
+      strokeDashoffset={-offsets[i]}
+      transform={`rotate(-90 ${cx} ${cy})`} />
+  ));
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -1142,10 +1144,19 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
-  const [token, setToken] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
-  useEffect(() => { setToken(loadToken()); setReady(true); }, []);
-  if (!ready) return null;
-  if (!token) return <LoginForm onLogin={(t) => setToken(t)} />;
-  return <Dashboard token={token} onLogout={() => setToken(null)} />;
+  // Estado conjunto evita dois setState's no mesmo efeito e mantém o
+  // padrão de "client-only restore" (renderiza null em SSR e no primeiro
+  // paint do cliente para não dar mismatch de hidratação; só depois lê
+  // o sessionStorage). useSyncExternalStore não cabe aqui porque o
+  // evento "storage" não dispara para escritas same-window, então a
+  // restauração inicial precisa rodar dentro de useEffect.
+  const [auth, setAuth] = useState<{ token: string | null; ready: boolean }>({ token: null, ready: false });
+  useEffect(() => {
+    // Restauração client-only do token em sessionStorage (ver comentário acima).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAuth({ token: loadToken(), ready: true });
+  }, []);
+  if (!auth.ready) return null;
+  if (!auth.token) return <LoginForm onLogin={(t) => setAuth({ token: t, ready: true })} />;
+  return <Dashboard token={auth.token} onLogout={() => setAuth({ token: null, ready: true })} />;
 }

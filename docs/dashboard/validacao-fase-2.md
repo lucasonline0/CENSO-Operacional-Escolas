@@ -472,6 +472,70 @@ Conforme observado em "Validação online — Fase 2A › Observações", o PG p
 - `npm run lint` — sem novos erros introduzidos. Os 3 erros remanescentes (`offset += len` em `Donut`, `setToken` em `AdminPage`, `require()` em `tailwind.config.js`) e os 4 warnings são pré-existentes e fora do escopo desta task.
 - `go build` não foi executado — backend não foi tocado.
 
+## Validação online/local — Fase 2B.1
+
+### Estado do commit
+
+- Commit local da Fase 2B.1: `48887c2` — `feat(web): migrar caracterização da rede para analytics PostgreSQL`.
+- Situação em relação ao `origin/main`: **sincronizado**. Após o commit local, o branch `main` foi mergeado com `origin/main` (que havia recebido `e8d11b5` — merge do PR #25 da Frente A, Task 1B.7). O merge resultante `31797b7` é o tip atual de `HEAD -> main`, `origin/main` e `origin/HEAD`. `git status` reporta "Your branch is up to date with 'origin/main'", working tree clean.
+- Observações sobre rebase/push: não foi necessário `git pull --rebase` — a integração já está consolidada via merge commit. Nenhum conflito ocorreu. Não há ação pendente de push.
+
+### Validação local
+
+| Comando | Resultado | Observação |
+|---|---|---|
+| `npm run build` | ✅ sucesso | Next.js 16.1.4 (Turbopack); TypeScript OK; 5 páginas estáticas geradas (`/`, `/_not-found`, `/admin`). |
+| `npm run lint` | ⚠️ 3 erros + 5 warnings | Todos pré-existentes. Nenhum erro novo introduzido pela Fase 2B.1. Erros restantes: `page.tsx:138` (`offset += len` em `Donut`, fora do escopo), `page.tsx:1147` (`setToken` síncrono em `AdminPage`, fora do escopo), `tailwind.config.js:76` (`require()` style, arquivo não tocado). |
+
+### Validação da implementação
+
+| Item | Status | Observação |
+|---|---|---|
+| KPIs usam PostgreSQL | ✅ | `perfilPg.kpis.total_escolas/total_alunos/media_alunos_por_escola/alunos_pcd` (page.tsx l. 497-513). |
+| Distribuição por porte usa PostgreSQL | ✅ | `perfilPg.por_porte` (l. 515-521). |
+| Distribuição por zona usa PostgreSQL | ✅ | `perfilPg.por_zona` (l. 523-529). |
+| Matrículas por porte usam PostgreSQL | ✅ | `perfilPg.matriculas_por_porte` (l. 531-535); `Math.round` apenas na apresentação. |
+| Gráfico por DRE usa PostgreSQL | ✅ | `drePg.top_dres.slice(0, 15)` (l. 541-543); slice é apenas visual. |
+| Tabela por DRE usa PostgreSQL | ✅ | `drePg.detalhamento` completo (l. 546-553), sem slice. |
+| `sheet-metrics` permanece como fallback | ✅ | Carregado em paralelo aos endpoints PG (l. 462-464). Endpoint backend intocado. |
+| Fallback parcial preservado | ✅ | Variáveis `usePerfilPg` (l. 491) e `useDrePg` (l. 538) são independentes; falha em um não derruba o outro. Indicador de fonte tem 3 estados (PostgreSQL/parcial/fallback total, l. 565-569). |
+| Demais integrações Sheets preservadas | ✅ | `GET /v1/admin/sheet-metrics`, `GET /v1/admin/indicadores-metrics`, `GET /v1/locations`, `POST /v1/admin/sync-sheets`, `POST /v1/census`, `sheetSyncRetryJob` não tocados. Confirmado por `git status` (apenas `web/src/app/admin/page.tsx` e este documento foram modificados). |
+
+### Validação visual online
+
+**Pendente de execução manual.** O ambiente atual não tem acesso a navegador para abrir `https://censo-operacional-escolas.vercel.app/admin` e realizar login autenticado. Sem credenciais — e por opção deliberada, **nenhuma credencial deve ser registrada neste documento ou em qualquer arquivo do repositório**.
+
+Roteiro sugerido para execução manual pelo operador autorizado:
+
+1. Abrir `https://censo-operacional-escolas.vercel.app/admin` no navegador.
+2. Fazer login com credenciais administrativas (manualmente, sem registrar em chat ou arquivo).
+3. Na aba "Caracterização da Rede", conferir:
+   - indicador de fonte mostrando "PostgreSQL · ano corrente · censos concluídos" (chip verde no topo);
+   - Total de Escolas ≈ 818;
+   - Total de Alunos ≈ 413.934;
+   - Média por Escola ≈ 506;
+   - Alunos PcD ≈ 15.337;
+   - donut "Distribuição de Escolas por Porte" carregando 6 faixas;
+   - donut "Distribuição de Escolas por Zona" carregando Urbana/Rural/Ribeirinha;
+   - barras "Distribuição de Matrículas por Porte" carregando;
+   - barras "Escolas Concluídas por DRE (Top 15)" carregando;
+   - tabela "Detalhamento por DRE" carregando todas as DREs (sem corte de 15).
+4. Demais abas (`Perfil dos Alunos e Resultados`, `Operacional`, `Todos os Censos`, `Por DRE`) sem regressão visual.
+5. DevTools › Network deve mostrar 3 requisições do tipo XHR/fetch ao montar a aba:
+   - `/v1/admin/analytics/caracterizacao/perfil` → 200;
+   - `/v1/admin/analytics/caracterizacao/dre` → 200;
+   - `/v1/admin/sheet-metrics` → 200 (fallback carregado em paralelo, comportamento esperado).
+6. Não devem aparecer banners âmbar de "indicadores via PostgreSQL parcialmente indisponíveis" se o PG estiver saudável.
+
+Em caso de discrepância visual ou de qualquer endpoint PG retornar diferente de 200, registrar a evidência aqui (status code, payload reduzido, screenshot da aba) **sem incluir tokens/cookies/sessão**.
+
+### Pendências
+
+- [ ] Investigar valores decimais em `total_alunos` (responsabilidade Frente A — qualidade dos dados; ver "Validação online — Fase 2A › Observações").
+- [ ] Resolver erros pré-existentes de lint em task separada (`Donut.offset += len`, `setToken` em `AdminPage`, `require()` em `tailwind.config.js`).
+- [x] ~~Concluir integração com `origin/main` antes do push.~~ — Sincronizado em `31797b7`; sem ação pendente.
+- [ ] Executar validação visual online assistida segundo o roteiro acima e anexar o resultado a este documento.
+
 ## Pendências
 
 - [x] ~~Rodar `go build ./cmd/api/...` em ambiente com Go instalado e anexar saída.~~ — Implicitamente validado pelo deploy bem-sucedido no Railway (binário compilado, iniciado e respondendo).

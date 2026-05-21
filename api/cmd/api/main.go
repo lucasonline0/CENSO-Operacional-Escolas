@@ -301,6 +301,11 @@ func (app *application) routes() http.Handler {
 			// Fase 1 — camada analítica baseada em PostgreSQL.
 			// Endpoints adicionais; não substituem sheet-metrics nem indicadores-metrics.
 			protected.Get("/admin/analytics/overview", app.AdminAnalyticsOverview)
+
+			// Fase 2A — backend analítico da Caracterização da Rede.
+			// Adicionais; a UI segue consumindo sheet-metrics até a Fase 2B.
+			protected.Get("/admin/analytics/caracterizacao/perfil", app.AdminAnalyticsCaracterizacaoPerfil)
+			protected.Get("/admin/analytics/caracterizacao/dre", app.AdminAnalyticsCaracterizacaoDRE)
 		})
 	})
 

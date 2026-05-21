@@ -592,6 +592,51 @@ Defasagem entre `origin/main` (que já contém `48887c2` desde o merge `31797b7`
 | `cd web && npm run build` | sucesso |
 | `cd web && npm run lint` | 3 erros e 5 warnings — todos pré-existentes, nenhum em código tocado pela Fase 2B.1 |
 
+### Revalidação visual após hard reload/cache refresh
+
+Data: 21/05/2026
+Ambiente: Vercel + Railway
+Página: `/admin` → aba "Caracterização da Rede"
+Status: **OK**
+
+| Item | Resultado | Observação |
+|---|---|---|
+| Indicador de fonte | OK | "PostgreSQL · ano corrente · censos concluídos" (chip verde) |
+| KPI — Total de Escolas | OK | 818 |
+| KPI — Total de Alunos | OK | 413.934 |
+| KPI — Média por Escola | OK | 506 |
+| KPI — Alunos PcD | OK | 15.337 |
+| Donut por porte | OK | Centro com 818 escolas; segmentos somam 818 |
+| Donut por zona | OK | Centro com 818 escolas; segmentos somam 818 |
+| Matrículas por porte | OK | Dados PostgreSQL carregados |
+| Escolas por DRE (Top 15) | OK | Bar chart com dados PostgreSQL |
+| Detalhamento por DRE | OK | Tabela completa com dados PostgreSQL |
+| Fallback Sheets | Preservado | `sheet-metrics` segue mantido como fallback paralelo, sem retirar `indicadores-metrics`, `/v1/locations`, `POST /v1/admin/sync-sheets`, `POST /v1/census`, `sheetSyncRetryJob` |
+
+Amostra de valores observados na tabela "Detalhamento por DRE" (Top 5):
+
+| DRE        | Escolas | Total de Alunos | Salas |
+|------------|--------:|----------------:|------:|
+| CASTANHAL  |      48 |          25.488 |   470 |
+| ABAETETUBA |      47 |          27.559 |   900 |
+| SANTARÉM   |      43 |          23.518 |   440 |
+| CAPANEMA   |      35 |          18.801 | 1.530 |
+| BRAGANÇA   |      33 |          15.452 |   278 |
+
+Esses números casam exatamente com a amostra do payload `/v1/admin/analytics/caracterizacao/dre` registrada em "Validação online — Fase 2A › Endpoint `/v1/admin/analytics/caracterizacao/dre`", confirmando que a UI agora consome o endpoint PostgreSQL.
+
+### Veredito
+
+**Fase 2B.1 validada visualmente em produção após hard reload/cache refresh.**
+
+A observação visual anterior (donut com 1.030, CASTANHAL com 74) foi confirmada como artefato de cache/deploy stale — a Vercel ainda servia a build da Fase 1 (`25a43c4` / `bfad540`) no momento da primeira inspeção. Após o hard reload, o build da Fase 2B.1 (`48887c2`) passou a ser servido e a aba "Caracterização da Rede" exibiu corretamente os dados PostgreSQL em todos os blocos (KPIs, donuts, barras e tabela). `sheet-metrics` permanece como fallback ativo e nenhuma integração com Google Sheets foi removida.
+
+Pendências mantidas (não bloqueiam o veredito):
+
+- investigar valores decimais em `total_alunos` (responsabilidade Frente A — qualidade dos dados);
+- resolver erros pré-existentes de lint em task própria (`Donut.offset += len`, `setToken` em `AdminPage`, `require()` em `tailwind.config.js`);
+- manter Google Sheets ativo até a fase futura de aposentadoria controlada (Fase 7 do roadmap), após paridade numérica documentada e sign-off explícito.
+
 ## Pendências
 
 - [x] ~~Rodar `go build ./cmd/api/...` em ambiente com Go instalado e anexar saída.~~ — Implicitamente validado pelo deploy bem-sucedido no Railway (binário compilado, iniciado e respondendo).

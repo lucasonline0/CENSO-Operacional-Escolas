@@ -431,6 +431,47 @@ Ressalvas:
 - deduplicação / INEP repetido será tratado pela Frente A;
 - `top_dres` retorna todas as DREs e pode ser limitado visualmente na Fase 2B.
 
+## Fase 2B.1 — Migração da UI (apenas frontend)
+
+> Esta seção registra a etapa visual da Caracterização da Rede. Backend, migrations e endpoints permanecem inalterados — apenas `web/src/app/admin/page.tsx` foi tocado.
+
+### Escopo migrado
+
+A aba "Caracterização da Rede" agora consome os endpoints da Fase 2A diretamente:
+
+- KPIs (total de escolas, total de alunos, média por escola, alunos PcD), donut de porte, donut de zona e barras de matrículas por porte → `GET /v1/admin/analytics/caracterizacao/perfil`.
+- Barras "Escolas Concluídas por DRE (Top 15)" e tabela "Detalhamento por DRE" → `GET /v1/admin/analytics/caracterizacao/dre`.
+
+A aba "Perfil dos Alunos e Resultados" segue inalterada (lê `indicadores-metrics`). A aba "Operacional", "Todos os Censos" e "Por DRE" seguem inalteradas (lêem `/v1/admin/dashboard` e `/v1/admin/census`).
+
+### Fallback
+
+`GET /v1/admin/sheet-metrics` é carregado em paralelo aos endpoints PostgreSQL. Se `caracterizacao/perfil` falhar, KPIs/donuts/matrículas caem para `sheet-metrics`; se `caracterizacao/dre` falhar, barras e tabela DRE caem para `sheet-metrics`. As falhas são independentes — uma parte da aba pode estar em PG enquanto a outra está em fallback.
+
+Indicador discreto no topo da aba mostra a fonte ativa:
+
+- "Fonte: PostgreSQL · ano corrente · censos concluídos" (verde) quando ambos endpoints respondem.
+- "Fonte: Google Sheets · fallback (parcial)" (âmbar) quando exatamente um endpoint PG falha.
+- "Fonte: Google Sheets · fallback" (âmbar) quando ambos endpoints PG falham.
+
+Se o PG responder mas a planilha falhar, a aba opera 100% via PostgreSQL e exibe apenas um aviso discreto sobre indisponibilidade do fallback.
+
+### Tratamento de `total_alunos` fracionário
+
+Conforme observado em "Validação online — Fase 2A › Observações", o PG pode devolver decimais em `total_alunos` (ex.: 413934.03). A UI arredonda para inteiro **somente na apresentação** (cards KPI, matrículas por porte, tabela DRE). O dado bruto não é corrigido no front, e o backend não foi tocado — o tratamento definitivo segue como pendência da Frente A.
+
+### Preservações verificadas
+
+- `GET /v1/admin/sheet-metrics`, `GET /v1/admin/indicadores-metrics`, `GET /v1/locations`, `POST /v1/admin/sync-sheets`, `POST /v1/census` e o job de sync continuam inalterados.
+- Nenhuma alteração em backend, migrations, endpoints, regras de contagem ou no formulário público.
+- Layout, cores e estrutura visual da aba mantidos — apenas a fonte dos dados mudou e foi adicionado o rótulo discreto de fonte.
+
+### Validações executadas
+
+- `npm run build` — sucesso (Next.js 16.1.4, Turbopack, TypeScript OK).
+- `npm run lint` — sem novos erros introduzidos. Os 3 erros remanescentes (`offset += len` em `Donut`, `setToken` em `AdminPage`, `require()` em `tailwind.config.js`) e os 4 warnings são pré-existentes e fora do escopo desta task.
+- `go build` não foi executado — backend não foi tocado.
+
 ## Pendências
 
 - [x] ~~Rodar `go build ./cmd/api/...` em ambiente com Go instalado e anexar saída.~~ — Implicitamente validado pelo deploy bem-sucedido no Railway (binário compilado, iniciado e respondendo).

@@ -37,18 +37,36 @@ interface IndicadoresMetrics {
   por_faixa_abandono:  AbandonoStat[];
   top_dre_abandono:    DreAbandono[];
 }
-// ── Fase 1: overview analítico vindo do PostgreSQL (/v1/admin/analytics/overview).
-// Substitui apenas os cards principais; donuts/barras/DRE seguem em sheet-metrics.
-interface AnalyticsZonaStat { zona: string; total: number; }
-interface AnalyticsOverview {
-  total_schools:           number;
-  total_censuses:          number;
-  completed:               number;
-  drafts:                  number;
+// ── Fase 2B.1: payloads analíticos PostgreSQL da aba "Caracterização da Rede".
+// /v1/admin/analytics/caracterizacao/perfil e /caracterizacao/dre substituem,
+// respectivamente, a parte de KPIs/donuts/matrículas e a parte de DRE da aba.
+// O endpoint legado /v1/admin/sheet-metrics segue como fallback.
+interface CaracterizacaoKpis {
+  total_escolas:            number;
+  total_alunos:             number;
+  media_alunos_por_escola:  number;
+  alunos_pcd:               number;
+}
+interface CaracterizacaoPortePg { porte: string; escolas: number; percentual: number; }
+interface CaracterizacaoZonaPg  { zona: string;  escolas: number; percentual: number; }
+interface CaracterizacaoMatPortePg { porte: string; total_alunos: number; }
+interface CaracterizacaoPerfilPg {
+  kpis:                  CaracterizacaoKpis;
+  por_porte:             CaracterizacaoPortePg[];
+  por_zona:              CaracterizacaoZonaPg[];
+  matriculas_por_porte:  CaracterizacaoMatPortePg[];
+}
+interface DreCountPg   { dre: string; escolas: number; }
+interface DreSummaryPg {
+  dre:                     string;
+  escolas:                 number;
   total_alunos:            number;
-  alunos_pcd:              number;
   media_alunos_por_escola: number;
-  por_zona:                AnalyticsZonaStat[];
+  salas_aula:              number;
+}
+interface CaracterizacaoDREPg {
+  top_dres:     DreCountPg[];
+  detalhamento: DreSummaryPg[];
 }
 interface CensusFull extends CensusRow { data: unknown; created_at: string; }
 
@@ -412,34 +430,40 @@ function CensusTable({ rows, onView, formatDate }: { rows: CensusRow[] | null; o
 // ─── Perfil da Rede tab ───────────────────────────────────────────────────────
 
 function PerfilDaRede({ token, onUnauth }: { token: string; onUnauth: () => void }) {
-  const [metrics, setMetrics] = useState<SheetMetrics | null>(null);
-  // Fase 1: cards principais passam a consumir analytics/overview (PostgreSQL).
-  // O restante da aba continua em sheet-metrics até a Fase 2.
-  const [overview, setOverview]       = useState<AnalyticsOverview | null>(null);
-  const [overviewErr, setOverviewErr] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [err, setErr]         = useState("");
+  // Fase 2B.1: a aba "Caracterização da Rede" passa a consumir PostgreSQL via
+  // /v1/admin/analytics/caracterizacao/perfil e /caracterizacao/dre. Os dados
+  // legados de /v1/admin/sheet-metrics continuam carregados em paralelo como
+  // fallback para qualquer parte cujo endpoint analítico falhe.
+  const [perfilPg, setPerfilPg] = useState<CaracterizacaoPerfilPg | null>(null);
+  const [drePg,    setDrePg]    = useState<CaracterizacaoDREPg | null>(null);
+  const [metrics,  setMetrics]  = useState<SheetMetrics | null>(null);
+  const [perfilErr, setPerfilErr] = useState("");
+  const [dreErr,    setDreErr]    = useState("");
+  const [sheetErr,  setSheetErr]  = useState("");
+  const [loading,   setLoading]   = useState(true);
 
   useEffect(() => {
     let cancelled = false;
 
-    // Carrega os dois endpoints em paralelo. Cada um trata seu próprio erro
-    // para que a UI degrade graciosamente caso um deles falhe.
+    const handleErr = (setter: (s: string) => void) => (e: unknown) => {
+      const msg = (e as Error).message;
+      if (msg === "UNAUTHORIZED") { if (!cancelled) onUnauth(); return; }
+      if (!cancelled) setter(msg);
+    };
+
+    const pPerfil = apiFetch<CaracterizacaoPerfilPg>("/v1/admin/analytics/caracterizacao/perfil", token)
+      .then((d) => { if (!cancelled) setPerfilPg(d); })
+      .catch(handleErr(setPerfilErr));
+
+    const pDre = apiFetch<CaracterizacaoDREPg>("/v1/admin/analytics/caracterizacao/dre", token)
+      .then((d) => { if (!cancelled) setDrePg(d); })
+      .catch(handleErr(setDreErr));
+
     const pSheet = apiFetch<SheetMetrics>("/v1/admin/sheet-metrics", token)
       .then((m) => { if (!cancelled) setMetrics(m); })
-      .catch((e) => {
-        if ((e as Error).message === "UNAUTHORIZED") { if (!cancelled) onUnauth(); return; }
-        if (!cancelled) setErr((e as Error).message);
-      });
+      .catch(handleErr(setSheetErr));
 
-    const pOverview = apiFetch<AnalyticsOverview>("/v1/admin/analytics/overview", token)
-      .then((o) => { if (!cancelled) setOverview(o); })
-      .catch((e) => {
-        if ((e as Error).message === "UNAUTHORIZED") { if (!cancelled) onUnauth(); return; }
-        if (!cancelled) setOverviewErr((e as Error).message);
-      });
-
-    Promise.all([pSheet, pOverview]).finally(() => {
+    Promise.all([pPerfil, pDre, pSheet]).finally(() => {
       if (!cancelled) setLoading(false);
     });
 
@@ -451,51 +475,134 @@ function PerfilDaRede({ token, onUnauth }: { token: string; onUnauth: () => void
       <Loader2 className="animate-spin mr-2" size={22} style={{ color: C.primary }} /> Carregando indicadores…
     </div>
   );
-  if (err) return (
-    <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl px-4 py-3 text-sm">
-      <AlertCircle size={16} /> {err}
-    </div>
-  );
-  if (!metrics) return null;
 
-  const safePorPorte = metrics.por_porte ?? [];
-  const safePorZona  = metrics.por_zona  ?? [];
-  const safePorDre   = metrics.por_dre   ?? [];
+  // Cenário catastrófico: PG falhou nas duas pontas e a planilha também.
+  // Sem dados nenhuma fonte → erro fatal.
+  if (!perfilPg && !drePg && !metrics) {
+    const msg = sheetErr || perfilErr || dreErr || "Não foi possível carregar indicadores.";
+    return (
+      <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl px-4 py-3 text-sm">
+        <AlertCircle size={16} /> {msg}
+      </div>
+    );
+  }
 
-  const porteDonut = safePorPorte.map((p, i) => ({
-    label: p.porte, value: p.count, color: PORTE_COLORS[i] ?? "#94A3B8",
-  }));
-  const zonaDonut = safePorZona.map((z) => ({
-    label: z.zona, value: z.count, color: ZONA_COLORS[z.zona] ?? "#94A3B8",
-  }));
-  const matriculasBar = safePorPorte.map((p) => ({ label: p.porte, value: p.alunos }));
-  const dreBar = safePorDre.slice(0, 15).map((d) => ({ label: d.dre, value: d.escolas }));
+  // ── Resolução KPI/donuts/matrículas: prefere PG; fallback p/ sheet-metrics.
+  const usePerfilPg = perfilPg !== null;
 
-  // Fase 1 — fonte dos 4 cards principais.
-  // Preferimos o endpoint analítico (PostgreSQL); se ele falhar ou ainda
-  // não estiver disponível, caímos para os valores vindos da planilha.
-  const useOverview     = overview !== null;
-  const totalEscolas    = useOverview ? overview!.completed                : metrics.total_escolas;
-  const totalAlunos     = useOverview ? Math.round(overview!.total_alunos) : metrics.total_alunos;
-  const mediaAlunos     = useOverview
-    ? Number(overview!.media_alunos_por_escola.toFixed(1)).toLocaleString("pt-BR")
-    : metrics.media_alunos_por_escola.toLocaleString("pt-BR");
-  const totalAlunosPcd  = useOverview ? Math.round(overview!.alunos_pcd)   : metrics.total_alunos_pcd;
-  const cardsSourceSub  = useOverview ? "Censos concluídos · PostgreSQL"   : "Censos concluídos";
+  const safePorPorteSheet = metrics?.por_porte ?? [];
+  const safePorZonaSheet  = metrics?.por_zona  ?? [];
+
+  // Total de escolas exibido nos cards e no centro dos donuts.
+  const totalEscolas = usePerfilPg
+    ? perfilPg!.kpis.total_escolas
+    : (metrics?.total_escolas ?? 0);
+
+  // total_alunos pode vir fracionário do PG (cf. validacao-fase-2.md, "Observações").
+  // Arredondamos só para apresentação; o dado bruto não é corrigido aqui.
+  const totalAlunos = usePerfilPg
+    ? Math.round(perfilPg!.kpis.total_alunos)
+    : (metrics?.total_alunos ?? 0);
+
+  const mediaAlunos = usePerfilPg
+    ? Number(perfilPg!.kpis.media_alunos_por_escola.toFixed(1)).toLocaleString("pt-BR")
+    : (metrics?.media_alunos_por_escola.toLocaleString("pt-BR") ?? "0");
+
+  const totalAlunosPcd = usePerfilPg
+    ? Math.round(perfilPg!.kpis.alunos_pcd)
+    : (metrics?.total_alunos_pcd ?? 0);
+
+  const porteDonut = usePerfilPg
+    ? perfilPg!.por_porte.map((p, i) => ({
+        label: p.porte, value: p.escolas, color: PORTE_COLORS[i] ?? "#94A3B8",
+      }))
+    : safePorPorteSheet.map((p, i) => ({
+        label: p.porte, value: p.count, color: PORTE_COLORS[i] ?? "#94A3B8",
+      }));
+
+  const zonaDonut = usePerfilPg
+    ? perfilPg!.por_zona.map((z) => ({
+        label: z.zona, value: z.escolas, color: ZONA_COLORS[z.zona] ?? "#94A3B8",
+      }))
+    : safePorZonaSheet.map((z) => ({
+        label: z.zona, value: z.count, color: ZONA_COLORS[z.zona] ?? "#94A3B8",
+      }));
+
+  const matriculasBar = usePerfilPg
+    ? perfilPg!.matriculas_por_porte.map((m) => ({
+        label: m.porte, value: Math.round(m.total_alunos),
+      }))
+    : safePorPorteSheet.map((p) => ({ label: p.porte, value: p.alunos }));
+
+  // ── Resolução DRE (bar + tabela): prefere PG; fallback p/ sheet-metrics.
+  const useDrePg = drePg !== null;
+  const safePorDreSheet = metrics?.por_dre ?? [];
+
+  const dreBar = useDrePg
+    ? drePg!.top_dres.slice(0, 15).map((d) => ({ label: d.dre, value: d.escolas }))
+    : safePorDreSheet.slice(0, 15).map((d) => ({ label: d.dre, value: d.escolas }));
+
+  type DreRow = { dre: string; escolas: number; alunos: number; salas: number; media: number };
+  const dreTable: DreRow[] = useDrePg
+    ? drePg!.detalhamento.map((d) => ({
+        dre:     d.dre,
+        escolas: d.escolas,
+        alunos:  Math.round(d.total_alunos),
+        salas:   Math.round(d.salas_aula),
+        media:   Math.round(d.media_alunos_por_escola),
+      }))
+    : safePorDreSheet.map((d) => ({
+        dre:     d.dre,
+        escolas: d.escolas,
+        alunos:  d.alunos,
+        salas:   d.salas,
+        media:   d.escolas > 0 ? Math.round(d.alunos / d.escolas) : 0,
+      }));
+
+  // Fonte global da aba (informativa). PG total = perfil + dre; qualquer
+  // falha vira "Sheets fallback (parcial)" para deixar claro ao operador
+  // que parte da aba está lendo do legado.
+  const sourceLabel =
+    usePerfilPg && useDrePg ? "PostgreSQL · ano corrente · censos concluídos"
+    : !usePerfilPg && !useDrePg ? "Google Sheets · fallback"
+    : "Google Sheets · fallback (parcial)";
+  const sourceTone = usePerfilPg && useDrePg ? "emerald" : "amber";
 
   return (
     <div className="space-y-6">
-      {overviewErr && (
+      {/* Indicação discreta da fonte de dados da aba. */}
+      <div className={`flex items-center gap-2 text-xs ${
+        sourceTone === "emerald" ? "text-emerald-700" : "text-amber-700"
+      }`}>
+        <span className={`inline-block w-2 h-2 rounded-full ${
+          sourceTone === "emerald" ? "bg-emerald-500" : "bg-amber-500"
+        }`} />
+        <span>Fonte: {sourceLabel}</span>
+      </div>
+
+      {/* Avisos detalhados de falha — só aparecem se houve fallback. */}
+      {(perfilErr || dreErr) && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>
-            Indicadores principais via PostgreSQL indisponíveis ({overviewErr}). Exibindo valores da planilha como fallback.
+            Indicadores via PostgreSQL parcialmente indisponíveis
+            {perfilErr && <> (perfil: {perfilErr})</>}
+            {dreErr    && <> (DRE: {dreErr})</>}
+            . Exibindo valores da planilha como fallback.
           </span>
         </div>
       )}
-      {/* Stat cards — Fase 1: lêem analytics/overview (PostgreSQL) com fallback p/ sheet-metrics. */}
+      {/* Se até a planilha falhou mas o PG funcionou, deixamos só um aviso suave. */}
+      {sheetErr && !perfilErr && !dreErr && (
+        <div className="flex items-start gap-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl px-4 py-3 text-xs">
+          <AlertCircle size={14} className="shrink-0 mt-0.5" />
+          <span>Planilha (fallback) indisponível ({sheetErr}). Operando 100% via PostgreSQL.</span>
+        </div>
+      )}
+
+      {/* Stat cards — Fase 2B.1: lêem caracterizacao/perfil com fallback p/ sheet-metrics. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total de Escolas" value={totalEscolas} Icon={Building2} tone="blue" sub={cardsSourceSub} />
+        <StatCard label="Total de Escolas" value={totalEscolas} Icon={Building2} tone="blue" sub="Censos concluídos" />
         <StatCard label="Total de Alunos" value={totalAlunos} Icon={Users} tone="green" />
         <StatCard label="Média por Escola" value={mediaAlunos} Icon={TrendingUp} tone="amber" sub="alunos/escola" />
         <StatCard label="Alunos PcD" value={totalAlunosPcd} Icon={GraduationCap} tone="purple" />
@@ -510,7 +617,7 @@ function PerfilDaRede({ token, onUnauth }: { token: string; onUnauth: () => void
           </h3>
           <Donut
             segments={porteDonut}
-            label={metrics.total_escolas.toLocaleString("pt-BR")}
+            label={totalEscolas.toLocaleString("pt-BR")}
             sub="escolas"
           />
         </div>
@@ -521,7 +628,7 @@ function PerfilDaRede({ token, onUnauth }: { token: string; onUnauth: () => void
           </h3>
           <Donut
             segments={zonaDonut}
-            label={metrics.total_escolas.toLocaleString("pt-BR")}
+            label={totalEscolas.toLocaleString("pt-BR")}
             sub="escolas"
           />
         </div>
@@ -561,18 +668,15 @@ function PerfilDaRede({ token, onUnauth }: { token: string; onUnauth: () => void
               </tr>
             </thead>
             <tbody>
-              {safePorDre.map((d, i) => {
-                const media = d.escolas > 0 ? Math.round(d.alunos / d.escolas) : 0;
-                return (
-                  <tr key={d.dre} className={i%2===0?"bg-white":"bg-slate-50/50"}>
-                    <td className="px-5 py-3 font-medium text-slate-800">{d.dre}</td>
-                    <td className="px-5 py-3 text-right tabular-nums text-slate-700 font-semibold">{d.escolas.toLocaleString("pt-BR")}</td>
-                    <td className="px-5 py-3 text-right tabular-nums text-slate-600">{d.alunos.toLocaleString("pt-BR")}</td>
-                    <td className="px-5 py-3 text-right tabular-nums text-slate-600">{media.toLocaleString("pt-BR")}</td>
-                    <td className="px-5 py-3 text-right tabular-nums text-slate-600">{d.salas.toLocaleString("pt-BR")}</td>
-                  </tr>
-                );
-              })}
+              {dreTable.map((d, i) => (
+                <tr key={d.dre} className={i%2===0?"bg-white":"bg-slate-50/50"}>
+                  <td className="px-5 py-3 font-medium text-slate-800">{d.dre}</td>
+                  <td className="px-5 py-3 text-right tabular-nums text-slate-700 font-semibold">{d.escolas.toLocaleString("pt-BR")}</td>
+                  <td className="px-5 py-3 text-right tabular-nums text-slate-600">{d.alunos.toLocaleString("pt-BR")}</td>
+                  <td className="px-5 py-3 text-right tabular-nums text-slate-600">{d.media.toLocaleString("pt-BR")}</td>
+                  <td className="px-5 py-3 text-right tabular-nums text-slate-600">{d.salas.toLocaleString("pt-BR")}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

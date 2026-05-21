@@ -536,6 +536,62 @@ Em caso de discrepância visual ou de qualquer endpoint PG retornar diferente de
 - [x] ~~Concluir integração com `origin/main` antes do push.~~ — Sincronizado em `31797b7`; sem ação pendente.
 - [ ] Executar validação visual online assistida segundo o roteiro acima e anexar o resultado a este documento.
 
+### Auditoria pós-validação visual — descoberta de deploy stale
+
+Durante a validação visual em produção foi observado o seguinte padrão na aba "Caracterização da Rede":
+
+- **KPIs corretos via PostgreSQL**: Total de Escolas 818, Total de Alunos ~413.934, Média 506, Alunos PcD 15.337.
+- **Donuts/barras/tabela aparentemente em Sheets**: donut por porte e por zona com 1.030 escolas no centro; gráfico por DRE com CASTANHAL 74, SANTARÉM 69; tabela DRE com valores compatíveis com a planilha.
+
+Suspeita inicial: a migração teria sido parcial — KPIs no PG, mas gráficos/tabela ainda em Sheets.
+
+**Auditoria do código no commit `48887c2` (Fase 2B.1) descartou essa hipótese:**
+
+- Em `web/src/app/admin/page.tsx` (linhas 491-560), as variáveis `usePerfilPg` (`perfilPg !== null`) e `useDrePg` (`drePg !== null`) controlam **todos** os blocos derivados do respectivo endpoint:
+  - `usePerfilPg` ⇒ KPIs (`totalEscolas`, `totalAlunos`, `mediaAlunos`, `totalAlunosPcd`), `porteDonut`, `zonaDonut`, `matriculasBar`.
+  - `useDrePg` ⇒ `dreBar`, `dreTable`.
+- O label central dos donuts usa a variável resolvida `totalEscolas.toLocaleString("pt-BR")` (linhas 620 e 631), não `metrics.total_escolas` direto.
+- A tabela DRE usa `dreTable` (que vem de `drePg.detalhamento` quando `useDrePg`), não `safePorDre` direto.
+
+**Como o padrão observado é então possível?** Comparando com o código da Fase 1 (commit `25a43c4`), a sintoma bate exatamente:
+
+- Fase 1 já tinha KPIs migrados (via `/analytics/overview`) com `totalEscolas` resolvido para PG.
+- Fase 1 ainda usava `metrics.total_escolas` no label central dos donuts (linhas 513 e 524 daquele commit) — **valor da planilha** (1.030).
+- Fase 1 ainda usava `safePorPorte`, `safePorZona` e `safePorDre` (todos `metrics.*`) nos segmentos do donut, no bar chart de matrículas, no bar de DRE e na tabela de detalhamento.
+
+Ou seja: **a observação visual é 100% consistente com a versão Fase 1, não com a Fase 2B.1**. Conclusão: a versão deployada em produção (Vercel) no momento da validação visual é a **Fase 1** (`25a43c4` / `bfad540`), e o build da Fase 2B.1 (`48887c2`) ainda não foi servido na URL que o operador inspecionou.
+
+### Causa raiz
+
+Defasagem entre `origin/main` (que já contém `48887c2` desde o merge `31797b7`) e o build servido na Vercel — cache do navegador, CDN ou pipeline de deploy ainda em execução. **Não é bug de código**.
+
+### Ações tomadas
+
+- **Nenhuma alteração de código foi feita.** O código no `main` local e em `origin/main` está correto.
+- Documentação atualizada com este diagnóstico para evitar nova confusão.
+
+### Próximos passos recomendados ao operador
+
+1. No navegador, executar hard reload em `https://censo-operacional-escolas.vercel.app/admin` (Ctrl+Shift+R / Cmd+Shift+R).
+2. Confirmar no painel da Vercel que o último deploy corresponde ao commit `48887c2` (ou superior) e que seu status é `Ready`.
+3. Reabrir a aba "Caracterização da Rede" e revalidar o roteiro da seção "Validação visual online".
+4. Em DevTools › Network, confirmar que `/v1/admin/analytics/caracterizacao/perfil` e `/caracterizacao/dre` retornam 200 e que os payloads alimentam donuts/barras/tabela.
+5. Se após o hard reload os números ainda divergirem, **abrir nova task** com:
+   - print da aba após o reload;
+   - status do deploy na Vercel;
+   - payload bruto dos 3 endpoints capturado em DevTools.
+6. Apenas então será justificado mexer em `web/src/app/admin/page.tsx` novamente.
+
+### Validações executadas nesta auditoria
+
+| Comando | Resultado |
+|---|---|
+| `git log --oneline web/src/app/admin/page.tsx` | confirma que o último commit no arquivo é `48887c2` (Fase 2B.1) |
+| inspeção de `web/src/app/admin/page.tsx` (linhas 432-684) | `usePerfilPg`/`useDrePg` cobrem KPIs, donuts, barras e tabela DRE — sem uso direto de `metrics.*` nos blocos migrados |
+| comparação com `git show 25a43c4:web/src/app/admin/page.tsx` | reproduz exatamente o padrão observado em produção (KPIs PG, donut/bar/tabela em Sheets) |
+| `cd web && npm run build` | sucesso |
+| `cd web && npm run lint` | 3 erros e 5 warnings — todos pré-existentes, nenhum em código tocado pela Fase 2B.1 |
+
 ## Pendências
 
 - [x] ~~Rodar `go build ./cmd/api/...` em ambiente com Go instalado e anexar saída.~~ — Implicitamente validado pelo deploy bem-sucedido no Railway (binário compilado, iniciado e respondendo).

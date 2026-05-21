@@ -16,11 +16,11 @@
 | Seção | Task (checklist) | Status |
 |---|---|---|
 | 1. Queries de diagnóstico | 1B.3 | ✅ Completa |
-| 2. Distinção entre identificadores | 1B.1 | ⬜ A preencher |
+| 2. Distinção entre identificadores | 1B.1 | ✅ Completa |
 | 3. Casos legítimos de INEP repetido | 1B.2 | ✅ Completa |
 | 4. Semântica por indicador | 1B.4 | ✅ Completa |
 | 5. Decisão sobre deduplicação | 1B.5 | ✅ Completa |
-| 6. Divergências PostgreSQL × Sheets | subitem de 1B.3/1B.4 | ⬜ A preencher (após rodar as queries) |
+| 6. Divergências PostgreSQL × Sheets | 1B.6 | ⏳ Aguarda execução em homologação |
 
 ---
 
@@ -764,10 +764,87 @@ Em vez de corrigir, a Frente A entrega:
 
 ---
 
+## 6. Divergências PostgreSQL × Sheets
+
+> ⏳ **Task 1B.6 — aguarda execução em homologação**  
+> As queries e instruções estão prontas (seção 1.5). Os valores reais precisam ser coletados
+> executando os dois endpoints em homologação e preenchendo a tabela abaixo.
+
+Esta seção é o registro formal das divergências encontradas entre o endpoint PostgreSQL
+(`/v1/admin/analytics/overview`) e o endpoint Sheets (`/v1/admin/sheet-metrics`), com hipótese
+de causa para cada uma. É o produto final da Frente A e pré-requisito para o aceite (1B.7).
+
+### 6.1 Como preencher
+
+**Passo 1 — Coletar lado PostgreSQL:**
+
+```bash
+curl -s -H "Authorization: Bearer <TOKEN>" \
+  "${API_URL:-http://localhost:8000}/v1/admin/analytics/overview" | jq
+```
+
+**Passo 2 — Coletar lado Sheets:**
+
+```bash
+curl -s -H "Authorization: Bearer <TOKEN>" \
+  "${API_URL:-http://localhost:8000}/v1/admin/sheet-metrics" | jq
+```
+
+**Passo 3 — Rodar as queries SQL de diagnóstico (seção 1)** contra o banco de homologação e
+salvar os resultados como comentário neste documento ou em arquivo anexo anonimizado.
+
+**Passo 4 — Preencher a tabela abaixo** e formular uma hipótese de causa para cada delta ≠ 0.
+
+---
+
+### 6.2 Tabela de divergências
+
+| Métrica | PostgreSQL | Sheets | Delta absoluto | Delta % | Hipótese de causa | Situação |
+|---|---:|---:|---:|---:|---|---|
+| Total de escolas (completed) | — | — | — | — | — | ⏳ pendente |
+| Total de alunos | — | — | — | — | — | ⏳ pendente |
+| Alunos PcD | — | — | — | — | — | ⏳ pendente |
+| Média de alunos por escola | — | — | — | — | — | ⏳ pendente |
+| Escolas — Zona Urbana | — | — | — | — | — | ⏳ pendente |
+| Escolas — Zona Rural | — | — | — | — | — | ⏳ pendente |
+| Escolas — Zona Ribeirinha | — | — | — | — | — | ⏳ pendente |
+| Escolas — Zona "Não informado" | — | — | — | — | — | ⏳ pendente |
+
+> **Critério de aceite (ver `validacao-fase-1.md`):**
+> - Delta = 0 para `total_schools`, `completed`, `drafts`.
+> - Delta ≤ 1% para `total_alunos` e `alunos_pcd`.
+> - Delta > 1%: abrir item de investigação antes de avançar para a Fase 2A.
+
+---
+
+### 6.3 Hipóteses de causa esperadas
+
+Com base no que foi documentado nas seções anteriores, as hipóteses mais prováveis para
+divergências são:
+
+| Cenário | Causa provável | Seção de referência |
+|---|---|---|
+| `total_alunos` PG < Sheets | Escolas `completed` sem `total_alunos` preenchido (campo `NULL` na view) | Seção 4.5, 4.7 |
+| `completed` PG ≠ Sheets | Sheets conta linhas da planilha (pode ter duplicatas de sync); PG conta `DISTINCT school_id` | Seção 4.3 |
+| `por_zona` PG ≠ Sheets | Sheets pode não ter todas as escolas (só recebe `completed`); PG conta todo o cadastro | Seção 4.8 |
+| Qualquer KPI PG > Sheets | Censos `completed` ainda pendentes de sync (`sheet_synced_at IS NULL`) | — |
+
+---
+
+### 6.4 Pendência para aceite (1B.7)
+
+- [ ] Preencher a tabela 6.2 com valores reais de homologação.
+- [ ] Para cada delta ≠ 0, registrar hipótese de causa na coluna correspondente.
+- [ ] Para deltas > 1%, abrir item de investigação antes de avançar para Fase 2A.
+- [ ] Após preenchimento, atualizar `validacao-fase-1.md` com os mesmos valores
+      (as duas tabelas devem estar em sincronia).
+
+---
+
 ## Referências
 
 - [`infra/init.sql`](../../infra/init.sql) — definição das tabelas `schools` e `census_responses`
 - [`infra/migrations/0001_vw_censo_base.sql`](../../infra/migrations/0001_vw_censo_base.sql) — view base
 - [`api/cmd/api/analytics.go`](../../api/cmd/api/analytics.go) — handler `AdminAnalyticsOverview`
 - [`docs/dashboard/jsonb-field-inventory.md`](jsonb-field-inventory.md) — inventário de campos JSONB
-- [`docs/dashboard/validacao-fase-1.md`](validacao-fase-1.md) — tabela de paridade Fase 1
+- [`docs/dashboard/validacao-fase-1.md`](validacao-fase-1.md) — tabela de paridade Fase 1 (espelha seção 6.2)

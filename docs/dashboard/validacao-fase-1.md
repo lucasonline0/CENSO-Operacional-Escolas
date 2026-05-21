@@ -106,7 +106,24 @@ curl -s -H "Authorization: Bearer <TOKEN>" \
 - [ ] `indicadores-metrics` continua respondendo (aba "Perfil dos Alunos").
 - [ ] `GET /v1/locations` continua respondendo (formulário público).
 
+## Divergências aceitas
+
+As divergências entre PostgreSQL e Sheets conhecidas e aceitas para esta fase estão documentadas
+em **[criterios-contagem-e-qualidade-dados.md — seção 6](criterios-contagem-e-qualidade-dados.md#6-divergências-postgresql--sheets)**,
+incluindo hipótese de causa para cada uma.
+
+As hipóteses prováveis documentadas são:
+
+| Cenário | Causa provável |
+|---|---|
+| `total_alunos` PG < Sheets | Escolas `completed` sem `total_alunos` preenchido (campo `NULL` na view) |
+| `completed` PG ≠ Sheets | Sheets conta linhas da planilha (pode ter duplicatas de sync); PG usa `DISTINCT school_id` |
+| `por_zona` PG ≠ Sheets | Sheets só recebe `completed`; PG conta todo o cadastro cadastrado |
+| Qualquer KPI PG > Sheets | Censos `completed` ainda pendentes de sync (`sheet_synced_at IS NULL`) |
+
 ## Pendências
 
+- [ ] Preencher a tabela "Métricas comparadas" acima com valores reais de homologação
+      (espelhar também em [criterios-contagem-e-qualidade-dados.md — seção 6.2](criterios-contagem-e-qualidade-dados.md#62-tabela-de-divergências)).
 - [ ] Anexar resultados das queries de saneamento da seção 8.4 do [jsonb-field-inventory.md](jsonb-field-inventory.md): verificar se há valores não-numéricos nos campos `total_alunos`, `alunos_pcd`, etc.
-- [ ] Decidir e registrar (em [checklist-dashboard-proprio.md](../checklist-dashboard-proprio.md)) qualquer divergência ≥ 1% encontrada antes de avançar para a Fase 2.
+- [ ] Para qualquer divergência ≥ 1% encontrada, registrar hipótese de causa antes de avançar para a Fase 2A.

@@ -149,8 +149,11 @@
 > ✅ Documentado em `docs/dashboard/criterios-contagem-e-qualidade-dados.md` — seção 5.
 
 ### 1B.6 Entregável
-- [ ] Criar `docs/dashboard/criterios-contagem-e-qualidade-dados.md` com tudo acima.
-- [ ] Atualizar `docs/dashboard/validacao-fase-1.md` apontando para o novo documento como referência sobre divergências aceitas.
+- [x] Criar `docs/dashboard/criterios-contagem-e-qualidade-dados.md` com tudo acima.
+- [x] Atualizar `docs/dashboard/validacao-fase-1.md` apontando para o novo documento como referência sobre divergências aceitas.
+
+> ✅ Documento criado com seções 1–5 completas e seção 6 estruturada (aguarda valores reais de homologação).
+> `validacao-fase-1.md` atualizado com seção "Divergências aceitas" e link para seção 6.2.
 
 ### 1B.7 Aceite
 - [ ] Documento revisado por pelo menos 1 outra pessoa.

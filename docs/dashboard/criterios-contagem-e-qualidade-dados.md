@@ -19,7 +19,7 @@
 | 2. Distinção entre identificadores | 1B.1 | ⬜ A preencher |
 | 3. Casos legítimos de INEP repetido | 1B.2 | ✅ Completa |
 | 4. Semântica por indicador | 1B.4 | ✅ Completa |
-| 5. Decisão sobre deduplicação | 1B.5 | ⬜ A preencher |
+| 5. Decisão sobre deduplicação | 1B.5 | ✅ Completa |
 | 6. Divergências PostgreSQL × Sheets | subitem de 1B.3/1B.4 | ⬜ A preencher (após rodar as queries) |
 
 ---
@@ -697,10 +697,70 @@ Regras derivadas deste contrato:
 
 ## 5. Decisão sobre deduplicação
 
-> ⬜ **A preencher — Task 1B.5**
+> ✅ **Task 1B.5 — concluída**
 
-Registrar explicitamente que **nesta fase não haverá deduplicação automática** e listar os
-critérios que disparariam uma futura proposta.
+### 5.1 Decisão desta fase
+
+**Nesta fase (Fase 1B / Frente A), não haverá deduplicação automática de nenhum tipo.**
+
+Divergências entre PostgreSQL e Google Sheets, ou inconsistências internas nos dados, serão
+**documentadas**, não corrigidas silenciosamente. Qualquer correção de dados exige aprovação
+explícita do produto/operação e está fora do escopo desta frente.
+
+Esta decisão é intencional e alinhada com a regra do `plano-trabalho-paralelo.md`:
+
+> *"Divergências devem ser registradas, não corrigidas automaticamente."*
+
+---
+
+### 5.2 Por que não deduplicar agora
+
+| Razão | Detalhe |
+|---|---|
+| **Não há duplicatas reais de escola** | A constraint `UNIQUE (codigo_inep)` + o upsert em `SchoolModel.Insert` garantem uma única linha por INEP em `schools`. Não existe cenário de deduplicação necessária nessa dimensão (ver seção 3). |
+| **Não há duplicatas de censo** | A constraint `UNIQUE (school_id, year)` + o `ON CONFLICT DO UPDATE` em `CensusModel.Upsert` garantem no máximo uma linha por `(escola × ano)`. |
+| **Sobreposição de dados ≠ duplicata** | O risco "last write wins" (seção 3.4) é uma questão de qualidade de dado dentro de um único registro, não uma duplicata de linha. A mitigação correta é de processo (quem preenche o formulário), não de deduplicação SQL. |
+| **Impacto desconhecido** | Sem os resultados reais das queries de diagnóstico (seção 1) preenchidos na tabela de paridade (seção 1.5), não é possível avaliar se alguma divergência justificaria uma correção. |
+| **Risco de perda de dados** | Qualquer lógica de merge automático entre censos poderia sobrescrever respostas legítimas de diretores, sem rastreabilidade. |
+
+---
+
+### 5.3 Critérios que disparariam uma proposta futura de deduplicação
+
+Uma proposta formal de deduplicação só deve ser aberta se **todos** os critérios abaixo forem
+atendidos:
+
+1. **Volume confirmado:** as queries de diagnóstico (seção 1) foram executadas em homologação e
+   a tabela de paridade (seção 1.5) está preenchida com valores reais.
+
+2. **Impacto em KPI ≥ 1%:** a divergência identificada afeta ao menos um KPI do
+   `analytics/overview` em magnitude superior a 1% (limiar de aceite definido em
+   `validacao-fase-1.md`).
+
+3. **Hipótese de causa documentada:** existe uma hipótese clara e rastreável para a origem da
+   divergência (ex.: escola cadastrada duas vezes com INEPs distintos por erro operacional,
+   censo submetido em ano errado, etc.).
+
+4. **Aprovação explícita do produto/operação:** a decisão de corrigir os dados foi validada por
+   um responsável do SEDUC-PA ou da equipe de produto — não pode ser decisão unilateral técnica.
+
+5. **Estratégia de correção reversível:** a correção proposta é executada via script auditável
+   (não direto no banco em produção), com backup previamente realizado e possibilidade de rollback.
+
+---
+
+### 5.4 O que esta fase entrega em vez de deduplicação
+
+Em vez de corrigir, a Frente A entrega:
+
+- **Visibilidade:** queries reproduzíveis (seção 1) para que qualquer pessoa possa rodar o
+  diagnóstico a qualquer momento.
+- **Rastreabilidade:** tabela de paridade PG × Sheets (seção 1.5) com hipótese de causa por
+  divergência.
+- **Contrato:** semântica fixada por indicador (seção 4) para que divergências futuras sejam
+  detectáveis por comparação contra este documento.
+- **Critérios claros** (seção 5.3) para que a equipe saiba exatamente quando e como abrir uma
+  proposta de correção no futuro.
 
 ---
 

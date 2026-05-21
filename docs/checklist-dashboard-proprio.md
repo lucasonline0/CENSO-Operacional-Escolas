@@ -118,8 +118,10 @@
 > ✅ Documentado em `docs/dashboard/criterios-contagem-e-qualidade-dados.md` — seção 2.
 
 ### 1B.2 Casos legítimos de mesmo INEP
-- [ ] Registrar que existem casos legítimos de escolas/anexos compartilhando o mesmo `codigo_inep` no contexto do SEDUC-PA.
-- [ ] Decidir e documentar como esses casos aparecem hoje (uma linha em `schools` por unidade administrativa? múltiplas linhas?), sem alterar o banco.
+- [x] Registrar que existem casos legítimos de escolas/anexos compartilhando o mesmo `codigo_inep` no contexto do SEDUC-PA.
+- [x] Decidir e documentar como esses casos aparecem hoje (uma linha em `schools` por unidade administrativa? múltiplas linhas?), sem alterar o banco.
+
+> ✅ Documentado em `docs/dashboard/criterios-contagem-e-qualidade-dados.md` — seção 3.
 
 ### 1B.3 Queries de diagnóstico (somente leitura)
 - [x] Query: INEPs repetidos em `schools` (com `dre`, `municipio`, `nome_escola`).

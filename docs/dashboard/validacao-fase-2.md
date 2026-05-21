@@ -637,6 +637,53 @@ Pendências mantidas (não bloqueiam o veredito):
 - resolver erros pré-existentes de lint em task própria (`Donut.offset += len`, `setToken` em `AdminPage`, `require()` em `tailwind.config.js`);
 - manter Google Sheets ativo até a fase futura de aposentadoria controlada (Fase 7 do roadmap), após paridade numérica documentada e sign-off explícito.
 
+## Validação pós-push — correção de lint e deploy Vercel
+
+### Resultado
+
+- **Commit validado:** `738a3b8` — `chore(web): corrige erros pré-existentes de lint`. Já em `origin/main` (HEAD = origin/main = origin/HEAD).
+- **Git:** branch `main`, working tree limpo, sincronizado com `origin/main`. Histórico contínuo a partir do merge `31797b7` (Fase 2B.1) → `8aa3867`/`43f0936`/`6c041e7` (docs) → `738a3b8` (lint).
+- **Lint:** `npm run lint` reporta **0 erros**, 5 warnings remanescentes, todos pré-existentes e fora do escopo desta correção:
+  - `next.config.ts:28` — `Unused eslint-disable directive` (no-process-env);
+  - `web/src/app/page.tsx:340` — `@next/next/no-img-element`;
+  - `web/src/components/forms/alunos-form.tsx:9` — `'NumberInput' unused`;
+  - `web/src/components/ui/form-components.tsx:107` — `'e' unused`;
+  - `web/src/hooks/use-census-persistence.ts:94` — `react-hooks/exhaustive-deps`.
+- **Build:** `npm run build` sucesso (Next.js 16.1.4, Turbopack, 5 páginas estáticas geradas — `/`, `/_not-found`, `/admin`).
+- **Validação visual:** **pendente de execução manual.** Ambiente atual não tem navegador. Operador deve executar o roteiro abaixo após confirmar que a Vercel servirá o build de `738a3b8`.
+- **Observações:**
+  - Os 3 erros bloqueantes anteriores (Donut `offset += len`, `setToken` em `AdminPage`, `require()` em `tailwind.config.js`) foram resolvidos sem alterar comportamento funcional do dashboard nem o fluxo de autenticação.
+  - `tailwind.config.js` foi renomeado para `tailwind.config.mjs` (ESM); o build Next continua resolvendo o config corretamente.
+  - Nenhuma alteração em backend, migrations, endpoints, regras de contagem, formulário público ou integração com Google Sheets.
+
+### Roteiro de validação visual pós-push (a executar manualmente)
+
+1. Confirmar no painel da Vercel que o último deploy corresponde ao commit `738a3b8` e que seu status é **Ready**.
+2. Abrir `https://censo-operacional-escolas.vercel.app/admin` e realizar hard reload (Ctrl+Shift+R / Cmd+Shift+R). **Não registrar credenciais em chat ou arquivo.**
+3. Conferir, na aba "Caracterização da Rede":
+   - indicador de fonte = "PostgreSQL · ano corrente · censos concluídos" (chip verde);
+   - KPIs: 818 escolas / 413.934 alunos / média 506 / 15.337 PcD;
+   - donut por porte com centro 818;
+   - donut por zona com centro 818;
+   - barras "Distribuição de Matrículas por Porte" e "Escolas Concluídas por DRE (Top 15)" carregadas;
+   - tabela "Detalhamento por DRE" completa.
+4. Conferir que as demais abas (`Perfil dos Alunos e Resultados`, `Operacional`, `Todos os Censos`, `Por DRE`) carregam sem quebra; que o botão "Sync Planilha" segue visível no header; e que o botão "Sair" continua funcionando.
+5. Em DevTools › Network, conferir as chamadas:
+   - `/v1/admin/analytics/caracterizacao/perfil` → 200;
+   - `/v1/admin/analytics/caracterizacao/dre` → 200;
+   - `/v1/admin/sheet-metrics` → 200 (fallback carregado em paralelo — comportamento esperado).
+6. Em DevTools › Console, conferir ausência de erros novos (especialmente relacionados a hidratação de `AdminPage` ou renderização do `Donut`, alvos das correções desta task).
+
+### Veredito
+
+**Deploy pós-push validado em git e localmente.** Correções de lint não alteraram o comportamento funcional do dashboard nem o fluxo de autenticação — paridade verificada por revisão estática:
+
+- `Donut`: `strokeDashoffset` continua recebendo offsets cumulativos idênticos (apenas via `reduce` imutável em vez de `let offset += len`).
+- `AdminPage`: novo objeto de estado `{ token, ready }` mantém exatamente os mesmos pontos de decisão (`!ready` → null, `!token` → LoginForm, login/logout via `setAuth`).
+- `tailwind.config.mjs`: mesmo conteúdo de configuração, agora exportado via ESM com `tailwindcss-animate` importado nominalmente.
+
+A validação visual em produção fica como **única pendência** desta task e deve ser anexada acima pelo operador após executar o roteiro.
+
 ## Pendências
 
 - [x] ~~Rodar `go build ./cmd/api/...` em ambiente com Go instalado e anexar saída.~~ — Implicitamente validado pelo deploy bem-sucedido no Railway (binário compilado, iniciado e respondendo).

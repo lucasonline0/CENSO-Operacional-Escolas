@@ -17,7 +17,7 @@
 |---|---|---|
 | 1. Queries de diagnóstico | 1B.3 | ✅ Completa |
 | 2. Distinção entre identificadores | 1B.1 | ⬜ A preencher |
-| 3. Casos legítimos de INEP repetido | 1B.2 | ⬜ A preencher |
+| 3. Casos legítimos de INEP repetido | 1B.2 | ✅ Completa |
 | 4. Semântica por indicador | 1B.4 | ⬜ A preencher |
 | 5. Decisão sobre deduplicação | 1B.5 | ⬜ A preencher |
 | 6. Divergências PostgreSQL × Sheets | subitem de 1B.3/1B.4 | ⬜ A preencher (após rodar as queries) |
@@ -377,10 +377,118 @@ A rastreabilidade completa de uma resposta é: `codigo_inep → school_id → ce
 
 ## 3. Casos legítimos de INEP repetido
 
-> ⬜ **A preencher — Task 1B.2**
+> ✅ **Task 1B.2 — concluída**
 
-Registrar se existem e como aparecem casos de escolas ou anexos com o mesmo `codigo_inep` no
-contexto do SEDUC-PA, sem alterar o banco.
+### 3.1 Realidade do SEDUC-PA: anexos e unidades vinculadas
+
+No contexto educacional do Pará, é comum que uma escola possua **unidades físicas secundárias
+(anexos)** que operam administrativamente sob o mesmo INEP da unidade-sede. O INEP não emite
+códigos separados para cada prédio — o código identifica a **entidade jurídico-administrativa**,
+não o imóvel.
+
+Exemplos de situações legítimas:
+
+| Situação | Descrição |
+|---|---|
+| Escola com anexo rural | Sede urbana + sala multisseriada em comunidade ribeirinha, mesmo INEP |
+| Escola com extensão em outro bairro | Unidade pedagógica vinculada sem CNPJ próprio |
+| Escola indígena com posto avançado | Aldeia-sede + posto em aldeia vizinha, mesmo gestor e INEP |
+
+---
+
+### 3.2 Como o sistema trata isso hoje
+
+A constraint `UNIQUE (codigo_inep)` em `schools` **impede a criação de duas linhas com o mesmo
+INEP**. Internamente, o método `SchoolModel.Insert` (`api/internal/models/models.go:64–93`)
+implementa um **upsert por INEP**:
+
+```go
+// models.go:66–93 (resumido)
+queryCheck := `SELECT id FROM schools WHERE codigo_inep = $1`
+err := m.DB.QueryRowContext(..., queryCheck, school.INEP).Scan(&existingID)
+
+if err == nil {
+    // INEP já existe → atualiza a linha existente, retorna o mesmo school_id
+    UPDATE schools SET nome_escola = $1, ... WHERE id = $16
+    return existingID, nil
+}
+// INEP não existe → insere nova linha
+INSERT INTO schools (...) VALUES (...) RETURNING id
+```
+
+**Consequência prática:** independentemente de quantas unidades físicas compartilham um INEP,
+existe **uma única linha em `schools`** com um único `school_id`. Todas as submissões de censo
+para aquele INEP apontam para o mesmo `school_id`.
+
+O campo `possui_anexos` (e `qtd_anexos`, `tipo_predio_anexo`) no JSONB de `census_responses`
+é a única forma de registrar a existência de unidades físicas secundárias dentro do formulário
+atual — eles não geram linhas separadas no banco.
+
+---
+
+### 3.3 Implicação analítica
+
+**Para contagem de escolas:** `COUNT(DISTINCT school_id)` e `COUNT(*) FROM schools` contam a
+**entidade administrativa**, não o número de prédios. Uma escola com 3 anexos aparece como 1.
+
+**Para métricas de alunos:** `total_alunos` preenchido no formulário deve refletir o total
+consolidado da entidade (sede + anexos). A instrução não é explícita no formulário — isso é
+um risco de qualidade de dados (ver seção 3.4).
+
+**Para a camada analítica futura:** se for necessário contar prédios físicos, a fonte é
+`SUM(qtd_anexos) + COUNT(school_id)` — mas somente para censos `completed` com `possui_anexos
+= 'Sim'` e `qtd_anexos` preenchido.
+
+---
+
+### 3.4 Risco: "last write wins" em caso de múltiplos preenchedores
+
+Se dois preenchedores distintos (diretor da sede e diretor do anexo) acessam o formulário com
+o mesmo INEP **no mesmo ciclo anual**, ambos submetem para o mesmo `(school_id, year)`. O
+handler faz merge de JSONB (`handlers.go:154–156`), mas para chaves presentes em ambas as
+submissões **o valor mais recente sobrescreve o anterior** (`ON CONFLICT … DO UPDATE`).
+
+Isso não é uma duplicidade de registro — é uma sobreposição de dados. O banco fica consistente
+(uma linha por escola × ano), mas os dados podem refletir apenas a última submissão recebida.
+
+**Decisão desta fase:** registrar como risco conhecido. Não há deduplicação automática nem
+controle de múltiplos preenchedores no escopo atual. Qualquer mitigação (ex.: bloquear o
+formulário após `completed`) está fora do escopo da Frente A.
+
+---
+
+### 3.5 Verificação no banco
+
+Para confirmar o comportamento descrito (resultado esperado: zero linhas, pois a constraint
+e o upsert impedem duplicidade de INEP):
+
+```sql
+-- Confirma: não existe INEP com mais de uma linha em schools
+SELECT codigo_inep, COUNT(*) AS qtd
+FROM schools
+WHERE codigo_inep IS NOT NULL AND codigo_inep <> ''
+GROUP BY codigo_inep
+HAVING COUNT(*) > 1;
+-- Resultado esperado: zero linhas
+```
+
+```sql
+-- Escolas que declararam possuir anexos (fonte: census_responses.data)
+SELECT
+    s.codigo_inep,
+    s.nome_escola,
+    s.dre,
+    s.municipio,
+    cr.year,
+    cr.data->>'possui_anexos'                   AS possui_anexos,
+    cr.data->>'qtd_anexos'                      AS qtd_anexos,
+    cr.data->>'tipo_predio_anexo'               AS tipo_predio_anexo
+FROM schools s
+JOIN census_responses cr ON cr.school_id = s.id
+WHERE cr.status = 'completed'
+  AND cr.data->>'possui_anexos' = 'Sim'
+ORDER BY s.dre, s.nome_escola;
+```
 
 ---
 

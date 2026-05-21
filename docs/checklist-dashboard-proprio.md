@@ -112,8 +112,10 @@
 > **Pré-requisito:** Fase 1 já validada em homologação. O quantitativo PostgreSQL atual é considerado **válido para a Fase 1**; esta fase formaliza por escrito as regras que sustentam essa decisão e que os próximos endpoints (Fase 2A em diante) deverão seguir.
 
 ### 1B.1 Distinção entre identificadores e status
-- [ ] Documentar a diferença entre `school_id` (PK em `schools`), `codigo_inep` (8 dígitos, "único" mas com casos legítimos de repetição), `census_id` (PK em `census_responses`) e `status` (`draft` vs. `completed`).
-- [ ] Registrar qual identificador é canônico para qual recorte (contagem de escolas, contagem de censos, soma de alunos).
+- [x] Documentar a diferença entre `school_id` (PK em `schools`), `codigo_inep` (8 dígitos, "único" mas com casos legítimos de repetição), `census_id` (PK em `census_responses`) e `status` (`draft` vs. `completed`).
+- [x] Registrar qual identificador é canônico para qual recorte (contagem de escolas, contagem de censos, soma de alunos).
+
+> ✅ Documentado em `docs/dashboard/criterios-contagem-e-qualidade-dados.md` — seção 2.
 
 ### 1B.2 Casos legítimos de mesmo INEP
 - [ ] Registrar que existem casos legítimos de escolas/anexos compartilhando o mesmo `codigo_inep` no contexto do SEDUC-PA.

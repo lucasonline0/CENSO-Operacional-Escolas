@@ -18,7 +18,7 @@
 | 1. Queries de diagnóstico | 1B.3 | ✅ Completa |
 | 2. Distinção entre identificadores | 1B.1 | ⬜ A preencher |
 | 3. Casos legítimos de INEP repetido | 1B.2 | ✅ Completa |
-| 4. Semântica por indicador | 1B.4 | ⬜ A preencher |
+| 4. Semântica por indicador | 1B.4 | ✅ Completa |
 | 5. Decisão sobre deduplicação | 1B.5 | ⬜ A preencher |
 | 6. Divergências PostgreSQL × Sheets | subitem de 1B.3/1B.4 | ⬜ A preencher (após rodar as queries) |
 
@@ -494,11 +494,204 @@ ORDER BY s.dre, s.nome_escola;
 
 ## 4. Semântica por indicador
 
-> ⬜ **A preencher — Task 1B.4**
+> ✅ **Task 1B.4 — concluída**
 
-Para cada KPI retornado por `/v1/admin/analytics/overview`, registrar a fórmula SQL exata usada
-pelo handler `AdminAnalyticsOverview` em `api/cmd/api/analytics.go`, a justificativa do recorte,
-e a instrução de que os endpoints da Fase 2A devem replicar o mesmo critério.
+Esta seção documenta a fórmula SQL exata e a justificativa de cada KPI retornado por
+`GET /v1/admin/analytics/overview` (handler `AdminAnalyticsOverview`,
+`api/cmd/api/analytics.go`). **Os endpoints da Fase 2A devem reusar exatamente estes
+recortes** para garantir consistência numérica entre abas do dashboard.
+
+---
+
+### 4.1 `total_schools` — total de escolas cadastradas
+
+```sql
+(SELECT COUNT(*) FROM schools) AS total_schools
+```
+
+**Fonte:** tabela `schools` diretamente (subconsulta independente da `vw_censo_base`).  
+**Recorte:** todas as escolas, independentemente de terem ou não um censo.  
+**Justificativa:** representa o universo operacional completo — quantas escolas o SEDUC-PA
+tem cadastradas no sistema, com ou sem participação no censo. É o denominador natural para
+cálculos de adesão.
+
+> **Não confundir com `completed`:** `total_schools` inclui escolas sem nenhum censo; `completed`
+> conta apenas as que concluíram o formulário. A diferença entre os dois revela o nível de
+> adesão ao censo.
+
+---
+
+### 4.2 `total_censuses` — total de registros de censo
+
+```sql
+COUNT(*) FILTER (WHERE census_id IS NOT NULL) AS total_censuses
+```
+
+**Fonte:** `vw_censo_base` (que faz `LEFT JOIN schools ← census_responses`).  
+**Recorte:** linhas da view onde `census_id IS NOT NULL`, ou seja, escolas que possuem ao menos
+um registro em `census_responses` (qualquer `status`, qualquer `year`).  
+**Justificativa:** conta pares `(school_id × year)` efetivamente registrados — inclui `draft` e
+`completed`, e acumula entre ciclos anuais. Útil para entender o volume operacional total do
+sistema, não a qualidade dos dados.
+
+---
+
+### 4.3 `completed` — escolas com censo concluído
+
+```sql
+COUNT(DISTINCT school_id) FILTER (WHERE status = 'completed') AS completed
+```
+
+**Fonte:** `vw_censo_base`.  
+**Recorte:** escolas **distintas** com ao menos um registro `completed` (qualquer ano).  
+**Justificativa do `DISTINCT`:** sem ele, uma escola que concluiu o censo em 2024 e novamente
+em 2025 seria contada duas vezes. `DISTINCT school_id` garante que a contagem representa
+**"quantas escolas únicas já concluíram o censo"**, independentemente do número de ciclos.
+
+> **Semântica do card no dashboard:** "Total de Escolas (Censos concluídos)". Responde à pergunta
+> "quantas escolas distintas enviaram o censo com status final?".
+
+---
+
+### 4.4 `drafts` — escolas com censo em rascunho
+
+```sql
+COUNT(DISTINCT school_id) FILTER (WHERE status = 'draft') AS drafts
+```
+
+**Fonte:** `vw_censo_base`.  
+**Recorte:** escolas **distintas** com ao menos um registro `draft` (qualquer ano).  
+**Justificativa:** mesma lógica do `completed` — `DISTINCT` evita inflação por multi-ano.
+
+> **Atenção de interpretação:** uma escola pode ter um censo `completed` de 2024 e um `draft` de
+> 2025. Ela aparece **simultaneamente** em `completed` e em `drafts`. As duas contagens não são
+> mutuamente exclusivas — não somam para `total_schools`.
+
+---
+
+### 4.5 `total_alunos` — total de alunos matriculados
+
+```sql
+COALESCE(
+    SUM(total_alunos) FILTER (
+        WHERE status = 'completed'
+          AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int
+    ), 0
+)::float8 AS total_alunos
+```
+
+**Fonte:** campo `total_alunos` de `vw_censo_base` (cast numérico com proteção de regex
+aplicado na view sobre `census_responses.data->>'total_alunos'`).  
+**Recorte duplo:**
+1. `status = 'completed'` — exclui rascunhos inacabados, cujos dados são incompletos ou
+   provisórios.
+2. `year = ano corrente` — evita inflação acumulada entre ciclos anuais. Sem este filtro,
+   uma escola que completou o censo em 2024 e 2025 somaria seus alunos duas vezes.
+
+**`COALESCE(..., 0)`:** retorna 0 em vez de `NULL` quando não há nenhum censo `completed` no
+ano corrente (ex.: início de ciclo).
+
+> **Filtro de ano fixo:** hoje o endpoint não aceita `?year=` via querystring — o ano corrente é
+> calculado em tempo de execução (`EXTRACT(YEAR FROM CURRENT_DATE)`). Filtros por ano serão
+> tratados em fase futura (ver roadmap).
+
+---
+
+### 4.6 `alunos_pcd` — alunos com deficiência
+
+```sql
+COALESCE(
+    SUM(alunos_pcd) FILTER (
+        WHERE status = 'completed'
+          AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int
+    ), 0
+)::float8 AS alunos_pcd
+```
+
+**Fonte:** campo `alunos_pcd` de `vw_censo_base`.  
+**Recorte:** idêntico ao de `total_alunos` — `completed` + ano corrente.  
+**Justificativa:** mesmos motivos: excluir rascunhos e evitar inflação multi-anual.
+
+---
+
+### 4.7 `media_alunos_por_escola` — média de alunos por escola
+
+```sql
+COALESCE(
+    AVG(total_alunos) FILTER (
+        WHERE status = 'completed'
+          AND total_alunos IS NOT NULL
+          AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int
+    ), 0
+)::float8 AS media_alunos
+```
+
+**Fonte:** campo `total_alunos` de `vw_censo_base`.  
+**Recorte triplo:**
+1. `status = 'completed'` — mesmo critério dos KPIs anteriores.
+2. `year = ano corrente` — mesmo critério.
+3. `total_alunos IS NOT NULL` — **exclusão explícita de escolas sem o campo preenchido**. Sem
+   este filtro, escolas que enviaram o censo mas não preencheram `total_alunos` entrariam no
+   denominador do `AVG` com valor `NULL`, que o PostgreSQL descarta automaticamente — mas a
+   presença explícita do filtro documenta a intenção e evita confusão futura.
+
+**Denominador efetivo:** número de escolas `completed` no ano corrente **com `total_alunos`
+preenchido** — não o total de escolas cadastradas.
+
+---
+
+### 4.8 `por_zona` — distribuição de escolas por zona
+
+```sql
+SELECT
+    COALESCE(NULLIF(zona, ''), 'Não informado') AS zona,
+    COUNT(DISTINCT school_id)                   AS total
+FROM vw_censo_base
+GROUP BY 1
+ORDER BY total DESC, zona
+```
+
+**Fonte:** coluna `schools.zona` exposta em `vw_censo_base`.  
+**Recorte:** **sem filtro de `status` ou `year`** — conta escolas distintas cadastradas por zona,
+independentemente de terem censo. Isso é intencional: zona é uma propriedade da escola, não do
+censo.  
+**`COALESCE(NULLIF(zona, ''), 'Não informado')`:** normaliza `NULL` e string vazia para o rótulo
+`'Não informado'`, evitando que escolas sem zona informada desapareçam dos resultados.  
+**`COUNT(DISTINCT school_id)`:** uma escola com censos em múltiplos anos é contada uma única
+vez por zona.
+
+---
+
+### 4.9 Tabela-resumo dos recortes
+
+| KPI | Tabela-fonte | Filtro `status` | Filtro `year` | Agregação | `DISTINCT`? |
+|---|---|---|---|---|---|
+| `total_schools` | `schools` | — | — | `COUNT(*)` | — |
+| `total_censuses` | `vw_censo_base` | `IS NOT NULL` (census_id) | — | `COUNT(*)` | Não |
+| `completed` | `vw_censo_base` | `= 'completed'` | — | `COUNT` | **Sim** |
+| `drafts` | `vw_censo_base` | `= 'draft'` | — | `COUNT` | **Sim** |
+| `total_alunos` | `vw_censo_base` | `= 'completed'` | **= ano corrente** | `SUM` | — |
+| `alunos_pcd` | `vw_censo_base` | `= 'completed'` | **= ano corrente** | `SUM` | — |
+| `media_alunos` | `vw_censo_base` | `= 'completed'` + `IS NOT NULL` | **= ano corrente** | `AVG` | — |
+| `por_zona` | `vw_censo_base` | — | — | `COUNT` | **Sim** |
+
+---
+
+### 4.10 Contrato para endpoints da Fase 2A
+
+Os endpoints `GET /v1/admin/analytics/caracterizacao/perfil` e `.../dre` (Fase 2A, Frente B)
+**devem replicar exatamente os recortes acima** para qualquer métrica que também apareça no
+`overview`. Desvios precisam ser justificados explicitamente em
+`docs/dashboard/validacao-fase-2.md`.
+
+Regras derivadas deste contrato:
+
+1. Métricas de **contagem de escolas** usam sempre `COUNT(DISTINCT school_id)`.
+2. Métricas de **volume de alunos** usam sempre `status = 'completed' AND year = ano_corrente`.
+3. Métricas de **distribuição geográfica** (zona, DRE, município) não filtram por `status` nem
+   `year` — contam o cadastro.
+4. Novos filtros opcionais (`?year=`, `?dre=`, `?zona=`) são **adicionais** aos recortes base —
+   nunca os substituem sem documentação explícita.
 
 ---
 

@@ -1,4 +1,4 @@
-# Frente 3 — Frontend (refactor de `admin/page.tsx`) + Qualidade de Dados
+# Frente 3 — Frontend (refactor + placeholders das 5 novas abas) + Qualidade de Dados
 
 **Branch:** `refactor/admin-page-componentes` (parte de `develop`).
 **Documentos companheiros:**
@@ -9,12 +9,15 @@
 
 ## 1. Objetivo
 
-Duas trilhas paralelas dentro da mesma frente:
+Três trilhas paralelas dentro da mesma frente:
 
-1. **Refactor de UI sem mudar fonte.** Quebrar `web/src/app/admin/page.tsx` (~50 KB, monolítico) em componentes por aba, **mantendo exatamente as mesmas fontes de dados** (PostgreSQL ou Sheets, conforme já está em produção). Isso prepara o terreno onde as Fases 3-UI e 4-UI vão plugar os endpoints entregues pelas Frentes 1 e 2.
-2. **Qualidade de dados.** Preencher a tabela de paridade da Fase 2A com valores reais e investigar a origem dos decimais em `total_alunos`.
+1. **Refactor de UI sem mudar fonte.** Quebrar `web/src/app/admin/page.tsx` (~50 KB, monolítico) em componentes por aba, **mantendo exatamente as mesmas fontes de dados** (PostgreSQL ou Sheets, conforme já está em produção).
+2. **Criação das 5 abas novas como placeholders.** Adicionar as abas "Pessoal e Gestão Escolar", "Tecnologia e Equipamentos", "Infraestrutura e Segurança", "Merenda Escolar" e "Serviços Terceirizados" à navegação do `/admin`, exibindo skeleton/empty state. Cada placeholder espera os endpoints que Frentes 1 e 2 vão entregar — a integração visual virá em PRs posteriores, fora desta rodada.
+3. **Qualidade de dados.** Preencher a tabela de paridade da Fase 2A com valores reais e investigar a origem dos decimais em `total_alunos`.
 
-**Não é objetivo desta frente migrar nenhuma fonte de dados.** Toda mudança de PG ↔ Sheets fica para PRs posteriores (Fase 3-UI, 4-UI), em cima do que esta frente entrega.
+**Não é objetivo desta frente migrar nenhuma fonte de dados.** Toda mudança de PG ↔ Sheets fica para PRs posteriores em cima do que esta frente entrega.
+
+**Não é objetivo desta frente criar abas para "Perfil dos Alunos e Resultados" nem "Gestão Financeira e Governança".** Esses dois temas serão remodelados para consumir outra planilha e estão fora de escopo nesta rodada.
 
 ## 2. Escopo
 
@@ -22,12 +25,19 @@ Duas trilhas paralelas dentro da mesma frente:
 
 - `web/src/app/admin/page.tsx` — quebrar em componentes; manter API pública (a página continua sendo o entry point do `/admin`).
 - `web/src/components/admin/` *(novo diretório)*:
-  - `AbaCaracterizacao.tsx` (consome `analytics/caracterizacao/{perfil,dre}` + fallback `sheet-metrics`, como hoje).
-  - `AbaPerfilAlunos.tsx` (consome `indicadores-metrics`, como hoje).
-  - `AbaOperacional.tsx` (consome `/admin/dashboard`).
-  - `AbaTodosCensos.tsx` (consome `/admin/census`).
-  - `AbaPorDre.tsx` (consome `/admin/dashboard.by_dre`).
-  - Componentes utilitários compartilhados (`StatCard`, `Donut`, `BarChart`, indicador de fonte de dados, modal "ver JSON") em `web/src/components/admin/shared/`.
+  - Abas existentes:
+    - `AbaCaracterizacao.tsx` (consome `analytics/caracterizacao/{perfil,dre}` + fallback `sheet-metrics`, **como hoje**).
+    - `AbaPerfilAlunos.tsx` (consome `indicadores-metrics`, **como hoje** — não migrar).
+    - `AbaOperacional.tsx` (consome `/admin/dashboard`).
+    - `AbaTodosCensos.tsx` (consome `/admin/census`).
+    - `AbaPorDre.tsx` (consome `/admin/dashboard.by_dre`).
+  - Abas novas (placeholders):
+    - `AbaPessoalGestao.tsx`
+    - `AbaTecnologia.tsx`
+    - `AbaInfraestruturaSeguranca.tsx`
+    - `AbaMerenda.tsx`
+    - `AbaServicosTerceirizados.tsx`
+  - Componentes utilitários compartilhados (`StatCard`, `Donut`, `BarChart`, indicador de fonte, modal "ver JSON", `EmptyStatePlaceholder`) em `web/src/components/admin/shared/`.
 - `web/src/hooks/` — eventualmente extrair hooks de fetching (`useAdminCaracterizacao`, `useAdminAlunos`, etc.). Manter o `apiFetch` existente.
 - `docs/dashboard/validacao-fase-2.md` — preencher tabela "Métricas comparadas" (linhas 100–132).
 - `docs/dashboard/criterios-contagem-e-qualidade-dados.md` — adicionar seção "Decimais em `total_alunos`" (origem, hipóteses, lista de escolas afetadas).
@@ -40,7 +50,8 @@ Duas trilhas paralelas dentro da mesma frente:
 - `POST /v1/census`, payload de submit, fluxo do formulário público.
 - Comportamento dos endpoints Sheets — apenas continua consumindo o que existe.
 - Comportamento de autenticação (JWT, login, logout).
-- Layout visual macro (mesmas abas, mesmos gráficos, mesmas cores). Refactor é estrutural, não visual.
+- Layout visual macro das abas existentes (mesmas abas atuais, mesmos gráficos, mesmas cores). Refactor é estrutural, não visual.
+- Criar abas para "Perfil dos Alunos e Resultados (remodelada)" nem "Gestão Financeira e Governança" — fora de escopo nesta rodada.
 
 ## 3. Tarefas
 
@@ -54,16 +65,47 @@ Princípios:
 - Indicador de fonte ("PostgreSQL · ano corrente" / "Google Sheets · fallback") continua exatamente como está hoje — apenas movido para o componente da aba relevante.
 - O modal "ver JSON" e o botão "Sync Planilha" continuam no header.
 
-Ordem sugerida de PRs:
+Ordem sugerida de PRs no refactor:
 
 1. **PR 1** — extrair `AbaOperacional.tsx` + `AbaPorDre.tsx` + `AbaTodosCensos.tsx` (as abas mais simples).
-2. **PR 2** — extrair `AbaPerfilAlunos.tsx`.
+2. **PR 2** — extrair `AbaPerfilAlunos.tsx` (mantida lendo `indicadores-metrics`).
 3. **PR 3** — extrair `AbaCaracterizacao.tsx` (a mais complexa — KPIs, donuts, barras, tabela DRE, fallback Sheets).
-4. **PR 4** — extrair componentes compartilhados (`Donut`, `BarChart`, `StatCard`, indicador de fonte) para `shared/`.
+4. **PR 4** — extrair componentes compartilhados (`Donut`, `BarChart`, `StatCard`, indicador de fonte, `EmptyStatePlaceholder`) para `shared/`.
 
-Cada PR deve manter `npm run build` e `npm run lint` no nível atual (zero erros novos; warnings remanescentes documentados em [validacao-fase-2.md](validacao-fase-2.md) podem permanecer).
+Cada PR deve manter `npm run build` e `npm run lint` no nível atual (zero erros novos).
 
-### 3.2 Tabela de paridade PG × Sheets (validação Fase 2A)
+### 3.2 Placeholders das 5 abas novas
+
+Criar 5 componentes, todos com a mesma estrutura: cabeçalho com título, descrição curta, `EmptyStatePlaceholder` (ícone + "Em construção" + texto explicativo curto), e — opcionalmente — skeleton de KPIs/cards que indica como ficará a aba depois da integração.
+
+Adicionar as 5 abas à navegação do `/admin` na ordem:
+
+1. Caracterização da Rede (já existe)
+2. **Pessoal e Gestão Escolar** *(nova — placeholder)*
+3. **Tecnologia e Equipamentos** *(nova — placeholder)*
+4. **Infraestrutura e Segurança** *(nova — placeholder)*
+5. **Merenda Escolar** *(nova — placeholder)*
+6. **Serviços Terceirizados** *(nova — placeholder)*
+7. Perfil dos Alunos e Resultados (mantida como está)
+8. Operacional (mantida como está)
+9. Todos os Censos (mantida como está)
+10. Por DRE (mantida como está)
+
+(Ordem sugerida — pode ser ajustada com o stakeholder.)
+
+Cada placeholder **não faz fetch nenhum** nesta frente. Carregar o endpoint correspondente é tarefa do PR de integração visual (fora desta rodada).
+
+Texto sugerido do placeholder:
+
+> **Em construção**
+>
+> Esta seção exibirá indicadores agregados sobre [tema]. A camada de dados está sendo entregue pela equipe e a visualização será habilitada em breve.
+
+PR sugerido:
+
+- **PR 5** — criar os 5 placeholders + componente compartilhado `EmptyStatePlaceholder` + adicionar à navegação do `/admin`.
+
+### 3.3 Tabela de paridade PG × Sheets (validação Fase 2A)
 
 Preencher [validacao-fase-2.md](validacao-fase-2.md) — tabela "Métricas comparadas" (linhas 100–132):
 
@@ -71,10 +113,10 @@ Preencher [validacao-fase-2.md](validacao-fase-2.md) — tabela "Métricas compa
   - `GET /v1/admin/sheet-metrics`
   - `GET /v1/admin/analytics/caracterizacao/perfil`
   - `GET /v1/admin/analytics/caracterizacao/dre`
-- Preencher cada linha da tabela com `valor PG`, `valor Sheets`, `delta`, `observação`.
+- Preencher cada linha com `valor PG`, `valor Sheets`, `delta`, `observação`.
 - Para deltas > 1% em KPIs ou em categorias com volume ≥ 50 escolas: anexar hipótese de causa (INEP repetido, drafts não migrados, anexos, correção pós-sync). Cruzar com [criterios-contagem-e-qualidade-dados.md](criterios-contagem-e-qualidade-dados.md) seção 6.
 
-### 3.3 Investigação dos decimais em `total_alunos`
+### 3.4 Investigação dos decimais em `total_alunos`
 
 Hoje a Fase 2A devolve `total_alunos = 413934.03` no agregado e amostras decimais em DREs (`9187.661`, `9179.496`, ...). Conceitualmente `total_alunos` é inteiro.
 
@@ -92,10 +134,10 @@ Tarefas:
   ```
 - Cruzar com os payloads originais (`SELECT data->>'total_alunos' FROM census_responses WHERE id = ?`) para identificar o formato gravado.
 - Levantar hipóteses (percentual digitado no campo errado? média de algum sistema externo? valor com vírgula sendo lido como ponto?).
-- Listar **escolas afetadas** em uma seção nova de [criterios-contagem-e-qualidade-dados.md](criterios-contagem-e-qualidade-dados.md): seção 8 "Decimais em campos conceitualmente inteiros".
+- Listar escolas afetadas em uma seção nova de [criterios-contagem-e-qualidade-dados.md](criterios-contagem-e-qualidade-dados.md): seção 8 "Decimais em campos conceitualmente inteiros".
 - Recomendação final: validação no Zod (`z.number().int()` ou `z.coerce.number().int()` no `general-data.ts`) **se** a análise indicar que é erro de input. Implementar em PR isolado, revisado, sem mudar submit.
 
-### 3.4 Sanity local
+### 3.5 Sanity local
 
 ```bash
 cd web
@@ -106,38 +148,48 @@ npm run dev      # abrir http://localhost:3000/admin e navegar todas as abas
 ```
 
 Verificar manualmente:
-- todas as 5 abas continuam carregando;
+- todas as abas continuam carregando — as 5 existentes idênticas ao baseline e as 5 novas mostrando placeholder;
 - indicador de fonte "PostgreSQL · ano corrente" segue verde na Caracterização da Rede;
 - fallback Sheets continua sendo carregado em paralelo (DevTools › Network);
-- nenhuma regressão de cor, layout, ordenação ou texto.
+- nenhuma regressão de cor, layout, ordenação ou texto nas abas existentes.
 
 ## 4. Critérios de aceite
 
 - [ ] `web/src/app/admin/page.tsx` reduzido a um shell (autenticação + aba ativa + composição dos componentes).
-- [ ] Cada aba em seu próprio arquivo sob `web/src/components/admin/`.
-- [ ] Componentes compartilhados (`Donut`, `BarChart`, `StatCard`, indicador de fonte) em `web/src/components/admin/shared/`.
+- [ ] Cada aba existente em seu próprio arquivo sob `web/src/components/admin/`.
+- [ ] 5 abas novas (Pessoal/Gestão, Tecnologia, Infra/Segurança, Merenda, Serviços Terceirizados) criadas como placeholders e visíveis na navegação.
+- [ ] Componentes compartilhados (`Donut`, `BarChart`, `StatCard`, indicador de fonte, `EmptyStatePlaceholder`) em `web/src/components/admin/shared/`.
 - [ ] `npm run build` OK. `npm run lint` sem erros novos.
-- [ ] Validação visual manual em homologação: 5 abas carregando idêntico ao baseline; chip de fonte exibindo o mesmo estado.
+- [ ] Validação visual manual em homologação: abas existentes idênticas ao baseline; abas novas mostrando placeholder.
 - [ ] Tabela "Métricas comparadas" em [validacao-fase-2.md](validacao-fase-2.md) preenchida com números reais.
 - [ ] Seção "Decimais em `total_alunos`" criada em [criterios-contagem-e-qualidade-dados.md](criterios-contagem-e-qualidade-dados.md) com escolas listadas e hipóteses.
 - [ ] **Nenhuma mudança em `api/`, `infra/`, formulário, autenticação ou submit.**
 - [ ] **Nenhuma migração de fonte (PG ↔ Sheets).**
+- [ ] **Nenhuma aba criada para "Perfil dos Alunos (remodelada)" nem "Gestão Financeira e Governança".**
 
 ## 5. Riscos conhecidos
 
 - `admin/page.tsx` é grande (~50 KB) e contém estado entrelaçado. Risco de regressão sutil em hidratação ou em fallback parcial. Mitigação: PRs pequenos por aba; smoke manual em cada PR.
 - O refactor pode descobrir bugs latentes (ex.: erros de lint pré-existentes ainda em `tailwind.config.mjs`, `setToken` em `AdminPage`). **Não tentar consertar tudo no mesmo PR** — abrir tasks separadas.
 - A investigação de decimais pode revelar problema sistêmico no formulário (campo numérico aceitando vírgula). Se for isso, a correção no Zod é uma decisão de produto — abrir issue antes de implementar.
+- A ordem definitiva das abas na navegação pode mudar conforme stakeholder. Manter a ordem facilmente reordenável no shell (`page.tsx`).
 
 ## 6. Fora de escopo
 
-- Migrar a aba "Perfil dos Alunos" para PostgreSQL — Fase 3-UI, depois da Frente 1 entregar.
-- Adicionar nova seção "Oferta e Funcionamento" — Fase 4-UI, depois da Frente 2 entregar.
+- Plugar os endpoints das Frentes 1 e 2 nos placeholders — PRs posteriores, fora desta rodada.
 - Refatorar componentes do formulário (`web/src/components/forms/*`).
 - Mudar autenticação, persistência, navegação do wizard.
-- Resolver os warnings pré-existentes não relacionados ao refactor.
+- Resolver warnings pré-existentes não relacionados ao refactor.
+- Criar abas para "Perfil dos Alunos e Resultados" remodelada (consumirá outra planilha — ainda em definição).
+- Criar aba "Gestão Financeira e Governança" (idem).
 
 ## 7. Coordenação com as outras frentes
 
 - Frente 1 e Frente 2 **não tocam** em `web/`. Nenhum conflito esperado durante o desenvolvimento.
-- Ao final desta frente, os componentes `AbaPerfilAlunos.tsx` e `AbaCaracterizacao.tsx` ficam prontos para receber, em PRs futuros, os endpoints entregues pelas Frentes 1 e 2 sem necessidade de novo refactor estrutural.
+- Ao final desta frente, os 5 placeholders ficam prontos para receber, em PRs futuros, os endpoints entregues pelas Frentes 1 e 2 — sem necessidade de novo refactor estrutural.
+- Nome dos componentes alinhado com os endpoints sugeridos das outras frentes:
+  - `AbaPessoalGestao.tsx` ↔ `/v1/admin/analytics/pessoal-gestao/*` (Frente 1)
+  - `AbaTecnologia.tsx` ↔ `/v1/admin/analytics/tecnologia/*` (Frente 1)
+  - `AbaInfraestruturaSeguranca.tsx` ↔ `/v1/admin/analytics/infraestrutura/*` (Frente 2)
+  - `AbaMerenda.tsx` ↔ `/v1/admin/analytics/merenda/*` (Frente 2)
+  - `AbaServicosTerceirizados.tsx` ↔ `/v1/admin/analytics/servicos-terceirizados/*` (Frente 2)

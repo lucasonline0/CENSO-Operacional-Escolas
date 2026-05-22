@@ -98,9 +98,9 @@ The admin dashboard (`/admin`) is being incrementally migrated from Google Sheet
 
 ### Current state (hybrid)
 
-- **Operational tab** ("Operacional", "Todos os Censos", "Por DRE") already reads from PostgreSQL via `/v1/admin/dashboard` and `/v1/admin/census`.
-- **Analytical tab** ("Caracterização da Rede"): main KPI cards now read from PostgreSQL via `/v1/admin/analytics/overview` (Phase 1 — landed). Donuts, bar charts and the DRE table on this tab still read from Google Sheets via `/v1/admin/sheet-metrics`.
-- **Student profile tab** ("Perfil dos Alunos e Resultados") still reads entirely from Google Sheets via `/v1/admin/indicadores-metrics`.
+- **Operational tab** ("Operacional", "Todos os Censos", "Por DRE") reads from PostgreSQL via `/v1/admin/dashboard` and `/v1/admin/census`.
+- **Analytical tab** ("Caracterização da Rede"): **fully migrated to PostgreSQL** (Phases 1 + 2A + 2B.1 — landed). KPIs, donuts, bar charts and the DRE table consume `/v1/admin/analytics/overview` and `/v1/admin/analytics/caracterizacao/{perfil,dre}`. `sheet-metrics` continues responding and is loaded in parallel as fallback.
+- **Student profile tab** ("Perfil dos Alunos e Resultados") still reads entirely from Google Sheets via `/v1/admin/indicadores-metrics` — target of Phase 3 (Frente 1).
 - The form flow and Sheets sync are unchanged.
 
 ### Target architecture
@@ -137,14 +137,15 @@ Do **not** remove or disable any of the following:
 - Do **not** remove existing endpoints without a deprecation phase.
 - Prefer **small, reversible PRs** with a paired validation note (numbers compared against the current Sheets-backed view).
 
-### Parallel work after Phase 1
+### Parallel work after Phase 2B.1 — 3 frentes
 
-After Phase 1 landed, the track is intentionally split into two frentes that can progress in parallel without scope conflict:
+After Phases 1, 1B, 2A and 2B.1 landed, the track is split into **three frentes** working in parallel from branch `develop`, each on its own branch and on a disjoint set of files:
 
-- **Frente A — documentação/qualidade de dados:** formaliza critérios de contagem, INEP repetido e divergências PostgreSQL × Sheets. Toca apenas em `docs/`.
-- **Frente B — backend analítico:** entrega `vw_censo_enriquecida` e os endpoints `/v1/admin/analytics/caracterizacao/*` (Fase 2A), **sem migrar a UI inteira**.
+- **Frente 1 — Backend Perfil dos Alunos (Fase 3).** Branch `feat/analytics-perfil-alunos`. Delivers `vw_censo_indicadores_escola` (minimal) and `GET /v1/admin/analytics/alunos/permanencia`. Touches `infra/migrations/0003_*`, `api/cmd/api/analytics_alunos.go` (new), `api/cmd/api/main.go` (route registration). Does **not** touch `web/`. Guide: `docs/dashboard/frente-1-perfil-alunos.md`.
+- **Frente 2 — Backend Oferta e Infraestrutura (Fase 4).** Branch `feat/analytics-oferta-infra`. Delivers `vw_censo_turnos / etapas / modalidades / ambientes` and endpoints `/v1/admin/analytics/caracterizacao/oferta-funcionamento` + `.../infraestrutura-educacional`. Touches `infra/migrations/0004_*` to `0007_*`, `api/cmd/api/analytics_oferta.go` (new), `api/cmd/api/main.go`. Does **not** touch `web/`. Guide: `docs/dashboard/frente-2-oferta-infra.md`.
+- **Frente 3 — Frontend + Data Quality.** Branch `refactor/admin-page-componentes`. Splits `web/src/app/admin/page.tsx` into per-tab components (without changing data sources), fills in the Phase 2A parity table, investigates decimals in `total_alunos`. Touches `web/`, `docs/dashboard/validacao-fase-2.md`, `docs/dashboard/criterios-contagem-e-qualidade-dados.md`. Does **not** touch `api/` or `infra/`. Guide: `docs/dashboard/frente-3-frontend-qualidade.md`.
 
-See `docs/dashboard/plano-trabalho-paralelo.md` for what each frente may and may not touch.
+The previous 2-frente split (Frente A docs + Frente B Fase 2A) has been concluded — see `docs/dashboard/plano-trabalho-paralelo.md` for the new coordination rules.
 
 ### Analytical migrations
 
@@ -169,5 +170,6 @@ When working on this track, consult (in this order):
 - `docs/checklist-dashboard-proprio.md` — executable checklist per phase.
 - `docs/dashboard/jsonb-field-inventory.md` — what is actually stored in `census_responses.data`.
 - `docs/dashboard/validacao-fase-1.md` — Phase 1 parity template (filled in homologação).
-- `docs/dashboard/plano-trabalho-paralelo.md` — escopo das frentes A (docs/qualidade) e B (backend Fase 2A).
+- `docs/dashboard/plano-trabalho-paralelo.md` — escopo das 3 frentes paralelas atuais (Fase 3 backend, Fase 4 backend, refactor frontend + qualidade).
+- `docs/dashboard/frente-1-perfil-alunos.md`, `docs/dashboard/frente-2-oferta-infra.md`, `docs/dashboard/frente-3-frontend-qualidade.md` — guia operacional de cada frente.
 - `docs/guia_views_analiticas_baseado_repositorio_censo.md` — methodological reference for the full set of views.

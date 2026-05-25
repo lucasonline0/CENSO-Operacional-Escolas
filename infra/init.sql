@@ -189,3 +189,69 @@ SELECT
     lower(NULLIF(cr.data->>'estado_bebedouros', ''))     AS estado_bebedouros
 FROM vw_censo_base b
 LEFT JOIN census_responses cr ON cr.id = b.census_id;
+
+-- Frente 2 / 0010 — espelho de infra/migrations/0010_vw_censo_rh_merendeiras.sql
+
+CREATE OR REPLACE VIEW vw_censo_rh_merendeiras AS
+SELECT
+    b.school_id, b.codigo_inep, b.nome_escola, b.dre, b.municipio, b.zona,
+    b.census_id, b.year, b.status,
+    NULLIF(cr.data->>'oferta_regular',      '')  AS oferta_regular,
+    NULLIF(cr.data->>'qualidade_merenda',   '')  AS qualidade_merenda,
+    NULLIF(cr.data->>'atende_necessidades', '')  AS atende_necessidades,
+    CASE WHEN cr.data->>'qtd_merendeiras_estatutaria' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_merendeiras_estatutaria')::numeric END  AS qtd_merendeiras_estatutaria,
+    CASE WHEN cr.data->>'qtd_merendeiras_terceirizada' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_merendeiras_terceirizada')::numeric END AS qtd_merendeiras_terceirizada,
+    CASE WHEN cr.data->>'qtd_merendeiras_temporaria' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_merendeiras_temporaria')::numeric END   AS qtd_merendeiras_temporaria,
+    NULLIF(cr.data->>'qtd_atende_necessidade_merenda',  '')  AS qtd_atende_necessidade_merenda,
+    CASE WHEN cr.data->>'quantitativo_necessario_merenda' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'quantitativo_necessario_merenda')::numeric END AS quantitativo_necessario_merenda,
+    NULLIF(cr.data->>'empresa_terceirizada_merenda', '')  AS empresa_terceirizada_merenda,
+    NULLIF(cr.data->>'possui_supervisor_merenda',    '')  AS possui_supervisor_merenda
+FROM vw_censo_base b
+LEFT JOIN census_responses cr ON cr.id = b.census_id;
+
+-- Frente 2 / 0011 — espelho de infra/migrations/0011_vw_censo_rh_servicos_gerais.sql
+
+CREATE OR REPLACE VIEW vw_censo_rh_servicos_gerais AS
+SELECT
+    b.school_id, b.codigo_inep, b.nome_escola, b.dre, b.municipio, b.zona,
+    b.census_id, b.year, b.status,
+    CASE WHEN cr.data->>'qtd_servicos_gerais_efetivo' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_servicos_gerais_efetivo')::numeric END      AS qtd_servicos_gerais_efetivo,
+    CASE WHEN cr.data->>'qtd_servicos_gerais_temporario' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_servicos_gerais_temporario')::numeric END   AS qtd_servicos_gerais_temporario,
+    CASE WHEN cr.data->>'qtd_servicos_gerais_terceirizado' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_servicos_gerais_terceirizado')::numeric END AS qtd_servicos_gerais_terceirizado,
+    NULLIF(cr.data->>'qtd_atende_necessidade_sg',  '')  AS qtd_atende_necessidade_sg,
+    CASE WHEN cr.data->>'quantitativo_necessario_sg' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'quantitativo_necessario_sg')::numeric END AS quantitativo_necessario_sg,
+    NULLIF(cr.data->>'empresa_terceirizada_sg', '')  AS empresa_terceirizada_sg,
+    NULLIF(cr.data->>'possui_supervisor_sg',    '')  AS possui_supervisor_sg
+FROM vw_censo_base b
+LEFT JOIN census_responses cr ON cr.id = b.census_id;
+
+-- Frente 2 / 0012 — espelho de infra/migrations/0012_vw_censo_servicos_terceirizados.sql
+
+CREATE OR REPLACE VIEW vw_censo_servicos_terceirizados AS
+SELECT
+    b.school_id, b.codigo_inep, b.nome_escola, b.dre, b.municipio, b.zona,
+    b.census_id, b.year, b.status,
+    CASE WHEN cr.data->>'qtd_agentes_portaria' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_agentes_portaria')::numeric END  AS qtd_agentes_portaria,
+    NULLIF(cr.data->>'qtd_atende_necessidade_portaria', '')    AS qtd_atende_necessidade_portaria,
+    CASE WHEN cr.data->>'quantitativo_necessario_portaria' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'quantitativo_necessario_portaria')::numeric END AS quantitativo_necessario_portaria,
+    NULLIF(cr.data->>'empresa_terceirizada_portaria', '')      AS empresa_terceirizada_portaria,
+    NULLIF(cr.data->>'possui_supervisor_portaria',    '')      AS possui_supervisor_portaria,
+    NULLIF(cr.data->>'empresa_terceirizada_merenda',  '')      AS empresa_terceirizada_merenda,
+    NULLIF(cr.data->>'empresa_terceirizada_sg',       '')      AS empresa_terceirizada_sg,
+    NULLIF(cr.data->>'avaliacao_merendeiras',  '')  AS avaliacao_merendeiras,
+    NULLIF(cr.data->>'avaliacao_portaria',     '')  AS avaliacao_portaria,
+    NULLIF(cr.data->>'avaliacao_limpeza',      '')  AS avaliacao_limpeza,
+    NULLIF(cr.data->>'avaliacao_comunicacao',  '')  AS avaliacao_comunicacao,
+    NULLIF(cr.data->>'avaliacao_supervisao',   '')  AS avaliacao_supervisao
+FROM vw_censo_base b
+LEFT JOIN census_responses cr ON cr.id = b.census_id;

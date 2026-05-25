@@ -97,39 +97,85 @@ Labels usam hífen ASCII (`-`) — o guia metodológico usa en-dash, mas em payl
 
 `top_dres` é derivado do `detalhamento` em uma única query (já ordenada por `escolas DESC`) para garantir consistência entre os dois blocos — o consumidor pode usar `top_dres` para o gráfico de barras "Escolas por DRE" e `detalhamento` para a tabela.
 
-## Métricas comparadas (a preencher em homologação)
+## Métricas comparadas (paridade PG × Sheets)
 
-> Preencher após executar os dois endpoints contra a base de homologação e a planilha em paralelo.
+> Valores da coluna **PostgreSQL** vêm do payload de produção já fixado em "Validação online — Fase 2A" (endpoints `/v1/admin/analytics/caracterizacao/perfil` e `/caracterizacao/dre`). Para a coluna **Sheets/admin atual** é necessário coletar `GET /v1/admin/sheet-metrics` com um token administrativo válido e comparar.
+>
+> **Status da coleta — Frente 3 (PR 7):** lado PostgreSQL preenchido a partir dos números de produção; lado Sheets **não coletado nesta rodada** porque exige token administrativo, e a política deste repositório veda registrar segredos/credenciais/tokens em arquivos. O preenchimento da coluna Sheets fica como passo manual do operador autorizado (ver "Como coletar o lado Sheets" abaixo).
 
 | Métrica | PostgreSQL | Sheets/admin atual | Delta | Observação |
 |---|---:|---:|---:|---|
-| Total de escolas (KPI) |  |  |  |  |
-| Total de alunos (KPI) |  |  |  |  |
-| Média de alunos/escola (KPI) |  |  |  |  |
-| Alunos PcD (KPI) |  |  |  |  |
-| Escolas por porte: 0-50 |  |  |  |  |
-| Escolas por porte: 50-150 |  |  |  |  |
-| Escolas por porte: 150-300 |  |  |  |  |
-| Escolas por porte: 300-500 |  |  |  |  |
-| Escolas por porte: 500-1000 |  |  |  |  |
-| Escolas por porte: 1000+ |  |  |  |  |
-| Escolas por porte: Não informado |  |  |  |  |
-| Escolas por zona: Urbana |  |  |  |  |
-| Escolas por zona: Rural |  |  |  |  |
-| Escolas por zona: Ribeirinha |  |  |  |  |
-| Escolas por zona: Não informado |  |  |  |  |
-| Matrículas por porte: 0-50 |  |  |  |  |
-| Matrículas por porte: 50-150 |  |  |  |  |
-| Matrículas por porte: 150-300 |  |  |  |  |
-| Matrículas por porte: 300-500 |  |  |  |  |
-| Matrículas por porte: 500-1000 |  |  |  |  |
-| Matrículas por porte: 1000+ |  |  |  |  |
-| Escolas por DRE (top 5) |  |  |  |  |
-| Total de alunos por DRE (top 5) |  |  |  |  |
-| Média alunos/escola por DRE (top 5) |  |  |  |  |
-| Salas de aula por DRE (top 5) |  |  |  |  |
+| Total de escolas (KPI) | 818 | _não coletado_ | — | Recorte PG: `COUNT(DISTINCT school_id)` em `vw_censo_enriquecida` com `status='completed'` e ano corrente. |
+| Total de alunos (KPI) | 413.934,03 | _não coletado_ | — | Valor PG vem com 2 casas decimais — investigação dedicada na seção "Decimais em `total_alunos`" de `criterios-contagem-e-qualidade-dados.md`. |
+| Média de alunos/escola (KPI) | 506,03 | _não coletado_ | — | PG: `AVG(total_alunos) FILTER (WHERE total_alunos IS NOT NULL)` com mesmos filtros. |
+| Alunos PcD (KPI) | 15.337 | _não coletado_ | — | — |
+| Escolas por porte: 0-50 | 22 | _não coletado_ | — | — |
+| Escolas por porte: 50-150 | 74 | _não coletado_ | — | — |
+| Escolas por porte: 150-300 | 204 | _não coletado_ | — | — |
+| Escolas por porte: 300-500 | 174 | _não coletado_ | — | — |
+| Escolas por porte: 500-1000 | 260 | _não coletado_ | — | — |
+| Escolas por porte: 1000+ | 84 | _não coletado_ | — | — |
+| Escolas por porte: Não informado | 0 (faixa ausente no payload) | _não coletado_ | — | Nenhuma escola caiu na faixa "Não informado" no recorte `completed` + ano corrente; verificar se Sheets também não classifica nenhuma escola sem porte. |
+| Escolas por zona: Urbana | 608 | _não coletado_ | — | — |
+| Escolas por zona: Rural | 197 | _não coletado_ | — | — |
+| Escolas por zona: Ribeirinha | 13 | _não coletado_ | — | — |
+| Escolas por zona: Não informado | 0 (zona ausente no payload) | _não coletado_ | — | Sob `completed` + ano corrente, nenhuma escola caiu em "Não informado". Em `/analytics/overview` (sem filtro de status/ano) os totais por zona são maiores — diferença esperada por construção. |
+| Matrículas por porte: 0-50 | 343,03 | _não coletado_ | — | Valor decimal — herdado de algum censo da faixa com `total_alunos` fracionário. |
+| Matrículas por porte: 50-150 | 7.617 | _não coletado_ | — | — |
+| Matrículas por porte: 150-300 | 45.832 | _não coletado_ | — | — |
+| Matrículas por porte: 300-500 | 67.471 | _não coletado_ | — | — |
+| Matrículas por porte: 500-1000 | 186.622 | _não coletado_ | — | — |
+| Matrículas por porte: 1000+ | 106.049 | _não coletado_ | — | — |
+| Escolas por DRE — CASTANHAL  | 48 | _não coletado_ | — | Top 1 do `detalhamento`. |
+| Escolas por DRE — ABAETETUBA | 47 | _não coletado_ | — | Top 2. |
+| Escolas por DRE — SANTAREM   | 43 | _não coletado_ | — | Top 3. |
+| Escolas por DRE — CAPANEMA   | 35 | _não coletado_ | — | Top 4. |
+| Escolas por DRE — BRAGANCA   | 33 | _não coletado_ | — | Top 5. |
+| Total de alunos por DRE — CASTANHAL  | 25.488 | _não coletado_ | — | — |
+| Total de alunos por DRE — ABAETETUBA | 27.559 | _não coletado_ | — | — |
+| Total de alunos por DRE — SANTAREM   | 23.518 | _não coletado_ | — | — |
+| Total de alunos por DRE — CAPANEMA   | 18.801 | _não coletado_ | — | — |
+| Total de alunos por DRE — BRAGANCA   | 15.452 | _não coletado_ | — | — |
+| Salas de aula por DRE — CASTANHAL  | 470 | _não coletado_ | — | — |
+| Salas de aula por DRE — ABAETETUBA | 900 | _não coletado_ | — | — |
+| Salas de aula por DRE — SANTAREM   | 440 | _não coletado_ | — | — |
+| Salas de aula por DRE — CAPANEMA   | 1.530 | _não coletado_ | — | — |
+| Salas de aula por DRE — BRAGANCA   | 278 | _não coletado_ | — | — |
+| Média alunos/escola por DRE (top 5) | _derivar de `total_alunos / escolas`_ | _não coletado_ | — | Coletar diretamente do payload `caracterizacao/dre.detalhamento[*].media_alunos_por_escola` no momento do preenchimento. |
 
 > **Critério de aceite numérico (sugerido):** delta ≤ 1% em KPIs e categorias com volume ≥ 50 escolas; deltas maiores devem ser explicados pela Frente A em [criterios-contagem-e-qualidade-dados.md](criterios-contagem-e-qualidade-dados.md) (INEP repetido, drafts não migrados, anexos, etc.).
+
+### Como coletar o lado Sheets (operador autorizado)
+
+> **Política de segredos:** nunca registrar usuário, senha, token JWT, URL completa do banco, credenciais Railway ou chaves Google em nenhum arquivo deste repositório. Substituir a coluna Sheets diretamente no diff, sem deixar artefatos do `curl` no documento.
+
+```bash
+# 1) Obter token administrativo (executar local, NÃO colar a saída no doc).
+curl -s -X POST "${API_URL:-http://localhost:8000}/v1/admin/login" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"<USUARIO>","password":"<SENHA>"}' | jq -r '.data.token'
+
+# 2) Exportar o token apenas na sessão de coleta.
+export TOKEN="<cole_o_token_apenas_aqui_e_nao_no_doc>"
+
+# 3) Capturar os três payloads.
+curl -s "${API_URL:-http://localhost:8000}/v1/admin/sheet-metrics"               -H "Authorization: Bearer $TOKEN" | jq
+curl -s "${API_URL:-http://localhost:8000}/v1/admin/analytics/caracterizacao/perfil" -H "Authorization: Bearer $TOKEN" | jq
+curl -s "${API_URL:-http://localhost:8000}/v1/admin/analytics/caracterizacao/dre"    -H "Authorization: Bearer $TOKEN" | jq
+```
+
+Para cada delta ≠ 0 encontrado, classificar a hipótese conforme a seção [6.3 Hipóteses de causa esperadas](criterios-contagem-e-qualidade-dados.md#63-hipóteses-de-causa-esperadas), por exemplo:
+
+- critério de contagem diferente (Sheets conta linhas, PG conta `DISTINCT school_id`);
+- ano corrente vs base histórica (Sheets pode acumular cadastros antigos);
+- censos `completed` vs todos os registros;
+- escolas com `sheet_synced_at IS NULL` no momento da coleta;
+- correção pós-sync direto na planilha;
+- diferença por INEP/`school_id` (ver seção 3 do mesmo documento);
+- dado decimal em campo conceitualmente inteiro (ver seção 8 — `total_alunos`);
+- campo ausente ou nome divergente entre as duas fontes.
+
+Se a hipótese não for confirmável por evidência, marcar explicitamente como "hipótese — investigar".
 
 ## SQL de sanity check
 

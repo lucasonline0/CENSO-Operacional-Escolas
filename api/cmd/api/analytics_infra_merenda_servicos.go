@@ -178,7 +178,7 @@ func (app *application) AdminAnalyticsInfraCondicoes(w http.ResponseWriter, r *h
 	err = db.QueryRowContext(ctx, fmt.Sprintf(`
 		SELECT
 			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE lower(muro_cerca) LIKE 'sim%%') / NULLIF(COUNT(*), 0), 1), 0)::float8,
-			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE lower(perimetro_fechado) = 'sim') / NULLIF(COUNT(*), 0), 1), 0)::float8
+			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE perimetro_fechado IS NOT NULL AND lower(perimetro_fechado) NOT IN ('não', 'nao', 'não possui')) / NULLIF(COUNT(*), 0), 1), 0)::float8
 		FROM vw_censo_infraestrutura_seguranca
 		WHERE %s
 	`, filtro)).Scan(&out.PctMuroCerca, &out.PctPerimetroFechado)
@@ -232,7 +232,7 @@ func (app *application) AdminAnalyticsInfraSeguranca(w http.ResponseWriter, r *h
 			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE lower(possui_botao_panico) = 'sim')                                        / NULLIF(COUNT(*), 0), 1), 0)::float8,
 			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE cameras_funcionamento IS NOT NULL AND lower(cameras_funcionamento) NOT LIKE '%%não possui%%') / NULLIF(COUNT(*), 0), 1), 0)::float8,
 			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE lower(plano_evacuacao)   = 'sim')                                          / NULLIF(COUNT(*), 0), 1), 0)::float8,
-			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE lower(politica_bullying) = 'sim')                                          / NULLIF(COUNT(*), 0), 1), 0)::float8
+			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE politica_bullying IS NOT NULL AND lower(politica_bullying) NOT LIKE 'não%%') / NULLIF(COUNT(*), 0), 1), 0)::float8
 		FROM vw_censo_infraestrutura_seguranca
 		WHERE %s
 	`, filtro)).Scan(
@@ -298,10 +298,10 @@ func (app *application) AdminAnalyticsMerendaOferta(w http.ResponseWriter, r *ht
 			),
 			tot AS (SELECT COUNT(DISTINCT school_id)::numeric AS n FROM base)
 			SELECT val,
-				COUNT(DISTINCT school_id),
+				COUNT(DISTINCT school_id) AS escolas,
 				ROUND(100.0 * COUNT(DISTINCT school_id) / NULLIF(tot.n, 0), 1)::float8
 			FROM base CROSS JOIN tot
-			GROUP BY val, tot.n ORDER BY escolas DESC
+			GROUP BY val, tot.n ORDER BY 2 DESC
 		`, campo, view, filtro, campo))
 		if err != nil {
 			return nil, err
@@ -324,12 +324,18 @@ func (app *application) AdminAnalyticsMerendaOferta(w http.ResponseWriter, r *ht
 	}
 
 	err = db.QueryRowContext(ctx, fmt.Sprintf(`
-		SELECT
-			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE lower(atende_necessidades) = 'sim') / NULLIF(COUNT(*), 0), 1), 0)::float8,
-			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE lower(possui_refeitorio)   = 'sim') / NULLIF(COUNT(*), 0), 1), 0)::float8
-		FROM vw_censo_equipamentos_merenda
-		WHERE %s
-	`, filtro)).Scan(&out.PctAtendeNecessidades, &out.PctPossuiRefeitorio)
+		SELECT COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE lower(atende_necessidades) = 'sim') / NULLIF(COUNT(*), 0), 1), 0)::float8
+		FROM vw_censo_rh_merendeiras WHERE %s
+	`, filtro)).Scan(&out.PctAtendeNecessidades)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("pct_atende_necessidades: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	err = db.QueryRowContext(ctx, fmt.Sprintf(`
+		SELECT COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE lower(possui_refeitorio) = 'sim') / NULLIF(COUNT(*), 0), 1), 0)::float8
+		FROM vw_censo_equipamentos_merenda WHERE %s
+	`, filtro)).Scan(&out.PctPossuiRefeitorio)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("pct_merenda: %v", err), http.StatusInternalServerError)
 		return

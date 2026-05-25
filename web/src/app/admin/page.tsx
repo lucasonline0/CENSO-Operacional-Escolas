@@ -6,6 +6,7 @@ import {
   LayoutDashboard, Database, MapPinned, Lock, User as UserIcon,
   AlertCircle, Loader2, CloudUpload,
   BarChart2, Activity,
+  UsersRound, MonitorSmartphone, ShieldCheck, Utensils, ClipboardCheck,
 } from "lucide-react";
 
 import { API, C } from "@/components/admin/shared/constants";
@@ -18,6 +19,11 @@ import { AbaTodosCensos } from "@/components/admin/AbaTodosCensos";
 import { AbaPorDre } from "@/components/admin/AbaPorDre";
 import { AbaPerfilAlunos } from "@/components/admin/AbaPerfilAlunos";
 import { AbaCaracterizacao } from "@/components/admin/AbaCaracterizacao";
+import { AbaPessoalGestao } from "@/components/admin/AbaPessoalGestao";
+import { AbaTecnologia } from "@/components/admin/AbaTecnologia";
+import { AbaInfraestruturaSeguranca } from "@/components/admin/AbaInfraestruturaSeguranca";
+import { AbaMerenda } from "@/components/admin/AbaMerenda";
+import { AbaServicosTerceirizados } from "@/components/admin/AbaServicosTerceirizados";
 import type {
   CensusRow, DashboardData,
 } from "@/components/admin/shared/types";
@@ -94,7 +100,17 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
-type Tab = "perfil" | "alunos" | "operacional" | "census" | "dre";
+type Tab =
+  | "perfil"
+  | "pessoal"
+  | "tecnologia"
+  | "infraestrutura"
+  | "merenda"
+  | "servicos"
+  | "alunos"
+  | "operacional"
+  | "census"
+  | "dre";
 
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [dbData,       setDbData]       = useState<DashboardData | null>(null);
@@ -154,11 +170,16 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const filteredCensus  = (allCensus       ?? []).filter((r) => !search || match(r, search));
 
   const tabs: { id: Tab; label: string; Icon: React.ComponentType<{ size?: number; strokeWidth?: number }> }[] = [
-    { id: "perfil",      label: "Caracterização da Rede",         Icon: BarChart2      },
-    { id: "alunos",      label: "Perfil dos Alunos e Resultados", Icon: Activity       },
-    { id: "operacional", label: "Operacional",                    Icon: LayoutDashboard },
-    { id: "census",      label: "Todos os Censos",                Icon: Database       },
-    { id: "dre",         label: "Por DRE",                        Icon: MapPinned      },
+    { id: "perfil",         label: "Caracterização da Rede",         Icon: BarChart2          },
+    { id: "pessoal",        label: "Pessoal e Gestão Escolar",       Icon: UsersRound         },
+    { id: "tecnologia",     label: "Tecnologia e Equipamentos",      Icon: MonitorSmartphone  },
+    { id: "infraestrutura", label: "Infraestrutura e Segurança",     Icon: ShieldCheck        },
+    { id: "merenda",        label: "Merenda Escolar",                Icon: Utensils           },
+    { id: "servicos",       label: "Serviços Terceirizados",         Icon: ClipboardCheck     },
+    { id: "alunos",         label: "Perfil dos Alunos e Resultados", Icon: Activity           },
+    { id: "operacional",    label: "Operacional",                    Icon: LayoutDashboard    },
+    { id: "census",         label: "Todos os Censos",                Icon: Database           },
+    { id: "dre",            label: "Por DRE",                        Icon: MapPinned          },
   ];
 
   if (loading) return (
@@ -223,6 +244,13 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         {tab === "perfil" && (
           <AbaCaracterizacao token={token} onUnauth={logout} />
         )}
+
+        {/* ── Placeholders das 5 novas abas ───────────────────────── */}
+        {tab === "pessoal"        && <AbaPessoalGestao />}
+        {tab === "tecnologia"     && <AbaTecnologia />}
+        {tab === "infraestrutura" && <AbaInfraestruturaSeguranca />}
+        {tab === "merenda"        && <AbaMerenda />}
+        {tab === "servicos"       && <AbaServicosTerceirizados />}
 
         {/* ── Perfil dos Alunos e Resultados ───────────────────── */}
         {tab === "alunos" && (

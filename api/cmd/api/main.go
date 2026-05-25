@@ -56,17 +56,30 @@ func main() {
 	logger := log.New(os.Stdout, "[CENSO-API] ", log.Ldate|log.Ltime|log.Lshortfile)
 
 	// --- CORREÇÃO DE PATH ---
-	// Verifica o diretório atual para debug
 	cwd, _ := os.Getwd()
 	logger.Printf("Executando a partir de: %s", cwd)
 
-	// Tenta carregar o .env. Ajuste o caminho se necessário.
-	// Se você estiver na pasta /api, talvez precise subir um nível para achar a pasta /infra
-	envPath := filepath.Join(cwd, "..", "infra", ".env")
-	err := godotenv.Load(envPath)
-	if err != nil {
-		logger.Printf("Aviso: Não encontrou .env em %s, tentando caminho local...", envPath)
-		_ = godotenv.Load(".env")
+	// PROCURA O .ENV DE FORMA INTELIGENTE EM VÁRIOS LUGARES
+	envPaths := []string{
+		".env",                                    // Tenta na mesma pasta de onde o comando rodou
+		filepath.Join(cwd, ".env"),                // Tenta no caminho absoluto atual
+		filepath.Join(cwd, "..", ".env"),          // Tenta um nível acima (raiz do projeto)
+		filepath.Join(cwd, "..", "infra", ".env"), // Tenta na pasta infra
+	}
+
+	envLoaded := false
+	for _, p := range envPaths {
+		if err := godotenv.Load(p); err == nil {
+			logger.Printf("Arquivo .env carregado com sucesso de: %s", p)
+			envLoaded = true
+			break // Para de procurar assim que encontrar e carregar um .env válido
+		}
+	}
+
+	if !envLoaded {
+		logger.Println("AVISO: Nenhum arquivo .env encontrado. Dependendo das variáveis do sistema.")
+	} else if os.Getenv("ADMIN_USERNAME") != "" {
+		logger.Println("Credenciais de ADMIN carregadas no ambiente com sucesso.")
 	}
 
 	var cfg config

@@ -319,6 +319,16 @@ func (app *application) routes() http.Handler {
 			// Adicionais; a UI segue consumindo sheet-metrics até a Fase 2B.
 			protected.Get("/admin/analytics/caracterizacao/perfil", app.AdminAnalyticsCaracterizacaoPerfil)
 			protected.Get("/admin/analytics/caracterizacao/dre", app.AdminAnalyticsCaracterizacaoDRE)
+
+			// Frente 2 — Infraestrutura/Segurança + Merenda + Serviços Terceirizados.
+			protected.Get("/admin/analytics/infraestrutura/condicoes", app.AdminAnalyticsInfraCondicoes)
+			protected.Get("/admin/analytics/infraestrutura/seguranca", app.AdminAnalyticsInfraSeguranca)
+			protected.Get("/admin/analytics/merenda/oferta", app.AdminAnalyticsMerendaOferta)
+			protected.Get("/admin/analytics/merenda/equipamentos", app.AdminAnalyticsMerendaEquipamentos)
+			protected.Get("/admin/analytics/merenda/recursos-humanos", app.AdminAnalyticsMerendaRH)
+			protected.Get("/admin/analytics/servicos-terceirizados/visao-geral", app.AdminAnalyticsServicosVisaoGeral)
+			protected.Get("/admin/analytics/servicos-terceirizados/servicos-gerais", app.AdminAnalyticsServicosGerais)
+			protected.Get("/admin/analytics/servicos-terceirizados/portaria", app.AdminAnalyticsServicosPortaria)
 		})
 	})
 

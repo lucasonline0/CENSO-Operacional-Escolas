@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Building2, CheckCircle2, FileText, LogOut, Search,
+  Building2, LogOut,
   LayoutDashboard, Database, MapPinned, Lock, User as UserIcon,
-  AlertCircle, Loader2, Filter, CloudUpload,
+  AlertCircle, Loader2, CloudUpload,
   TrendingUp, Users, GraduationCap, BarChart2, Activity, AlertTriangle,
 } from "lucide-react";
 
@@ -15,10 +15,12 @@ import {
   apiFetch, saveToken, loadToken, clearToken, sanitize,
 } from "@/components/admin/shared/api";
 import { StatCard } from "@/components/admin/shared/StatCard";
-import { CensusTable } from "@/components/admin/shared/CensusTable";
 import { JsonModal } from "@/components/admin/shared/JsonModal";
 import { Donut } from "@/components/admin/shared/Donut";
 import { HBarChart, VBarChart } from "@/components/admin/shared/BarChart";
+import { AbaOperacional } from "@/components/admin/AbaOperacional";
+import { AbaTodosCensos } from "@/components/admin/AbaTodosCensos";
+import { AbaPorDre } from "@/components/admin/AbaPorDre";
 import type {
   CensusRow, DashboardData, SheetMetrics, IndicadoresMetrics,
   CaracterizacaoPerfilPg, CaracterizacaoDREPg,
@@ -636,94 +638,36 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
         {/* ── Operacional (DB stats + envios recentes) ───────────── */}
         {tab === "operacional" && dbData && (
-          <div className="space-y-5">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard label="Escolas Cadastradas" value={dbData.total_schools}       Icon={Building2}    tone="blue"   />
-              <StatCard label="Censos Concluídos"   value={dbData.completed_censuses}  Icon={CheckCircle2} tone="green"  />
-              <StatCard label="Rascunhos"            value={dbData.draft_censuses}      Icon={FileText}     tone="amber"  />
-              <StatCard label="Pendente na Planilha" value={dbData.pending_sync}        Icon={CloudUpload}  tone="orange" />
-            </div>
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-slate-800">Envios Recentes</h2>
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input type="search" placeholder="Buscar escola, INEP…" value={search}
-                  onChange={(e) => setSearch(sanitize(e.target.value).slice(0,100))}
-                  className="bg-white border border-slate-300 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-64" />
-              </div>
-            </div>
-            <CensusTable rows={filteredRecent} onView={setViewId} formatDate={fmtDate} />
-          </div>
+          <AbaOperacional
+            dbData={dbData}
+            search={search}
+            setSearch={setSearch}
+            filteredRecent={filteredRecent}
+            onView={setViewId}
+            formatDate={fmtDate}
+          />
         )}
 
         {/* ── Todos os Censos ────────────────────────────────────── */}
         {tab === "census" && (
-          <div className="space-y-4">
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-wrap items-center gap-3">
-              <Filter size={15} className="text-slate-500" />
-              <span className="text-sm font-medium text-slate-700">Filtros:</span>
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-                className="border border-slate-300 bg-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-                <option value="">Todos os status</option>
-                <option value="completed">Concluído</option>
-                <option value="draft">Rascunho</option>
-              </select>
-              <select value={filterDre} onChange={(e) => setFilterDre(e.target.value)}
-                className="border border-slate-300 bg-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 max-w-xs">
-                <option value="">Todas as DREs</option>
-                {(dbData?.by_dre ?? []).map((d) => <option key={d.dre} value={d.dre}>{d.dre}</option>)}
-              </select>
-              <div className="relative ml-auto">
-                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input type="search" placeholder="Buscar…" value={search}
-                  onChange={(e) => setSearch(sanitize(e.target.value).slice(0,100))}
-                  className="bg-white border border-slate-300 rounded-lg pl-9 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-52" />
-              </div>
-            </div>
-            {allCensus === null
-              ? <div className="bg-white rounded-2xl py-14 text-center text-slate-400 text-sm border border-slate-200"><Loader2 className="animate-spin mx-auto mb-2" size={18} />Carregando…</div>
-              : <CensusTable rows={filteredCensus} onView={setViewId} formatDate={fmtDate} />}
-          </div>
+          <AbaTodosCensos
+            dbData={dbData}
+            allCensus={allCensus}
+            filterStatus={filterStatus}
+            setFilterStatus={setFilterStatus}
+            filterDre={filterDre}
+            setFilterDre={setFilterDre}
+            search={search}
+            setSearch={setSearch}
+            filteredCensus={filteredCensus}
+            onView={setViewId}
+            formatDate={fmtDate}
+          />
         )}
 
         {/* ── Por DRE (DB) ───────────────────────────────────────── */}
         {tab === "dre" && dbData && (
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-            <div className="px-6 py-4 border-b flex items-center gap-2" style={{ background: C.primaryLight }}>
-              <MapPinned size={16} style={{ color: C.primary }} />
-              <h2 className="font-semibold text-slate-800 text-sm">Andamento por Diretoria Regional de Ensino</h2>
-            </div>
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  {["DRE","Total","Concluídos","Rascunhos","% Conclusão"].map((h, i) => (
-                    <th key={i} className={`px-5 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wide ${i===0?"text-left":"text-center"}`}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {dbData.by_dre.map((d, i) => {
-                  const pct = d.total > 0 ? Math.round((d.completed / d.total) * 100) : 0;
-                  return (
-                    <tr key={d.dre} className={i%2===0?"bg-white":"bg-slate-50/50"}>
-                      <td className="px-5 py-3 font-medium text-slate-800">{d.dre}</td>
-                      <td className="px-5 py-3 text-center text-slate-600 tabular-nums">{d.total}</td>
-                      <td className="px-5 py-3 text-center text-emerald-700 font-semibold tabular-nums">{d.completed}</td>
-                      <td className="px-5 py-3 text-center text-amber-600 tabular-nums">{d.draft}</td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: C.primary }} />
-                          </div>
-                          <span className="text-xs font-bold text-slate-700 w-10 text-right tabular-nums">{pct}%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <AbaPorDre dbData={dbData} />
         )}
       </main>
 

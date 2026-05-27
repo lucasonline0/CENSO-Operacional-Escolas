@@ -101,3 +101,46 @@ export interface InfraSeguranca {
   pct_politica_bullying: number;
   dist_cameras: CategoricStat[];
 }
+
+// Frente 2 — Merenda Escolar.
+// Payloads de /v1/admin/analytics/merenda/{oferta,equipamentos,recursos-humanos}.
+export interface EquipTotais {
+  total: number;
+  media_por_escola: number;
+}
+
+export interface EstadoEquipStat {
+  equipamento: string;
+  estado: string;
+  escolas: number;
+}
+
+export interface EmpresaStat {
+  empresa: string;
+  escolas: number;
+}
+
+export interface MerendaOferta {
+  dist_oferta_regular: CategoricStat[];
+  dist_qualidade: CategoricStat[];
+  pct_atende_necessidades: number;
+  dist_condicoes_cozinha: CategoricStat[];
+  pct_possui_refeitorio: number;
+}
+
+export interface MerendaEquipamentos {
+  freezers: EquipTotais;
+  geladeiras: EquipTotais;
+  fogoes: EquipTotais;
+  fornos: EquipTotais;
+  bebedouros: EquipTotais;
+  dist_estados: EstadoEquipStat[];
+}
+
+export interface MerendaRH {
+  total_estatutaria: number;
+  total_terceirizada: number;
+  total_temporaria: number;
+  pct_com_supervisor: number;
+  top_empresas: EmpresaStat[];
+}

@@ -255,7 +255,9 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         {tab === "infraestrutura" && (
           <AbaInfraestruturaSeguranca token={token} onUnauth={logout} />
         )}
-        {tab === "merenda"        && <AbaMerenda />}
+        {tab === "merenda"        && (
+          <AbaMerenda token={token} onUnauth={logout} />
+        )}
         {tab === "servicos"       && <AbaServicosTerceirizados />}
 
         {/* ── Perfil dos Alunos e Resultados ───────────────────── */}

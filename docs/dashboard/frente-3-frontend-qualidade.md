@@ -1,5 +1,28 @@
 # Frente 3 — Frontend (refactor + placeholders das 5 novas abas) + Qualidade de Dados
 
+> **Status:** ✅ **Concluída e integrada à `develop`.**
+>
+> Entregas mergeadas:
+> - `web/src/app/admin/page.tsx` transformado em shell (autenticação + composição).
+> - Abas existentes extraídas para `web/src/components/admin/`: `AbaCaracterizacao.tsx`, `AbaPerfilAlunos.tsx`, `AbaOperacional.tsx`, `AbaTodosCensos.tsx`, `AbaPorDre.tsx`.
+> - Componentes compartilhados extraídos para `web/src/components/admin/shared/` (`Donut`, `BarChart`, `StatCard`, indicador de fonte, `EmptyStatePlaceholder`).
+> - Placeholders das 5 abas temáticas criados na navegação: Pessoal e Gestão Escolar, Tecnologia e Equipamentos, Infraestrutura e Segurança, Merenda Escolar, Serviços Terceirizados.
+> - Placeholder institucional de **Gestão Financeira e Governança** criado em PR posterior à Frente 3 (`feat/admin-governanca-placeholder`), também já mergeado em `develop`.
+> - Documentação de paridade Fase 2A atualizada em [validacao-fase-2.md](validacao-fase-2.md).
+> - Investigação de decimais em `total_alunos` documentada em [criterios-contagem-e-qualidade-dados.md](criterios-contagem-e-qualidade-dados.md) §8.
+>
+> **Pendências futuras (não reabrem esta frente):**
+> - Coleta do lado Sheets da paridade Fase 2A (operador autorizado com acesso ao banco).
+> - Coleta nominal de casos legados de `total_alunos` decimal — registro em §8.5 do documento de critérios, se necessário.
+> - Avaliar `z.number().int()` para outros campos conceitualmente inteiros (PR isolado, fora desta frente).
+>
+> **Microfix preventivo de `total_alunos`** (PR independente já mergeado, complementar a esta frente):
+> - Schema Zod da etapa Dados Gerais passou a exigir número inteiro para `total_alunos`.
+> - Input recebeu ajuste local (`step`/`min`) no formulário.
+> - **Não altera dados legados, views SQL ou endpoints.**
+>
+> O conteúdo abaixo permanece como **registro histórico** da frente concluída (escopo, decisões, riscos).
+
 **Branch:** `refactor/admin-page-componentes` (parte de `develop`).
 **Documentos companheiros:**
 - [plano-trabalho-paralelo.md](plano-trabalho-paralelo.md)

@@ -1,5 +1,16 @@
 # Frente 1 — Backend Pessoal/Gestão Escolar + Tecnologia
 
+> **Status:** ⏳ **Pendente — próxima frente backend a executar.**
+>
+> As Frentes 2 (backend Infra/Merenda/Serviços) e 3 (frontend + qualidade) já foram mergeadas em `develop`. O microfix preventivo de `total_alunos` e o placeholder institucional de "Gestão Financeira e Governança" também já estão integrados. Esta frente continua sendo o próximo bloco de backend a entregar, e o documento abaixo permanece como o guia operacional vigente.
+>
+> Restrições atuais (continuam valendo):
+> - **Não tocar `web/`** — os placeholders já existem; a integração visual desta frente é feita em PRs posteriores, fora desta rodada.
+> - **Não tocar nas migrations `0007_*` a `0012_*`** (já integradas pela Frente 2) nem em `vw_censo_base`/`vw_censo_enriquecida`.
+> - **Não tocar nos handlers da Frente 2** (`api/cmd/api/analytics_infra_merenda_servicos.go`) nem em `api/cmd/api/analytics.go`.
+> - **Não alterar endpoints Sheets** (`sheet-metrics`, `indicadores-metrics`, `/v1/locations`, `sheetSyncRetryJob`).
+> - **Não alterar a aba "Caracterização da Rede"** nem placeholders já criados pela Frente 3.
+
 **Branch:** `feat/analytics-pessoal-tecnologia` (parte de `develop`).
 **Documentos companheiros:**
 - [plano-trabalho-paralelo.md](plano-trabalho-paralelo.md)

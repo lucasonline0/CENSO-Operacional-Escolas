@@ -1,5 +1,39 @@
 # Frente 2 — Backend Infraestrutura/Segurança + Merenda + Serviços Terceirizados
 
+> **Status:** ✅ **Concluída e integrada à `develop`.**
+>
+> Entregas mergeadas:
+> - Migrations `0007_vw_censo_ambientes.sql` a `0012_vw_censo_servicos_terceirizados.sql` (com espelhos em `api/cmd/api/migrations/` e replicação em `infra/init.sql`).
+> - Handlers em `api/cmd/api/analytics_infra_merenda_servicos.go` (novo).
+> - Registro de rotas em `api/cmd/api/main.go`.
+> - Validação em [validacao-fase-infra-merenda-servicos.md](validacao-fase-infra-merenda-servicos.md).
+>
+> Endpoints ativos sob `requireAdminAuth`:
+>
+> ```
+> GET /v1/admin/analytics/infraestrutura/condicoes
+> GET /v1/admin/analytics/infraestrutura/seguranca
+> GET /v1/admin/analytics/merenda/oferta
+> GET /v1/admin/analytics/merenda/equipamentos
+> GET /v1/admin/analytics/merenda/recursos-humanos
+> GET /v1/admin/analytics/servicos-terceirizados/visao-geral
+> GET /v1/admin/analytics/servicos-terceirizados/servicos-gerais
+> GET /v1/admin/analytics/servicos-terceirizados/portaria
+> ```
+>
+> Próximas ações (fora desta frente — PRs de integração visual, **uma aba por PR**, sem mexer no backend):
+> - **UI-FT2-01** — Integrar `AbaInfraestruturaSeguranca.tsx` aos endpoints `/v1/admin/analytics/infraestrutura/*`.
+> - **UI-FT2-02** — Integrar `AbaMerenda.tsx` aos endpoints `/v1/admin/analytics/merenda/*`.
+> - **UI-FT2-03** — Integrar `AbaServicosTerceirizados.tsx` aos endpoints `/v1/admin/analytics/servicos-terceirizados/*`.
+>
+> Restrições permanentes desses PRs de integração:
+> - Sem alterar backend, migrations ou endpoints já validados.
+> - Sem alterar "Caracterização da Rede", "Perfil dos Alunos" ou "Gestão Financeira e Governança".
+> - Sem remover placeholders de outras abas.
+> - Sem dado fake.
+>
+> O conteúdo abaixo permanece como **registro histórico** da frente concluída (escopo, decisões, riscos).
+
 **Branch:** `feat/analytics-infra-merenda-servicos` (parte de `develop`).
 **Documentos companheiros:**
 - [plano-trabalho-paralelo.md](plano-trabalho-paralelo.md)

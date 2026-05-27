@@ -24,6 +24,18 @@ Permitir que **três desenvolvedores avancem em paralelo** sobre o roadmap do da
 
 Histórico: o plano original previa 2 frentes (Frente A docs + Frente B Fase 2A) — ambas concluídas (Fase 1, 1B, 2A e 2B.1 em produção). Em seguida foi rascunhado um plano em 3 frentes que incluía a Fase 3 (Perfil dos Alunos) e a Fase 4 (Oferta/Infra Educacional como expansão da Caracterização). **Esse rascunho foi descartado** porque as abas "Perfil dos Alunos e Resultados" e "Gestão Financeira e Governança" serão remodeladas para consumir outra planilha — não o banco — e ainda estão em definição. Este documento substitui o rascunho e coordena as 3 frentes vigentes.
 
+## 1.1 Status atual das frentes (snapshot pós-merge em `develop`)
+
+| Frente | Branch | Status |
+|---|---|---|
+| **1 — Backend Pessoal/Gestão Escolar + Tecnologia** | `feat/analytics-pessoal-tecnologia` | ⏳ **Pendente.** Próxima frente backend a executar. |
+| **2 — Backend Infraestrutura/Segurança + Merenda + Serviços Terceirizados** | `feat/analytics-infra-merenda-servicos` | ✅ **Concluída e integrada à `develop`.** 6 views (`0007_*` a `0012_*`) + 8 endpoints `/v1/admin/analytics/{infraestrutura,merenda,servicos-terceirizados}/*` ativos. Validação em [validacao-fase-infra-merenda-servicos.md](validacao-fase-infra-merenda-servicos.md). |
+| **3 — Frontend Admin + Qualidade de Dados** | `refactor/admin-page-componentes` | ✅ **Concluída e integrada à `develop`.** `/admin/page.tsx` virou shell, abas existentes extraídas, componentes compartilhados em `shared/`, 5 placeholders temáticos criados. Investigação de `total_alunos` documentada em [criterios-contagem-e-qualidade-dados.md](criterios-contagem-e-qualidade-dados.md) §8. |
+| **Microfix preventivo de `total_alunos`** | `fix/total-alunos-integer` (mergeado) | ✅ **Concluído.** Schema Zod da etapa Dados Gerais passou a exigir inteiro; input recebeu ajuste local (`step`/`min`). Sem correção retroativa de dados legados. |
+| **Placeholder institucional de "Gestão Financeira e Governança"** | `feat/admin-governanca-placeholder` (mergeado) | ✅ **Concluído.** Aba visível na navegação como placeholder institucional — sem fetch, sem endpoint, sem view SQL, sem dado fake. |
+
+> **Importante.** O microfix de `total_alunos` impede novos valores decimais, mas **não corrige registros legados**. Qualquer correção retroativa depende de coleta nominal e validação humana, fora desta rodada.
+
 ## 2. Estado atual (baseline)
 
 - Fase 1 validada em produção (Railway + Vercel).
@@ -31,7 +43,31 @@ Histórico: o plano original previa 2 frentes (Frente A docs + Frente B Fase 2A)
 - Fase 2A validada em produção — `vw_censo_enriquecida` + `/v1/admin/analytics/caracterizacao/{perfil,dre}`.
 - Fase 2B.1 validada visualmente — aba "Caracterização da Rede" consome PostgreSQL.
 - Lint cleanup landed (`738a3b8`).
+- Frente 2 integrada à `develop` — views `0007_*` a `0012_*` e endpoints `/v1/admin/analytics/{infraestrutura,merenda,servicos-terceirizados}/*` disponíveis. Validação em [validacao-fase-infra-merenda-servicos.md](validacao-fase-infra-merenda-servicos.md).
+- Frente 3 integrada à `develop` — `/admin/page.tsx` virou shell, abas existentes extraídas para `web/src/components/admin/`, componentes compartilhados em `shared/`, placeholders das 5 abas temáticas criados.
+- Microfix preventivo de `total_alunos` aplicado (validação inteira no Zod + ajuste local do input).
+- Placeholder institucional de "Gestão Financeira e Governança" criado, **sem fetch e sem endpoint**.
 - Google Sheets continua ativo (sink + fallback). `sheet-metrics`, `indicadores-metrics`, `/v1/locations`, `POST /v1/admin/sync-sheets` e `sheetSyncRetryJob` permanecem intactos.
+
+### 2.1 Navegação atual do `/admin`
+
+Abas visíveis na ordem institucional acordada (estado pós-merge em `develop`):
+
+| # | Aba | Estado dos dados | Fonte |
+|---|---|---|---|
+| 1 | **Caracterização da Rede** | Dados reais | PostgreSQL (`/v1/admin/analytics/caracterizacao/*`) + fallback `sheet-metrics` |
+| 2 | **Pessoal e Gestão Escolar** | Placeholder ("Em construção") | Frente 1 backend ainda pendente |
+| 3 | **Tecnologia e Equipamentos** | Placeholder ("Em construção") | Frente 1 backend ainda pendente |
+| 4 | **Infraestrutura e Segurança** | Placeholder ("Em construção") | Endpoints da Frente 2 já existem — aguardando integração visual (UI-FT2-01) |
+| 5 | **Merenda Escolar** | Placeholder ("Em construção") | Endpoints da Frente 2 já existem — aguardando integração visual (UI-FT2-02) |
+| 6 | **Serviços Terceirizados** | Placeholder ("Em construção") | Endpoints da Frente 2 já existem — aguardando integração visual (UI-FT2-03) |
+| 7 | **Perfil dos Alunos e Resultados** | Dados reais (implementação atual mantida) | Google Sheets (`/v1/admin/indicadores-metrics`) |
+| 8 | **Gestão Financeira e Governança** | Placeholder institucional (sem fetch) | Fonte futura: base própria das coordenações responsáveis, **fora do banco do censo** |
+| 9 | **Operacional** | Dados reais | PostgreSQL (`/v1/admin/dashboard`) |
+| 10 | **Todos os Censos** | Dados reais | PostgreSQL (`/v1/admin/census`) |
+| 11 | **Por DRE** | Dados reais | PostgreSQL (`/v1/admin/dashboard.by_dre`) |
+
+> **Distinção importante.** As abas 4, 5 e 6 são placeholders que **já têm endpoint pronto** (Frente 2 mergeada) — falta apenas plugar visualmente. A aba 8 é placeholder **institucional**: não terá endpoint nem view SQL nesta rodada, e a fonte futura **não** será necessariamente o banco PostgreSQL alimentado pelo formulário do censo. A aba 7 mantém a implementação atual; uma eventual remodelagem futura também poderá consumir bases externas validadas pelas coordenações.
 
 ## 3. Abas-alvo das 3 frentes
 
@@ -113,10 +149,33 @@ A aba "Caracterização da Rede" (já em produção, alimentada por PostgreSQL) 
 
 ## 8. Ordem recomendada para integração
 
-Quando as 3 frentes entregarem em `develop`:
+> **Estado real:** Frentes 2 e 3 já foram mergeadas em `develop`. Microfix de `total_alunos` e placeholder institucional de "Gestão Financeira e Governança" também já integrados. **Frente 1 backend ainda pendente.**
 
-1. Merge Frente 3 primeiro (refactor + placeholders, sem mudar fonte) — reduz blast radius dos próximos PRs e deixa as 5 abas visíveis.
-2. Merge Frente 1 (backend Pessoal/Gestão + Tecnologia).
-3. Merge Frente 2 (backend Infra + Merenda + Serviços Terceirizados).
-4. PRs posteriores (fora desta rodada) plugam os endpoints das Frentes 1 e 2 nos placeholders da Frente 3 — uma aba por PR, com fallback de erro próprio.
-5. Promover `develop` → `main` somente após validação online de cada bloco.
+Próximos passos, na ordem recomendada:
+
+1. **Validar `develop`** após os merges das Frentes 2 e 3, o microfix de `total_alunos` e o placeholder institucional de "Gestão Financeira e Governança". Smoke manual em homologação, confirmar endpoints da Frente 2 respondendo 200 sob `requireAdminAuth`, navegação do `/admin` com as 11 abas listadas em §2.1.
+2. **Atualizar documentação geral pós-merge** (este PR documental).
+3. **Executar Frente 1 backend** (`feat/analytics-pessoal-tecnologia`) — views `0003_*` a `0006_*`, handlers `/pessoal-gestao/*` e `/tecnologia/*`, validação em `validacao-fase-pessoal-tecnologia.md`. Sem tocar `web/`. Detalhes em [frente-1-pessoal-tecnologia.md](frente-1-pessoal-tecnologia.md).
+4. **Integrar visualmente endpoints da Frente 2** nos placeholders correspondentes (UI-FT2-01 a 03), **uma aba por PR**:
+   - **UI-FT2-01** — Integrar `AbaInfraestruturaSeguranca.tsx` aos endpoints `/v1/admin/analytics/infraestrutura/{condicoes,seguranca}`.
+   - **UI-FT2-02** — Integrar `AbaMerenda.tsx` aos endpoints `/v1/admin/analytics/merenda/{oferta,equipamentos,recursos-humanos}`.
+   - **UI-FT2-03** — Integrar `AbaServicosTerceirizados.tsx` aos endpoints `/v1/admin/analytics/servicos-terceirizados/{visao-geral,servicos-gerais,portaria}`.
+5. **Integrar visualmente endpoints da Frente 1** nos placeholders correspondentes (após conclusão do passo 3), **uma aba por PR**:
+   - Integrar `AbaPessoalGestao.tsx` aos endpoints `/v1/admin/analytics/pessoal-gestao/*`.
+   - Integrar `AbaTecnologia.tsx` aos endpoints `/v1/admin/analytics/tecnologia/*`.
+6. **Planejar separadamente** a remodelagem de "Perfil dos Alunos e Resultados" e "Gestão Financeira e Governança" com bases externas/planilhas próprias das coordenações responsáveis. Essa remodelagem **não faz parte** desta rodada de backend e não deve criar views nem endpoints sobre o banco do censo.
+7. **Promover `develop` → `main`** somente após validação online de cada bloco acima.
+
+### 8.1 Regras dos PRs de integração visual (UI-FT2-01/02/03 e equivalentes da Frente 1)
+
+- Uma aba por PR.
+- Sem alterar backend.
+- Sem alterar migrations.
+- Sem alterar endpoints já validados.
+- Sem alterar a aba "Caracterização da Rede".
+- Sem alterar a aba "Perfil dos Alunos e Resultados" (mantida como está nesta rodada).
+- Sem alterar a aba "Gestão Financeira e Governança" (continua como placeholder institucional).
+- Sem remover placeholders de outras abas.
+- Sem dado fake — se a aba ainda não tem endpoint pronto (caso das duas abas da Frente 1 enquanto o backend não estiver mergeado), o placeholder permanece.
+
+> Nota: é **autorizado** começar a integração visual da Frente 2 (passo 4) **antes** da conclusão da Frente 1 backend (passo 3), desde que respeitadas as regras acima — uma aba por PR e sem tocar no backend. A ordem 3 → 4 → 5 é recomendada por reduzir retrabalho, mas não é bloqueante.

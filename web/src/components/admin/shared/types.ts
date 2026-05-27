@@ -69,3 +69,35 @@ export interface CaracterizacaoDREPg {
 }
 
 export interface CensusFull extends CensusRow { data: unknown; created_at: string; }
+
+// Frente 2 — Infraestrutura e Segurança.
+// Payloads de /v1/admin/analytics/infraestrutura/{condicoes,seguranca}.
+export interface CategoricStat {
+  valor: string;
+  escolas: number;
+  percentual: number;
+}
+
+export interface AmbienteStat {
+  ambiente: string;
+  escolas: number;
+}
+
+export interface InfraCondicoes {
+  por_tipo_predio: CategoricStat[];
+  por_situacao_estrutura: CategoricStat[];
+  pct_com_muro_ou_cerca: number;
+  pct_perimetro_fechado: number;
+  top_ambientes: AmbienteStat[];
+}
+
+export interface InfraSeguranca {
+  pct_possui_guarita: number;
+  pct_controle_portao: number;
+  pct_iluminacao_externa: number;
+  pct_possui_botao_panico: number;
+  pct_cameras_funcionais: number;
+  pct_plano_evacuacao: number;
+  pct_politica_bullying: number;
+  dist_cameras: CategoricStat[];
+}

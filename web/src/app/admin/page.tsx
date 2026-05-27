@@ -252,7 +252,9 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         {/* ── Placeholders das 5 novas abas ───────────────────────── */}
         {tab === "pessoal"        && <AbaPessoalGestao />}
         {tab === "tecnologia"     && <AbaTecnologia />}
-        {tab === "infraestrutura" && <AbaInfraestruturaSeguranca />}
+        {tab === "infraestrutura" && (
+          <AbaInfraestruturaSeguranca token={token} onUnauth={logout} />
+        )}
         {tab === "merenda"        && <AbaMerenda />}
         {tab === "servicos"       && <AbaServicosTerceirizados />}
 

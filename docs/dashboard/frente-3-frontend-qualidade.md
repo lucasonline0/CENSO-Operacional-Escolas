@@ -12,12 +12,12 @@
 Três trilhas paralelas dentro da mesma frente:
 
 1. **Refactor de UI sem mudar fonte.** Quebrar `web/src/app/admin/page.tsx` (~50 KB, monolítico) em componentes por aba, **mantendo exatamente as mesmas fontes de dados** (PostgreSQL ou Sheets, conforme já está em produção).
-2. **Criação das 5 abas novas como placeholders.** Adicionar as abas "Pessoal e Gestão Escolar", "Tecnologia e Equipamentos", "Infraestrutura e Segurança", "Merenda Escolar" e "Serviços Terceirizados" à navegação do `/admin`, exibindo skeleton/empty state. Cada placeholder espera os endpoints que Frentes 1 e 2 vão entregar — a integração visual virá em PRs posteriores, fora desta rodada.
+2. **Criação das 5 abas novas como placeholders + placeholder institucional de Gestão Financeira e Governança.** Adicionar as abas "Pessoal e Gestão Escolar", "Tecnologia e Equipamentos", "Infraestrutura e Segurança", "Merenda Escolar", "Serviços Terceirizados" e — por decisão de produto — também "Gestão Financeira e Governança" à navegação do `/admin`, exibindo skeleton/empty state. As 5 primeiras esperam os endpoints que Frentes 1 e 2 vão entregar — a integração visual virá em PRs posteriores, fora desta rodada. A aba "Gestão Financeira e Governança" é placeholder **institucional**: a fonte de dados será definida futuramente a partir de bases próprias das coordenações responsáveis (não o banco do censo) e **não há fetch, endpoint, view SQL nem dado fake nesta etapa**.
 3. **Qualidade de dados.** Preencher a tabela de paridade da Fase 2A com valores reais e investigar a origem dos decimais em `total_alunos`.
 
 **Não é objetivo desta frente migrar nenhuma fonte de dados.** Toda mudança de PG ↔ Sheets fica para PRs posteriores em cima do que esta frente entrega.
 
-**Não é objetivo desta frente criar abas para "Perfil dos Alunos e Resultados" nem "Gestão Financeira e Governança".** Esses dois temas serão remodelados para consumir outra planilha e estão fora de escopo nesta rodada.
+**Não é objetivo desta frente criar consumo de dados, endpoints ou views para "Perfil dos Alunos e Resultados" nem para "Gestão Financeira e Governança".** Esses dois temas serão remodelados para consumir outra planilha e estão fora de escopo nesta rodada. A única ação autorizada para "Gestão Financeira e Governança" é o **placeholder visual** descrito no item 2.
 
 ## 2. Escopo
 
@@ -37,6 +37,7 @@ Três trilhas paralelas dentro da mesma frente:
     - `AbaInfraestruturaSeguranca.tsx`
     - `AbaMerenda.tsx`
     - `AbaServicosTerceirizados.tsx`
+    - `AbaGestaoFinanceiraGovernanca.tsx` *(placeholder institucional — sem fetch, sem endpoint, sem dado fake; fonte futura: base própria das coordenações, fora do banco do censo)*
   - Componentes utilitários compartilhados (`StatCard`, `Donut`, `BarChart`, indicador de fonte, modal "ver JSON", `EmptyStatePlaceholder`) em `web/src/components/admin/shared/`.
 - `web/src/hooks/` — eventualmente extrair hooks de fetching (`useAdminCaracterizacao`, `useAdminAlunos`, etc.). Manter o `apiFetch` existente.
 - `docs/dashboard/validacao-fase-2.md` — preencher tabela "Métricas comparadas" (linhas 100–132).
@@ -51,7 +52,7 @@ Três trilhas paralelas dentro da mesma frente:
 - Comportamento dos endpoints Sheets — apenas continua consumindo o que existe.
 - Comportamento de autenticação (JWT, login, logout).
 - Layout visual macro das abas existentes (mesmas abas atuais, mesmos gráficos, mesmas cores). Refactor é estrutural, não visual.
-- Criar abas para "Perfil dos Alunos e Resultados (remodelada)" nem "Gestão Financeira e Governança" — fora de escopo nesta rodada.
+- Criar abas com consumo de dados, endpoint ou view SQL para "Perfil dos Alunos e Resultados (remodelada)" — fora de escopo nesta rodada. Para "Gestão Financeira e Governança", apenas o **placeholder visual** (skeleton/empty state, sem fetch) está autorizado nesta rodada; qualquer integração de dados permanece fora de escopo.
 
 ## 3. Tarefas
 
@@ -74,11 +75,11 @@ Ordem sugerida de PRs no refactor:
 
 Cada PR deve manter `npm run build` e `npm run lint` no nível atual (zero erros novos).
 
-### 3.2 Placeholders das 5 abas novas
+### 3.2 Placeholders das 5 abas novas + placeholder institucional de Gestão Financeira e Governança
 
-Criar 5 componentes, todos com a mesma estrutura: cabeçalho com título, descrição curta, `EmptyStatePlaceholder` (ícone + "Em construção" + texto explicativo curto), e — opcionalmente — skeleton de KPIs/cards que indica como ficará a aba depois da integração.
+Criar 6 componentes, todos com a mesma estrutura: cabeçalho com título, descrição curta, `EmptyStatePlaceholder` (ícone + "Em construção" + texto explicativo curto), e — opcionalmente — skeleton de KPIs/cards que indica como ficará a aba depois da integração.
 
-Adicionar as 5 abas à navegação do `/admin` na ordem:
+Adicionar as abas à navegação do `/admin` na ordem institucional acordada:
 
 1. Caracterização da Rede (já existe)
 2. **Pessoal e Gestão Escolar** *(nova — placeholder)*
@@ -87,23 +88,32 @@ Adicionar as 5 abas à navegação do `/admin` na ordem:
 5. **Merenda Escolar** *(nova — placeholder)*
 6. **Serviços Terceirizados** *(nova — placeholder)*
 7. Perfil dos Alunos e Resultados (mantida como está)
-8. Operacional (mantida como está)
-9. Todos os Censos (mantida como está)
-10. Por DRE (mantida como está)
+8. **Gestão Financeira e Governança** *(nova — placeholder institucional, sem fonte de dados nesta etapa)*
+9. Operacional (mantida como está)
+10. Todos os Censos (mantida como está)
+11. Por DRE (mantida como está)
 
-(Ordem sugerida — pode ser ajustada com o stakeholder.)
+(Ordem definida pelo stakeholder; manter facilmente reordenável no shell.)
 
 Cada placeholder **não faz fetch nenhum** nesta frente. Carregar o endpoint correspondente é tarefa do PR de integração visual (fora desta rodada).
 
-Texto sugerido do placeholder:
+> **Distinção importante.** As 5 abas temáticas (Pessoal/Gestão, Tecnologia, Infra/Segurança, Merenda, Serviços Terceirizados) **terão** fonte de dados PostgreSQL definida — as Frentes 1 e 2 estão entregando as views e endpoints correspondentes. Já a aba **"Gestão Financeira e Governança"** é placeholder **institucional**: a fonte de dados será definida futuramente a partir de bases próprias das coordenações responsáveis (não o banco do censo operacional), portanto **nenhuma view SQL, endpoint ou integração de dados deve ser criada para ela** nesta rodada nem em PRs subsequentes de integração das 5 abas temáticas. Sem dado fake, sem mock, sem `dummy` payload.
+
+Texto sugerido do placeholder (5 abas temáticas):
 
 > **Em construção**
 >
 > Esta seção exibirá indicadores agregados sobre [tema]. A camada de dados está sendo entregue pela equipe e a visualização será habilitada em breve.
 
+Texto sugerido do placeholder (Gestão Financeira e Governança):
+
+> **Em construção**
+>
+> Esta seção exibirá indicadores de Gestão Financeira e Governança. A fonte de dados está sendo definida pelas coordenações responsáveis e a visualização será habilitada em uma próxima rodada.
+
 PR sugerido:
 
-- **PR 5** — criar os 5 placeholders + componente compartilhado `EmptyStatePlaceholder` + adicionar à navegação do `/admin`.
+- **PR 5** — criar os 6 placeholders + componente compartilhado `EmptyStatePlaceholder` + adicionar à navegação do `/admin`.
 
 ### 3.3 Tabela de paridade PG × Sheets (validação Fase 2A)
 
@@ -157,7 +167,8 @@ Verificar manualmente:
 
 - [ ] `web/src/app/admin/page.tsx` reduzido a um shell (autenticação + aba ativa + composição dos componentes).
 - [ ] Cada aba existente em seu próprio arquivo sob `web/src/components/admin/`.
-- [ ] 5 abas novas (Pessoal/Gestão, Tecnologia, Infra/Segurança, Merenda, Serviços Terceirizados) criadas como placeholders e visíveis na navegação.
+- [ ] 5 abas temáticas novas (Pessoal/Gestão, Tecnologia, Infra/Segurança, Merenda, Serviços Terceirizados) criadas como placeholders e visíveis na navegação.
+- [ ] Aba **Gestão Financeira e Governança** criada como placeholder institucional, visível na navegação, **sem fetch, sem endpoint, sem view SQL, sem dado fake**.
 - [ ] Componentes compartilhados (`Donut`, `BarChart`, `StatCard`, indicador de fonte, `EmptyStatePlaceholder`) em `web/src/components/admin/shared/`.
 - [ ] `npm run build` OK. `npm run lint` sem erros novos.
 - [ ] Validação visual manual em homologação: abas existentes idênticas ao baseline; abas novas mostrando placeholder.
@@ -165,7 +176,7 @@ Verificar manualmente:
 - [ ] Seção "Decimais em `total_alunos`" criada em [criterios-contagem-e-qualidade-dados.md](criterios-contagem-e-qualidade-dados.md) com escolas listadas e hipóteses.
 - [ ] **Nenhuma mudança em `api/`, `infra/`, formulário, autenticação ou submit.**
 - [ ] **Nenhuma migração de fonte (PG ↔ Sheets).**
-- [ ] **Nenhuma aba criada para "Perfil dos Alunos (remodelada)" nem "Gestão Financeira e Governança".**
+- [ ] **Nenhuma aba com consumo de dados criada para "Perfil dos Alunos (remodelada)" nem "Gestão Financeira e Governança".** A aba "Gestão Financeira e Governança" entra apenas como **placeholder visual** (sem fetch, sem endpoint, sem view SQL, sem dado fake).
 
 ## 5. Riscos conhecidos
 
@@ -180,8 +191,8 @@ Verificar manualmente:
 - Refatorar componentes do formulário (`web/src/components/forms/*`).
 - Mudar autenticação, persistência, navegação do wizard.
 - Resolver warnings pré-existentes não relacionados ao refactor.
-- Criar abas para "Perfil dos Alunos e Resultados" remodelada (consumirá outra planilha — ainda em definição).
-- Criar aba "Gestão Financeira e Governança" (idem).
+- Criar aba com consumo de dados para "Perfil dos Alunos e Resultados" remodelada (consumirá outra planilha — ainda em definição).
+- Criar **consumo de dados / endpoint / view SQL** para "Gestão Financeira e Governança". O **placeholder visual** desta aba está autorizado nesta rodada (seção 3.2); a integração de dados permanece fora de escopo e dependerá de bases próprias das coordenações responsáveis, a serem definidas futuramente.
 
 ## 7. Coordenação com as outras frentes
 
@@ -193,3 +204,4 @@ Verificar manualmente:
   - `AbaInfraestruturaSeguranca.tsx` ↔ `/v1/admin/analytics/infraestrutura/*` (Frente 2)
   - `AbaMerenda.tsx` ↔ `/v1/admin/analytics/merenda/*` (Frente 2)
   - `AbaServicosTerceirizados.tsx` ↔ `/v1/admin/analytics/servicos-terceirizados/*` (Frente 2)
+  - `AbaGestaoFinanceiraGovernanca.tsx` ↔ **sem endpoint correspondente** (placeholder institucional; fonte futura: base própria das coordenações, definição fora do escopo das Frentes 1 e 2).

@@ -7,6 +7,7 @@ import {
   AlertCircle, Loader2, CloudUpload,
   BarChart2, Activity,
   UsersRound, MonitorSmartphone, ShieldCheck, Utensils, ClipboardCheck,
+  Landmark,
 } from "lucide-react";
 
 import { API, C } from "@/components/admin/shared/constants";
@@ -24,6 +25,7 @@ import { AbaTecnologia } from "@/components/admin/AbaTecnologia";
 import { AbaInfraestruturaSeguranca } from "@/components/admin/AbaInfraestruturaSeguranca";
 import { AbaMerenda } from "@/components/admin/AbaMerenda";
 import { AbaServicosTerceirizados } from "@/components/admin/AbaServicosTerceirizados";
+import { AbaGestaoFinanceiraGovernanca } from "@/components/admin/AbaGestaoFinanceiraGovernanca";
 import type {
   CensusRow, DashboardData,
 } from "@/components/admin/shared/types";
@@ -108,6 +110,7 @@ type Tab =
   | "merenda"
   | "servicos"
   | "alunos"
+  | "governanca"
   | "operacional"
   | "census"
   | "dre";
@@ -177,6 +180,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     { id: "merenda",        label: "Merenda Escolar",                Icon: Utensils           },
     { id: "servicos",       label: "Serviços Terceirizados",         Icon: ClipboardCheck     },
     { id: "alunos",         label: "Perfil dos Alunos e Resultados", Icon: Activity           },
+    { id: "governanca",     label: "Gestão Financeira e Governança", Icon: Landmark           },
     { id: "operacional",    label: "Operacional",                    Icon: LayoutDashboard    },
     { id: "census",         label: "Todos os Censos",                Icon: Database           },
     { id: "dre",            label: "Por DRE",                        Icon: MapPinned          },
@@ -256,6 +260,9 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         {tab === "alunos" && (
           <AbaPerfilAlunos token={token} onUnauth={logout} />
         )}
+
+        {/* ── Gestão Financeira e Governança (placeholder institucional) ── */}
+        {tab === "governanca" && <AbaGestaoFinanceiraGovernanca />}
 
         {/* ── Operacional (DB stats + envios recentes) ───────────── */}
         {tab === "operacional" && dbData && (

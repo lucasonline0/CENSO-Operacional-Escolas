@@ -43,7 +43,9 @@ Estas são as 5 abas autorizadas para esta rodada de trabalho — todas serão *
 4. **Merenda Escolar** (Frente 2)
 5. **Serviços Terceirizados** (Frente 2)
 
-**Fora de escopo nesta rodada:** abas "Perfil dos Alunos e Resultados" e "Gestão Financeira e Governança". Ambas serão remodeladas para consumir **outra planilha** (não o banco) — ainda em definição. Nenhuma frente deve criar views, endpoints ou componentes para esses dois temas.
+**Aba adicional autorizada apenas como placeholder institucional (Frente 3):** **Gestão Financeira e Governança**. Por decisão de produto, esta aba deve aparecer na navegação do `/admin` exibindo skeleton/empty state — **sem consumir o banco PostgreSQL do censo operacional**, sem endpoint, sem view SQL e sem dado fake. A fonte de dados será definida futuramente a partir de bases próprias já validadas pelas coordenações responsáveis. A criação do placeholder não antecipa regra de cálculo, endpoint, view SQL ou integração de dados.
+
+**Fora de escopo nesta rodada (dados/endpoints/views):** abas "Perfil dos Alunos e Resultados" e "Gestão Financeira e Governança". Ambas serão remodeladas para consumir **outra planilha** (não o banco) — ainda em definição. Nenhuma frente deve criar views, endpoints ou consumo de dados para esses dois temas. A única ação autorizada nesta rodada para "Gestão Financeira e Governança" é o **placeholder visual** descrito acima.
 
 A aba "Caracterização da Rede" (já em produção, alimentada por PostgreSQL) **não é alvo** desta rodada — não tocar.
 
@@ -53,7 +55,7 @@ A aba "Caracterização da Rede" (já em produção, alimentada por PostgreSQL) 
 |---|---|---|---|---|
 | **1 — Backend Pessoal/Gestão Escolar + Tecnologia** | `feat/analytics-pessoal-tecnologia` | 4 views temáticas (`vw_censo_direcao_escolar`, `_coordenacao_area`, `_quadro_pessoal`, `_equipamentos_tecnologia`); endpoints `/v1/admin/analytics/pessoal-gestao/*` e `/v1/admin/analytics/tecnologia/*` | `infra/migrations/0003_*` a `0006_*`, espelhos em `api/cmd/api/migrations/`, `api/cmd/api/analytics_pessoal_tecnologia.go` *(novo)*, `api/cmd/api/main.go` (registro de rotas), `infra/init.sql`, `docs/dashboard/validacao-fase-pessoal-tecnologia.md` *(novo)* | `web/`, demais migrations, `analytics.go`/`analytics_*.go` da Frente 2, `POST /v1/census`, Sheets, `/v1/locations`, `vw_censo_base` e `vw_censo_enriquecida` |
 | **2 — Backend Infra/Segurança + Merenda + Serviços Terceirizados** | `feat/analytics-infra-merenda-servicos` | Até 6 views temáticas (`vw_censo_ambientes`, `_infraestrutura_seguranca`, `_equipamentos_merenda`, `_rh_merendeiras`, `_rh_servicos_gerais`, `_servicos_terceirizados`); endpoints `/v1/admin/analytics/infraestrutura/*`, `/merenda/*`, `/servicos-terceirizados/*` | `infra/migrations/0007_*` a `0012_*`, espelhos em `api/cmd/api/migrations/`, `api/cmd/api/analytics_infra_merenda_servicos.go` *(novo)*, `api/cmd/api/main.go` (registro de rotas), `infra/init.sql`, `docs/dashboard/validacao-fase-infra-merenda-servicos.md` *(novo)* | `web/`, demais migrations, `analytics.go`/`analytics_*.go` da Frente 1, `POST /v1/census`, Sheets, `/v1/locations`, `vw_censo_base` e `vw_censo_enriquecida` |
-| **3 — Frontend + Qualidade de Dados** | `refactor/admin-page-componentes` | Quebrar `admin/page.tsx` em componentes por aba; criar **placeholders** das 5 novas abas; preencher tabela de paridade da Fase 2A; investigar decimais em `total_alunos` | `web/src/app/admin/page.tsx`, `web/src/components/admin/*` *(novo)*, `docs/dashboard/validacao-fase-2.md`, `docs/dashboard/criterios-contagem-e-qualidade-dados.md` (extensão), eventualmente `web/src/schemas/steps/*.ts` (validação Zod, PR isolado) | `api/`, `infra/migrations/`, fluxo `POST /v1/census`, comportamento dos endpoints Sheets, submit do formulário, abas "Perfil dos Alunos" e "Gestão Financeira e Governança" |
+| **3 — Frontend + Qualidade de Dados** | `refactor/admin-page-componentes` | Quebrar `admin/page.tsx` em componentes por aba; criar **placeholders** das 5 novas abas temáticas + placeholder institucional de "Gestão Financeira e Governança" (sem dados); preencher tabela de paridade da Fase 2A; investigar decimais em `total_alunos` | `web/src/app/admin/page.tsx`, `web/src/components/admin/*` *(novo)*, `docs/dashboard/validacao-fase-2.md`, `docs/dashboard/criterios-contagem-e-qualidade-dados.md` (extensão), eventualmente `web/src/schemas/steps/*.ts` (validação Zod, PR isolado) | `api/`, `infra/migrations/`, fluxo `POST /v1/census`, comportamento dos endpoints Sheets, submit do formulário, **consumo de dados / endpoints / views** das abas "Perfil dos Alunos" e "Gestão Financeira e Governança" (esta última liberada apenas como placeholder visual) |
 
 ## 5. Regras de integração
 
@@ -106,7 +108,7 @@ A aba "Caracterização da Rede" (já em produção, alimentada por PostgreSQL) 
 - Introduzir ORM.
 - Aplicar deduplicação automática no banco.
 - Alterar `vw_censo_base` ou `vw_censo_enriquecida` (são fundação das Fases 1 e 2A em produção).
-- Criar views, endpoints ou componentes para "Perfil dos Alunos e Resultados" ou "Gestão Financeira e Governança" — fora de escopo nesta rodada.
+- Criar views, endpoints ou consumo de dados para "Perfil dos Alunos e Resultados" ou "Gestão Financeira e Governança" — fora de escopo nesta rodada. **Exceção autorizada para Frente 3:** placeholder visual de "Gestão Financeira e Governança" no `/admin` (skeleton/empty state, sem fetch, sem endpoint, sem view SQL, sem dado fake).
 - Modificar a aba "Caracterização da Rede" (já em produção).
 
 ## 8. Ordem recomendada para integração

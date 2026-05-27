@@ -1011,6 +1011,15 @@ Lista exaustiva — para cada caso encontrado em 8.3, selecionar a hipótese mai
 
 A presença de decimais não bloqueia o veredito técnico da Fase 2A (já validada) nem da migração visual da Fase 2B.1 (já em produção). É um item de **qualidade de dado** com responsabilidade compartilhada entre Frente A (este documento) e Frente 3 (UI), a ser tratado em PR isolado conforme 8.7.
 
+### 8.9 Microfix preventivo aplicado (branch `fix/total-alunos-integer-validation`)
+
+Após o levantamento documental acima, foi aplicado um microfix preventivo isolado no formulário, sem tocar em backend, view ou endpoint:
+
+- **Schema Zod (`web/src/schemas/steps/general-data.ts`):** `total_alunos` passou a exigir inteiro não negativo (`z.number().int(...).min(1, ...)`). Mensagem: *"Informe um número inteiro de alunos."*
+- **Input do formulário (`web/src/components/forms/general-data-form.tsx`):** a instância de `total_alunos` recebeu `step={1}` e `min={0}` explícitos. O componente compartilhado `NumberInput` (`web/src/components/ui/form-components.tsx`) **não foi alterado**, pois é reutilizado por campos decimais (percentuais, médias).
+
+> **Escopo deliberadamente restrito.** Este PR impede novos valores decimais em `total_alunos`, mas **não altera registros existentes**. A correção de dados legados depende de relatório nominal (seções 8.3–8.5) e validação humana, conforme decisão da seção 5 e recomendação 8.7.1. Demais campos conceitualmente inteiros (`alunos_pcd`, `qtd_salas_aula`, `qtd_anexos`, etc.) seguem com a recomendação 8.7.2 em aberto — serão tratados em PRs separados se confirmados como problema na próxima rodada de coleta.
+
 ---
 
 ## Referências

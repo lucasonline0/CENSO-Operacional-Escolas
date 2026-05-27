@@ -338,7 +338,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <NumberInput<GeneralDataFormValues> control={control} name="total_alunos" label="Total de alunos matriculados *" />
+                <NumberInput<GeneralDataFormValues> control={control} name="total_alunos" label="Total de alunos matriculados *" min={0} step={1} />
                 <NumberInput<GeneralDataFormValues> control={control} name="alunos_pcd" label="Qtd. alunos PcD (Preenchimento Manual) *" />
                 <NumberInput<GeneralDataFormValues> control={control} name="alunos_rural" label="Qtd. alunos residência rural *" />
                 <NumberInput<GeneralDataFormValues> control={control} name="alunos_urbana" label="Qtd. alunos residência urbana *" />

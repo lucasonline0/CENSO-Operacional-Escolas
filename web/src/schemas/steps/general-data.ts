@@ -20,7 +20,11 @@ export const generalDataSchema = z.object({
   turmas_noite: numberSchema.optional(),
   turmas_integral: numberSchema.optional(),
   
-  total_alunos: numberSchema.pipe(z.number().min(1, "Obrigatório ter pelo menos 1 aluno")),
+  total_alunos: numberSchema.pipe(
+    z.number()
+      .int("Informe um número inteiro de alunos.")
+      .min(1, "Obrigatório ter pelo menos 1 aluno")
+  ),
   alunos_pcd: numberSchema,
   alunos_rural: numberSchema,
   alunos_urbana: numberSchema,

@@ -84,11 +84,21 @@ func main() {
 
 	var cfg config
 
+	// Valida configuração de segurança crítica antes de subir o servidor.
+	// Aborta cedo (em vez de cair num segredo default inseguro) se o JWT
+	// não estiver corretamente configurado.
+	if err := validateSecurityConfig(); err != nil {
+		logger.Fatal("ERRO FATAL SEGURANÇA: ", err)
+	}
+
 	cfg.port = os.Getenv("PORT")
 	if cfg.port == "" {
 		cfg.port = "8000"
 	}
-	cfg.env = "production"
+	cfg.env = os.Getenv("APP_ENV")
+	if cfg.env == "" {
+		cfg.env = "production"
+	}
 
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -98,8 +108,14 @@ func main() {
 	if dsn == "" {
 		dbHost := os.Getenv("DB_HOST")
 		if dbHost != "" {
-			dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable timezone=UTC connect_timeout=5",
-				os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"))
+			// sslmode configurável: padrão "disable" para o docker local sem TLS,
+			// mas permite exigir TLS (DB_SSLMODE=require) em produção.
+			sslmode := os.Getenv("DB_SSLMODE")
+			if sslmode == "" {
+				sslmode = "disable"
+			}
+			dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s timezone=UTC connect_timeout=5",
+				os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"), sslmode)
 		}
 	}
 

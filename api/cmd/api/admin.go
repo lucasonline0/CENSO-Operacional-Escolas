@@ -25,17 +25,37 @@ type rateLimiter struct {
 
 var loginRL = &rateLimiter{attempts: make(map[string][]time.Time)}
 
+// Limitadores para os endpoints públicos de escrita. Os limites são
+// propositalmente generosos para não atrapalhar o preenchimento legítimo
+// do formulário (multi-step + autosave, possivelmente várias escolas atrás
+// do mesmo IP/NAT de uma DRE), mas cortam abuso/enumeração em massa.
+var (
+	censusWriteRL = &rateLimiter{attempts: make(map[string][]time.Time)}
+	uploadRL      = &rateLimiter{attempts: make(map[string][]time.Time)}
+)
+
 const (
 	maxLoginAttempts = 5
 	rlWindow         = 15 * time.Minute
 	jwtExpiry        = 2 * time.Hour
+
+	// Escrita de censo/escola: alto o suficiente para o formulário completo
+	// (11 passos + salvamentos automáticos) repetido por várias escolas.
+	maxCensusWrites = 300
+	censusWindow    = 10 * time.Minute
+
+	// Upload de foto: uma por escola na prática; margem para reenvios.
+	maxUploads   = 40
+	uploadWindow = 10 * time.Minute
 )
 
-func (rl *rateLimiter) check(ip string) bool {
+// allow implementa um rate limit de janela deslizante para o IP informado,
+// com limite e janela parametrizáveis.
+func (rl *rateLimiter) allow(ip string, max int, window time.Duration) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
-	cutoff := time.Now().Add(-rlWindow)
+	cutoff := time.Now().Add(-window)
 	var recent []time.Time
 	for _, t := range rl.attempts[ip] {
 		if t.After(cutoff) {
@@ -44,11 +64,15 @@ func (rl *rateLimiter) check(ip string) bool {
 	}
 	rl.attempts[ip] = recent
 
-	if len(recent) >= maxLoginAttempts {
+	if len(recent) >= max {
 		return false
 	}
 	rl.attempts[ip] = append(rl.attempts[ip], time.Now())
 	return true
+}
+
+func (rl *rateLimiter) check(ip string) bool {
+	return rl.allow(ip, maxLoginAttempts, rlWindow)
 }
 
 func clientIP(r *http.Request) string {
@@ -73,12 +97,26 @@ type adminClaims struct {
 	jwt.RegisteredClaims
 }
 
+// minJWTSecretLen é o tamanho mínimo aceitável para o segredo de assinatura.
+const minJWTSecretLen = 32
+
 func jwtSecret() []byte {
+	// A validação real acontece no startup (validateSecurityConfig), que aborta
+	// o processo caso o segredo esteja ausente ou curto demais. Aqui apenas
+	// devolvemos o valor do ambiente — nunca um default embutido no código,
+	// que permitiria forjar tokens de admin.
+	return []byte(os.Getenv("ADMIN_JWT_SECRET"))
+}
+
+// validateSecurityConfig é chamada no boot para garantir que o segredo JWT
+// está configurado de forma segura. Falha cedo e de forma explícita em vez de
+// silenciosamente cair num default inseguro.
+func validateSecurityConfig() error {
 	s := os.Getenv("ADMIN_JWT_SECRET")
-	if s == "" {
-		return []byte("INSECURE-default-set-ADMIN_JWT_SECRET")
+	if len(s) < minJWTSecretLen {
+		return fmt.Errorf("ADMIN_JWT_SECRET ausente ou curto demais (mínimo %d caracteres; gere com: openssl rand -hex 32)", minJWTSecretLen)
 	}
-	return []byte(s)
+	return nil
 }
 
 // ─── Handlers ────────────────────────────────────────────────────────────────
@@ -365,7 +403,8 @@ func (app *application) AdminSheetMetrics(w http.ResponseWriter, r *http.Request
 	}
 	metrics, err := app.sheets.GetSheetMetrics()
 	if err != nil {
-		app.errorJSON(w, fmt.Errorf("erro ao ler planilha: %v", err), http.StatusInternalServerError)
+		app.logger.Printf("AdminSheetMetrics: %v", err)
+		app.errorJSON(w, fmt.Errorf("erro ao ler planilha"), http.StatusInternalServerError)
 		return
 	}
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: metrics})
@@ -379,7 +418,8 @@ func (app *application) AdminIndicadoresMetrics(w http.ResponseWriter, r *http.R
 	}
 	metrics, err := app.sheets.GetIndicadoresMetrics()
 	if err != nil {
-		app.errorJSON(w, fmt.Errorf("erro ao ler Indicadores_Flags: %v", err), http.StatusInternalServerError)
+		app.logger.Printf("AdminIndicadoresMetrics: %v", err)
+		app.errorJSON(w, fmt.Errorf("erro ao ler Indicadores_Flags"), http.StatusInternalServerError)
 		return
 	}
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: metrics})

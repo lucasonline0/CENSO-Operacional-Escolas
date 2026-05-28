@@ -507,10 +507,10 @@ func (app *application) AdminAnalyticsTecnologiaUso(w http.ResponseWriter, r *ht
 		tot AS (SELECT COUNT(DISTINCT school_id)::numeric AS n FROM base)
 		SELECT
 			COUNT(DISTINCT school_id) FILTER (WHERE possui_projetor)::bigint,
-			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE possui_projetor) / NULLIF(tot.n, 0), 1), 0)::float8,
+			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE possui_projetor) / NULLIF(MAX(tot.n), 0), 1), 0)::float8,
 			COALESCE(SUM(qtd_projetores), 0)::float8,
 			COUNT(DISTINCT school_id) FILTER (WHERE possui_lousa_digital)::bigint,
-			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE possui_lousa_digital) / NULLIF(tot.n, 0), 1), 0)::float8
+			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE possui_lousa_digital) / NULLIF(MAX(tot.n), 0), 1), 0)::float8
 		FROM base CROSS JOIN tot
 	`, year, dre, municipio, zona, porte).Scan(
 		&out.EscolasComProjetor,

@@ -12,7 +12,7 @@ import "./admin.css";
 
 import { API, C } from "@/components/admin/shared/constants";
 import {
-  apiFetch, saveToken, loadToken, clearToken, sanitize,
+  apiFetch, saveToken, loadToken, clearToken, clearApiCache, sanitize, prefetchDashboard,
 } from "@/components/admin/shared/api";
 import { JsonModal } from "@/components/admin/shared/JsonModal";
 import { AbaOperacional } from "@/components/admin/AbaOperacional";
@@ -37,25 +37,28 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
   const [password, setPassword] = useState("");
   const [showPwd,  setShowPwd]  = useState(false);
   const [error,    setError]    = useState("");
-  const [loading,  setLoading]  = useState(false);
+  const [status,   setStatus]   = useState<"idle" | "auth" | "prefetch">("idle");
   const [attempts, setAttempts] = useState(0);
   const blocked = attempts >= 5;
+  const loading = status !== "idle";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (blocked) return;
-    setError(""); setLoading(true);
+    setError(""); setStatus("auth");
     const u = sanitize(username).slice(0, 64);
     const p = sanitize(password).slice(0, 128);
-    if (!u || !p) { setError("Preencha usuário e senha."); setLoading(false); return; }
+    if (!u || !p) { setError("Preencha usuário e senha."); setStatus("idle"); return; }
     try {
       const res  = await fetch(`${API}/v1/admin/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: u, password: p }) });
       const json = await res.json();
-      if (!res.ok) { setAttempts((a) => a + 1); setError(json.message ?? "Credenciais inválidas."); return; }
+      if (!res.ok) { setAttempts((a) => a + 1); setError(json.message ?? "Credenciais inválidas."); setStatus("idle"); return; }
       const token = (json.data as { token: string }).token;
-      saveToken(token); onLogin(token);
-    } catch { setError("Não foi possível conectar ao servidor."); }
-    finally   { setLoading(false); }
+      saveToken(token);
+      setStatus("prefetch");
+      await prefetchDashboard(token);
+      onLogin(token);
+    } catch { setError("Não foi possível conectar ao servidor."); setStatus("idle"); }
   }
 
   return (
@@ -158,9 +161,9 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
               )}
 
               <button type="submit" className="ca-submit-btn" disabled={loading || blocked}>
-                {loading
-                  ? <><Loader2 size={15} className="animate-spin" />Autenticando…</>
-                  : <>Entrar no painel <ArrowRight size={14} /></>}
+                {status === "auth"     ? <><Loader2 size={15} className="animate-spin" />Autenticando…</>
+                : status === "prefetch"? <><Loader2 size={15} className="animate-spin" />Carregando painel…</>
+                :                        <>Entrar no painel <ArrowRight size={14} /></>}
               </button>
             </form>
           </div>
@@ -252,8 +255,9 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const [syncing,      setSyncing]      = useState(false);
   const [viewId,       setViewId]       = useState<number | null>(null);
   const [collapsed,    setCollapsed]    = useState(false);
+  const [visited,      setVisited]      = useState<Set<Tab>>(() => new Set<Tab>(["perfil"]));
 
-  const logout = useCallback(() => { clearToken(); onLogout(); }, [onLogout]);
+  const logout = useCallback(() => { clearToken(); clearApiCache(); onLogout(); }, [onLogout]);
 
   const loadDb = useCallback(async () => {
     try {
@@ -274,6 +278,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
   useEffect(() => { loadDb(); }, [loadDb]);
   useEffect(() => { if (tab === "census") loadCensus(); }, [tab, filterStatus, filterDre, loadCensus]);
+
 
   async function handleSync() {
     setSyncing(true);
@@ -298,7 +303,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const filteredRecent  = (dbData?.recent  ?? []).filter((r) => !search || match(r, search));
   const filteredCensus  = (allCensus       ?? []).filter((r) => !search || match(r, search));
 
-  const handleNav = (id: Tab) => { setTab(id); setSearch(""); };
+  const handleNav = (id: Tab) => { setTab(id); setSearch(""); setVisited((prev) => new Set([...prev, id])); };
 
   if (loading) return (
     <div className="censo-admin" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -388,22 +393,54 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
           </div>
 
           {/* Page content */}
-          <div className="admin-page" key={tab}>
+          <div className="admin-page">
             {err && (
               <div className="ca-error-note">
                 <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
                 {err}
               </div>
             )}
-
-            {tab === "perfil"         && <AbaCaracterizacao token={token} onUnauth={logout} />}
-            {tab === "pessoal"        && <AbaPessoalGestao token={token} onUnauth={logout} />}
-            {tab === "tecnologia"     && <AbaTecnologia token={token} onUnauth={logout} />}
-            {tab === "infraestrutura" && <AbaInfraestruturaSeguranca token={token} onUnauth={logout} />}
-            {tab === "merenda"        && <AbaMerenda token={token} onUnauth={logout} />}
-            {tab === "servicos"       && <AbaServicosTerceirizados token={token} onUnauth={logout} />}
-            {tab === "alunos"         && <AbaPerfilAlunos token={token} onUnauth={logout} />}
-            {tab === "governanca"     && <AbaGestaoFinanceiraGovernanca />}
+{/* Renderiza todas as abas já visitadas. Quando volta para uma aba os dados já são carregados*/}
+            {visited.has("perfil") && (
+              <div style={{ display: tab === "perfil" ? undefined : "none" }}>
+                <AbaCaracterizacao token={token} onUnauth={logout} />
+              </div>
+            )}
+            {visited.has("pessoal") && (
+              <div style={{ display: tab === "pessoal" ? undefined : "none" }}>
+                <AbaPessoalGestao token={token} onUnauth={logout} />
+              </div>
+            )}
+            {visited.has("tecnologia") && (
+              <div style={{ display: tab === "tecnologia" ? undefined : "none" }}>
+                <AbaTecnologia token={token} onUnauth={logout} />
+              </div>
+            )}
+            {visited.has("infraestrutura") && (
+              <div style={{ display: tab === "infraestrutura" ? undefined : "none" }}>
+                <AbaInfraestruturaSeguranca token={token} onUnauth={logout} />
+              </div>
+            )}
+            {visited.has("merenda") && (
+              <div style={{ display: tab === "merenda" ? undefined : "none" }}>
+                <AbaMerenda token={token} onUnauth={logout} />
+              </div>
+            )}
+            {visited.has("servicos") && (
+              <div style={{ display: tab === "servicos" ? undefined : "none" }}>
+                <AbaServicosTerceirizados token={token} onUnauth={logout} />
+              </div>
+            )}
+            {visited.has("alunos") && (
+              <div style={{ display: tab === "alunos" ? undefined : "none" }}>
+                <AbaPerfilAlunos token={token} onUnauth={logout} />
+              </div>
+            )}
+            {visited.has("governanca") && (
+              <div style={{ display: tab === "governanca" ? undefined : "none" }}>
+                <AbaGestaoFinanceiraGovernanca />
+              </div>
+            )}
 
             {tab === "operacional" && dbData && (
               <AbaOperacional

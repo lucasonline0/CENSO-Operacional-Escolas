@@ -197,9 +197,9 @@ func (app *application) AdminAnalyticsPessoalCoordenacao(w http.ResponseWriter, 
 	// 2) Cobertura Média (Média de áreas cobertas por escola)
 	err = db.QueryRowContext(ctx, fmt.Sprintf(`
 		WITH base AS (
-			SELECT school_id, COUNT(*) FILTER (WHERE possui) AS qtd_areas
+			SELECT v.school_id, COUNT(*) FILTER (WHERE possui) AS qtd_areas
 			%s
-			GROUP BY school_id
+			GROUP BY v.school_id
 		)
 		SELECT COALESCE(ROUND(AVG(qtd_areas), 2), 0)::float8
 		FROM base
@@ -394,7 +394,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 
 	// 1) Totais de internet e equipamentos
 	err := db.QueryRowContext(ctx, fmt.Sprintf(`
-		WITH base AS (SELECT * %s),
+		WITH base AS (SELECT v.* %s),
 		tot AS (SELECT COUNT(DISTINCT school_id)::numeric AS n FROM base)
 		SELECT
 			COUNT(DISTINCT school_id) FILTER (WHERE internet_disponivel)::bigint,
@@ -424,7 +424,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 	// helper: distribuição categórica por campo
 	distCateg := func(campo string) ([]CategoricStat, error) {
 		rows, err := db.QueryContext(ctx, fmt.Sprintf(`
-			WITH base AS (SELECT * %s),
+			WITH base AS (SELECT v.* %s),
 			tot AS (SELECT COUNT(DISTINCT school_id)::numeric AS n FROM base)
 			SELECT
 				COALESCE(%s, 'Não informado') AS valor,

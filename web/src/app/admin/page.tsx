@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   LogOut, Search, RefreshCw, CloudUpload, Lock, User as UserIcon,
-  AlertCircle, Loader2, PanelLeftClose,
+  AlertCircle, Loader2, PanelLeftClose, Eye, EyeOff, ArrowRight,
   BarChart2, UsersRound, MonitorSmartphone, ShieldCheck, Utensils,
   ClipboardCheck, Activity, Landmark, LayoutDashboard, Database, MapPinned,
 } from "lucide-react";
@@ -35,8 +35,9 @@ import type {
 function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError]       = useState("");
-  const [loading, setLoading]   = useState(false);
+  const [showPwd,  setShowPwd]  = useState(false);
+  const [error,    setError]    = useState("");
+  const [loading,  setLoading]  = useState(false);
   const [attempts, setAttempts] = useState(0);
   const blocked = attempts >= 5;
 
@@ -59,61 +60,112 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
 
   return (
     <div className="censo-admin login-shell">
-      <div className="ca-login-card">
-        <div className="ca-login-head">
-          <div className="ca-login-mark">
-            <img src="/brasao-para.png" alt="Brasão do Estado do Pará" />
-          </div>
-          <div className="ca-login-title">Censo Operacional</div>
-          <div className="ca-login-sub">Painel Administrativo · SEDUC‑PA · FADEP</div>
-        </div>
+      <div className="ca-login-frame">
 
-        <form onSubmit={submit} className="ca-login-body" noValidate>
-          <div className="ca-field">
-            <label htmlFor="u">Usuário</label>
-            <div className="ca-input-wrap">
-              <UserIcon size={15} className="ca-input-icon" />
-              <input
-                id="u" type="text" autoComplete="username" maxLength={64}
-                disabled={loading || blocked} value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Usuário" required
-              />
+        {/* ── Left: institutional identity ── */}
+        <aside className="ca-identity">
+          <div className="ca-id-top">
+            <div className="ca-id-brasao">
+              <img src="/brasao-para.png" alt="Brasão do Estado do Pará" />
+            </div>
+            <div className="ca-id-org">
+              <div className="ot1">Censo Operacional</div>
+              <div className="ot2">SEDUC · Pará</div>
             </div>
           </div>
 
-          <div className="ca-field">
-            <label htmlFor="pw">Senha</label>
-            <div className="ca-input-wrap">
-              <Lock size={15} className="ca-input-icon" />
-              <input
-                id="pw" type="password" autoComplete="current-password" maxLength={128}
-                disabled={loading || blocked} value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Senha" required
-              />
-            </div>
+          <div className="ca-id-eyebrow-row">
+            <span className="ca-id-badge">Painel Administrativo</span>
+            <span className="ca-id-eyebrow">Censo Escolar 2026</span>
           </div>
 
-          {error   && (
-            <div className="ca-login-error">
-              <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-              {error}
-            </div>
-          )}
-          {blocked && (
-            <div className="ca-login-warn">
-              <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-              Muitas tentativas. Aguarde alguns minutos.
-            </div>
-          )}
+          <h1 className="ca-id-title">
+            Acesso ao painel de gestão da rede estadual.
+          </h1>
 
-          <button type="submit" className="ca-submit-btn" disabled={loading || blocked}>
-            {loading ? <><Loader2 size={15} className="animate-spin" />Autenticando…</> : "Entrar"}
-          </button>
+          <div className="ca-id-footer">
+            <span className="ca-dot" />
+            Sistema ativo · dados atualizados
+          </div>
+        </aside>
 
-          <p className="ca-login-note">Acesso restrito. Sessão expira em 2 horas.</p>
-        </form>
+        {/* ── Right: form ── */}
+        <section className="ca-form-side">
+          <div className="ca-form-wrap">
+            <div>
+              <div className="ca-form-eyebrow">Acesso administrativo</div>
+              <h2 className="ca-form-title">Entrar no painel</h2>
+              <p className="ca-form-sub">Utilize suas credenciais institucionais da SEDUC‑PA.</p>
+            </div>
+
+            <form className="ca-lform" onSubmit={submit} noValidate>
+              {/* Usuário */}
+              <div className="ca-lfield">
+                <label className="ca-lfield-label" htmlFor="u">Usuário</label>
+                <div className="ca-linput">
+                  <UserIcon size={16} className="ca-linput-icon" />
+                  <input
+                    id="u" type="text" autoComplete="username" maxLength={64}
+                    disabled={loading || blocked} value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="admin_seduc_pa" required
+                  />
+                </div>
+              </div>
+
+              {/* Senha */}
+              <div className="ca-lfield">
+                <label className="ca-lfield-label" htmlFor="pw">Senha</label>
+                <div className="ca-linput">
+                  <Lock size={16} className="ca-linput-icon" />
+                  <input
+                    id="pw" type={showPwd ? "text" : "password"}
+                    autoComplete="current-password" maxLength={128}
+                    disabled={loading || blocked} value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••••••" required
+                  />
+                  <button
+                    type="button" className="ca-linput-suffix"
+                    aria-label={showPwd ? "Ocultar senha" : "Mostrar senha"}
+                    onClick={() => setShowPwd((v) => !v)}
+                  >
+                    {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Checkbox row */}
+              <div className="ca-checkbox-row">
+                <label className="ca-lcheckbox">
+                  <input type="checkbox" name="remember" />
+                  <span>Manter sessão ativa</span>
+                </label>
+                <span className="ca-session-note">Sessão expira em 2 horas</span>
+              </div>
+
+              {error && (
+                <div className="ca-login-error">
+                  <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                  {error}
+                </div>
+              )}
+              {blocked && (
+                <div className="ca-login-warn">
+                  <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                  Muitas tentativas. Aguarde alguns minutos.
+                </div>
+              )}
+
+              <button type="submit" className="ca-submit-btn" disabled={loading || blocked}>
+                {loading
+                  ? <><Loader2 size={15} className="animate-spin" />Autenticando…</>
+                  : <>Entrar no painel <ArrowRight size={14} /></>}
+              </button>
+            </form>
+          </div>
+        </section>
+
       </div>
     </div>
   );

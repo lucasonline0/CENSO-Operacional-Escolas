@@ -512,103 +512,324 @@
   font-size: 13px;
 }
 
-/* ── Login form shell ────────────────────────────────────── */
+/* ── Login — two-column design ───────────────────────────── */
 .censo-admin.login-shell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: linear-gradient(135deg, var(--accent) 0%, #0c2e6a 100%);
+  min-height: 100vh;
+  padding: 14px;
+  display: grid;
+  grid-template-rows: 1fr;
+  background: var(--bg);
 }
 
-.censo-admin .ca-login-card {
-  width: 100%;
-  max-width: 420px;
+.ca-login-frame {
   background: var(--frame);
-  border-radius: 24px;
-  box-shadow: 0 25px 60px -15px rgba(16,61,142,0.35);
+  border-radius: var(--rad);
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
   overflow: hidden;
+  min-height: 0;
+  animation: ca-fadeIn .4s ease both;
+  box-shadow: 0 4px 40px -10px rgba(16,61,142,0.12);
 }
 
-.censo-admin .ca-login-head {
-  padding: 28px 32px 22px;
-  text-align: center;
-  background: var(--accent-soft);
-  border-bottom: 1px solid var(--accent-line);
-}
-
-.censo-admin .ca-login-mark {
-  width: 60px;
-  height: 60px;
-  margin: 0 auto 12px;
-}
-.censo-admin .ca-login-mark img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.censo-admin .ca-login-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--ink);
-  letter-spacing: -0.015em;
-  line-height: 1.2;
-}
-.censo-admin .ca-login-sub {
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 4px;
-}
-
-.censo-admin .ca-login-body {
-  padding: 28px 32px;
+/* ── Left: institutional identity ────────────────────────── */
+.ca-identity {
+  background: var(--accent);
+  position: relative;
+  padding: 40px 48px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 20px;
+  overflow: hidden;
+  color: #fff;
+  isolation: isolate;
 }
-
-.censo-admin .ca-field label {
-  display: block;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ink-2);
-  margin-bottom: 6px;
-  letter-spacing: 0.01em;
-}
-
-.censo-admin .ca-field .ca-input-wrap {
-  position: relative;
-}
-
-.censo-admin .ca-field .ca-input-icon {
+.ca-identity::before {
+  content: "";
   position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--muted);
+  inset: 0;
+  background-image: url('/seduc-building.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.12;
+  z-index: -2;
   pointer-events: none;
 }
+.ca-identity::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(42,102,199,0.08) 0%, rgba(8,32,78,0.12) 100%);
+  pointer-events: none;
+  z-index: -1;
+}
+.ca-identity > * { position: relative; z-index: 1; }
 
-.censo-admin .ca-field input {
+.ca-id-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+  animation: ca-fadeInUp .55s ease both;
+}
+.ca-id-brasao {
+  width: 56px; height: 56px;
+  display: grid; place-items: center;
+  flex-shrink: 0;
+}
+.ca-id-brasao img {
+  width: 100%; height: 100%;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.25));
+}
+.ca-id-org {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  animation: ca-fadeInUp .55s ease both;
+  animation-delay: .05s;
+}
+.ca-id-org .ot1 {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.ca-id-org .ot2 {
+  font-size: 11.5px;
+  color: rgba(255,255,255,0.72);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+}
+
+.ca-id-eyebrow-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  animation: ca-fadeInUp .55s ease both;
+  animation-delay: .12s;
+}
+.ca-id-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  background: rgba(255,255,255,0.18);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(255,255,255,0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.ca-id-badge::before {
+  content: "";
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: #fff;
+  display: inline-block;
+  box-shadow: 0 0 6px rgba(255,255,255,0.7);
+}
+.ca-id-eyebrow {
+  font-size: 12px;
+  color: rgba(255,255,255,0.78);
+  font-weight: 500;
+}
+
+.ca-id-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: -0.018em;
+  line-height: 1.22;
+  margin: 0;
+  max-width: 360px;
+  text-align: center;
+  text-wrap: balance;
+  animation: ca-fadeInUp .6s ease both;
+  animation-delay: .18s;
+}
+
+.ca-id-footer {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11.5px;
+  color: rgba(255,255,255,0.60);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+  animation: ca-fadeIn .6s ease both;
+  animation-delay: .5s;
+}
+.ca-id-footer .ca-dot {
+  width: 6px; height: 6px;
+  background: #6EE7B7;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(110,231,183,0.22);
+}
+
+/* ── Right: form panel ────────────────────────────────────── */
+.ca-form-side {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 56px 64px;
+}
+
+.ca-form-wrap {
+  max-width: 380px;
+  margin: 0 auto;
   width: 100%;
-  padding: 10px 14px 10px 38px;
-  border: 1px solid var(--bdr);
-  border-radius: var(--rad-sm);
-  font-family: var(--font);
-  font-size: 13.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.ca-form-eyebrow {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  animation: ca-fadeInUp .5s ease both;
+  animation-delay: .1s;
+}
+.ca-form-title {
+  font-size: 26px;
+  font-weight: 700;
   color: var(--ink);
-  background: var(--bg);
-  outline: none;
+  letter-spacing: -0.018em;
+  margin: 6px 0 4px;
+  animation: ca-fadeInUp .5s ease both;
+  animation-delay: .14s;
+}
+.ca-form-sub {
+  font-size: 13px;
+  color: var(--muted);
+  animation: ca-fadeInUp .5s ease both;
+  animation-delay: .18s;
+}
+
+.ca-lform {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: ca-fadeInUp .5s ease both;
+  animation-delay: .24s;
+}
+
+.ca-lfield { display: flex; flex-direction: column; gap: 6px; }
+
+.ca-lfield-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ca-linput {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--bdr);
+  background: var(--frame);
+  border-radius: 10px;
+  padding: 0 12px;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
-.censo-admin .ca-field input:focus {
-  border-color: var(--accent-line);
+.ca-linput:focus-within {
+  border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
-.censo-admin .ca-field input:disabled { opacity: 0.55; }
+.ca-linput .ca-linput-icon { color: var(--muted); flex-shrink: 0; }
+.ca-linput input {
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--ink);
+  flex: 1;
+  min-width: 0;
+  padding: 11px 0;
+  letter-spacing: 0.01em;
+}
+.ca-linput input::placeholder { color: var(--muted-2); }
+.ca-linput input:disabled { opacity: 0.55; }
 
-.censo-admin .ca-login-error {
+.ca-linput-suffix {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  transition: color .15s ease, background .15s ease;
+  flex-shrink: 0;
+}
+.ca-linput-suffix:hover { color: var(--ink); background: var(--side); }
+
+.ca-checkbox-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+}
+.ca-lcheckbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2);
+  cursor: pointer;
+  user-select: none;
+}
+.ca-lcheckbox input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  border: 1px solid var(--bdr-2);
+  border-radius: 4px;
+  background: var(--frame);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all .15s ease;
+  flex-shrink: 0;
+}
+.ca-lcheckbox input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.ca-lcheckbox input[type="checkbox"]:checked::after {
+  content: "";
+  width: 9px; height: 5px;
+  border-left: 1.6px solid #fff;
+  border-bottom: 1.6px solid #fff;
+  transform: rotate(-45deg) translate(1px, -1px);
+  display: block;
+}
+.ca-session-note {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.ca-login-error {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -619,8 +840,7 @@
   color: #B91C1C;
   font-size: 12.5px;
 }
-
-.censo-admin .ca-login-warn {
+.ca-login-warn {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -632,30 +852,52 @@
   font-size: 12.5px;
 }
 
-.censo-admin .ca-submit-btn {
-  width: 100%;
-  padding: 11px 16px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: var(--rad-sm);
-  font-family: var(--font);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
+.ca-submit-btn {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: background .15s ease, opacity .15s ease;
+  padding: 13px 16px;
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  width: 100%;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.12) inset, 0 6px 18px -8px rgba(16,61,142,0.45);
+  transition: background .15s ease, transform .15s ease, box-shadow .15s ease;
 }
-.censo-admin .ca-submit-btn:hover { background: var(--accent-2); }
-.censo-admin .ca-submit-btn:disabled { opacity: 0.55; cursor: default; }
+.ca-submit-btn:hover {
+  background: var(--accent-2);
+  transform: translateY(-1px);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.12) inset, 0 10px 22px -10px rgba(16,61,142,0.5);
+}
+.ca-submit-btn:active { transform: translateY(0); }
+.ca-submit-btn:disabled { opacity: 0.55; cursor: default; transform: none; }
 
-.censo-admin .ca-login-note {
-  text-align: center;
-  font-size: 11.5px;
-  color: var(--muted);
+/* ── Login responsive ─────────────────────────────────────── */
+@media (max-width: 1080px) {
+  .ca-login-frame { grid-template-columns: 1fr 1.05fr; }
+  .ca-identity { padding: 36px 32px; }
+  .ca-form-side { padding: 44px 40px; }
+  .ca-id-title { font-size: 22px; }
+}
+@media (max-width: 880px) {
+  .censo-admin.login-shell { padding: 10px; }
+  .ca-login-frame { grid-template-columns: 1fr; }
+  .ca-identity {
+    padding: 28px 24px 32px;
+    gap: 14px;
+    min-height: 200px;
+    justify-content: flex-start;
+  }
+  .ca-id-title { font-size: 20px; }
+  .ca-form-side { padding: 32px 28px 36px; }
+  .ca-form-title { font-size: 22px; }
 }
 
 /* ── Responsive ──────────────────────────────────────────── */

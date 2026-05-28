@@ -398,13 +398,13 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 		tot AS (SELECT COUNT(DISTINCT school_id)::numeric AS n FROM base)
 		SELECT
 			COUNT(DISTINCT school_id) FILTER (WHERE internet_disponivel)::bigint,
-			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE internet_disponivel) / NULLIF(tot.n, 0), 1), 0)::float8,
+			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE internet_disponivel) / NULLIF(MAX(tot.n), 0), 1), 0)::float8,
 			COALESCE(SUM(qtd_desktop_adm), 0)::float8,
 			COALESCE(SUM(qtd_desktop_alunos), 0)::float8,
 			COALESCE(SUM(qtd_notebooks), 0)::float8,
 			COALESCE(SUM(qtd_chromebooks), 0)::float8,
 			COALESCE(SUM(qtd_computadores_inoperantes), 0)::float8,
-			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE computadores_atendem = 'Sim') / NULLIF(tot.n, 0), 1), 0)::float8
+			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE computadores_atendem = 'Sim') / NULLIF(MAX(tot.n), 0), 1), 0)::float8
 		FROM base CROSS JOIN tot
 	`, baseWhere), year, dre, municipio, zona, porte).Scan(
 		&out.EscolasComInternet,

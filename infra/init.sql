@@ -366,3 +366,45 @@ SELECT
            ELSE 0 END)::numeric AS total_professores
 FROM vw_censo_base b
 JOIN census_responses cr ON cr.id = b.census_id;
+
+-- 0006_vw_censo_equipamentos_tecnologia
+-- Finalidade: Consolidar indicadores de conectividade e parque tecnológico das escolas.
+-- Fonte: vw_censo_base e census_responses.data (JSONB)
+-- Granularidade: Uma linha por escola/ano (school_id + year).
+CREATE OR REPLACE VIEW vw_censo_equipamentos_tecnologia AS
+SELECT
+    b.school_id,
+    b.codigo_inep,
+    b.nome_escola,
+    b.dre,
+    b.municipio,
+    b.zona,
+    b.year,
+    b.status,
+    b.census_id,
+    lower(cr.data->>'internet_disponivel') IN ('sim', 'true', 't', '1')
+        AS internet_disponivel,
+    NULLIF(cr.data->>'provedor_internet', '')
+        AS provedor_internet,
+    NULLIF(cr.data->>'qualidade_internet', '')
+        AS qualidade_internet,
+    CASE WHEN cr.data->>'qtd_desktop_adm' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_desktop_adm')::numeric END AS qtd_desktop_adm,
+    CASE WHEN cr.data->>'qtd_desktop_alunos' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_desktop_alunos')::numeric END AS qtd_desktop_alunos,
+    CASE WHEN cr.data->>'qtd_notebooks' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_notebooks')::numeric END AS qtd_notebooks,
+    CASE WHEN cr.data->>'qtd_chromebooks' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_chromebooks')::numeric END AS qtd_chromebooks,
+    CASE WHEN cr.data->>'qtd_computadores_inoperantes' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_computadores_inoperantes')::numeric END AS qtd_computadores_inoperantes,
+    NULLIF(cr.data->>'computadores_atendem', '')
+        AS computadores_atendem,
+    lower(cr.data->>'possui_projetor') IN ('sim', 'true', 't', '1')
+        AS possui_projetor,
+    CASE WHEN cr.data->>'qtd_projetores' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_projetores')::numeric END AS qtd_projetores,
+    lower(cr.data->>'possui_lousa_digital') IN ('sim', 'true', 't', '1')
+        AS possui_lousa_digital
+FROM vw_censo_base b
+JOIN census_responses cr ON cr.id = b.census_id;

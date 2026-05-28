@@ -46,6 +46,13 @@ CREATE TABLE IF NOT EXISTS census_responses (
       UNIQUE (school_id, year)
 );
 
+-- Performance indexes (mirror of infra/migrations/0013_performance_indexes.sql)
+CREATE INDEX IF NOT EXISTS idx_cr_status_year  ON census_responses(status, year);
+CREATE INDEX IF NOT EXISTS idx_cr_school_id    ON census_responses(school_id);
+CREATE INDEX IF NOT EXISTS idx_schools_dre     ON schools(dre);
+CREATE INDEX IF NOT EXISTS idx_schools_municipio ON schools(municipio);
+CREATE INDEX IF NOT EXISTS idx_cr_data_gin     ON census_responses USING GIN (data);
+
 -- =====================================================================
 -- Camada analítica — Fase 1 (espelho de infra/migrations/0001_vw_censo_base.sql)
 -- =====================================================================

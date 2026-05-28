@@ -297,16 +297,44 @@ func (app *application) AdminDashboard(w http.ResponseWriter, r *http.Request) {
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: s})
 }
 
-// AdminGetCensus returns all census entries with optional status/DRE filters.
-// All filtering is done via parameterized queries — no string interpolation.
+type CensusPageResponse struct {
+	Rows  []CensusRow `json:"rows"`
+	Total int         `json:"total"`
+	Page  int         `json:"page"`
+	Limit int         `json:"limit"`
+}
+
+// AdminGetCensus returns paginated census entries with optional status/DRE filters.
+// Query params: status, dre, limit (default 10), page (default 1).
 func (app *application) AdminGetCensus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	db := app.models.Schools.DB
 
-	statusFilter := r.URL.Query().Get("status") // "completed" | "draft" | ""
-	dreFilter := r.URL.Query().Get("dre")        // DRE name or ""
+	statusFilter := r.URL.Query().Get("status")
+	dreFilter    := r.URL.Query().Get("dre")
 
-	// $1 and $2 are safe parameterized filters; empty string matches all via OR trick
+	limit := 10
+	page  := 1
+	if v, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && v > 0 {
+		limit = v
+	}
+	if v, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && v > 0 {
+		page = v
+	}
+	offset := (page - 1) * limit
+
+	var total int
+	if err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM census_responses cr
+		JOIN schools s ON s.id = cr.school_id
+		WHERE ($1 = '' OR cr.status = $1)
+		  AND ($2 = '' OR s.dre = $2)`,
+		statusFilter, dreFilter).Scan(&total); err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao contar censos"), http.StatusInternalServerError)
+		return
+	}
+
 	rows, err := db.QueryContext(ctx, `
 		SELECT
 			cr.id, cr.school_id, s.nome_escola, s.codigo_inep, s.municipio, s.dre,
@@ -316,8 +344,9 @@ func (app *application) AdminGetCensus(w http.ResponseWriter, r *http.Request) {
 		JOIN schools s ON s.id = cr.school_id
 		WHERE ($1 = '' OR cr.status = $1)
 		  AND ($2 = '' OR s.dre = $2)
-		ORDER BY cr.updated_at DESC`,
-		statusFilter, dreFilter)
+		ORDER BY cr.updated_at DESC
+		LIMIT $3 OFFSET $4`,
+		statusFilter, dreFilter, limit, offset)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro ao listar censos"), http.StatusInternalServerError)
 		return
@@ -338,7 +367,9 @@ func (app *application) AdminGetCensus(w http.ResponseWriter, r *http.Request) {
 		results = []CensusRow{}
 	}
 
-	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: results})
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: CensusPageResponse{
+		Rows: results, Total: total, Page: page, Limit: limit,
+	}})
 }
 
 // CensusFullRecord representa a resposta completa de um censo, incluindo o JSON bruto.

@@ -27,7 +27,7 @@ import { AbaMerenda } from "@/components/admin/AbaMerenda";
 import { AbaServicosTerceirizados } from "@/components/admin/AbaServicosTerceirizados";
 import { AbaGestaoFinanceiraGovernanca } from "@/components/admin/AbaGestaoFinanceiraGovernanca";
 import type {
-  CensusRow, DashboardData,
+  CensusRow, CensusPage, DashboardData,
 } from "@/components/admin/shared/types";
 
 // ─── Login ────────────────────────────────────────────────────────────────────
@@ -244,18 +244,20 @@ function NavGroup({ items, active, onNav }: { items: NavItem[]; active: Tab; onN
 }
 
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
-  const [dbData,       setDbData]       = useState<DashboardData | null>(null);
-  const [allCensus,    setAllCensus]    = useState<CensusRow[] | null>(null);
-  const [tab,          setTab]          = useState<Tab>("perfil");
-  const [filterStatus, setFilterStatus] = useState("");
-  const [filterDre,    setFilterDre]    = useState("");
-  const [search,       setSearch]       = useState("");
-  const [err,          setErr]          = useState("");
-  const [loading,      setLoading]      = useState(true);
-  const [syncing,      setSyncing]      = useState(false);
-  const [viewId,       setViewId]       = useState<number | null>(null);
-  const [collapsed,    setCollapsed]    = useState(false);
-  const [visited,      setVisited]      = useState<Set<Tab>>(() => new Set<Tab>(["perfil"]));
+  const [dbData,         setDbData]         = useState<DashboardData | null>(null);
+  const [censusPage,     setCensusPage]     = useState<CensusPage | null>(null);
+  const [tab,            setTab]            = useState<Tab>("perfil");
+  const [filterStatus,   setFilterStatus]   = useState("");
+  const [filterDre,      setFilterDre]      = useState("");
+  const [search,         setSearch]         = useState("");
+  const [err,            setErr]            = useState("");
+  const [loading,        setLoading]        = useState(true);
+  const [syncing,        setSyncing]        = useState(false);
+  const [viewId,         setViewId]         = useState<number | null>(null);
+  const [collapsed,      setCollapsed]      = useState(false);
+  const [visited,        setVisited]        = useState<Set<Tab>>(() => new Set<Tab>(["perfil"]));
+  const [censusLimit,    setCensusLimit]    = useState(10);
+  const [censusPageNum,  setCensusPageNum]  = useState(1);
 
   const logout = useCallback(() => { clearToken(); clearApiCache(); onLogout(); }, [onLogout]);
 
@@ -268,16 +270,18 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     } finally { setLoading(false); }
   }, [token, logout]);
 
-  const loadCensus = useCallback(async () => {
+  const loadCensus = useCallback(async (limit = censusLimit, page = censusPageNum) => {
     const p = new URLSearchParams();
     if (filterStatus) p.set("status", filterStatus);
     if (filterDre)    p.set("dre", filterDre);
-    try { setAllCensus(await apiFetch<CensusRow[]>(`/v1/admin/census?${p}`, token)); }
+    p.set("limit", String(limit));
+    p.set("page",  String(page));
+    try { setCensusPage(await apiFetch<CensusPage>(`/v1/admin/census?${p}`, token)); }
     catch (e) { if ((e as Error).message === "UNAUTHORIZED") logout(); }
-  }, [token, filterStatus, filterDre, logout]);
+  }, [token, filterStatus, filterDre, censusLimit, censusPageNum, logout]);
 
   useEffect(() => { loadDb(); }, [loadDb]);
-  useEffect(() => { if (tab === "census") loadCensus(); }, [tab, filterStatus, filterDre, loadCensus]);
+  useEffect(() => { if (tab === "census") loadCensus(); }, [tab, filterStatus, filterDre, censusLimit, censusPageNum, loadCensus]);
 
 
   async function handleSync() {
@@ -300,8 +304,8 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
            r.municipio.toLowerCase().includes(l)   || r.dre.toLowerCase().includes(l);
   };
 
-  const filteredRecent  = (dbData?.recent  ?? []).filter((r) => !search || match(r, search));
-  const filteredCensus  = (allCensus       ?? []).filter((r) => !search || match(r, search));
+  const filteredRecent  = (dbData?.recent ?? []).filter((r) => !search || match(r, search));
+  const filteredCensus  = (censusPage?.rows ?? []).filter((r) => !search || match(r, search));
 
   const handleNav = (id: Tab) => { setTab(id); setSearch(""); setVisited((prev) => new Set([...prev, id])); };
 
@@ -456,7 +460,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             {tab === "census" && (
               <AbaTodosCensos
                 dbData={dbData}
-                allCensus={allCensus}
+                censusPage={censusPage}
                 filterStatus={filterStatus}
                 setFilterStatus={setFilterStatus}
                 filterDre={filterDre}
@@ -464,6 +468,10 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 search={search}
                 setSearch={setSearch}
                 filteredCensus={filteredCensus}
+                censusLimit={censusLimit}
+                setCensusLimit={(l) => { setCensusLimit(l); setCensusPageNum(1); }}
+                censusPageNum={censusPageNum}
+                setCensusPageNum={setCensusPageNum}
                 onView={setViewId}
                 formatDate={fmtDate}
               />

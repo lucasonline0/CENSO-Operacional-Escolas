@@ -42,6 +42,7 @@ export async function apiFetch<T>(path: string, token: string, opts?: RequestIni
 // Chamado durante o login para que as abas abram instantaneamente.
 const DASHBOARD_ENDPOINTS = [
   "/v1/admin/dashboard",
+  "/v1/admin/census?limit=10&page=1",
   "/v1/admin/analytics/caracterizacao/perfil",
   "/v1/admin/analytics/caracterizacao/dre",
   "/v1/admin/sheet-metrics",

@@ -70,6 +70,13 @@ export interface CaracterizacaoDREPg {
 
 export interface CensusFull extends CensusRow { data: unknown; created_at: string; }
 
+export interface CensusPage {
+  rows: CensusRow[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 // Frente 2 — Infraestrutura e Segurança.
 // Payloads de /v1/admin/analytics/infraestrutura/{condicoes,seguranca}.
 export interface CategoricStat {

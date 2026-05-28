@@ -56,17 +56,30 @@ func main() {
 	logger := log.New(os.Stdout, "[CENSO-API] ", log.Ldate|log.Ltime|log.Lshortfile)
 
 	// --- CORREÇÃO DE PATH ---
-	// Verifica o diretório atual para debug
 	cwd, _ := os.Getwd()
 	logger.Printf("Executando a partir de: %s", cwd)
 
-	// Tenta carregar o .env. Ajuste o caminho se necessário.
-	// Se você estiver na pasta /api, talvez precise subir um nível para achar a pasta /infra
-	envPath := filepath.Join(cwd, "..", "infra", ".env")
-	err := godotenv.Load(envPath)
-	if err != nil {
-		logger.Printf("Aviso: Não encontrou .env em %s, tentando caminho local...", envPath)
-		_ = godotenv.Load(".env")
+	// PROCURA O .ENV DE FORMA INTELIGENTE EM VÁRIOS LUGARES
+	envPaths := []string{
+		".env",                                    // Tenta na mesma pasta de onde o comando rodou
+		filepath.Join(cwd, ".env"),                // Tenta no caminho absoluto atual
+		filepath.Join(cwd, "..", ".env"),          // Tenta um nível acima (raiz do projeto)
+		filepath.Join(cwd, "..", "infra", ".env"), // Tenta na pasta infra
+	}
+
+	envLoaded := false
+	for _, p := range envPaths {
+		if err := godotenv.Load(p); err == nil {
+			logger.Printf("Arquivo .env carregado com sucesso de: %s", p)
+			envLoaded = true
+			break // Para de procurar assim que encontrar e carregar um .env válido
+		}
+	}
+
+	if !envLoaded {
+		logger.Println("AVISO: Nenhum arquivo .env encontrado. Dependendo das variáveis do sistema.")
+	} else if os.Getenv("ADMIN_USERNAME") != "" {
+		logger.Println("Credenciais de ADMIN carregadas no ambiente com sucesso.")
 	}
 
 	var cfg config
@@ -306,6 +319,23 @@ func (app *application) routes() http.Handler {
 			// Adicionais; a UI segue consumindo sheet-metrics até a Fase 2B.
 			protected.Get("/admin/analytics/caracterizacao/perfil", app.AdminAnalyticsCaracterizacaoPerfil)
 			protected.Get("/admin/analytics/caracterizacao/dre", app.AdminAnalyticsCaracterizacaoDRE)
+
+			// Frente 1 — Pessoal e Gestão Escolar + Tecnologia
+			protected.Get("/admin/analytics/pessoal-gestao/estrutura", app.AdminAnalyticsPessoalEstrutura)
+			protected.Get("/admin/analytics/pessoal-gestao/coordenacao", app.AdminAnalyticsPessoalCoordenacao)
+			protected.Get("/admin/analytics/pessoal-gestao/quadro-pessoal", app.AdminAnalyticsPessoalQuadro)
+			protected.Get("/admin/analytics/tecnologia/infraestrutura", app.AdminAnalyticsTecnologiaInfra)
+			protected.Get("/admin/analytics/tecnologia/uso-pedagogico", app.AdminAnalyticsTecnologiaUso)
+
+			// Frente 2 — Infraestrutura/Segurança + Merenda + Serviços Terceirizados.
+			protected.Get("/admin/analytics/infraestrutura/condicoes", app.AdminAnalyticsInfraCondicoes)
+			protected.Get("/admin/analytics/infraestrutura/seguranca", app.AdminAnalyticsInfraSeguranca)
+			protected.Get("/admin/analytics/merenda/oferta", app.AdminAnalyticsMerendaOferta)
+			protected.Get("/admin/analytics/merenda/equipamentos", app.AdminAnalyticsMerendaEquipamentos)
+			protected.Get("/admin/analytics/merenda/recursos-humanos", app.AdminAnalyticsMerendaRH)
+			protected.Get("/admin/analytics/servicos-terceirizados/visao-geral", app.AdminAnalyticsServicosVisaoGeral)
+			protected.Get("/admin/analytics/servicos-terceirizados/servicos-gerais", app.AdminAnalyticsServicosGerais)
+			protected.Get("/admin/analytics/servicos-terceirizados/portaria", app.AdminAnalyticsServicosPortaria)
 		})
 	})
 

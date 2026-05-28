@@ -270,7 +270,7 @@
 ## Fase 6 — Painéis temáticos (gestão, merenda, tecnologia, serviços, infra)
 
 ### 6.1 Views
-- [ ] `vw_censo_direcao_escolar`
+- [x] `vw_censo_direcao_escolar`
 - [ ] `vw_censo_coordenacao_area`
 - [ ] `vw_censo_quadro_pessoal`
 - [ ] `vw_censo_equipamentos_merenda`

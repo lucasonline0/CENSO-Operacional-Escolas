@@ -102,3 +102,309 @@ SELECT
     NULLIF(cr.data->>'cameras_funcionamento', '')       AS cameras_funcionamento
 FROM schools s
 LEFT JOIN census_responses cr ON cr.school_id = s.id;
+
+-- Frente 2 / 0007 — espelho de infra/migrations/0007_vw_censo_ambientes.sql
+
+CREATE OR REPLACE VIEW vw_censo_ambientes AS
+SELECT
+    b.school_id, b.codigo_inep, b.nome_escola, b.dre, b.municipio, b.zona,
+    b.census_id, b.year, b.status,
+    amb.value AS ambiente
+FROM vw_censo_base b
+INNER JOIN census_responses cr
+        ON cr.id = b.census_id
+       AND cr.data ? 'ambientes'
+       AND jsonb_typeof(cr.data->'ambientes') = 'array'
+CROSS JOIN LATERAL jsonb_array_elements_text(cr.data->'ambientes') AS amb(value)
+WHERE amb.value IS NOT NULL AND amb.value <> '';
+
+-- Frente 2 / 0008 — espelho de infra/migrations/0008_vw_censo_infraestrutura_seguranca.sql
+
+CREATE OR REPLACE VIEW vw_censo_infraestrutura_seguranca AS
+SELECT
+    b.school_id, b.codigo_inep, b.nome_escola, b.dre, b.municipio, b.zona,
+    b.census_id, b.year, b.status,
+    b.tipo_predio, b.situacao_estrutura, b.possui_anexos,
+    CASE WHEN cr.data->>'qtd_anexos' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_anexos')::numeric END              AS qtd_anexos,
+    NULLIF(cr.data->>'tipo_predio_anexo',          '')           AS tipo_predio_anexo,
+    b.muro_cerca, b.perimetro_fechado,
+    NULLIF(cr.data->>'quadra_coberta',             '')           AS quadra_coberta,
+    CASE WHEN cr.data->>'qtd_quadras' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_quadras')::numeric END             AS qtd_quadras,
+    NULLIF(cr.data->>'banda_fanfarra',             '')           AS banda_fanfarra,
+    CASE WHEN cr.data->>'banheiros_alunos' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'banheiros_alunos')::numeric END        AS banheiros_alunos,
+    CASE WHEN cr.data->>'banheiros_prof' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'banheiros_prof')::numeric END          AS banheiros_prof,
+    CASE WHEN cr.data->>'banheiros_chuveiro' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'banheiros_chuveiro')::numeric END      AS banheiros_chuveiro,
+    NULLIF(cr.data->>'banheiros_vasos_funcionais', '')           AS banheiros_vasos_funcionais,
+    NULLIF(cr.data->>'energia',                    '')           AS energia,
+    b.rede_eletrica_atende,
+    NULLIF(cr.data->>'estrutura_climatizacao',     '')           AS estrutura_climatizacao,
+    NULLIF(cr.data->>'suporta_novos_equipamentos', '')           AS suporta_novos_equipamentos,
+    b.cameras_funcionamento,
+    NULLIF(cr.data->>'cameras_cobrem',             '')           AS cameras_cobrem,
+    NULLIF(cr.data->>'possui_guarita',             '')           AS possui_guarita,
+    NULLIF(cr.data->>'controle_portao',            '')           AS controle_portao,
+    NULLIF(cr.data->>'iluminacao_externa',         '')           AS iluminacao_externa,
+    NULLIF(cr.data->>'possui_botao_panico',        '')           AS possui_botao_panico,
+    NULLIF(cr.data->>'plano_evacuacao',            '')           AS plano_evacuacao,
+    NULLIF(cr.data->>'politica_bullying',          '')           AS politica_bullying
+FROM vw_censo_base b
+LEFT JOIN census_responses cr ON cr.id = b.census_id;
+
+-- Frente 2 / 0009 — espelho de infra/migrations/0009_vw_censo_equipamentos_merenda.sql
+
+CREATE OR REPLACE VIEW vw_censo_equipamentos_merenda AS
+SELECT
+    b.school_id, b.codigo_inep, b.nome_escola, b.dre, b.municipio, b.zona,
+    b.census_id, b.year, b.status,
+    NULLIF(cr.data->>'condicoes_cozinha',   '')  AS condicoes_cozinha,
+    NULLIF(cr.data->>'tamanho_cozinha',     '')  AS tamanho_cozinha,
+    NULLIF(cr.data->>'possui_refeitorio',   '')  AS possui_refeitorio,
+    NULLIF(cr.data->>'refeitorio_adequado', '')  AS refeitorio_adequado,
+    NULLIF(cr.data->>'possui_balanca',      '')  AS possui_balanca,
+    NULLIF(cr.data->>'bancadas_inox',       '')  AS bancadas_inox,
+    NULLIF(cr.data->>'sistema_exaustao',    '')  AS sistema_exaustao,
+    NULLIF(cr.data->>'despensa_exclusiva',  '')  AS despensa_exclusiva,
+    NULLIF(cr.data->>'deposito_conserva',   '')  AS deposito_conserva,
+    NULLIF(cr.data->>'estoque_epi_extintor','')  AS estoque_epi_extintor,
+    NULLIF(cr.data->>'manutencao_extintores','') AS manutencao_extintores,
+    CASE WHEN cr.data->>'qtd_freezers' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_freezers')::numeric END    AS qtd_freezers,
+    lower(NULLIF(cr.data->>'estado_freezers',   ''))     AS estado_freezers,
+    CASE WHEN cr.data->>'qtd_geladeiras' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_geladeiras')::numeric END  AS qtd_geladeiras,
+    lower(NULLIF(cr.data->>'estado_geladeiras', ''))     AS estado_geladeiras,
+    CASE WHEN cr.data->>'qtd_fogoes' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_fogoes')::numeric END      AS qtd_fogoes,
+    lower(NULLIF(cr.data->>'estado_fogoes',     ''))     AS estado_fogoes,
+    CASE WHEN cr.data->>'qtd_fornos' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_fornos')::numeric END      AS qtd_fornos,
+    lower(NULLIF(cr.data->>'estado_fornos',     ''))     AS estado_fornos,
+    CASE WHEN cr.data->>'qtd_bebedouros' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_bebedouros')::numeric END  AS qtd_bebedouros,
+    lower(NULLIF(cr.data->>'estado_bebedouros', ''))     AS estado_bebedouros
+FROM vw_censo_base b
+LEFT JOIN census_responses cr ON cr.id = b.census_id;
+
+-- Frente 2 / 0010 — espelho de infra/migrations/0010_vw_censo_rh_merendeiras.sql
+
+CREATE OR REPLACE VIEW vw_censo_rh_merendeiras AS
+SELECT
+    b.school_id, b.codigo_inep, b.nome_escola, b.dre, b.municipio, b.zona,
+    b.census_id, b.year, b.status,
+    NULLIF(cr.data->>'oferta_regular',      '')  AS oferta_regular,
+    NULLIF(cr.data->>'qualidade_merenda',   '')  AS qualidade_merenda,
+    NULLIF(cr.data->>'atende_necessidades', '')  AS atende_necessidades,
+    CASE WHEN cr.data->>'qtd_merendeiras_estatutaria' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_merendeiras_estatutaria')::numeric END  AS qtd_merendeiras_estatutaria,
+    CASE WHEN cr.data->>'qtd_merendeiras_terceirizada' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_merendeiras_terceirizada')::numeric END AS qtd_merendeiras_terceirizada,
+    CASE WHEN cr.data->>'qtd_merendeiras_temporaria' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_merendeiras_temporaria')::numeric END   AS qtd_merendeiras_temporaria,
+    NULLIF(cr.data->>'qtd_atende_necessidade_merenda',  '')  AS qtd_atende_necessidade_merenda,
+    CASE WHEN cr.data->>'quantitativo_necessario_merenda' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'quantitativo_necessario_merenda')::numeric END AS quantitativo_necessario_merenda,
+    NULLIF(cr.data->>'empresa_terceirizada_merenda', '')  AS empresa_terceirizada_merenda,
+    NULLIF(cr.data->>'possui_supervisor_merenda',    '')  AS possui_supervisor_merenda
+FROM vw_censo_base b
+LEFT JOIN census_responses cr ON cr.id = b.census_id;
+
+-- Frente 2 / 0011 — espelho de infra/migrations/0011_vw_censo_rh_servicos_gerais.sql
+
+CREATE OR REPLACE VIEW vw_censo_rh_servicos_gerais AS
+SELECT
+    b.school_id, b.codigo_inep, b.nome_escola, b.dre, b.municipio, b.zona,
+    b.census_id, b.year, b.status,
+    CASE WHEN cr.data->>'qtd_servicos_gerais_efetivo' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_servicos_gerais_efetivo')::numeric END      AS qtd_servicos_gerais_efetivo,
+    CASE WHEN cr.data->>'qtd_servicos_gerais_temporario' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_servicos_gerais_temporario')::numeric END   AS qtd_servicos_gerais_temporario,
+    CASE WHEN cr.data->>'qtd_servicos_gerais_terceirizado' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_servicos_gerais_terceirizado')::numeric END AS qtd_servicos_gerais_terceirizado,
+    NULLIF(cr.data->>'qtd_atende_necessidade_sg',  '')  AS qtd_atende_necessidade_sg,
+    CASE WHEN cr.data->>'quantitativo_necessario_sg' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'quantitativo_necessario_sg')::numeric END AS quantitativo_necessario_sg,
+    NULLIF(cr.data->>'empresa_terceirizada_sg', '')  AS empresa_terceirizada_sg,
+    NULLIF(cr.data->>'possui_supervisor_sg',    '')  AS possui_supervisor_sg
+FROM vw_censo_base b
+LEFT JOIN census_responses cr ON cr.id = b.census_id;
+
+-- Frente 2 / 0012 — espelho de infra/migrations/0012_vw_censo_servicos_terceirizados.sql
+
+CREATE OR REPLACE VIEW vw_censo_servicos_terceirizados AS
+SELECT
+    b.school_id, b.codigo_inep, b.nome_escola, b.dre, b.municipio, b.zona,
+    b.census_id, b.year, b.status,
+    CASE WHEN cr.data->>'qtd_agentes_portaria' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_agentes_portaria')::numeric END  AS qtd_agentes_portaria,
+    NULLIF(cr.data->>'qtd_atende_necessidade_portaria', '')    AS qtd_atende_necessidade_portaria,
+    CASE WHEN cr.data->>'quantitativo_necessario_portaria' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'quantitativo_necessario_portaria')::numeric END AS quantitativo_necessario_portaria,
+    NULLIF(cr.data->>'empresa_terceirizada_portaria', '')      AS empresa_terceirizada_portaria,
+    NULLIF(cr.data->>'possui_supervisor_portaria',    '')      AS possui_supervisor_portaria,
+    NULLIF(cr.data->>'empresa_terceirizada_merenda',  '')      AS empresa_terceirizada_merenda,
+    NULLIF(cr.data->>'empresa_terceirizada_sg',       '')      AS empresa_terceirizada_sg,
+    NULLIF(cr.data->>'avaliacao_merendeiras',  '')  AS avaliacao_merendeiras,
+    NULLIF(cr.data->>'avaliacao_portaria',     '')  AS avaliacao_portaria,
+    NULLIF(cr.data->>'avaliacao_limpeza',      '')  AS avaliacao_limpeza,
+    NULLIF(cr.data->>'avaliacao_comunicacao',  '')  AS avaliacao_comunicacao,
+    NULLIF(cr.data->>'avaliacao_supervisao',   '')  AS avaliacao_supervisao
+FROM vw_censo_base b
+LEFT JOIN census_responses cr ON cr.id = b.census_id;
+-- ==============================================================================
+-- VIEWS DA FRENTE 1 - PESSOAL E GESTÃO ESCOLAR
+-- ==============================================================================
+CREATE OR REPLACE VIEW vw_censo_direcao_escolar AS
+WITH censo_data AS (
+    SELECT
+        b.school_id,
+        b.codigo_inep,
+        b.nome_escola,
+        b.dre,
+        b.municipio,
+        b.zona,
+        b.year,
+        b.status,
+        b.census_id,
+        cr.data
+    FROM vw_censo_base b
+    JOIN census_responses cr ON cr.id = b.census_id
+)
+SELECT
+    cd.school_id,
+    cd.codigo_inep,
+    cd.nome_escola,
+    cd.dre,
+    cd.municipio,
+    cd.zona,
+    cd.year,
+    cd.status,
+    cd.census_id,
+    v.cargo,
+    v.possui,
+    v.ordem
+FROM censo_data cd
+CROSS JOIN LATERAL (
+    VALUES
+        ('Direção Escolar',             lower(cd.data->>'possui_direcao') IN ('sim', 'true', 't', '1'), 1),
+        ('Vice-Diretor Pedagógico',     lower(cd.data->>'possui_vice_pedagogico') IN ('sim', 'true', 't', '1'), 2),
+        ('Vice-Diretor Administrativo', lower(cd.data->>'possui_vice_administrativo') IN ('sim', 'true', 't', '1'), 3),
+        ('Secretário Escolar',          lower(cd.data->>'possui_secretario') IN ('sim', 'true', 't', '1'), 4),
+        ('Coordenação Pedagógica',      lower(cd.data->>'possui_coord_pedagogico') IN ('sim', 'true', 't', '1'), 5)
+) AS v(cargo, possui, ordem);
+
+CREATE OR REPLACE VIEW vw_censo_coordenacao_area AS
+WITH censo_data AS (
+    SELECT
+        b.school_id,
+        b.codigo_inep,
+        b.nome_escola,
+        b.dre,
+        b.municipio,
+        b.zona,
+        b.year,
+        b.status,
+        b.census_id,
+        cr.data
+    FROM vw_censo_base b
+    JOIN census_responses cr ON cr.id = b.census_id
+)
+SELECT
+    cd.school_id,
+    cd.codigo_inep,
+    cd.nome_escola,
+    cd.dre,
+    cd.municipio,
+    cd.zona,
+    cd.year,
+    cd.status,
+    cd.census_id,
+    v.area,
+    v.possui,
+    v.ordem
+FROM censo_data cd
+CROSS JOIN LATERAL (
+    VALUES
+        ('Linguagens',         lower(cd.data->>'possui_coord_area_linguagem') IN ('sim', 'true', 't', '1'), 1),
+        ('Matemática',         lower(cd.data->>'possui_coord_area_matematica') IN ('sim', 'true', 't', '1'), 2),
+        ('Ciências Humanas',   lower(cd.data->>'possui_coord_area_humanas') IN ('sim', 'true', 't', '1'), 3),
+        ('Ciências da Natureza', lower(cd.data->>'possui_coord_area_natureza') IN ('sim', 'true', 't', '1'), 4)
+) AS v(area, possui, ordem);
+
+CREATE OR REPLACE VIEW vw_censo_quadro_pessoal AS
+SELECT
+    b.school_id,
+    b.codigo_inep,
+    b.nome_escola,
+    b.dre,
+    b.municipio,
+    b.zona,
+    b.year,
+    b.status,
+    b.census_id,
+    CASE WHEN cr.data->>'qtd_professores_efetivos' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_professores_efetivos')::numeric
+         ELSE 0 END AS qtd_professores_efetivos,
+    CASE WHEN cr.data->>'qtd_professores_temporarios' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_professores_temporarios')::numeric
+         ELSE 0 END AS qtd_professores_temporarios,
+    CASE WHEN cr.data->>'qtd_servidores_administrativos' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_servidores_administrativos')::numeric
+         ELSE 0 END AS qtd_servidores_administrativos,
+    CASE WHEN cr.data->>'qtd_professor_readaptado' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_professor_readaptado')::numeric
+         ELSE 0 END AS qtd_professor_readaptado,
+    (CASE WHEN cr.data->>'qtd_professores_efetivos' ~ '^-?[0-9]+(\.[0-9]+)?$'
+           THEN (cr.data->>'qtd_professores_efetivos')::numeric
+           ELSE 0 END +
+     CASE WHEN cr.data->>'qtd_professores_temporarios' ~ '^-?[0-9]+(\.[0-9]+)?$'
+           THEN (cr.data->>'qtd_professores_temporarios')::numeric
+           ELSE 0 END)::numeric AS total_professores
+FROM vw_censo_base b
+JOIN census_responses cr ON cr.id = b.census_id;
+
+-- 0006_vw_censo_equipamentos_tecnologia
+-- Finalidade: Consolidar indicadores de conectividade e parque tecnológico das escolas.
+-- Fonte: vw_censo_base e census_responses.data (JSONB)
+-- Granularidade: Uma linha por escola/ano (school_id + year).
+CREATE OR REPLACE VIEW vw_censo_equipamentos_tecnologia AS
+SELECT
+    b.school_id,
+    b.codigo_inep,
+    b.nome_escola,
+    b.dre,
+    b.municipio,
+    b.zona,
+    b.year,
+    b.status,
+    b.census_id,
+    lower(cr.data->>'internet_disponivel') IN ('sim', 'true', 't', '1')
+        AS internet_disponivel,
+    NULLIF(cr.data->>'provedor_internet', '')
+        AS provedor_internet,
+    NULLIF(cr.data->>'qualidade_internet', '')
+        AS qualidade_internet,
+    CASE WHEN cr.data->>'qtd_desktop_adm' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_desktop_adm')::numeric END AS qtd_desktop_adm,
+    CASE WHEN cr.data->>'qtd_desktop_alunos' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_desktop_alunos')::numeric END AS qtd_desktop_alunos,
+    CASE WHEN cr.data->>'qtd_notebooks' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_notebooks')::numeric END AS qtd_notebooks,
+    CASE WHEN cr.data->>'qtd_chromebooks' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_chromebooks')::numeric END AS qtd_chromebooks,
+    CASE WHEN cr.data->>'qtd_computadores_inoperantes' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_computadores_inoperantes')::numeric END AS qtd_computadores_inoperantes,
+    NULLIF(cr.data->>'computadores_atendem', '')
+        AS computadores_atendem,
+    lower(cr.data->>'possui_projetor') IN ('sim', 'true', 't', '1')
+        AS possui_projetor,
+    CASE WHEN cr.data->>'qtd_projetores' ~ '^-?[0-9]+(\.[0-9]+)?$'
+         THEN (cr.data->>'qtd_projetores')::numeric END AS qtd_projetores,
+    lower(cr.data->>'possui_lousa_digital') IN ('sim', 'true', 't', '1')
+        AS possui_lousa_digital
+FROM vw_censo_base b
+JOIN census_responses cr ON cr.id = b.census_id;

@@ -890,10 +890,144 @@ Nenhum dos seguintes foi tocado: `api/`, `web/`, `infra/migrations/`, endpoints,
 
 ---
 
+## 8. Decimais em `total_alunos` (campo conceitualmente inteiro)
+
+> ⏳ **Investigação aberta pela Frente 3 (PR 7).**
+> Apenas documentação. Nenhuma correção automática, nenhuma alteração de view, endpoint, schema Zod ou formulário neste PR.
+
+### 8.1 Contexto
+
+Durante a validação online da Fase 2A foram observados valores fracionários em `total_alunos`, campo que conceitualmente é uma contagem inteira de matrículas:
+
+- Total geral retornado por `/v1/admin/analytics/caracterizacao/perfil`: **413.934,03**.
+- Faixa "0-50" em `matriculas_por_porte`: **343,03**.
+- Amostras por DRE registradas em `validacao-fase-2.md`:
+  - BELEM 8: **9.187,661**
+  - BELEM 9: **9.179,496**
+  - BENEVIDES: **10.109,726**
+  - BREVES: **9.823,147**
+
+Esses números não foram corrigidos no front nem no back. A UI da Caracterização da Rede aplica `Math.round(...)` apenas na apresentação (cards/tabela); o dado bruto permanece fracionário no PostgreSQL e no Sheets.
+
+### 8.2 Origem técnica do dado fracionário
+
+A view `vw_censo_base` (`infra/migrations/0001_vw_censo_base.sql`, l. 42-44) faz cast seguro do JSONB para `numeric` aceitando inteiros **ou** decimais:
+
+```sql
+CASE WHEN cr.data->>'total_alunos' ~ '^-?[0-9]+(\.[0-9]+)?$'
+     THEN (cr.data->>'total_alunos')::numeric END AS total_alunos
+```
+
+A regex `^-?[0-9]+(\.[0-9]+)?$` aceita `"180"`, `"180.5"` e `"180.747"`. Logo, **qualquer fracionário visível na view foi gravado fracionário em `census_responses.data->>'total_alunos'`**. Não há introdução de decimais pela camada SQL — a fonte é o payload original submetido pelo formulário (ou herdado de uma importação anterior).
+
+`vw_censo_enriquecida` (`0002_vw_censo_enriquecida.sql`) deriva da base sem alterar `total_alunos`.
+
+### 8.3 Consulta canônica — escolas com `total_alunos` fracionário
+
+> A view canônica é `vw_censo_enriquecida`. Se algum recorte ad-hoc precisar de campos que só existem em `vw_censo_base`, ajustar a `FROM` e registrar no momento da coleta. Em ambos os casos, `total_alunos` é a mesma coluna.
+
+```sql
+SELECT
+  school_id,
+  codigo_inep,
+  nome_escola,
+  dre,
+  total_alunos
+FROM vw_censo_enriquecida
+WHERE status = 'completed'
+  AND year   = EXTRACT(YEAR FROM CURRENT_DATE)::int
+  AND total_alunos IS NOT NULL
+  AND total_alunos <> FLOOR(total_alunos)
+ORDER BY total_alunos DESC;
+```
+
+### 8.4 Cruzamento com o JSONB original
+
+Para cada `school_id` retornado por 8.3, recuperar o valor exatamente como foi gravado em `census_responses.data`:
+
+```sql
+SELECT
+  cr.id          AS census_id,
+  cr.school_id,
+  s.codigo_inep,
+  s.nome_escola,
+  s.dre,
+  cr.data->>'total_alunos' AS total_alunos_jsonb,
+  cr.updated_at
+FROM census_responses cr
+JOIN schools s ON s.id = cr.school_id
+WHERE cr.school_id = ANY($1::int[])
+  AND cr.year      = EXTRACT(YEAR FROM CURRENT_DATE)::int
+  AND cr.status    = 'completed'
+ORDER BY s.dre, s.nome_escola;
+```
+
+> Substituir `$1::int[]` pela lista de `school_id` retornada por 8.3 (`ARRAY[123, 456, ...]`). Não inspecionar o JSONB completo — `data->>'total_alunos'` é suficiente para detectar separador e ordem de grandeza sem expor outros campos sensíveis.
+
+### 8.5 Registro das escolas afetadas
+
+> ⏳ **Coleta nominal pendente.** Esta tabela deve ser preenchida pelo operador após rodar 8.3 + 8.4 em homologação. Para esta rodada (Frente 3 — PR 7), o registro permanece como "não coletado nesta rodada" porque exige acesso ao banco e a coleta dos dados nominais deve respeitar a política de privacidade do projeto.
+
+| Escola | INEP | DRE | Valor tipado na view (`total_alunos`) | Valor original no JSONB (`data->>'total_alunos'`) | Hipótese de causa | Recomendação |
+|---|---|---|---:|---|---|---|
+| _não coletado_ | _não coletado_ | _não coletado_ | _não coletado_ | _não coletado_ | _a classificar conforme 8.6_ | _a classificar conforme 8.7_ |
+
+Amostras já conhecidas pela validação Fase 2A (sem identificação nominal das escolas — apenas agregação por DRE):
+
+| Recorte | Valor agregado fracionário | Fonte |
+|---|---:|---|
+| Total geral (`kpis.total_alunos`) | 413.934,03 | `/caracterizacao/perfil` |
+| Matrículas porte "0-50"          | 343,03     | `/caracterizacao/perfil` |
+| Soma por DRE — BELEM 8           | 9.187,661  | nota em `validacao-fase-2.md` |
+| Soma por DRE — BELEM 9           | 9.179,496  | nota em `validacao-fase-2.md` |
+| Soma por DRE — BENEVIDES         | 10.109,726 | nota em `validacao-fase-2.md` |
+| Soma por DRE — BREVES            | 9.823,147  | nota em `validacao-fase-2.md` |
+
+A presença de 3 casas decimais em DREs (`9.187,661`) sugere que pelo menos um censo da regional tem `total_alunos` com 3 dígitos pós-vírgula — padrão atípico para contagem inteira de matrículas.
+
+### 8.6 Hipóteses de causa (a confirmar com evidência por escola)
+
+Lista exaustiva — para cada caso encontrado em 8.3, selecionar a hipótese mais provável **somente quando houver evidência no JSONB cruzado**. Sem evidência, marcar como "hipótese — investigar".
+
+1. **Valor decimal digitado diretamente no formulário.** O input HTML aceita decimais (`type="number"` sem `step="1"` ou sem coerção `z.number().int()` no schema Zod). Sintoma esperado: `data->>'total_alunos'` com vírgula/ponto e até 2-3 casas decimais.
+2. **Vírgula vs. ponto.** Usuário digita `1.234,56` esperando "1234,56" pt-BR mas o front converte para `1234.56`. Sintoma: valor coerente com o tamanho esperado da escola, com fração de 2 casas.
+3. **Campo mapeado a partir de chave JSONB errada.** Algum step do formulário pode estar gravando em `total_alunos` um valor que pertencia a outro campo (ex.: percentual de aprovação, média de alunos por turma). Sintoma: valor totalmente fora de escala (ex.: `87.5` numa escola com porte 500-1000).
+4. **Soma/derivação incluindo campo percentual.** Se algum cálculo intermediário concatenou um percentual num agregador, o agregado fica fracionário mesmo que cada `total_alunos` individual seja inteiro. Sintoma: agregado fracionário mas todas as escolas da DRE com valores inteiros.
+5. **Erro de tipagem na view (descartado).** A view aceita decimais por design (regex permissiva). Não há cast forçado a inteiro; portanto a view não é a origem do problema — ela apenas reflete o JSONB.
+6. **Dado importado previamente com formato inconsistente.** Carga histórica de antes do formulário atual pode ter gravado decimais por particularidade da fonte original (planilha com média, fator de correção, etc.).
+
+### 8.7 Recomendações (para PRs futuros — não implementar agora)
+
+> Nenhuma destas recomendações deve ser executada neste PR. São propostas para abrir tasks separadas após o preenchimento de 8.5.
+
+1. **Relatório de inconsistências antes de qualquer correção.** Gerar (em ambiente controlado) lista nominal de escolas em 8.5 e revisar caso a caso com a equipe operacional do SEDUC-PA. Não corrigir em massa.
+2. **Validação `z.number().int()` no schema Zod.** Em `web/src/schemas/steps/*.ts`, restringir os campos que são contagem inteira (`total_alunos`, `alunos_pcd`, `qtd_salas_aula`, `qtd_anexos`, etc.) com `z.coerce.number().int().min(0)`. Avaliar impacto em rascunhos legados antes de habilitar.
+3. **Coerção/máscara no input do formulário.** Adicionar `inputMode="numeric"` + `pattern="[0-9]*"` (ou componente numérico controlado) nos campos conceitualmente inteiros, sem alterar o payload de submit.
+4. **Regra documental de "campo conceitualmente inteiro".** Catalogar em `jsonb-field-inventory.md` quais chaves do JSONB devem ser inteiras versus decimais (ex.: `total_alunos` inteiro; `media_aprovacao_pct` decimal), para servir de referência ao backend e ao schema Zod.
+5. **Mitigação opcional na view.** Como medida defensiva, e somente após acordo de produto, considerar `ROUND((cr.data->>'total_alunos')::numeric)::bigint` em `vw_censo_base`. Risco: oculta o problema na origem e impede o relatório de inconsistências de 8.7.1; só fazer **depois** de consolidar 8.7.1 e 8.7.2.
+6. **Não corrigir automaticamente.** Reafirmar a decisão da seção 5 — qualquer correção de dado é decisão humana, não silenciosa.
+
+### 8.8 Impacto no aceite
+
+A presença de decimais não bloqueia o veredito técnico da Fase 2A (já validada) nem da migração visual da Fase 2B.1 (já em produção). É um item de **qualidade de dado** com responsabilidade compartilhada entre Frente A (este documento) e Frente 3 (UI), a ser tratado em PR isolado conforme 8.7.
+
+### 8.9 Microfix preventivo aplicado (branch `fix/total-alunos-integer-validation`)
+
+Após o levantamento documental acima, foi aplicado um microfix preventivo isolado no formulário, sem tocar em backend, view ou endpoint:
+
+- **Schema Zod (`web/src/schemas/steps/general-data.ts`):** `total_alunos` passou a exigir inteiro não negativo (`z.number().int(...).min(1, ...)`). Mensagem: *"Informe um número inteiro de alunos."*
+- **Input do formulário (`web/src/components/forms/general-data-form.tsx`):** a instância de `total_alunos` recebeu `step={1}` e `min={0}` explícitos. O componente compartilhado `NumberInput` (`web/src/components/ui/form-components.tsx`) **não foi alterado**, pois é reutilizado por campos decimais (percentuais, médias).
+
+> **Escopo deliberadamente restrito.** Este PR impede novos valores decimais em `total_alunos`, mas **não altera registros existentes**. A correção de dados legados depende de relatório nominal (seções 8.3–8.5) e validação humana, conforme decisão da seção 5 e recomendação 8.7.1. Demais campos conceitualmente inteiros (`alunos_pcd`, `qtd_salas_aula`, `qtd_anexos`, etc.) seguem com a recomendação 8.7.2 em aberto — serão tratados em PRs separados se confirmados como problema na próxima rodada de coleta.
+
+---
+
 ## Referências
 
 - [`infra/init.sql`](../../infra/init.sql) — definição das tabelas `schools` e `census_responses`
-- [`infra/migrations/0001_vw_censo_base.sql`](../../infra/migrations/0001_vw_censo_base.sql) — view base
+- [`infra/migrations/0001_vw_censo_base.sql`](../../infra/migrations/0001_vw_censo_base.sql) — view base, cast numérico de `total_alunos`
+- [`infra/migrations/0002_vw_censo_enriquecida.sql`](../../infra/migrations/0002_vw_censo_enriquecida.sql) — view enriquecida derivada da base, sem alterar `total_alunos`
 - [`api/cmd/api/analytics.go`](../../api/cmd/api/analytics.go) — handler `AdminAnalyticsOverview`
 - [`docs/dashboard/jsonb-field-inventory.md`](jsonb-field-inventory.md) — inventário de campos JSONB
 - [`docs/dashboard/validacao-fase-1.md`](validacao-fase-1.md) — tabela de paridade Fase 1 (espelha seção 6.2)
+- [`docs/dashboard/validacao-fase-2.md`](validacao-fase-2.md) — tabela de paridade Fase 2A (preenchida com valor PG pela Frente 3)

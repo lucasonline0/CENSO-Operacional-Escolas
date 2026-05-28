@@ -33,3 +33,5 @@ key.json
 
 # Dev Tools (Tests)
 src/dev/
+
+.claude

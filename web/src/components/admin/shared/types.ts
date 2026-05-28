@@ -144,3 +144,29 @@ export interface MerendaRH {
   pct_com_supervisor: number;
   top_empresas: EmpresaStat[];
 }
+
+// Frente 2 — Serviços Terceirizados.
+// Payloads de /v1/admin/analytics/servicos-terceirizados/{visao-geral,servicos-gerais,portaria}.
+export interface TerceirizacaoArea {
+  area: string;
+  escolas: number;
+  percentual: number;
+}
+
+export interface ServicosVisaoGeral {
+  por_area: TerceirizacaoArea[];
+  por_quantidade_areas: CategoricStat[];
+}
+
+export interface ServicosGerais {
+  total_efetivo: number;
+  total_temporario: number;
+  total_terceirizado: number;
+  media_total_por_escola: number;
+}
+
+export interface ServicosPortaria {
+  pct_com_agentes: number;
+  media_agentes_por_escola: number;
+  top_empresas: EmpresaStat[];
+}

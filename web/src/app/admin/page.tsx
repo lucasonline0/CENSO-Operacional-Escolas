@@ -397,11 +397,11 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             )}
 
             {tab === "perfil"         && <AbaCaracterizacao token={token} onUnauth={logout} />}
-            {tab === "pessoal"        && <AbaPessoalGestao />}
-            {tab === "tecnologia"     && <AbaTecnologia />}
+            {tab === "pessoal"        && <AbaPessoalGestao token={token} onUnauth={logout} />}
+            {tab === "tecnologia"     && <AbaTecnologia token={token} onUnauth={logout} />}
             {tab === "infraestrutura" && <AbaInfraestruturaSeguranca token={token} onUnauth={logout} />}
             {tab === "merenda"        && <AbaMerenda token={token} onUnauth={logout} />}
-            {tab === "servicos"       && <AbaServicosTerceirizados />}
+            {tab === "servicos"       && <AbaServicosTerceirizados token={token} onUnauth={logout} />}
             {tab === "alunos"         && <AbaPerfilAlunos token={token} onUnauth={logout} />}
             {tab === "governanca"     && <AbaGestaoFinanceiraGovernanca />}
 

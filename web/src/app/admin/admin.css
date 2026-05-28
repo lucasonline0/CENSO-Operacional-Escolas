@@ -1,0 +1,729 @@
+/* ============================================================
+   Censo Operacional — Admin Panel Design
+   Scoped to .censo-admin to avoid conflicts with Tailwind globals
+============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap');
+
+/* ── CSS Variables (scoped to wrapper) ────────────────────── */
+.censo-admin {
+  --bg:       #F4F2EE;
+  --frame:    #FFFFFF;
+  --side:     #EFECE5;
+  --crd:      #FFFFFF;
+  --bdr:      #ECE8DE;
+  --bdr-2:    #E2DDD0;
+  --hover:    #EFECE5;
+  --active:   #E6E2D6;
+
+  --ink:      #14110C;
+  --ink-2:    #2A2620;
+  --muted:    #908A7E;
+  --muted-2:  #B7B1A4;
+
+  --accent:       #103D8E;
+  --accent-2:     #2A66C7;
+  --accent-soft:  #E6ECF8;
+  --accent-line:  #C6D3EC;
+
+  --pos:    #2F7A55;
+  --neg:    #D9272E;
+  --warn:   #B5832F;
+  --terra:  #D9272E;
+  --sage:   #6E9170;
+  --umber:  #7A6B4F;
+  --gold:   #C28344;
+  --slate-c: #4A6FA0;
+
+  --rad:      14px;
+  --rad-sm:   10px;
+  --rad-pill: 999px;
+
+  --font:      "Geist", system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.censo-admin *, .censo-admin *::before, .censo-admin *::after {
+  box-sizing: border-box;
+}
+
+/* ── Animations ──────────────────────────────────────────── */
+@keyframes ca-fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes ca-fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes ca-scaleIn {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes ca-barGrow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@keyframes ca-numberPop {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.censo-admin .admin-page {
+  animation: ca-fadeIn .3s ease both;
+}
+
+.censo-admin .ca-nav-item {
+  transition: background .15s ease, color .15s ease, transform .15s ease;
+}
+.censo-admin .ca-nav-item:hover { transform: translateX(2px); }
+.censo-admin .ca-nav-item.active { transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .censo-admin *, .censo-admin *::before, .censo-admin *::after {
+    animation-duration: .01ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/* ── Shell ───────────────────────────────────────────────── */
+.censo-admin .ca-app {
+  display: grid;
+  grid-template-columns: 248px 1fr;
+  min-height: 100vh;
+  padding: 14px;
+  gap: 14px;
+  transition: grid-template-columns .25s cubic-bezier(.4,0,.2,1);
+}
+.censo-admin .ca-app.collapsed {
+  grid-template-columns: 68px 1fr;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────── */
+.censo-admin .ca-sidebar {
+  background: var(--side);
+  border-radius: var(--rad);
+  padding: 16px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  position: sticky;
+  top: 14px;
+  height: calc(100vh - 28px);
+  overflow-y: auto;
+}
+
+.censo-admin .ca-side-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 0 4px 4px;
+  gap: 8px;
+}
+
+.censo-admin .ca-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.censo-admin .ca-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+.censo-admin .ca-brand-text .bt1 {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.censo-admin .ca-brand-text .bt2 {
+  font-size: 10.5px;
+  color: var(--muted);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  margin-top: 1px;
+}
+
+.censo-admin .ca-brand-mark-img {
+  width: 42px;
+  height: 42px;
+  background: transparent;
+  border-radius: 0;
+  flex: 0 0 42px;
+}
+.censo-admin .ca-brand-mark-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.censo-admin .ca-school-year {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--crd);
+  border: 1px solid var(--bdr);
+  border-radius: 10px;
+  margin: 0 2px;
+}
+.censo-admin .sy-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.censo-admin .sy-val {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -0.01em;
+  font-feature-settings: "tnum" 1;
+}
+
+.censo-admin .ca-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.censo-admin .ca-nav-group-label {
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 8px 8px 6px;
+  font-weight: 500;
+}
+
+.censo-admin .ca-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  color: #4A4338;
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  transition: background .12s ease;
+}
+.censo-admin .ca-nav-item .ca-icon {
+  color: #6F6759;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+.censo-admin .ca-nav-item:hover {
+  background: rgba(255,255,255,0.55);
+}
+.censo-admin .ca-nav-item.active {
+  background: var(--crd);
+  border-color: var(--bdr);
+  color: var(--ink);
+  box-shadow: 0 1px 0 rgba(20,17,12,0.02);
+}
+.censo-admin .ca-nav-item.active .ca-icon {
+  color: var(--accent);
+}
+
+.censo-admin .ca-side-footer {
+  margin-top: auto;
+  background: var(--crd);
+  border: 1px solid var(--bdr);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* ── Collapse button ─────────────────────────────────────── */
+.censo-admin .ca-collapse-btn {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  border-radius: 7px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .15s ease, color .15s ease;
+}
+.censo-admin .ca-collapse-btn:hover {
+  background: rgba(0,0,0,0.06);
+  color: var(--ink);
+}
+.censo-admin .ca-collapse-btn svg {
+  transition: transform .22s cubic-bezier(.4,0,.2,1);
+}
+.censo-admin .ca-app.collapsed .ca-collapse-btn svg {
+  transform: rotate(180deg);
+}
+
+/* ── Collapsed sidebar overrides ────────────────────────── */
+.censo-admin .ca-app.collapsed .ca-sidebar {
+  padding: 14px 8px;
+  gap: 14px;
+}
+.censo-admin .ca-app.collapsed .ca-brand-text,
+.censo-admin .ca-app.collapsed .ca-nav-group-label,
+.censo-admin .ca-app.collapsed .ca-side-footer > div:not(.ca-sf-icon),
+.censo-admin .ca-app.collapsed .sy-label {
+  display: none;
+}
+
+/* collapsed: side-top empilha brasão acima do botão */
+.censo-admin .ca-app.collapsed .ca-side-top {
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0 0 4px;
+}
+.censo-admin .ca-app.collapsed .ca-school-year {
+  justify-content: center;
+  padding: 8px 6px;
+}
+.censo-admin .ca-app.collapsed .sy-val {
+  font-size: 13px;
+}
+.censo-admin .ca-app.collapsed .ca-side-footer {
+  justify-content: center;
+  padding: 8px;
+}
+.censo-admin .ca-app.collapsed .ca-nav-item {
+  justify-content: center;
+  padding: 10px 6px;
+  gap: 0;
+}
+.censo-admin .ca-app.collapsed .ca-nav-item span {
+  display: none;
+}
+.censo-admin .ca-app.collapsed .ca-brand-row {
+  justify-content: center;
+}
+.censo-admin .ca-app.collapsed .ca-side-top {
+  justify-content: center;
+  padding: 0 0 4px;
+}
+.censo-admin .ca-app.collapsed .ca-brand-mark-img {
+  width: 34px;
+  height: 34px;
+  flex-basis: 34px;
+}
+
+/* ── Sidebar scrollbar ───────────────────────────────────── */
+.censo-admin .ca-sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+.censo-admin .ca-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.censo-admin .ca-sidebar::-webkit-scrollbar-thumb {
+  background: var(--bdr-2);
+  border-radius: 99px;
+}
+.censo-admin .ca-sidebar::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-2);
+}
+.censo-admin .ca-sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bdr-2) transparent;
+}
+
+.censo-admin .ca-side-footer .ca-sf-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+}
+.censo-admin .ca-side-footer .ca-sf-t {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.censo-admin .ca-side-footer .ca-sf-s {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* ── Main ────────────────────────────────────────────────── */
+.censo-admin .ca-main {
+  background: var(--frame);
+  border-radius: var(--rad);
+  overflow: hidden;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Topbar ──────────────────────────────────────────────── */
+.censo-admin .ca-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 36px;
+  gap: 24px;
+  border-bottom: 1px solid var(--bdr);
+  flex-shrink: 0;
+}
+
+.censo-admin .ca-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+.censo-admin .ca-crumbs .sep { color: var(--muted-2); }
+.censo-admin .ca-crumbs .cur { color: var(--ink); font-weight: 600; }
+
+.censo-admin .ca-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.censo-admin .ca-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--rad-pill);
+  padding: 8px 14px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 13px;
+  min-width: 280px;
+}
+.censo-admin .ca-search input {
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--ink);
+  flex: 1;
+  min-width: 0;
+}
+.censo-admin .ca-search kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.censo-admin .ca-icon-btn {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--bdr);
+  border-radius: 10px;
+  background: var(--crd);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: border-color .15s ease;
+}
+.censo-admin .ca-icon-btn:hover { border-color: var(--bdr-2); }
+.censo-admin .ca-icon-btn:disabled { opacity: 0.5; cursor: default; }
+
+.censo-admin .ca-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid var(--bdr);
+  border-radius: 10px;
+  background: var(--crd);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: border-color .15s ease;
+  font-family: var(--font);
+}
+.censo-admin .ca-btn:hover { border-color: var(--bdr-2); }
+.censo-admin .ca-btn.primary {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+.censo-admin .ca-btn.primary:hover { background: #000; }
+
+/* ── Page content area ───────────────────────────────────── */
+.censo-admin .admin-page {
+  padding: 28px 36px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* ── Partners footer ─────────────────────────────────────── */
+.censo-admin .ca-partners-strip {
+  margin-top: auto;
+  padding: 18px 36px 24px;
+  border-top: 1px solid var(--bdr);
+  background: var(--frame);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.censo-admin .ca-partners-strip img {
+  max-width: 480px;
+  width: 100%;
+  height: auto;
+  opacity: 0.85;
+  display: block;
+}
+
+/* ── Error note ──────────────────────────────────────────── */
+.censo-admin .ca-error-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid #FECACA;
+  border-radius: 12px;
+  background: #FEF2F2;
+  color: #B91C1C;
+  font-size: 13px;
+}
+
+/* ── Login form shell ────────────────────────────────────── */
+.censo-admin.login-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--accent) 0%, #0c2e6a 100%);
+}
+
+.censo-admin .ca-login-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--frame);
+  border-radius: 24px;
+  box-shadow: 0 25px 60px -15px rgba(16,61,142,0.35);
+  overflow: hidden;
+}
+
+.censo-admin .ca-login-head {
+  padding: 28px 32px 22px;
+  text-align: center;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--accent-line);
+}
+
+.censo-admin .ca-login-mark {
+  width: 60px;
+  height: 60px;
+  margin: 0 auto 12px;
+}
+.censo-admin .ca-login-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.censo-admin .ca-login-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+.censo-admin .ca-login-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.censo-admin .ca-login-body {
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.censo-admin .ca-field label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin-bottom: 6px;
+  letter-spacing: 0.01em;
+}
+
+.censo-admin .ca-field .ca-input-wrap {
+  position: relative;
+}
+
+.censo-admin .ca-field .ca-input-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.censo-admin .ca-field input {
+  width: 100%;
+  padding: 10px 14px 10px 38px;
+  border: 1px solid var(--bdr);
+  border-radius: var(--rad-sm);
+  font-family: var(--font);
+  font-size: 13.5px;
+  color: var(--ink);
+  background: var(--bg);
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.censo-admin .ca-field input:focus {
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.censo-admin .ca-field input:disabled { opacity: 0.55; }
+
+.censo-admin .ca-login-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #FECACA;
+  border-radius: 10px;
+  background: #FEF2F2;
+  color: #B91C1C;
+  font-size: 12.5px;
+}
+
+.censo-admin .ca-login-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #FED7AA;
+  border-radius: 10px;
+  background: #FFF7ED;
+  color: #C2410C;
+  font-size: 12.5px;
+}
+
+.censo-admin .ca-submit-btn {
+  width: 100%;
+  padding: 11px 16px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--rad-sm);
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background .15s ease, opacity .15s ease;
+}
+.censo-admin .ca-submit-btn:hover { background: var(--accent-2); }
+.censo-admin .ca-submit-btn:disabled { opacity: 0.55; cursor: default; }
+
+.censo-admin .ca-login-note {
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 1280px) {
+  .censo-admin .ca-app {
+    grid-template-columns: 220px 1fr;
+  }
+  .censo-admin .ca-topbar { padding: 18px 26px; }
+  .censo-admin .admin-page { padding: 24px 26px 40px; }
+  .censo-admin .ca-search { min-width: 220px; }
+}
+
+@media (max-width: 1080px) {
+  .censo-admin .ca-app {
+    grid-template-columns: 68px 1fr;
+    gap: 10px;
+    padding: 10px;
+  }
+  .censo-admin .ca-sidebar { padding: 14px 8px; gap: 14px; }
+  .censo-admin .ca-brand-text,
+  .censo-admin .ca-nav-group-label,
+  .censo-admin .ca-side-footer > div:not(.ca-sf-icon) { display: none; }
+  .censo-admin .ca-school-year { justify-content: center; padding: 8px 6px; }
+  .censo-admin .sy-val { font-size: 13px; }
+  .censo-admin .ca-side-footer { justify-content: center; padding: 8px; }
+  .censo-admin .ca-nav-item { justify-content: center; padding: 9px 6px; gap: 0; }
+  .censo-admin .ca-nav-item span { display: none; }
+  .censo-admin .ca-brand-row { justify-content: center; }
+  .censo-admin .ca-topbar { padding: 16px 22px; }
+  .censo-admin .admin-page { padding: 20px 22px 36px; }
+  .censo-admin .ca-search { min-width: 180px; }
+}
+
+@media (max-width: 880px) {
+  .censo-admin .ca-app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    padding: 8px;
+    gap: 8px;
+  }
+  .censo-admin .ca-sidebar {
+    position: relative;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    padding: 10px;
+    gap: 10px;
+    overflow-x: auto;
+    overflow-y: visible;
+    border-radius: var(--rad);
+  }
+  .censo-admin .ca-brand-text { display: flex; }
+  .censo-admin .ca-brand-text .bt1 { display: block; font-size: 12px; }
+  .censo-admin .ca-brand-text .bt2 { display: none; }
+  .censo-admin .ca-school-year,
+  .censo-admin .ca-side-footer { display: none; }
+  .censo-admin .ca-nav-group { flex-direction: row; gap: 4px; flex-wrap: nowrap; }
+  .censo-admin .ca-nav-group-label { display: none; }
+  .censo-admin .ca-nav-item { padding: 7px 10px; white-space: nowrap; flex-shrink: 0; }
+  .censo-admin .ca-nav-item span { display: inline; font-size: 12px; }
+  .censo-admin .ca-topbar { padding: 14px 18px; flex-wrap: wrap; gap: 12px; }
+  .censo-admin .ca-search { min-width: 0; max-width: 100%; flex: 1; }
+  .censo-admin .ca-search kbd { display: none; }
+  .censo-admin .admin-page { padding: 16px 18px 28px; gap: 20px; }
+  .censo-admin .ca-partners-strip { padding: 14px 18px 18px; }
+  .censo-admin .ca-partners-strip img { max-width: 100%; }
+}
+
+@media (max-width: 540px) {
+  .censo-admin .ca-icon-btn:not(:last-child) { display: none; }
+}

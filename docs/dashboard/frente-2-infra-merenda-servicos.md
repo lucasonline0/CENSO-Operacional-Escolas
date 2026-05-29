@@ -21,13 +21,12 @@
 > GET /v1/admin/analytics/servicos-terceirizados/portaria
 > ```
 >
-> Próximas ações (fora desta frente — PRs de integração visual, **uma aba por PR**, sem mexer no backend):
-> - **UI-FT2-01** — Integrar `AbaInfraestruturaSeguranca.tsx` aos endpoints `/v1/admin/analytics/infraestrutura/*`.
-> - **UI-FT2-02** — Integrar `AbaMerenda.tsx` aos endpoints `/v1/admin/analytics/merenda/*`.
-> - **UI-FT2-03** — Integrar `AbaServicosTerceirizados.tsx` aos endpoints `/v1/admin/analytics/servicos-terceirizados/*`.
+> **Integração visual de primeira versão também já concluída** — `AbaInfraestruturaSeguranca.tsx`, `AbaMerenda.tsx` e `AbaServicosTerceirizados.tsx` em `web/src/components/admin/` consomem os endpoints acima. Os antigos placeholders foram substituídos pelos componentes integrados (UI-FT2-01/02/03 não são mais ações pendentes).
 >
-> Restrições permanentes desses PRs de integração:
-> - Sem alterar backend, migrations ou endpoints já validados.
+> **Próximas ações estão na matriz oficial** — ver [matriz-abas-e-graficos.md](matriz-abas-e-graficos.md) §5.4, §5.5 e §5.6 para a lista de blocos, gráficos mínimos e lacunas (incl. bloco "Governança / Supervisão" em Serviços Terceirizados, ainda sem endpoint dedicado). Não introduzir gráficos novos antes da validação da matriz com as áreas finalísticas.
+>
+> Restrições permanentes para qualquer PR futuro sobre esta área:
+> - Sem alterar backend, migrations ou endpoints já validados sem decisão de produto explícita.
 > - Sem alterar "Caracterização da Rede", "Perfil dos Alunos" ou "Gestão Financeira e Governança".
 > - Sem remover placeholders de outras abas.
 > - Sem dado fake.

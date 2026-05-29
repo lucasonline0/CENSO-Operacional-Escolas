@@ -61,6 +61,21 @@ func (app *application) GetSchools(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// LGPD: a listagem em massa não é usada pelo formulário público (que só
+	// usa POST /schools e GET /schools?id=). Removemos os dados pessoais do
+	// diretor e demais campos sensíveis da resposta para evitar que um
+	// raspador colete esses dados de todas as escolas de uma vez.
+	for _, s := range schools {
+		s.CNPJ = ""
+		s.Telefone = ""
+		s.Email = ""
+		s.CEP = ""
+		s.Endereco = ""
+		s.NomeDiretor = ""
+		s.MatriculaDiretor = ""
+		s.ContatoDiretor = ""
+	}
+
 	payload := jsonResponse{Error: false, Data: schools}
 	app.writeJSON(w, http.StatusOK, payload)
 }

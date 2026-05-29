@@ -37,7 +37,10 @@ export function useCensusPersistence<T extends FieldValues>(
               cache: "no-store",
               headers: {
                   "Cache-Control": "no-cache",
-                  "Pragma": "no-cache"
+                  "Pragma": "no-cache",
+                  // Envia a chave pública para passar pelo gate X-API-Key do
+                  // backend quando ele estiver ativado (PUBLIC_API_KEY setado).
+                  "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || ""
               }
           });
           

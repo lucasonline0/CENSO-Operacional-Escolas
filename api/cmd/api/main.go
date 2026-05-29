@@ -309,12 +309,19 @@ func (app *application) routes() http.Handler {
 
 	mux.Route("/v1", func(r chi.Router) {
 		r.Get("/health", app.HealthCheck)
-		r.Get("/locations", app.GetLocations)
-		r.Get("/schools", app.GetSchools)
-		r.Post("/schools", app.CreateSchool)
-		r.Get("/census", app.GetCenso)
-		r.Post("/census", app.CreateOrUpdateCenso)
-		r.Post("/upload", app.uploadPhoto)
+
+		// Endpoints públicos do formulário. Ficam atrás do gate opcional de
+		// X-API-Key (requirePublicAPIKey): inerte até PUBLIC_API_KEY ser
+		// definido no servidor, então não quebra nada em produção.
+		r.Group(func(pub chi.Router) {
+			pub.Use(app.requirePublicAPIKey)
+			pub.Get("/locations", app.GetLocations)
+			pub.Get("/schools", app.GetSchools)
+			pub.Post("/schools", app.CreateSchool)
+			pub.Get("/census", app.GetCenso)
+			pub.Post("/census", app.CreateOrUpdateCenso)
+			pub.Post("/upload", app.uploadPhoto)
+		})
 
 		// Admin: login público + rotas protegidas por JWT
 		r.Post("/admin/login", app.AdminLogin)

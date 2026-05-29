@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -75,19 +76,71 @@ func (rl *rateLimiter) check(ip string) bool {
 	return rl.allow(ip, maxLoginAttempts, rlWindow)
 }
 
+// trustedProxyCount é o número de proxies reversos confiáveis à frente da
+// aplicação. Plataformas como Railway colocam 1 proxy. Default 1.
+func trustedProxyCount() int {
+	if v := os.Getenv("TRUSTED_PROXY_COUNT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			return n
+		}
+	}
+	return 1
+}
+
+// clientIP resolve o IP real do cliente de forma resistente a spoofing.
+//
+// O header X-Forwarded-For é totalmente controlável pelo cliente; confiar na
+// entrada mais à ESQUERDA (como antes) permitia burlar o rate limit injetando
+// IPs falsos. A entrada confiável é a adicionada pelo proxy reverso mais
+// próximo — a n-ésima a partir da DIREITA, onde n = nº de proxies confiáveis.
+// Sem proxy confiável (TRUSTED_PROXY_COUNT=0) ou sem XFF, usa RemoteAddr, que
+// não é spoofável.
 func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		return strings.TrimSpace(strings.SplitN(xff, ",", 2)[0])
+	stripPort := func(addr string) string {
+		if i := strings.LastIndex(addr, ":"); i != -1 {
+			// Evita cortar IPv6 sem porta (ex.: "::1")
+			if strings.Count(addr, ":") == 1 || strings.Contains(addr, "]") {
+				return strings.Trim(addr[:i], "[]")
+			}
+		}
+		return strings.Trim(addr, "[]")
 	}
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return xri
+
+	if n := trustedProxyCount(); n > 0 {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			for i := range parts {
+				parts[i] = strings.TrimSpace(parts[i])
+			}
+			idx := len(parts) - n
+			if idx < 0 {
+				idx = 0
+			}
+			if parts[idx] != "" {
+				return parts[idx]
+			}
+		}
 	}
-	// Strip port from RemoteAddr
-	addr := r.RemoteAddr
-	if i := strings.LastIndex(addr, ":"); i != -1 {
-		return addr[:i]
-	}
-	return addr
+	return stripPort(r.RemoteAddr)
+}
+
+// requirePublicAPIKey é um gate OPCIONAL para os endpoints públicos. Só passa a
+// exigir o header X-API-Key quando PUBLIC_API_KEY está definido no servidor —
+// se a env estiver vazia, mantém o comportamento atual (não exige nada), o que
+// preserva a compatibilidade do formulário já em produção. O frontend já envia
+// NEXT_PUBLIC_API_KEY em X-API-Key; basta os dois valores baterem.
+func (app *application) requirePublicAPIKey(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key := os.Getenv("PUBLIC_API_KEY")
+		if key != "" && r.Method != http.MethodOptions {
+			provided := r.Header.Get("X-API-Key")
+			if subtle.ConstantTimeCompare([]byte(provided), []byte(key)) != 1 {
+				app.errorJSON(w, fmt.Errorf("não autorizado"), http.StatusUnauthorized)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // ─── JWT ─────────────────────────────────────────────────────────────────────

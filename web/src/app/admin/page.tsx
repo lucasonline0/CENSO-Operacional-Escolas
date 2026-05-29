@@ -6,6 +6,7 @@ import {
   AlertCircle, Loader2, PanelLeftClose, Eye, EyeOff, ArrowRight,
   BarChart2, UsersRound, MonitorSmartphone, ShieldCheck, Utensils,
   ClipboardCheck, Activity, Landmark, LayoutDashboard, Database, MapPinned,
+  Menu, X,
 } from "lucide-react";
 
 import "./admin.css";
@@ -258,6 +259,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const [visited,        setVisited]        = useState<Set<Tab>>(() => new Set<Tab>(["perfil"]));
   const [censusLimit,    setCensusLimit]    = useState(10);
   const [censusPageNum,  setCensusPageNum]  = useState(1);
+  const [mobileNavOpen,  setMobileNavOpen]  = useState(false);
 
   const logout = useCallback(() => { clearToken(); clearApiCache(); onLogout(); }, [onLogout]);
 
@@ -307,7 +309,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const filteredRecent  = (dbData?.recent ?? []).filter((r) => !search || match(r, search));
   const filteredCensus  = (censusPage?.rows ?? []).filter((r) => !search || match(r, search));
 
-  const handleNav = (id: Tab) => { setTab(id); setSearch(""); setVisited((prev) => new Set([...prev, id])); };
+  const handleNav = (id: Tab) => { setTab(id); setSearch(""); setVisited((prev) => new Set([...prev, id])); setMobileNavOpen(false); };
 
   if (loading) return (
     <div className="censo-admin" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -317,7 +319,10 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
   return (
     <div className="censo-admin">
-      <div className={`ca-app${collapsed ? " collapsed" : ""}`}>
+      <div className={`ca-app${collapsed ? " collapsed" : ""}${mobileNavOpen ? " nav-open" : ""}`}>
+
+        {/* Overlay da gaveta de navegação — visível apenas no mobile (CSS) */}
+        <div className="ca-nav-overlay" onClick={() => setMobileNavOpen(false)} />
 
         {/* ── Sidebar ──────────────────────────────────────────── */}
         <aside className="ca-sidebar">
@@ -338,6 +343,13 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             >
               <PanelLeftClose size={17} strokeWidth={1.6} />
             </div>
+            <button
+              className="ca-drawer-close"
+              aria-label="Fechar menu"
+              onClick={() => setMobileNavOpen(false)}
+            >
+              <X size={18} strokeWidth={1.8} />
+            </button>
           </div>
 
           <div className="ca-nav-group">
@@ -365,10 +377,19 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         <main className="ca-main">
           {/* Topbar */}
           <div className="ca-topbar">
-            <div className="ca-crumbs">
-              <span>Painel SEDUC</span>
-              <span className="sep">/</span>
-              <span className="cur">{PAGE_META[tab].title}</span>
+            <div className="ca-topbar-left">
+              <button
+                className="ca-mobile-menu-btn"
+                aria-label="Abrir menu de navegação"
+                onClick={() => setMobileNavOpen(true)}
+              >
+                <Menu size={18} strokeWidth={1.8} />
+              </button>
+              <div className="ca-crumbs">
+                <span>Painel SEDUC</span>
+                <span className="sep">/</span>
+                <span className="cur">{PAGE_META[tab].title}</span>
+              </div>
             </div>
             <div className="ca-topbar-right">
               <div className="ca-search">

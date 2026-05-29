@@ -161,7 +161,7 @@ export function AbaTecnologia({
       </div>
 
       {/* ── Infraestrutura Digital ───────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div id="sec-tecnologia-digital" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
             <Signal size={16} style={{ color: C.primary }} />
@@ -193,7 +193,7 @@ export function AbaTecnologia({
       </div>
 
       {/* ── Parque Tecnológico ───────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div id="sec-tecnologia-parque" className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard
           label="Desktops Administrativos"
           value={fmtInt(infra?.total_desktops_adm)}
@@ -250,7 +250,7 @@ export function AbaTecnologia({
       </div>
 
       {/* ── Uso Pedagógico ───────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div id="sec-tecnologia-pedagogico" className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <StatCard
           label="Escolas com Projetor"
           value={fmtPct(uso?.percentual_com_projetor)}

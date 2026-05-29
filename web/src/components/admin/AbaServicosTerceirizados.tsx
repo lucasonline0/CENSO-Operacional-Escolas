@@ -188,7 +188,7 @@ export function AbaServicosTerceirizados({
       </div>
 
       {/* ── Visão Geral ──────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div id="sec-servicos-visao" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
             <Layers size={16} style={{ color: C.primary }} />
@@ -220,7 +220,7 @@ export function AbaServicosTerceirizados({
       </div>
 
       {/* ── Serviços Gerais ──────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div id="sec-servicos-gerais" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Efetivos"
           value={Math.round(sg?.total_efetivo ?? 0).toLocaleString("pt-BR")}
@@ -267,7 +267,7 @@ export function AbaServicosTerceirizados({
       </div>
 
       {/* ── Portaria ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div id="sec-servicos-portaria" className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <StatCard
           label="Escolas com agentes de portaria"
           value={fmtPct(portaria?.pct_com_agentes)}
@@ -307,7 +307,7 @@ export function AbaServicosTerceirizados({
       </div>
 
       {/* ── Governança / Supervisão (empty interno) ──────────────── */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+      <div id="sec-servicos-governanca" className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         <div
           className="px-6 py-4 border-b flex items-center gap-2"
           style={{ background: C.primaryLight }}

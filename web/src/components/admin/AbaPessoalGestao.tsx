@@ -187,7 +187,7 @@ export function AbaPessoalGestao({
       </div>
 
       {/* ── Estrutura de Gestão Escolar ──────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+      <div id="sec-pessoal-estrutura" className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
           <UsersRound size={16} style={{ color: C.primary }} />
           Composição da Gestão Escolar
@@ -203,7 +203,7 @@ export function AbaPessoalGestao({
       </div>
 
       {/* ── Coordenação Pedagógica ───────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div id="sec-pessoal-coordenacao" className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
             <Layers size={16} style={{ color: C.primary }} />
@@ -239,7 +239,7 @@ export function AbaPessoalGestao({
       </div>
 
       {/* ── Quadro de Pessoal ────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div id="sec-pessoal-quadro" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Servidores Administrativos"
           value={fmtInt(quadro?.total_servidores_administrativos)}

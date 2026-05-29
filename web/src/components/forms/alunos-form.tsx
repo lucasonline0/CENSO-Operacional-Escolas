@@ -58,7 +58,9 @@ export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
       if (!schoolId) return;
       try {
         const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        const response = await fetch(`${baseUrl}/v1/census?school_id=${schoolId}`);
+        const response = await fetch(`${baseUrl}/v1/census?school_id=${schoolId}`, {
+          headers: { "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "" },
+        });
         
         if (response.ok) {
           const json = await response.json();
@@ -105,7 +107,7 @@ export function AlunosForm({ schoolId, onSuccess, onBack }: AlunosFormProps) {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/census`, {
         method: "POST", 
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "" },
         body: JSON.stringify({
             school_id: schoolId,
             year: new Date().getFullYear(),

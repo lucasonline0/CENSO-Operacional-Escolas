@@ -46,12 +46,16 @@ func (app *application) enableCORS(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-API-Key, Cache-Control, Pragma")
 
-		// Previne MIME sniffing e clickjacking
+		// Previne MIME sniffing e clickjacking.
+		// X-XSS-Protection foi removido por estar obsoleto (pode introduzir
+		// vulnerabilidades em navegadores legados); a proteção real vem do CSP.
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("X-XSS-Protection", "1; mode=block")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Permissions-Policy", "geolocation=(), camera=(), microphone=()")
+		// HSTS: força HTTPS por 2 anos. Navegadores ignoram o header quando a
+		// conexão é HTTP simples, então é seguro enviar sempre.
+		w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)

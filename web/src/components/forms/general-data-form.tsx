@@ -67,7 +67,9 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
     if (schoolId) {
         const fetchSchoolData = async () => {
             try {
-                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/schools?id=${schoolId}`);
+                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/schools?id=${schoolId}`, {
+                    headers: { "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "" },
+                });
                 if (response.ok) {
                     const json = await response.json();
                     if (json.data && Array.isArray(json.data.turnos)) {
@@ -171,6 +173,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
         try {
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/upload`, {
                 method: "POST",
+                headers: { "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "" },
                 body: formData,
             });
 
@@ -243,7 +246,7 @@ export function GeneralDataForm({ schoolId, onSuccess, onBack }: GeneralDataForm
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/census`, {
         method: "POST", 
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "" },
         body: JSON.stringify({ school_id: schoolId, year: new Date().getFullYear(), status: "draft", data: payload }),
       });
 

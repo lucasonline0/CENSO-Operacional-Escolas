@@ -197,9 +197,9 @@ func (app *application) AdminAnalyticsPessoalCoordenacao(w http.ResponseWriter, 
 	// 2) Cobertura Média (Média de áreas cobertas por escola)
 	err = db.QueryRowContext(ctx, fmt.Sprintf(`
 		WITH base AS (
-			SELECT school_id, COUNT(*) FILTER (WHERE possui) AS qtd_areas
+			SELECT v.school_id, COUNT(*) FILTER (WHERE possui) AS qtd_areas
 			%s
-			GROUP BY school_id
+			GROUP BY v.school_id
 		)
 		SELECT COALESCE(ROUND(AVG(qtd_areas), 2), 0)::float8
 		FROM base
@@ -394,17 +394,17 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 
 	// 1) Totais de internet e equipamentos
 	err := db.QueryRowContext(ctx, fmt.Sprintf(`
-		WITH base AS (SELECT * %s),
+		WITH base AS (SELECT v.* %s),
 		tot AS (SELECT COUNT(DISTINCT school_id)::numeric AS n FROM base)
 		SELECT
 			COUNT(DISTINCT school_id) FILTER (WHERE internet_disponivel)::bigint,
-			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE internet_disponivel) / NULLIF(tot.n, 0), 1), 0)::float8,
+			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE internet_disponivel) / NULLIF(MAX(tot.n), 0), 1), 0)::float8,
 			COALESCE(SUM(qtd_desktop_adm), 0)::float8,
 			COALESCE(SUM(qtd_desktop_alunos), 0)::float8,
 			COALESCE(SUM(qtd_notebooks), 0)::float8,
 			COALESCE(SUM(qtd_chromebooks), 0)::float8,
 			COALESCE(SUM(qtd_computadores_inoperantes), 0)::float8,
-			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE computadores_atendem = 'Sim') / NULLIF(tot.n, 0), 1), 0)::float8
+			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE computadores_atendem = 'Sim') / NULLIF(MAX(tot.n), 0), 1), 0)::float8
 		FROM base CROSS JOIN tot
 	`, baseWhere), year, dre, municipio, zona, porte).Scan(
 		&out.EscolasComInternet,
@@ -424,7 +424,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 	// helper: distribuição categórica por campo
 	distCateg := func(campo string) ([]CategoricStat, error) {
 		rows, err := db.QueryContext(ctx, fmt.Sprintf(`
-			WITH base AS (SELECT * %s),
+			WITH base AS (SELECT v.* %s),
 			tot AS (SELECT COUNT(DISTINCT school_id)::numeric AS n FROM base)
 			SELECT
 				COALESCE(%s, 'Não informado') AS valor,
@@ -507,10 +507,10 @@ func (app *application) AdminAnalyticsTecnologiaUso(w http.ResponseWriter, r *ht
 		tot AS (SELECT COUNT(DISTINCT school_id)::numeric AS n FROM base)
 		SELECT
 			COUNT(DISTINCT school_id) FILTER (WHERE possui_projetor)::bigint,
-			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE possui_projetor) / NULLIF(tot.n, 0), 1), 0)::float8,
+			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE possui_projetor) / NULLIF(MAX(tot.n), 0), 1), 0)::float8,
 			COALESCE(SUM(qtd_projetores), 0)::float8,
 			COUNT(DISTINCT school_id) FILTER (WHERE possui_lousa_digital)::bigint,
-			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE possui_lousa_digital) / NULLIF(tot.n, 0), 1), 0)::float8
+			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE possui_lousa_digital) / NULLIF(MAX(tot.n), 0), 1), 0)::float8
 		FROM base CROSS JOIN tot
 	`, year, dre, municipio, zona, porte).Scan(
 		&out.EscolasComProjetor,

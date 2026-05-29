@@ -22,7 +22,8 @@ func (app *application) GetLocations(w http.ResponseWriter, r *http.Request) {
 
 	locations, err := app.sheets.GetLocations()
 	if err != nil {
-		app.errorJSON(w, fmt.Errorf("erro ao buscar locais: %v", err), http.StatusInternalServerError)
+		app.logger.Printf("GetLocations: %v", err)
+		app.errorJSON(w, fmt.Errorf("erro ao buscar locais"), http.StatusInternalServerError)
 		return
 	}
 
@@ -60,11 +61,32 @@ func (app *application) GetSchools(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// LGPD: a listagem em massa não é usada pelo formulário público (que só
+	// usa POST /schools e GET /schools?id=). Removemos os dados pessoais do
+	// diretor e demais campos sensíveis da resposta para evitar que um
+	// raspador colete esses dados de todas as escolas de uma vez.
+	for _, s := range schools {
+		s.CNPJ = ""
+		s.Telefone = ""
+		s.Email = ""
+		s.CEP = ""
+		s.Endereco = ""
+		s.NomeDiretor = ""
+		s.MatriculaDiretor = ""
+		s.ContatoDiretor = ""
+	}
+
 	payload := jsonResponse{Error: false, Data: schools}
 	app.writeJSON(w, http.StatusOK, payload)
 }
 
 func (app *application) CreateSchool(w http.ResponseWriter, r *http.Request) {
+	if !censusWriteRL.allow(clientIP(r), maxCensusWrites, censusWindow) {
+		w.Header().Set("Retry-After", "600")
+		app.errorJSON(w, fmt.Errorf("muitas requisições. Aguarde alguns minutos"), http.StatusTooManyRequests)
+		return
+	}
+
 	var req models.School
 
 	err := app.readJSON(w, r, &req)
@@ -121,6 +143,12 @@ func (app *application) GetCenso(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Request) {
+	if !censusWriteRL.allow(clientIP(r), maxCensusWrites, censusWindow) {
+		w.Header().Set("Retry-After", "600")
+		app.errorJSON(w, fmt.Errorf("muitas requisições. Aguarde alguns minutos"), http.StatusTooManyRequests)
+		return
+	}
+
 	var req struct {
 		SchoolID int             `json:"school_id"`
 		Year     int             `json:"year"`
@@ -187,12 +215,14 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 			} else {
 				censoCopy := censo
 				go func(c models.CensusResponse, s models.School) {
-					if err = app.sheets.AppendCenso(c, s); err != nil {
-						app.logger.Println("Erro ao salvar na planilha:", err)
+					// Usa variável local (não a 'err' da função externa) para
+					// evitar data race com o handler que segue executando.
+					if e := app.sheets.AppendCenso(c, s); e != nil {
+						app.logger.Println("Erro ao salvar na planilha:", e)
 						return
 					}
-					if err = app.models.Census.MarkSheetSynced(c.ID); err != nil {
-						app.logger.Println("Erro ao marcar sheet_synced_at:", err)
+					if e := app.models.Census.MarkSheetSynced(c.ID); e != nil {
+						app.logger.Println("Erro ao marcar sheet_synced_at:", e)
 					}
 				}(censoCopy, *school)
 			}
@@ -278,8 +308,18 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
-	// Limite 10MB
-	r.ParseMultipartForm(10 << 20)
+	if !uploadRL.allow(clientIP(r), maxUploads, uploadWindow) {
+		w.Header().Set("Retry-After", "600")
+		app.errorJSON(w, fmt.Errorf("muitos uploads. Aguarde alguns minutos"), http.StatusTooManyRequests)
+		return
+	}
+
+	// Limite total do corpo da requisição a 10MB (defesa contra DoS por disco).
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		app.errorJSON(w, fmt.Errorf("arquivo muito grande ou inválido (máx. 10MB)"), http.StatusBadRequest)
+		return
+	}
 
 	file, handler, err := r.FormFile("photo")
 	if err != nil {
@@ -303,7 +343,25 @@ func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 	ext := strings.ToLower(filepath.Ext(safeBase))
 	allowedExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".webp": true, ".gif": true}
 	if !allowedExts[ext] {
-		app.errorJSON(w, fmt.Errorf("tipo de arquivo não permitido. Use: jpg, jpeg, png ou webp"), http.StatusBadRequest)
+		app.errorJSON(w, fmt.Errorf("tipo de arquivo não permitido. Use: jpg, jpeg, png, webp ou gif"), http.StatusBadRequest)
+		return
+	}
+
+	// Valida o CONTEÚDO real (magic bytes), não só a extensão do nome — impede
+	// que um arquivo arbitrário seja salvo apenas renomeado com extensão de imagem.
+	sniff := make([]byte, 512)
+	n, _ := file.Read(sniff)
+	detected := http.DetectContentType(sniff[:n])
+	allowedTypes := map[string]bool{
+		"image/jpeg": true, "image/png": true, "image/webp": true, "image/gif": true,
+	}
+	if !allowedTypes[detected] {
+		app.errorJSON(w, fmt.Errorf("conteúdo do arquivo não é uma imagem válida"), http.StatusBadRequest)
+		return
+	}
+	// Rebobina para que o io.Copy abaixo grave o arquivo inteiro.
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao processar arquivo"), http.StatusInternalServerError)
 		return
 	}
 
@@ -357,7 +415,8 @@ func (app *application) AdminSyncSheets(w http.ResponseWriter, r *http.Request) 
 
 	pending, err := app.models.Census.GetPendingSheetSync()
 	if err != nil {
-		app.errorJSON(w, fmt.Errorf("erro ao buscar pendentes: %v", err), http.StatusInternalServerError)
+		app.logger.Printf("AdminSyncSheets: %v", err)
+		app.errorJSON(w, fmt.Errorf("erro ao buscar pendentes"), http.StatusInternalServerError)
 		return
 	}
 

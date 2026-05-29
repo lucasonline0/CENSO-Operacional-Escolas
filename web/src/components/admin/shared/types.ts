@@ -70,6 +70,13 @@ export interface CaracterizacaoDREPg {
 
 export interface CensusFull extends CensusRow { data: unknown; created_at: string; }
 
+export interface CensusPage {
+  rows: CensusRow[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 // Frente 2 — Infraestrutura e Segurança.
 // Payloads de /v1/admin/analytics/infraestrutura/{condicoes,seguranca}.
 export interface CategoricStat {
@@ -143,4 +150,88 @@ export interface MerendaRH {
   total_temporaria: number;
   pct_com_supervisor: number;
   top_empresas: EmpresaStat[];
+}
+
+// Frente 2 — Serviços Terceirizados.
+// Payloads de /v1/admin/analytics/servicos-terceirizados/{visao-geral,servicos-gerais,portaria}.
+export interface TerceirizacaoArea {
+  area: string;
+  escolas: number;
+  percentual: number;
+}
+
+export interface ServicosVisaoGeral {
+  por_area: TerceirizacaoArea[];
+  por_quantidade_areas: CategoricStat[];
+}
+
+export interface ServicosGerais {
+  total_efetivo: number;
+  total_temporario: number;
+  total_terceirizado: number;
+  media_total_por_escola: number;
+}
+
+export interface ServicosPortaria {
+  pct_com_agentes: number;
+  media_agentes_por_escola: number;
+  top_empresas: EmpresaStat[];
+}
+
+// Frente 1 — Pessoal e Gestão Escolar.
+// Payloads de /v1/admin/analytics/pessoal-gestao/{estrutura,coordenacao,quadro-pessoal}.
+export interface PessoalEstrutura {
+  composicao_gestao: CategoricStat[];
+  total_coordenadores_pedagogicos: number;
+}
+
+export interface PessoalCoordenacao {
+  por_area: CategoricStat[];
+  cobertura_media: number;
+}
+
+export interface QuadroPessoalMedias {
+  efetivos: number;
+  temporarios: number;
+  administrativos: number;
+  readaptados: number;
+}
+
+export interface QuadroPessoalDRE {
+  dre: string;
+  total_efetivos: number;
+  total_temporarios: number;
+  media_total_professores: number;
+}
+
+export interface QuadroPessoal {
+  total_professores_efetivos: number;
+  total_professores_temporarios: number;
+  total_servidores_administrativos: number;
+  total_professores_readaptados: number;
+  media_por_escola: QuadroPessoalMedias;
+  por_dre: QuadroPessoalDRE[];
+}
+
+// Frente 1 — Tecnologia e Equipamentos.
+// Payloads de /v1/admin/analytics/tecnologia/{infraestrutura,uso-pedagogico}.
+export interface TecnologiaInfra {
+  escolas_com_internet: number;
+  percentual_internet: number;
+  por_provedor: CategoricStat[];
+  por_qualidade: CategoricStat[];
+  total_desktops_adm: number;
+  total_desktops_alunos: number;
+  total_notebooks: number;
+  total_chromebooks: number;
+  total_computadores_inoperantes: number;
+  percentual_computadores_atendem: number;
+}
+
+export interface TecnologiaUso {
+  escolas_com_projetor: number;
+  percentual_com_projetor: number;
+  total_projetores: number;
+  escolas_com_lousa_digital: number;
+  percentual_com_lousa_digital: number;
 }

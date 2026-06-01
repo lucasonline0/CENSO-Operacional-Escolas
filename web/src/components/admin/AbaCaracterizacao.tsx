@@ -286,8 +286,9 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
 
         {infraPg && (
           <>
-            {/* KPIs de cobertura essencial */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* KPIs de cobertura essencial. "Total de Escolas" não é
+                repetido aqui — já consta no bloco Dimensão e Perfil da Rede. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <StatCard
                 label="Média de Ambientes Essenciais"
                 value={infraPg.cobertura_essenciais.media_ambientes_essenciais.toLocaleString("pt-BR")}
@@ -301,13 +302,6 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
                 Icon={ShieldCheck}
                 tone="green"
                 sub={`possuem os ${infraPg.cobertura_essenciais.total_essenciais} essenciais`}
-              />
-              <StatCard
-                label="Total de Escolas"
-                value={totalEscolas}
-                Icon={Building2}
-                tone="amber"
-                sub="censos concluídos"
               />
             </div>
 

@@ -9,7 +9,6 @@ import { apiFetch } from "./shared/api";
 import { C, PORTE_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
-import { HBarChart } from "./shared/BarChart";
 import type {
   TecnologiaInfra, TecnologiaUso,
 } from "./shared/types";
@@ -89,9 +88,11 @@ export function AbaTecnologia({
     );
   }
 
-  const provedorRows = (infra?.por_provedor ?? []).map((p) => ({
+  const provedorSegments = (infra?.por_provedor ?? []).map((p, i) => ({
     label: p.valor,
     value: p.escolas,
+    color: PORTE_COLORS[i % PORTE_COLORS.length] ?? "#94A3B8",
+    pct: p.percentual,
   }));
   const qualidadeSegments = (infra?.por_qualidade ?? []).map((q, i) => ({
     label: q.valor,
@@ -138,11 +139,11 @@ export function AbaTecnologia({
           sub="escolas que afirmam atender à demanda"
         />
         <StatCard
-          label="Computadores Inoperantes"
-          value={fmtInt(infra?.total_computadores_inoperantes)}
+          label="Escolas c/ Computadores Inoperantes"
+          value={fmtInt(infra?.escolas_com_computadores_inoperantes)}
           Icon={ZapOff}
           tone="orange"
-          sub="total declarado"
+          sub="escolas declararam"
         />
         <StatCard
           label="Projetores"
@@ -170,8 +171,8 @@ export function AbaTecnologia({
           <p className="text-xs text-slate-400 mb-5">
             Número de escolas por provedor declarado.
           </p>
-          {provedorRows.length > 0 ? (
-            <HBarChart rows={provedorRows} color={C.primary} />
+          {provedorSegments.length > 0 ? (
+            <Donut segments={provedorSegments} />
           ) : (
             <NoData />
           )}
@@ -223,11 +224,11 @@ export function AbaTecnologia({
           sub="total declarado"
         />
         <StatCard
-          label="Computadores Inoperantes"
-          value={fmtInt(infra?.total_computadores_inoperantes)}
+          label="Escolas c/ Computadores Inoperantes"
+          value={fmtInt(infra?.escolas_com_computadores_inoperantes)}
           Icon={ZapOff}
           tone="orange"
-          sub="total declarado"
+          sub="escolas declararam"
         />
       </div>
 
@@ -244,7 +245,7 @@ export function AbaTecnologia({
             Quantidades de equipamentos são declaradas pelas escolas no formulário do censo.
           </p>
           <p>
-            O total de computadores inoperantes não representa automaticamente um percentual do parque total.
+            O número de escolas com computadores inoperantes não representa automaticamente um percentual do parque total.
           </p>
         </div>
       </div>

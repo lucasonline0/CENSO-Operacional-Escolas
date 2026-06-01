@@ -343,7 +343,7 @@ type TecnologiaInfra struct {
 	TotalDesktopsAlunos     float64         `json:"total_desktops_alunos"`
 	TotalNotebooks          float64         `json:"total_notebooks"`
 	TotalChromebooks        float64         `json:"total_chromebooks"`
-	TotalInoperantes        float64         `json:"total_computadores_inoperantes"`
+	EscolasComInoperantes   int64           `json:"escolas_com_computadores_inoperantes"`
 	PercentualAtendeDemanda float64         `json:"percentual_computadores_atendem"`
 }
 
@@ -403,7 +403,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 			COALESCE(SUM(qtd_desktop_alunos), 0)::float8,
 			COALESCE(SUM(qtd_notebooks), 0)::float8,
 			COALESCE(SUM(qtd_chromebooks), 0)::float8,
-			COALESCE(SUM(qtd_computadores_inoperantes), 0)::float8,
+			COUNT(DISTINCT school_id) FILTER (WHERE qtd_computadores_inoperantes > 0)::bigint,
 			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE computadores_atendem = 'Sim') / NULLIF(MAX(tot.n), 0), 1), 0)::float8
 		FROM base CROSS JOIN tot
 	`, baseWhere), year, dre, municipio, zona, porte).Scan(
@@ -413,7 +413,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 		&out.TotalDesktopsAlunos,
 		&out.TotalNotebooks,
 		&out.TotalChromebooks,
-		&out.TotalInoperantes,
+		&out.EscolasComInoperantes,
 		&out.PercentualAtendeDemanda,
 	)
 	if err != nil {

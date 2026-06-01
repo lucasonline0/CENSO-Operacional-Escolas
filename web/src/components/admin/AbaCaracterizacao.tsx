@@ -185,8 +185,8 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
         </div>
       )}
 
-      {/* Stat cards — Fase 2B.1: lêem caracterizacao/perfil com fallback p/ sheet-metrics. */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ── Dimensão e Perfil da Rede ─────────────────────────── */}
+      <div id="sec-perfil-dimensao" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total de Escolas" value={totalEscolas} Icon={Building2} tone="blue" sub="Censos concluídos" />
         <StatCard label="Total de Alunos" value={totalAlunos} Icon={Users} tone="green" />
         <StatCard label="Média por Escola" value={mediaAlunos} Icon={TrendingUp} tone="amber" sub="alunos/escola" />
@@ -236,6 +236,12 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
         </h3>
         <HBarChart rows={dreBar} color="#2563EB" />
       </div>
+
+      {/* ── Organização da Oferta e Funcionamento ─────────────── */}
+      <div id="sec-perfil-oferta" />
+
+      {/* ── Infraestrutura Educacional ────────────────────────── */}
+      <div id="sec-perfil-infra" />
 
       {/* Tabela DRE detalhada */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">

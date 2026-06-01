@@ -121,6 +121,7 @@
   top: 14px;
   height: calc(100vh - 28px);
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .censo-admin .ca-side-top {
@@ -149,6 +150,7 @@
   font-weight: 700;
   color: var(--ink);
   letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 .censo-admin .ca-brand-text .bt2 {
   font-size: 10.5px;
@@ -239,6 +241,64 @@
 }
 .censo-admin .ca-nav-item.active .ca-icon {
   color: var(--accent);
+}
+.censo-admin .ca-nav-item span {
+  flex: 1;
+  min-width: 0;
+}
+.censo-admin .ca-nav-item,
+.censo-admin .ca-nav-subitem,
+.censo-admin .ca-nav-group-label {
+  user-select: none;
+}
+
+/* ── Sub-menu do nav lateral ───────────────────────────────── */
+.censo-admin .ca-nav-chevron {
+  margin-left: auto;
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: transform .2s ease;
+}
+.censo-admin .ca-nav-chevron.open {
+  transform: rotate(180deg);
+}
+.censo-admin .ca-nav-subitems {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows .25s cubic-bezier(.4,0,.2,1);
+}
+.censo-admin .ca-nav-subitems.open {
+  grid-template-rows: 1fr;
+}
+.censo-admin .ca-nav-subitems-inner {
+  overflow: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 0 4px 28px;
+  opacity: 0;
+  transition: opacity .18s ease;
+}
+.censo-admin .ca-nav-subitems.open .ca-nav-subitems-inner {
+  opacity: 1;
+}
+.censo-admin .ca-nav-subitem {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  line-height: 1.35;
+  transition: background .12s ease, color .12s ease;
+}
+.censo-admin .ca-nav-subitem:hover {
+  background: rgba(255,255,255,0.55);
+  color: var(--ink);
+}
+.censo-admin .ca-app.collapsed .ca-nav-subitems,
+.censo-admin .ca-app.collapsed .ca-nav-chevron {
+  display: none;
 }
 
 .censo-admin .ca-side-footer {
@@ -1035,7 +1095,7 @@
     white-space: normal;
     flex-shrink: 0;
   }
-  .censo-admin .ca-nav-item span { display: inline; font-size: 13.5px; }
+  .censo-admin .ca-nav-item span { display: inline; font-size: 13.5px; white-space: normal; overflow: visible; text-overflow: clip; }
 
   /* Troca o collapse (sem sentido na gaveta) pelo botão de fechar. */
   .censo-admin .ca-collapse-btn { display: none; }

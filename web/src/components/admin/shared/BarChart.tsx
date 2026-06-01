@@ -40,17 +40,26 @@ export function VBarChart({
   );
 }
 
-// Horizontal bar chart
+// Horizontal bar chart.
+// A largura da barra é proporcional a `value` (mantém o comportamento
+// histórico). Por linha:
+//   - o rótulo dentro da barra é `display`, quando informado (senão usa
+//     o formato numérico padrão `value` + `unit`);
+//   - `trailing`, quando informado, é renderizado FORA da barra, à direita,
+//     em cinza — útil para exibir o percentual ao lado do valor numérico.
+// Quando nenhuma linha tem `trailing`, a coluna à direita não é renderizada,
+// preservando o layout original das demais abas.
 export function HBarChart({
   rows,
   unit = "",
   color = C.primary,
 }: {
-  rows: { label: string; value: number }[];
+  rows: { label: string; value: number; display?: string; trailing?: string }[];
   unit?: string;
   color?: string;
 }) {
   const max = Math.max(...rows.map((r) => r.value), 1);
+  const showTrailing = rows.some((r) => r.trailing !== undefined);
   return (
     <div className="space-y-2 w-full">
       {rows.map((r) => {
@@ -64,9 +73,14 @@ export function HBarChart({
                 style={{ width: `${pct}%`, background: color }}
               />
               <span className="absolute inset-0 flex items-center px-2 text-xs font-semibold text-white mix-blend-luminosity">
-                {r.value.toLocaleString("pt-BR")}{unit}
+                {r.display ?? `${r.value.toLocaleString("pt-BR")}${unit}`}
               </span>
             </div>
+            {showTrailing && (
+              <span className="w-12 shrink-0 text-right text-slate-500 text-xs tabular-nums">
+                {r.trailing}
+              </span>
+            )}
           </div>
         );
       })}

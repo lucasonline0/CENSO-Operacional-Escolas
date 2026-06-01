@@ -210,7 +210,9 @@ Implementar junto com a normalização de turnos, mantendo teste de contagem por
 
 ### 5.2 Caracterização da Rede — Infraestrutura Educacional
 
-#### 5.2.1 Presença de ambientes
+> **Status (CAR-INFRA-01 — entregue 1ª versão):** o endpoint `GET /v1/admin/analytics/caracterizacao/infraestrutura-educacional` foi implementado e o bloco renderizado em `AbaCaracterizacao.tsx` (anchor `sec-perfil-infra`). A lista oficial inicial de ambientes essenciais usada no cálculo é: **Biblioteca, Laboratório de Ciências, Laboratório de Informática, Quadra Esportiva, Refeitório, Cozinha, Sala dos Professores, SAEE** — devolvida no payload em `ambientes_essenciais` para exibição na janela informativa. Denominador de todos os percentuais: total de escolas concluídas no ano corrente (não apenas as que declararam ambientes).
+
+#### 5.2.1 Presença de ambientes — **entregue**
 
 **O que o gráfico deve mostrar**  
 Ranking ou distribuição de ambientes existentes, com escolas e percentual por ambiente.
@@ -250,7 +252,7 @@ Backend + Frontend.
 **Próxima ação recomendada**  
 Criar endpoint de infraestrutura educacional usando `vw_censo_ambientes` e renderizar gráfico sintético na Caracterização.
 
-#### 5.2.2 Cobertura de ambientes essenciais
+#### 5.2.2 Cobertura de ambientes essenciais — **entregue com lista oficial inicial**
 
 **O que o gráfico deve mostrar**  
 Indicadores de cobertura dos ambientes considerados essenciais: média de essenciais presentes, percentual de escolas com cobertura plena e distribuição por faixa.
@@ -294,7 +296,7 @@ Produto, depois Backend + Frontend.
 **Próxima ação recomendada**  
 Abrir task de produto para validar a lista de essenciais antes de implementar SQL.
 
-#### 5.2.3 Média de ambientes essenciais por porte
+#### 5.2.3 Média de ambientes essenciais por porte — **entregue com lista oficial inicial**
 
 **O que o gráfico deve mostrar**  
 Média de ambientes essenciais presentes por escola em cada faixa de porte.
@@ -771,7 +773,7 @@ A fonte futura deve vir de bases próprias validadas pelas coordenações respon
 | Endpoint | Finalidade | Status | Dependência |
 |---|---|---|---|
 | `/v1/admin/analytics/caracterizacao/oferta-funcionamento` | Etapas, modalidades, turnos, média de turnos por porte | Recomendado | Confirmar estrutura dos campos multivalorados |
-| `/v1/admin/analytics/caracterizacao/infraestrutura-educacional` | Ambientes e essenciais | Recomendado | Lista oficial de ambientes essenciais |
+| `/v1/admin/analytics/caracterizacao/infraestrutura-educacional` | Ambientes e essenciais | **Entregue (CAR-INFRA-01)** | Lista oficial inicial definida; refino futuro com produto |
 | `/v1/admin/analytics/infraestrutura/energia-climatizacao` | Energia e climatização | Recomendado ou expansão de `/condicoes` | Confirmar semântica dos campos |
 | `/v1/admin/analytics/merenda/estrutura-fisica` | Tamanho da cozinha e estrutura | Opcional | Pode ser expansão de `/merenda/oferta` |
 | `/v1/admin/analytics/servicos-terceirizados/governanca` | Supervisão e avaliações | Recomendado | Escala oficial das avaliações |
@@ -783,8 +785,8 @@ A fonte futura deve vir de bases próprias validadas pelas coordenações respon
 | Normalizar etapas | Campo multivalorado para dimensão | A confirmar | Pode exigir nova view |
 | Normalizar modalidades | Campo multivalorado para dimensão | A confirmar | Pode exigir nova view |
 | Normalizar turnos | Campo multivalorado para dimensão | A confirmar | Diferenciar turno de turma |
-| Ambientes por escola | Presença de ambientes | Sim, `vw_censo_ambientes` | Falta essencialidade |
-| Ambientes essenciais | Cobertura e média por porte | Parcial | Depende de lista oficial |
+| Ambientes por escola | Presença de ambientes | Sim, `vw_censo_ambientes` | Entregue (CAR-INFRA-01) |
+| Ambientes essenciais | Cobertura e média por porte | Sim, lista oficial inicial | Entregue (CAR-INFRA-01); refino futuro da lista |
 | Energia/climatização | KPIs e distribuição | Parcial | Campos existem, não expostos |
 | Tamanho da cozinha | Distribuição categórica | Sim | Falta payload |
 | Governança serviços | Supervisão e avaliação | Parcial | Campos existem, escala a validar |

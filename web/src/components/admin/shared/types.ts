@@ -68,6 +68,37 @@ export interface CaracterizacaoDREPg {
   detalhamento: DreSummaryPg[];
 }
 
+// CAR-INFRA-01 — Caracterização da Rede: Infraestrutura Educacional.
+// Payload de /v1/admin/analytics/caracterizacao/infraestrutura-educacional.
+export interface CaracterizacaoAmbienteStat {
+  label: string;
+  escolas: number;
+  percentual: number;
+}
+
+export interface CaracterizacaoCoberturaEssenciais {
+  total_essenciais: number;
+  media_ambientes_essenciais: number;
+  pct_cobertura_plena: number;
+  por_faixa: Array<{
+    label: string;
+    escolas: number;
+    percentual: number;
+  }>;
+}
+
+export interface CaracterizacaoMediaEssenciaisPorPorte {
+  porte: string;
+  media: number;
+}
+
+export interface CaracterizacaoInfraEducacionalPg {
+  ambientes: CaracterizacaoAmbienteStat[];
+  cobertura_essenciais: CaracterizacaoCoberturaEssenciais;
+  media_essenciais_por_porte: CaracterizacaoMediaEssenciaisPorPorte[];
+  ambientes_essenciais: string[];
+}
+
 export interface CensusFull extends CensusRow { data: unknown; created_at: string; }
 
 export interface CensusPage {

@@ -342,6 +342,7 @@ func (app *application) routes() http.Handler {
 			// Adicionais; a UI segue consumindo sheet-metrics até a Fase 2B.
 			protected.Get("/admin/analytics/caracterizacao/perfil", app.AdminAnalyticsCaracterizacaoPerfil)
 			protected.Get("/admin/analytics/caracterizacao/dre", app.AdminAnalyticsCaracterizacaoDRE)
+			protected.Get("/admin/analytics/caracterizacao/infraestrutura-educacional", app.AdminAnalyticsCaracterizacaoInfraEducacional)
 
 			// Frente 1 — Pessoal e Gestão Escolar + Tecnologia
 			protected.Get("/admin/analytics/pessoal-gestao/estrutura", app.AdminAnalyticsPessoalEstrutura)

@@ -123,9 +123,9 @@ Removido/adiado: **Estatística Descritiva**.
 | Organização da Oferta e Funcionamento | Modalidades ofertadas (barra) | PG `/caracterizacao/perfil` | presente / a confirmar | Idem | — | — |
 | Organização da Oferta e Funcionamento | Distribuição por turnos (donut/barra) | PG `/caracterizacao/perfil` | presente / a confirmar | Confirmar mapeamento turnos | — | — |
 | Organização da Oferta e Funcionamento | Média de turnos por porte (tabela) | PG | planejado | View/endpoint a criar/expor | Componente a criar | Item de backlog. |
-| Infraestrutura Educacional | Presença de ambientes (barra %) | PG `vw_censo_ambientes` | presente parcial via aba Infra | Expor recorte para aba Caracterização | Componente sintético na aba | Aba Infraestrutura tem versão detalhada. |
-| Infraestrutura Educacional | Cobertura de ambientes essenciais (KPI %) | PG `vw_censo_ambientes` | planejado | Definir lista oficial de "essenciais" + endpoint | Componente a criar | Decisão de produto pendente: quais são "essenciais". |
-| Infraestrutura Educacional | Média de ambientes essenciais por porte (tabela) | PG | planejado | Endpoint a criar | Componente a criar | Item de backlog. |
+| Infraestrutura Educacional | Presença de ambientes (barra %) | PG `vw_censo_ambientes` | **entregue (CAR-INFRA-01)** | `/caracterizacao/infraestrutura-educacional` | Bloco em `AbaCaracterizacao.tsx` | Aba Infraestrutura tem versão detalhada. |
+| Infraestrutura Educacional | Cobertura de ambientes essenciais (KPI %) | PG `vw_censo_ambientes` | **entregue 1ª versão (CAR-INFRA-01)** | `/caracterizacao/infraestrutura-educacional` (lista oficial inicial) | KPIs + donut de faixas + modal informativo | Lista oficial inicial definida; refino futuro com produto. |
+| Infraestrutura Educacional | Média de ambientes essenciais por porte (tabela) | PG | **entregue 1ª versão (CAR-INFRA-01)** | `/caracterizacao/infraestrutura-educacional` | Barra por porte | Usa `porte_escola_nome`/`porte_escola_cod`. |
 
 ### 5.2 Pessoal e Gestão Escolar
 

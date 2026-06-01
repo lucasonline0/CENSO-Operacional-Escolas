@@ -1,35 +1,53 @@
 import React from "react";
 import { C } from "./constants";
 
-// Vertical bar chart (estilo Looker Studio)
+// Vertical bar chart (estilo Looker Studio).
+// `barMaxWidth` limita a largura de cada coluna (px) e `gapClass` controla
+// o espaçamento entre colunas — ambos opcionais, com os valores históricos
+// como default, para não afetar usos existentes.
 export function VBarChart({
   rows,
   color = C.primary,
   showPct = true,
+  barMaxWidth = 56,
+  gapClass = "gap-3",
+  valueInside = false,
 }: {
   rows: { label: string; value: number }[];
   color?: string;
   showPct?: boolean;
+  barMaxWidth?: number;
+  gapClass?: string;
+  valueInside?: boolean;
 }) {
   const total = rows.reduce((s, r) => s + r.value, 0);
   const max   = Math.max(...rows.map((r) => r.value), 1);
   return (
-    <div className="flex items-end justify-around gap-3 w-full h-52 pt-6 relative">
+    <div className={`flex items-end justify-around ${gapClass} w-full h-52 pt-6 relative`}>
       {rows.map((r) => {
         const pct    = total > 0 ? ((r.value / total) * 100).toFixed(1) : "0.0";
         const height = total > 0 ? (r.value / max) * 100 : 0;
+        const valueText = showPct ? `${pct}%` : r.value.toLocaleString("pt-BR");
         return (
           <div key={r.label} className="flex flex-col items-center gap-1 flex-1 min-w-0">
-            {/* label acima da barra */}
-            <span className="text-xs font-bold tabular-nums" style={{ color }}>
-              {showPct ? `${pct}%` : r.value.toLocaleString("pt-BR")}
-            </span>
+            {/* valor acima da barra (oculto quando exibido dentro da barra) */}
+            {!valueInside && (
+              <span className="text-xs font-bold tabular-nums" style={{ color }}>
+                {valueText}
+              </span>
+            )}
             {/* barra */}
-            <div className="w-full max-w-[56px] flex items-end" style={{ height: "120px" }}>
+            <div className="w-full flex items-end" style={{ height: "120px", maxWidth: barMaxWidth }}>
               <div
-                className="w-full rounded-t-md transition-all duration-500"
+                className="w-full rounded-t-md transition-all duration-500 flex justify-center"
                 style={{ height: `${Math.max(height, 2)}%`, background: color }}
-              />
+              >
+                {valueInside && (
+                  <span className="text-xs font-bold tabular-nums text-white pt-1.5">
+                    {valueText}
+                  </span>
+                )}
+              </div>
             </div>
             {/* rótulo abaixo */}
             <span className="text-xs text-slate-500 text-center leading-tight line-clamp-2 w-full">{r.label}</span>

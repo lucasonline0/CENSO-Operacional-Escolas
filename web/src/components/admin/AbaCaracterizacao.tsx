@@ -10,7 +10,7 @@ import { apiFetch } from "./shared/api";
 import { C, PORTE_COLORS, ZONA_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
-import { HBarChart } from "./shared/BarChart";
+import { HBarChart, VBarChart } from "./shared/BarChart";
 import type {
   CaracterizacaoPerfilPg, CaracterizacaoDREPg, SheetMetrics,
   CaracterizacaoInfraEducacionalPg,
@@ -351,9 +351,13 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
                 Média de Essenciais por Porte
               </h3>
               {infraPg.media_essenciais_por_porte.length > 0 ? (
-                <HBarChart
+                <VBarChart
                   rows={infraPg.media_essenciais_por_porte.map((m) => ({ label: m.porte, value: m.media }))}
                   color="#2563EB"
+                  showPct={false}
+                  barMaxWidth={120}
+                  gapClass="gap-1"
+                  valueInside
                 />
               ) : (
                 <p className="text-sm text-slate-400">Sem dados de porte.</p>

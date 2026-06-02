@@ -45,7 +45,7 @@ Decisões registradas pelo time, válidas para todo o trabalho a partir desta br
 4. **Gestão Financeira e Governança** é **placeholder institucional**. Sem fetch, sem endpoint, sem view SQL, sem dado fake.
 5. **Gestão Financeira e Governança não deve consumir o banco PostgreSQL do formulário do censo** nesta rodada.
 6. A **fonte futura** de "Gestão Financeira / Governança" virá de **bases próprias validadas pelas coordenações responsáveis**, não do banco do censo operacional.
-7. As **5 abas temáticas já integradas em primeira versão** (Pessoal e Gestão Escolar, Tecnologia e Equipamentos, Infraestrutura e Segurança, Merenda Escolar, Serviços Terceirizados) **não devem receber novos gráficos** antes desta matriz mínima ser validada com as áreas finalísticas da SEDUC.
+7. As **5 abas temáticas já integradas em primeira versão** (Pessoal e Gestão Escolar, Tecnologia e Equipamentos, Infraestrutura e Segurança, Merenda Escolar, Serviços Terceirizados) **não devem receber gráficos inéditos** (fora do escopo do painel original) antes desta matriz mínima ser validada com as áreas finalísticas da SEDUC. **Exceção:** gráficos mínimos que já existiam no painel original (Data Studio/Looker Studio) e ainda não estão refletidos na aplicação podem ser **documentados como lacunas** nesta matriz e **implementados após diagnóstico técnico**, mesmo antes da validação — eles não são novidade de escopo, e sim recuperação da referência mínima. O caso de Tecnologia e Equipamentos (ver §5.3) é o primeiro a seguir esse caminho.
 
 ---
 
@@ -153,27 +153,35 @@ Endpoints: `/v1/admin/analytics/pessoal-gestao/{estrutura,coordenacao,quadro-pes
 
 ### 5.3 Tecnologia e Equipamentos
 
-Blocos oficiais:
+Blocos oficiais (3):
 - **Infraestrutura Digital**
 - **Parque Tecnológico**
 - **Uso Pedagógico**
 
 Endpoints: `/v1/admin/analytics/tecnologia/{infraestrutura,uso-pedagogico}` (view `0006_*`).
 
+> **Equivalência com o painel original (Data Studio/Looker Studio).** O painel original organizava o tema em dois blocos visuais — "Infraestrutura Digital e Capacidade Instalada" e "Uso Pedagógico e Adequação Tecnológica". A aplicação desdobrou o primeiro em dois blocos e manteve o segundo:
+>
+> - Data Studio: **Infraestrutura Digital e Capacidade Instalada** → Aplicação: **Infraestrutura Digital** + **Parque Tecnológico**.
+> - Data Studio: **Uso Pedagógico e Adequação Tecnológica** → Aplicação: **Uso Pedagógico**.
+>
+> Os três blocos atuais da aplicação ficam **mantidos**. A matriz mínima abaixo preserva os gráficos que existiam no painel original, distribuídos pelos três blocos. Itens que hoje existem apenas como KPI percentual, mas que no Data Studio eram exibidos como distribuição, ficam classificados como **parcial** (e não "presente"), porque a referência mínima exige a distribuição.
+
+A antiga seção "Infraestrutura Digital e Capacidade Instalada" do Data Studio foi desdobrada em "Infraestrutura Digital" e "Parque Tecnológico" na aplicação. A seção "Uso Pedagógico e Adequação Tecnológica" corresponde ao bloco "Uso Pedagógico".
+
 | Bloco | Gráficos mínimos | Fonte atual | Status | Lacuna backend | Lacuna frontend | Observações |
 |---|---|---|---|---|---|---|
-| Infraestrutura Digital | Escolas com internet (KPI %) | PG `/tecnologia/infraestrutura` | presente | — | — | — |
-| Infraestrutura Digital | Provedor de internet (donut/barra) | PG `/tecnologia/infraestrutura` | presente | — | — | — |
-| Infraestrutura Digital | Qualidade da internet (donut Boa/Regular/Ruim) | PG `/tecnologia/infraestrutura` | presente | Confirmar normalização das opções | — | — |
-| Infraestrutura Digital | Computadores atendem à demanda (KPI %) | PG `/tecnologia/infraestrutura` | presente | — | — | — |
-| Parque Tecnológico | Desktops administrativos (KPI total) | PG `/tecnologia/infraestrutura` | presente | — | — | — |
-| Parque Tecnológico | Desktops de alunos (KPI total) | PG `/tecnologia/infraestrutura` | presente | — | — | — |
-| Parque Tecnológico | Notebooks (KPI total) | PG `/tecnologia/infraestrutura` | presente | — | — | — |
-| Parque Tecnológico | Chromebooks (KPI total) | PG `/tecnologia/infraestrutura` | presente | — | — | — |
-| Parque Tecnológico | Computadores inoperantes (KPI total e %) | PG `/tecnologia/infraestrutura` | presente parcial | Confirmar payload | Confirmar render | — |
-| Uso Pedagógico | Escolas com projetor (KPI %) | PG `/tecnologia/uso-pedagogico` | presente | — | — | — |
-| Uso Pedagógico | Total de projetores (KPI) | PG `/tecnologia/uso-pedagogico` | presente | — | — | — |
-| Uso Pedagógico | Escolas com lousa digital (KPI %) | PG `/tecnologia/uso-pedagogico` | presente | — | — | — |
+| Infraestrutura Digital | Disponibilidade de internet — distribuição Sim/Não | PG `/tecnologia/infraestrutura` (`percentual_internet`, `escolas_com_internet`) | parcial | Endpoint só entrega KPI % e contagem; não há distribuição Sim/Não | Donut/barra Sim/Não a criar | Data Studio mostrava distribuição Sim/Não; hoje só KPI "Escolas com Internet" no resumo executivo. |
+| Infraestrutura Digital | Provedor de internet | PG `/tecnologia/infraestrutura` (`por_provedor`) | presente | — | — | Donut renderizado. |
+| Infraestrutura Digital | Qualidade da internet | PG `/tecnologia/infraestrutura` (`por_qualidade`) | presente | Confirmar normalização das opções | — | Donut renderizado. |
+| Parque Tecnológico | Quantidade mediana de equipamentos por escola | PG | planejado | View/endpoint não calculam mediana (hoje só `SUM` por tipo) | Componente a criar | Data Studio exibia mediana por escola por tipo (chromebook, desktop alunos, desktop adm, notebook). Lacuna backend + frontend. |
+| Parque Tecnológico | Distribuição do parque tecnológico (%) | PG `/tecnologia/infraestrutura` (totais por tipo) | planejado | Percentuais por tipo não calculados (só totais absolutos) | Gráfico de participação % a criar | Pode ser derivado dos totais já entregues; lacuna frontend (e backend se o % for calculado no servidor). |
+| Parque Tecnológico | Totais por tipo de equipamento | PG `/tecnologia/infraestrutura` (`total_desktops_adm`, `total_desktops_alunos`, `total_notebooks`, `total_chromebooks`) | presente | — | — | KPIs renderizados (desktops adm/alunos, notebooks, chromebooks). |
+| Parque Tecnológico | Computadores inoperantes (nº de escolas; % a confirmar) | PG `/tecnologia/infraestrutura` (`escolas_com_computadores_inoperantes`) | presente parcial | Número absoluto de escolas presente; percentual depende de denominador oficial (produto) | KPI % a criar se aprovado | Hoje só nº de escolas que declararam. Percentual = decisão de produto (denominador). |
+| Uso Pedagógico | Equipamentos atendem à demanda — distribuição Sim/Parcialmente/Não | PG `/tecnologia/infraestrutura` (`percentual_computadores_atendem`) | parcial | Endpoint só entrega % de "Sim"; não há distribuição Sim/Parcialmente/Não | Donut/barra de distribuição a criar | Data Studio mostrava as três categorias. |
+| Uso Pedagógico | Projetor multimídia — distribuição Sim/Não | PG `/tecnologia/uso-pedagogico` (`percentual_com_projetor`) | parcial | Endpoint só entrega KPI %; não há distribuição Sim/Não | Donut Sim/Não a criar | Data Studio mostrava distribuição Sim/Não. |
+| Uso Pedagógico | Lousa digital — distribuição Sim/Não | PG `/tecnologia/uso-pedagogico` (`percentual_com_lousa_digital`) | parcial | Endpoint só entrega KPI %; não há distribuição Sim/Não | Donut Sim/Não a criar | Data Studio mostrava distribuição Sim/Não. |
+| Uso Pedagógico | Quantidade média de projetores por escola | PG `/tecnologia/uso-pedagogico` (`total_projetores` + total de escolas) | planejado | Endpoint só entrega total de projetores e % com projetor; média por escola não exposta | KPI média a criar | Denominador (total de escolas do recorte) já disponível no backend; média pode ser calculada no servidor. |
 
 ### 5.4 Infraestrutura e Segurança
 
@@ -319,23 +327,29 @@ Estas abas **não recebem alteração nesta rodada**. Aparecem aqui para que a l
 
 Itens identificados na matriz como `planejado` ou `presente / a confirmar`. Não são compromisso imediato de PR — entram em backlog para a próxima rodada de validação com as áreas finalísticas.
 
-- **Caracterização — Infraestrutura Educacional:** definir critério oficial de "ambientes essenciais" e expor endpoint dedicado (% médio por escola, média por porte).
+- **Caracterização — Infraestrutura Educacional:** **entregue (CAR-INFRA-01)** — endpoint `/caracterizacao/infraestrutura-educacional` em produção com lista oficial inicial de ambientes essenciais. Resta apenas refino futuro da lista com produto (não bloqueante).
 - **Caracterização — Organização da Oferta:** confirmar exposição de etapas, modalidades, turnos no payload analítico atual ou criar recorte específico para a aba Caracterização.
 - **Infraestrutura — Energia/Climatização:** confirmar se `0008_vw_censo_infraestrutura_seguranca` expõe os campos `rede_eletrica_atende_demanda`, `estrutura_permite_climatizacao`, `climatizacao_salas` — caso contrário, expandir view/endpoint.
 - **Merenda — Estrutura Física:** confirmar se `condicoes_cozinha`, `possui_refeitorio`, `tamanho_cozinha` estão no payload atual ou requerem extensão.
 - **Serviços Terceirizados — Governança/Supervisão:** sem endpoint dedicado hoje. Avaliar criação de `/v1/admin/analytics/servicos-terceirizados/governanca` cobrindo presença de supervisor por serviço, avaliação da supervisão e avaliação dos serviços.
+- **Tecnologia — Parque Tecnológico:** gráficos mínimos do Data Studio ainda não totalmente refletidos — falta **mediana de equipamentos por escola** (hoje só `SUM` por tipo) e **distribuição do parque tecnológico (%)** por tipo. Prioridade média/alta.
+- **Tecnologia — Uso Pedagógico:** indicadores existem como KPIs, mas faltam as **distribuições Sim/Não** (projetor, lousa) e **Sim/Parcialmente/Não** (equipamentos atendem à demanda), além da **média de projetores por escola**. Prioridade média/alta.
+- **Tecnologia — Infraestrutura Digital:** "Disponibilidade de internet" hoje só como KPI %; o Data Studio exibia distribuição Sim/Não — backend não entrega a distribuição.
 - **Total de alunos com decimais (legado):** documentado em [criterios-contagem-e-qualidade-dados.md](criterios-contagem-e-qualidade-dados.md) §8; correção retroativa fora desta rodada.
 
 ### 7.2 Lacunas de frontend
 
-- **Caracterização — Infraestrutura Educacional:** criar versão sintética de "presença de ambientes" e KPI "cobertura de ambientes essenciais" dentro da aba Caracterização (sem duplicar conteúdo da aba Infraestrutura).
+- **Tecnologia e Equipamentos:** renderizar as distribuições/medianas mínimas do Data Studio (donuts Sim/Não de internet, projetor e lousa; Sim/Parcialmente/Não de "atendem à demanda"; distribuição (%) do parque; mediana e média de projetores) assim que o backend expuser o payload — ver §5.3.
 - **Confirmações pontuais ("presente / a confirmar"):** auditar visualmente cada Aba\*.tsx para confirmar render dos campos sinalizados na §5.
 - **Subabas como navegação interna:** não implementar nesta rodada. Hoje os blocos são seções verticais — manter assim até a matriz mínima ser validada.
-- **Sem novos gráficos** nas 5 abas temáticas integradas (Pessoal, Tecnologia, Infraestrutura, Merenda, Serviços) antes da validação com as áreas finalísticas.
+- **Sem gráficos inéditos** (fora do escopo do painel original) nas 5 abas temáticas integradas antes da validação com as áreas finalísticas. Gráficos mínimos do Data Studio ainda não refletidos (caso de Tecnologia) são exceção e podem ser implementados após diagnóstico técnico.
+
+> Caracterização — Infraestrutura Educacional **não consta mais** como lacuna de frontend: o bloco sintético de presença de ambientes, os KPIs de cobertura de essenciais e a média por porte já foram entregues em CAR-INFRA-01.
 
 ### 7.3 Lacunas de decisão de produto
 
-- **Definição oficial de "ambientes essenciais"** (Caracterização e Infraestrutura).
+- **Lista de "ambientes essenciais":** a lista oficial **inicial** já foi definida e entregue em CAR-INFRA-01 (Caracterização). Não é mais decisão bloqueante; resta apenas **refino futuro** com produto, que também alimentaria o indicador correlato na aba Infraestrutura e Segurança (§5.4, ainda `planejado`).
+- **Denominador oficial do percentual de computadores inoperantes** (Tecnologia — Parque Tecnológico).
 - **Escala oficial de avaliação** para Governança/Supervisão de Serviços Terceirizados.
 - **Fonte de dados futura para Perfil dos Alunos e Resultados** (planilha própria a indicar).
 - **Fonte de dados futura para Gestão Financeira e Governança** (base externa das coordenações responsáveis).

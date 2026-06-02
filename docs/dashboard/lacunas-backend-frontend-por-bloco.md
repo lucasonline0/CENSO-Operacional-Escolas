@@ -59,7 +59,8 @@ Observação metodológica: a auditoria foi feita por leitura estática do códi
 | Média | Merenda Escolar | Estrutura Física | Condições da cozinha e refeitório existem; tamanho da cozinha está na view, mas não no payload/frontend. | Backend + Frontend | Expor `tamanho_cozinha` no endpoint de oferta/estrutura e renderizar distribuição. |
 | Média | Caracterização da Rede | Dimensão e Perfil da Rede | Conteúdo principal existe, mas a tabela Detalhamento por DRE aparece depois dos anchors vazios de Oferta/Infra, não dentro do bloco correto. | Frontend | Reorganizar a posição/ancoragem da tabela sem mudar backend. |
 | Média | Pessoal e Gestão Escolar | Coordenação Pedagógica | Gráfico e KPI existem; a lista/tabela de áreas declaradas não existe separadamente. | Frontend | Decidir se o gráfico atual substitui a lista; se não, adicionar tabela simples. |
-| Média | Tecnologia e Equipamentos | Parque Tecnológico | Total de computadores inoperantes existe; percentual de inoperantes não é renderizado como KPI próprio. | Produto | Definir denominador oficial do percentual; depois ajustar frontend ou payload. |
+| Média/Alta | Tecnologia e Equipamentos | Parque Tecnológico | Gráficos mínimos do Data Studio ainda não totalmente refletidos: mediana por tipo e distribuição do parque tecnológico (%). Computadores inoperantes existem em nº de escolas; percentual depende de denominador. | Backend + Frontend / Produto | Calcular mediana por tipo e participação %; definir denominador do percentual de inoperantes. |
+| Média/Alta | Tecnologia e Equipamentos | Uso Pedagógico | Indicadores existem como KPIs, mas faltam distribuições Sim/Não (projetor, lousa) ou Sim/Parcialmente/Não (atendem à demanda) e média de projetores por escola. | Backend + Frontend | Expor distribuições e média de projetores; renderizar donuts/KPI. |
 | Baixa | Perfil dos Alunos e Resultados | Aba futura/externa | Implementação atual/legada por Google Sheets mantida. | Histórico/legado | Não incluir na rodada PostgreSQL do formulário. |
 | Baixa | Gestão Financeira e Governança | Aba futura/externa | Placeholder institucional sem fetch, endpoint ou view. | Fonte externa | Aguardar fonte validada pelas coordenações responsáveis. |
 
@@ -112,8 +113,8 @@ Diagnóstico B1:
 
 Endpoints recomendados para próxima rodada:
 
-- `GET /v1/admin/analytics/caracterizacao/oferta-funcionamento`
-- `GET /v1/admin/analytics/caracterizacao/infraestrutura-educacional`
+- `GET /v1/admin/analytics/caracterizacao/oferta-funcionamento` (recomendado)
+- `GET /v1/admin/analytics/caracterizacao/infraestrutura-educacional` — **já entregue (CAR-INFRA-01)**, listado aqui apenas para referência.
 
 ## 6. B2 — Abas temáticas integradas
 
@@ -136,20 +137,21 @@ Endpoints recomendados para próxima rodada:
 
 ### 6.2 Tecnologia e Equipamentos
 
+> **Referência mínima do Data Studio.** O painel original organizava o tema em "Infraestrutura Digital e Capacidade Instalada" e "Uso Pedagógico e Adequação Tecnológica". A aplicação desdobrou o primeiro em **Infraestrutura Digital** + **Parque Tecnológico** e manteve **Uso Pedagógico**. A auditoria abaixo foi revista para preservar os gráficos mínimos do painel original: indicadores que hoje existem apenas como KPI percentual, mas que no Data Studio eram distribuições, ficam classificados como **Parcial** (não "Sem lacuna"). Ver detalhamento técnico em `docs/dashboard/especificacao-entrega-dados-por-grafico.md` §6.5.
+
 | Bloco | Item mínimo | Menu/anchor | Frontend | Backend/payload | View/campo | Tipo de lacuna | Próxima ação | Frente sugerida |
 |---|---|---|---|---|---|---|---|---|
-| Infraestrutura Digital | Escolas com internet | Menu e `sec-tecnologia-digital` OK | KPI no resumo executivo | `/tecnologia/infraestrutura` entrega `percentual_internet` e `escolas_com_internet` | `vw_censo_equipamentos_tecnologia.internet_disponivel` | Sem lacuna | Manter | — |
-| Infraestrutura Digital | Provedor de internet | Menu e anchor OK | Barra renderizada | `/tecnologia/infraestrutura` entrega `por_provedor` | `vw_censo_equipamentos_tecnologia.provedor_internet` | Sem lacuna | Manter | — |
-| Infraestrutura Digital | Qualidade da internet | Menu e anchor OK | Donut renderizado | `/tecnologia/infraestrutura` entrega `por_qualidade` | `vw_censo_equipamentos_tecnologia.qualidade_internet` | Sem lacuna | Manter | — |
-| Infraestrutura Digital | Computadores atendem à demanda | Menu e anchor OK | KPI no resumo executivo | `/tecnologia/infraestrutura` entrega `percentual_computadores_atendem` | `vw_censo_equipamentos_tecnologia.computadores_atendem` | Sem lacuna | Manter | — |
-| Parque Tecnológico | Desktops administrativos | Menu e `sec-tecnologia-parque` OK | KPI renderizado | `/tecnologia/infraestrutura` entrega `total_desktops_adm` | `vw_censo_equipamentos_tecnologia.qtd_desktop_adm` | Sem lacuna | Manter | — |
-| Parque Tecnológico | Desktops de alunos | Menu e anchor OK | KPI renderizado | `/tecnologia/infraestrutura` entrega `total_desktops_alunos` | `vw_censo_equipamentos_tecnologia.qtd_desktop_alunos` | Sem lacuna | Manter | — |
-| Parque Tecnológico | Notebooks | Menu e anchor OK | KPI renderizado | `/tecnologia/infraestrutura` entrega `total_notebooks` | `vw_censo_equipamentos_tecnologia.qtd_notebooks` | Sem lacuna | Manter | — |
-| Parque Tecnológico | Chromebooks | Menu e anchor OK | KPI renderizado | `/tecnologia/infraestrutura` entrega `total_chromebooks` | `vw_censo_equipamentos_tecnologia.qtd_chromebooks` | Sem lacuna | Manter | — |
-| Parque Tecnológico | Computadores inoperantes | Menu e anchor OK | Total renderizado; percentual não renderizado | Payload traz total e totais do parque, mas não percentual oficial | `qtd_computadores_inoperantes` + equipamentos | Produto | Definir denominador do percentual; depois renderizar KPI percentual ou expor no payload | Produto/Dados |
-| Uso Pedagógico | Escolas com projetor | Menu e `sec-tecnologia-pedagogico` OK | KPI renderizado | `/tecnologia/uso-pedagogico` entrega `percentual_com_projetor` | `vw_censo_equipamentos_tecnologia.possui_projetor` | Sem lacuna | Manter | — |
-| Uso Pedagógico | Total de projetores | Menu e anchor OK | KPI renderizado | `/tecnologia/uso-pedagogico` entrega `total_projetores` | `vw_censo_equipamentos_tecnologia.qtd_projetores` | Sem lacuna | Manter | — |
-| Uso Pedagógico | Escolas com lousa digital | Menu e anchor OK | KPI renderizado | `/tecnologia/uso-pedagogico` entrega `percentual_com_lousa_digital` | `vw_censo_equipamentos_tecnologia.possui_lousa_digital` | Sem lacuna | Manter | — |
+| Infraestrutura Digital | Disponibilidade de internet — distribuição Sim/Não | Menu e `sec-tecnologia-digital` OK | Apenas KPI % no resumo executivo; sem distribuição Sim/Não | `/tecnologia/infraestrutura` entrega `percentual_internet` e `escolas_com_internet`, mas não a distribuição | `vw_censo_equipamentos_tecnologia.internet_disponivel` | Parcial — Backend + Frontend | Expor distribuição Sim/Não e renderizar donut/barra | Backend |
+| Infraestrutura Digital | Provedor de internet | Menu e anchor OK | Donut renderizado | `/tecnologia/infraestrutura` entrega `por_provedor` | `vw_censo_equipamentos_tecnologia.provedor_internet` | Sem lacuna | Manter | — |
+| Infraestrutura Digital | Qualidade da internet | Menu e anchor OK | Donut renderizado | `/tecnologia/infraestrutura` entrega `por_qualidade` | `vw_censo_equipamentos_tecnologia.qualidade_internet` | Sem lacuna | Manter; confirmar normalização das opções | — |
+| Parque Tecnológico | Quantidade mediana de equipamentos por escola | Menu e `sec-tecnologia-parque` OK | Não renderizado | Endpoint entrega apenas `SUM` por tipo, não mediana | `vw_censo_equipamentos_tecnologia.qtd_chromebooks`, `qtd_desktop_alunos`, `qtd_desktop_adm`, `qtd_notebooks` | Ausente — Backend + Frontend | Calcular `PERCENTILE_CONT(0.5)` por tipo e renderizar | Backend |
+| Parque Tecnológico | Distribuição do parque tecnológico (%) | Menu e anchor OK | Não renderizado | Totais por tipo existem; percentuais de participação não calculados | totais de desktops adm/alunos, notebooks, chromebooks | Ausente — Frontend (e Backend se calculado no servidor) | Calcular participação % de cada tipo e renderizar | Frontend |
+| Parque Tecnológico | Totais por tipo de equipamento | Menu e anchor OK | KPIs renderizados | `/tecnologia/infraestrutura` entrega `total_desktops_adm`, `total_desktops_alunos`, `total_notebooks`, `total_chromebooks` | `qtd_desktop_adm`, `qtd_desktop_alunos`, `qtd_notebooks`, `qtd_chromebooks` | Sem lacuna | Manter | — |
+| Parque Tecnológico | Computadores inoperantes — número absoluto e eventual percentual | Menu e anchor OK | Nº de escolas renderizado; percentual não renderizado | Payload traz nº de escolas (`escolas_com_computadores_inoperantes`), mas não percentual oficial | `qtd_computadores_inoperantes` + equipamentos | Parcial — Produto | Definir denominador do percentual; depois renderizar KPI percentual ou expor no payload | Produto/Dados |
+| Uso Pedagógico | Equipamentos atendem à demanda — distribuição Sim/Parcialmente/Não | Menu e `sec-tecnologia-pedagogico` OK | Apenas KPI % de "Sim" no resumo executivo | `/tecnologia/infraestrutura` entrega só `percentual_computadores_atendem` (% de "Sim") | `vw_censo_equipamentos_tecnologia.computadores_atendem` | Parcial — Backend + Frontend | Expor distribuição Sim/Parcialmente/Não e renderizar | Backend |
+| Uso Pedagógico | Projetor multimídia — distribuição Sim/Não | Menu e anchor OK | Apenas KPI % | `/tecnologia/uso-pedagogico` entrega só `percentual_com_projetor` | `vw_censo_equipamentos_tecnologia.possui_projetor` | Parcial — Backend + Frontend | Expor distribuição Sim/Não e renderizar donut | Backend |
+| Uso Pedagógico | Lousa digital — distribuição Sim/Não | Menu e anchor OK | Apenas KPI % | `/tecnologia/uso-pedagogico` entrega só `percentual_com_lousa_digital` | `vw_censo_equipamentos_tecnologia.possui_lousa_digital` | Parcial — Backend + Frontend | Expor distribuição Sim/Não e renderizar donut | Backend |
+| Uso Pedagógico | Quantidade média de projetores por escola | Menu e anchor OK | Não renderizado | Endpoint entrega `total_projetores` e `percentual_com_projetor`, mas não a média por escola | `vw_censo_equipamentos_tecnologia.qtd_projetores` | Ausente — Backend + Frontend (denominador já disponível) | Calcular `AVG(qtd_projetores)` e renderizar KPI | Backend |
 
 ### 6.3 Infraestrutura e Segurança
 
@@ -258,16 +260,19 @@ As tasks de implementação devem ser abertas a partir de `docs/dashboard/especi
 ### 8.1 Backend
 
 - Criar `GET /v1/admin/analytics/caracterizacao/oferta-funcionamento`, com etapas, modalidades, distribuição por turnos e média de turnos por porte.
-- Criar `GET /v1/admin/analytics/caracterizacao/infraestrutura-educacional`, reaproveitando `vw_censo_ambientes` após definição de ambientes essenciais.
+- Expandir `/tecnologia/infraestrutura` e `/tecnologia/uso-pedagogico` para refletir os gráficos mínimos do Data Studio (§6.2 e especificação §6.5): distribuição Sim/Não de internet, distribuição Sim/Parcialmente/Não de "atendem à demanda", distribuições Sim/Não de projetor e lousa, mediana por tipo de equipamento, distribuição (%) do parque e média de projetores por escola.
 - Expor energia/climatização/capacidade elétrica na aba Infraestrutura, preferencialmente em endpoint dedicado ou expansão controlada de `/infraestrutura/condicoes`.
 - Expor `tamanho_cozinha` na Merenda, idealmente em recorte de estrutura física.
 - Criar `GET /v1/admin/analytics/servicos-terceirizados/governanca`, cobrindo supervisor por serviço e avaliações.
 - Avaliar padronização de filtros (`year`, `dre`, `municipio`, `zona`, `porte_escola`) nos endpoints de Infraestrutura, Merenda e Serviços.
 
+> Caracterização / Infraestrutura Educacional (`/caracterizacao/infraestrutura-educacional`) já foi entregue em CAR-INFRA-01, com a lista oficial inicial de ambientes essenciais. Não consta mais como backlog de backend; resta apenas refino futuro da lista com produto.
+
 ### 8.2 Frontend
 
 - Reorganizar a tabela Detalhamento por DRE dentro do bloco Dimensão e Perfil da Rede.
-- Renderizar conteúdo real nos anchors vazios de Caracterização: `sec-perfil-oferta` e `sec-perfil-infra`.
+- Renderizar conteúdo real no anchor vazio de Caracterização `sec-perfil-oferta` (o anchor `sec-perfil-infra` já foi entregue em CAR-INFRA-01).
+- Renderizar as distribuições/medianas de Tecnologia (donuts Sim/Não, distribuição do parque, médias) quando o backend expuser o payload.
 - Substituir empty state de Infraestrutura/Energia por KPIs/gráficos quando o backend expuser payload.
 - Renderizar distribuição de tamanho da cozinha em Merenda.
 - Substituir empty state de Serviços/Governança quando houver endpoint.
@@ -275,9 +280,9 @@ As tasks de implementação devem ser abertas a partir de `docs/dashboard/especi
 
 ### 8.3 Produto/Dados externos
 
-- Definir lista oficial de ambientes essenciais.
 - Definir denominador oficial do percentual de computadores inoperantes.
 - Definir escala oficial de avaliação de supervisão/serviços terceirizados.
+- Refino futuro (não bloqueante): revisar a lista oficial inicial de ambientes essenciais já entregue em CAR-INFRA-01.
 - Definir fonte futura de Perfil dos Alunos e Resultados.
 - Definir fonte futura de Gestão Financeira e Governança.
 
@@ -292,8 +297,10 @@ As tasks de implementação devem ser abertas a partir de `docs/dashboard/especi
 | Frente | Responsável sugerido | Escopo | Arquivos prováveis | Dependências |
 |---|---|---|---|---|
 | Backend Caracterização Oferta | Backend | Endpoint de oferta/funcionamento; parsing/normalização de etapas, modalidades e turnos | `api/cmd/api/analytics.go`, possíveis migrations novas, espelhos em `api/cmd/api/migrations/` | Definir cálculo de média de turnos por porte |
-| Backend Caracterização Infra | Backend + Produto | Endpoint de infraestrutura educacional baseado em ambientes | `api/cmd/api/analytics.go`, `infra/migrations/0007_*` ou migration nova | Lista oficial de ambientes essenciais |
-| Frontend Caracterização | Frontend | Reorganizar Detalhamento por DRE e renderizar blocos Oferta/Infra quando houver payload | `web/src/components/admin/AbaCaracterizacao.tsx` | Endpoints de Caracterização |
+| ~~Backend Caracterização Infra~~ **Entregue (CAR-INFRA-01)** | Backend + Produto | Endpoint de infraestrutura educacional baseado em ambientes — entregue, com lista oficial inicial de essenciais | `api/cmd/api/analytics.go` | Refino futuro da lista com produto (não bloqueante) |
+| Backend Tecnologia (Data Studio) | Backend | Distribuições Sim/Não e Sim/Parcialmente/Não, mediana por tipo, distribuição (%) do parque, média de projetores | `api/cmd/api/analytics_pessoal_tecnologia.go` | Denominador do percentual de computadores inoperantes (produto) |
+| Frontend Caracterização | Frontend | Reorganizar Detalhamento por DRE e renderizar o bloco Oferta quando houver payload (Infra já entregue) | `web/src/components/admin/AbaCaracterizacao.tsx` | Endpoint de oferta/funcionamento |
+| Frontend Tecnologia (Data Studio) | Frontend | Renderizar donuts/distribuições/médias de Tecnologia | `web/src/components/admin/AbaTecnologia.tsx` | Payload expandido de Tecnologia |
 | Backend Infra Energia | Backend | Expor rede elétrica, estrutura de climatização e climatização das salas | `api/cmd/api/analytics_infra_merenda_servicos.go`, possivelmente migrations/views | Confirmar semântica dos campos elétricos |
 | Frontend Infra Energia | Frontend | Substituir empty state por KPIs/gráficos | `web/src/components/admin/AbaInfraestruturaSeguranca.tsx` | Payload de energia/climatização |
 | Backend Merenda Estrutura | Backend | Expor distribuição de tamanho da cozinha | `api/cmd/api/analytics_infra_merenda_servicos.go` | Campo já existe em `vw_censo_equipamentos_merenda` |
@@ -304,11 +311,12 @@ As tasks de implementação devem ser abertas a partir de `docs/dashboard/especi
 
 ## 10. Próxima ordem recomendada
 
-1. Validar com produto a lista de ambientes essenciais, o denominador de computadores inoperantes e a escala de avaliação de serviços.
+1. Validar com produto o denominador de computadores inoperantes (Tecnologia) e a escala de avaliação de serviços. (A lista de ambientes essenciais já foi definida e entregue em CAR-INFRA-01; resta apenas refino opcional.)
 2. Fazer PR backend pequeno para `caracterizacao/oferta-funcionamento`.
 3. Fazer PR frontend para preencher o bloco Organização da Oferta e reposicionar Detalhamento por DRE.
-4. Fazer PR backend pequeno para Energia/Climatização em Infraestrutura.
-5. Fazer PR frontend para substituir o empty state de Energia.
-6. Fazer PR backend/frontend para `tamanho_cozinha` em Merenda.
-7. Fazer PR backend/frontend para Governança/Supervisão de Serviços Terceirizados após decisão da escala.
-8. Manter Perfil dos Alunos e Gestão Financeira/Governança fora da rodada PostgreSQL até definição de fonte externa.
+4. Fazer PR backend/frontend de Tecnologia conforme Data Studio (distribuições, mediana, distribuição do parque, média de projetores).
+5. Fazer PR backend pequeno para Energia/Climatização em Infraestrutura.
+6. Fazer PR frontend para substituir o empty state de Energia.
+7. Fazer PR backend/frontend para `tamanho_cozinha` em Merenda.
+8. Fazer PR backend/frontend para Governança/Supervisão de Serviços Terceirizados após decisão da escala.
+9. Manter Perfil dos Alunos e Gestão Financeira/Governança fora da rodada PostgreSQL até definição de fonte externa.

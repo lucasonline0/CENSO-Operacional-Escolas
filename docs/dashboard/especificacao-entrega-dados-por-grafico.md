@@ -224,10 +224,10 @@ Dependia de aba auxiliar que expandia a lista de ambientes declarados por escola
 `vw_censo_ambientes`, criada pela migration `0007_vw_censo_ambientes.sql`, com uma linha por `school_id + year + ambiente`.
 
 **View ou transformação necessária**  
-A view existente é suficiente para presença de ambientes. Falta uma query/endpoint sintético dentro de Caracterização, usando `COUNT(DISTINCT school_id) GROUP BY ambiente` e percentual sobre o total do recorte.
+A view existente já é suficiente. O endpoint sintético dentro de Caracterização foi implementado (CAR-INFRA-01), usando `COUNT(DISTINCT school_id) GROUP BY ambiente` e percentual sobre o total do recorte.
 
 **Endpoint necessário**  
-Novo endpoint recomendado: `GET /v1/admin/analytics/caracterizacao/infraestrutura-educacional`.
+Entregue: `GET /v1/admin/analytics/caracterizacao/infraestrutura-educacional`.
 
 **Payload esperado**  
 ```ts
@@ -241,16 +241,16 @@ Novo endpoint recomendado: `GET /v1/admin/analytics/caracterizacao/infraestrutur
 ```
 
 **Frontend necessário**  
-Renderizar em `AbaCaracterizacao.tsx`, anchor `sec-perfil-infra`, como bloco sintético sem duplicar a profundidade da aba Infraestrutura e Segurança.
+Entregue: renderizado em `AbaCaracterizacao.tsx`, anchor `sec-perfil-infra`, como bloco sintético sem duplicar a profundidade da aba Infraestrutura e Segurança.
 
 **Dependências de produto/dados**  
-Confirmar se o gráfico deve exibir todos os ambientes ou apenas Top N.
+Refino futuro: confirmar com produto se o gráfico deve exibir todos os ambientes ou apenas Top N.
 
 **Tipo de lacuna**  
-Backend + Frontend.
+Entregue (CAR-INFRA-01).
 
 **Próxima ação recomendada**  
-Criar endpoint de infraestrutura educacional usando `vw_censo_ambientes` e renderizar gráfico sintético na Caracterização.
+Nenhuma ação obrigatória. Refino futuro de apresentação (Top N vs. todos os ambientes) com a área de produto.
 
 #### 5.2.2 Cobertura de ambientes essenciais — **entregue com lista oficial inicial**
 
@@ -261,13 +261,13 @@ Indicadores de cobertura dos ambientes considerados essenciais: média de essenc
 Dependia de aba auxiliar com marcação de essencialidade ou cálculo equivalente por escola.
 
 **Origem provável do dado no banco**  
-`vw_censo_ambientes` para presença; `vw_censo_enriquecida.porte_escola_nome` se houver recorte por porte. Falta a lista oficial de ambientes essenciais.
+`vw_censo_ambientes` para presença; `vw_censo_enriquecida.porte_escola_nome` para recorte por porte. A lista oficial inicial de ambientes essenciais já foi definida e entregue (ver Status acima).
 
 **View ou transformação necessária**  
-Criar transformação derivada que marque `is_essencial` com base em lista oficial. Depois calcular, por escola: `qtd_ambientes_essenciais_presentes`, `percentual_cobertura_essenciais` e `faixa_cobertura`.
+Entregue: o endpoint marca `is_essencial` com base na lista oficial inicial e calcula, por escola, `qtd_ambientes_essenciais_presentes`, `percentual_cobertura_essenciais` e `faixa_cobertura`.
 
 **Endpoint necessário**  
-`GET /v1/admin/analytics/caracterizacao/infraestrutura-educacional`.
+Entregue: `GET /v1/admin/analytics/caracterizacao/infraestrutura-educacional`.
 
 **Payload esperado**  
 ```ts
@@ -285,16 +285,16 @@ Criar transformação derivada que marque `is_essencial` com base em lista ofici
 ```
 
 **Frontend necessário**  
-Renderizar KPI(s) e distribuição em `AbaCaracterizacao.tsx`, anchor `sec-perfil-infra`.
+Entregue: KPIs + donut de faixas + modal informativo em `AbaCaracterizacao.tsx`, anchor `sec-perfil-infra`.
 
 **Dependências de produto/dados**  
-Definir a lista oficial de ambientes essenciais. Sem essa decisão, qualquer cálculo será arbitrário.
+Refino futuro: revisar a lista oficial de ambientes essenciais com a área de produto. A lista inicial já está em produção.
 
 **Tipo de lacuna**  
-Produto, depois Backend + Frontend.
+Entregue (CAR-INFRA-01).
 
 **Próxima ação recomendada**  
-Abrir task de produto para validar a lista de essenciais antes de implementar SQL.
+Nenhuma ação obrigatória. Refino futuro da lista de essenciais com produto.
 
 #### 5.2.3 Média de ambientes essenciais por porte — **entregue com lista oficial inicial**
 
@@ -305,13 +305,13 @@ Média de ambientes essenciais presentes por escola em cada faixa de porte.
 Dependia do mesmo cálculo intermediário de essencialidade por escola, depois agrupado por porte.
 
 **Origem provável do dado no banco**  
-`vw_censo_ambientes` + `vw_censo_enriquecida.porte_escola_nome`, após existir regra oficial de ambientes essenciais.
+`vw_censo_ambientes` + `vw_censo_enriquecida.porte_escola_nome`, com a regra oficial inicial de ambientes essenciais já aplicada.
 
 **View ou transformação necessária**  
-Transformação por escola com contagem de essenciais presentes e agregação `AVG(qtd_essenciais_presentes) GROUP BY porte_escola_nome`.
+Entregue: contagem de essenciais presentes por escola e agregação `AVG(qtd_essenciais_presentes) GROUP BY porte_escola_nome`.
 
 **Endpoint necessário**  
-`GET /v1/admin/analytics/caracterizacao/infraestrutura-educacional`.
+Entregue: `GET /v1/admin/analytics/caracterizacao/infraestrutura-educacional`.
 
 **Payload esperado**  
 ```ts
@@ -324,16 +324,16 @@ Transformação por escola com contagem de essenciais presentes e agregação `A
 ```
 
 **Frontend necessário**  
-Renderizar tabela compacta ou barra em `AbaCaracterizacao.tsx`, anchor `sec-perfil-infra`.
+Entregue: barra por porte em `AbaCaracterizacao.tsx`, anchor `sec-perfil-infra`.
 
 **Dependências de produto/dados**  
-Mesma lista oficial de ambientes essenciais do item anterior.
+Refino futuro: mesma revisão da lista oficial de essenciais do item anterior.
 
 **Tipo de lacuna**  
-Produto, depois Backend + Frontend.
+Entregue (CAR-INFRA-01).
 
 **Próxima ação recomendada**  
-Implementar somente depois da lista de essenciais e do endpoint sintético de infraestrutura educacional.
+Nenhuma ação obrigatória. Eventual refino acompanha a revisão da lista de essenciais.
 
 ### 5.3 Infraestrutura e Segurança — Energia, Climatização e Capacidade Elétrica
 
@@ -754,6 +754,333 @@ Produto.
 **Próxima ação recomendada**  
 Abrir decisão de produto sobre denominador antes de qualquer alteração backend/frontend.
 
+### 6.5 Tecnologia e Equipamentos — Gráficos mínimos do Data Studio
+
+> **Contexto.** O painel original (Data Studio/Looker Studio) organizava o tema em dois blocos visuais — "Infraestrutura Digital e Capacidade Instalada" e "Uso Pedagógico e Adequação Tecnológica". A aplicação desdobrou o primeiro em **Infraestrutura Digital** + **Parque Tecnológico** e manteve **Uso Pedagógico**. Esta seção detalha tecnicamente os gráficos mínimos do painel original que hoje estão **parciais** (existem como KPI, mas não como distribuição) ou **ausentes**. Vários indicadores já existem como percentual/KPI; a referência mínima do Data Studio exige a distribuição completa, por isso ficam classificados como pendentes. Esta seção é **somente documental** — não implementa endpoints, views nem frontend.
+>
+> Os endpoints existentes (`/v1/admin/analytics/tecnologia/{infraestrutura,uso-pedagogico}`) usam `CategoricStat` com o campo `valor`; novos contratos podem mapear `valor`→`label` no frontend ou padronizar o payload novo. As assinaturas de payload abaixo descrevem o contrato lógico desejado, não o formato atual.
+
+#### 6.5.1 Disponibilidade de internet
+
+**O que o gráfico deve mostrar**  
+Distribuição de escolas com e sem internet (Sim/Não), com contagem e percentual sobre o total de escolas do recorte.
+
+**Como era tratado na planilha/painel original**  
+Exibido como distribuição Sim/Não no bloco "Infraestrutura Digital e Capacidade Instalada", não apenas como KPI percentual.
+
+**Origem provável do dado no banco**  
+`vw_censo_equipamentos_tecnologia.internet_disponivel` (boolean), derivado de `census_responses.data`.
+
+**View ou transformação necessária**  
+A view já expõe o campo booleano. Falta agregar a distribuição Sim/Não no endpoint (hoje só há `percentual_internet` e `escolas_com_internet`).
+
+**Endpoint necessário**  
+Expandir `GET /v1/admin/analytics/tecnologia/infraestrutura`.
+
+**Payload esperado**  
+```ts
+{
+  disponibilidade_internet: Array<{
+    label: "Sim" | "Não";
+    escolas: number;
+    percentual: number;
+  }>;
+}
+```
+
+**Frontend necessário**  
+Renderizar donut/barra Sim/Não em `web/src/components/admin/AbaTecnologia.tsx`, anchor `sec-tecnologia-digital`, sem remover o KPI "Escolas com Internet".
+
+**Dependências de produto/dados**  
+Confirmar tratamento de respostas vazias/não informadas (entram como "Não" ou categoria própria).
+
+**Tipo de lacuna**  
+Backend + Frontend.
+
+**Próxima ação recomendada**  
+Expor a distribuição Sim/Não no payload de infraestrutura e renderizar o donut.
+
+#### 6.5.2 Quantidade mediana de equipamentos por escola
+
+**O que o gráfico deve mostrar**  
+Mediana por escola para Chromebook, Desktop uso de alunos, Desktop administrativo e Notebook.
+
+**Como era tratado na planilha/painel original**  
+Estatística de mediana por escola e por tipo de equipamento, no bloco de capacidade instalada.
+
+**Origem provável do dado no banco**  
+`vw_censo_equipamentos_tecnologia.qtd_chromebooks`, `qtd_desktop_alunos`, `qtd_desktop_adm`, `qtd_notebooks`.
+
+**View ou transformação necessária**  
+A view já expõe as quantidades por escola. Hoje o endpoint só calcula `SUM` por tipo. Cálculo sugerido para a mediana:
+
+```sql
+PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY campo)
+```
+
+por tipo de equipamento, sobre escolas concluídas no recorte.
+
+**Endpoint necessário**  
+Expandir `GET /v1/admin/analytics/tecnologia/infraestrutura`.
+
+**Payload esperado**  
+```ts
+{
+  mediana_equipamentos_por_escola: Array<{
+    label: string;   // ex.: "Chromebook", "Desktop alunos", "Desktop administrativo", "Notebook"
+    mediana: number;
+  }>;
+}
+```
+
+**Frontend necessário**  
+Renderizar barra/tabela em `AbaTecnologia.tsx`, anchor `sec-tecnologia-parque`.
+
+**Dependências de produto/dados**  
+Confirmar se escolas que declararam zero entram no cálculo da mediana ou se há recorte por escolas que possuem o equipamento.
+
+**Tipo de lacuna**  
+Backend + Frontend.
+
+**Próxima ação recomendada**  
+Adicionar a mediana por tipo ao payload de infraestrutura e renderizar.
+
+#### 6.5.3 Distribuição do parque tecnológico (%)
+
+**O que o gráfico deve mostrar**  
+Participação percentual de cada tipo de equipamento no total do parque tecnológico declarado.
+
+**Como era tratado na planilha/painel original**  
+Distribuição percentual (%) do parque por tipo de equipamento.
+
+**Origem provável do dado no banco**  
+Totais de desktops administrativos, desktops de alunos, notebooks e chromebooks, já entregues como `SUM` no endpoint atual.
+
+**View ou transformação necessária**  
+Nenhuma view nova obrigatória. O percentual pode ser calculado a partir dos totais já existentes (no frontend ou no servidor): `quantidade_tipo / soma_total_parque`.
+
+**Endpoint necessário**  
+Pode ser derivado no frontend a partir do payload atual de `GET /v1/admin/analytics/tecnologia/infraestrutura`; alternativamente, expor o percentual já calculado no servidor.
+
+**Payload esperado**  
+```ts
+{
+  distribuicao_parque_tecnologico: Array<{
+    label: string;
+    quantidade: number;
+    percentual: number;
+  }>;
+}
+```
+
+**Frontend necessário**  
+Renderizar donut/barra de participação % em `AbaTecnologia.tsx`, anchor `sec-tecnologia-parque`.
+
+**Dependências de produto/dados**  
+Confirmar quais tipos compõem o "total do parque" (mesma decisão que afeta o denominador de computadores inoperantes).
+
+**Tipo de lacuna**  
+Frontend (e Backend se o percentual for calculado no servidor).
+
+**Próxima ação recomendada**  
+Decidir onde calcular o percentual e renderizar o gráfico de participação.
+
+#### 6.5.4 Equipamentos atendem à demanda
+
+**O que o gráfico deve mostrar**  
+Distribuição Sim / Parcialmente / Não sobre a resposta das escolas.
+
+**Como era tratado na planilha/painel original**  
+Distribuição categórica com três respostas, no bloco "Uso Pedagógico e Adequação Tecnológica".
+
+**Origem provável do dado no banco**  
+`vw_censo_equipamentos_tecnologia.computadores_atendem`.
+
+**View ou transformação necessária**  
+A view já expõe o campo categórico. Hoje o endpoint só calcula `percentual_computadores_atendem` (% de "Sim"). Falta agregar a distribuição completa.
+
+**Endpoint necessário**  
+Expandir `GET /v1/admin/analytics/tecnologia/infraestrutura`.
+
+**Payload esperado**  
+```ts
+{
+  computadores_atendem_demanda: Array<{
+    label: string;   // "Sim" | "Parcialmente" | "Não" (conforme normalização)
+    escolas: number;
+    percentual: number;
+  }>;
+}
+```
+
+**Frontend necessário**  
+Renderizar donut/barra em `AbaTecnologia.tsx`, anchor `sec-tecnologia-pedagogico`, sem remover o KPI atual de "Computadores Atendem".
+
+**Dependências de produto/dados**  
+Confirmar as categorias oficiais e a normalização de variações textuais ("Parcialmente", "Em parte", etc.).
+
+**Tipo de lacuna**  
+Backend + Frontend.
+
+**Próxima ação recomendada**  
+Expor a distribuição Sim/Parcialmente/Não e renderizar.
+
+#### 6.5.5 Projetor multimídia
+
+**O que o gráfico deve mostrar**  
+Distribuição Sim / Não sobre escolas que possuem projetor multimídia.
+
+**Como era tratado na planilha/painel original**  
+Distribuição Sim/Não no bloco de uso pedagógico.
+
+**Origem provável do dado no banco**  
+`vw_censo_equipamentos_tecnologia.possui_projetor` (boolean).
+
+**View ou transformação necessária**  
+A view já expõe o campo. Hoje o endpoint só calcula `percentual_com_projetor`. Falta agregar a distribuição Sim/Não.
+
+**Endpoint necessário**  
+Expandir `GET /v1/admin/analytics/tecnologia/uso-pedagogico`.
+
+**Payload esperado**  
+```ts
+{
+  possui_projetor: Array<{
+    label: "Sim" | "Não";
+    escolas: number;
+    percentual: number;
+  }>;
+}
+```
+
+**Frontend necessário**  
+Renderizar donut Sim/Não em `AbaTecnologia.tsx`, anchor `sec-tecnologia-pedagogico`, sem remover o KPI atual.
+
+**Dependências de produto/dados**  
+Confirmar tratamento de não informado.
+
+**Tipo de lacuna**  
+Backend + Frontend.
+
+**Próxima ação recomendada**  
+Expor a distribuição Sim/Não e renderizar o donut.
+
+#### 6.5.6 Lousa digital
+
+**O que o gráfico deve mostrar**  
+Distribuição Sim / Não sobre escolas que possuem lousa digital.
+
+**Como era tratado na planilha/painel original**  
+Distribuição Sim/Não no bloco de uso pedagógico.
+
+**Origem provável do dado no banco**  
+`vw_censo_equipamentos_tecnologia.possui_lousa_digital` (boolean).
+
+**View ou transformação necessária**  
+A view já expõe o campo. Hoje o endpoint só calcula `percentual_com_lousa_digital`. Falta agregar a distribuição Sim/Não.
+
+**Endpoint necessário**  
+Expandir `GET /v1/admin/analytics/tecnologia/uso-pedagogico`.
+
+**Payload esperado**  
+```ts
+{
+  possui_lousa_digital: Array<{
+    label: "Sim" | "Não";
+    escolas: number;
+    percentual: number;
+  }>;
+}
+```
+
+**Frontend necessário**  
+Renderizar donut Sim/Não em `AbaTecnologia.tsx`, anchor `sec-tecnologia-pedagogico`, sem remover o KPI atual.
+
+**Dependências de produto/dados**  
+Confirmar tratamento de não informado.
+
+**Tipo de lacuna**  
+Backend + Frontend.
+
+**Próxima ação recomendada**  
+Expor a distribuição Sim/Não e renderizar o donut.
+
+#### 6.5.7 Quantidade média de projetores por escola
+
+**O que o gráfico deve mostrar**  
+Média de projetores por escola no recorte.
+
+**Como era tratado na planilha/painel original**  
+Média por escola exibida como indicador no bloco de uso pedagógico.
+
+**Origem provável do dado no banco**  
+`vw_censo_equipamentos_tecnologia.qtd_projetores`.
+
+**View ou transformação necessária**  
+A view já expõe a quantidade por escola. Hoje o endpoint entrega `total_projetores` e `percentual_com_projetor`, mas não a média. Cálculo sugerido:
+
+```sql
+AVG(qtd_projetores)
+```
+
+sobre escolas concluídas no recorte (denominador — total de escolas — já disponível no backend).
+
+**Endpoint necessário**  
+Expandir `GET /v1/admin/analytics/tecnologia/uso-pedagogico`.
+
+**Payload esperado**  
+```ts
+{
+  media_projetores_por_escola: number;
+}
+```
+
+**Frontend necessário**  
+Renderizar KPI em `AbaTecnologia.tsx`, anchor `sec-tecnologia-pedagogico`, ao lado de "Total de Projetores".
+
+**Dependências de produto/dados**  
+Confirmar se a média considera todas as escolas concluídas ou apenas escolas que possuem projetor.
+
+**Tipo de lacuna**  
+Backend + Frontend.
+
+**Próxima ação recomendada**  
+Expor `media_projetores_por_escola` no payload e renderizar KPI.
+
+#### 6.5.8 Computadores inoperantes
+
+**O que o gráfico deve mostrar**  
+Número de escolas com computadores inoperantes e, se aprovado, percentual correspondente.
+
+**Como era tratado na planilha/painel original**  
+Indicador de escolas com computadores inoperantes no bloco de uso pedagógico/adequação tecnológica.
+
+**Origem provável do dado no banco**  
+`vw_censo_equipamentos_tecnologia.qtd_computadores_inoperantes`.
+
+**View ou transformação necessária**  
+O número absoluto de escolas já é entregue (`escolas_com_computadores_inoperantes`). O percentual depende de decisão de produto sobre o denominador. Ver também §6.4.1, que trata do percentual de computadores inoperantes sobre o parque.
+
+**Endpoint necessário**  
+Número absoluto já entregue por `GET /v1/admin/analytics/tecnologia/infraestrutura`; percentual exigiria expansão após decisão de produto.
+
+**Payload esperado**  
+```ts
+{
+  escolas_com_computadores_inoperantes: number;
+  percentual_computadores_inoperantes?: number; // se aprovado
+}
+```
+
+**Dependências de produto/dados**  
+Definir se o percentual deve usar como denominador todas as escolas ou apenas escolas com algum computador declarado.
+
+**Tipo de lacuna**  
+Presente (número absoluto) / Produto (percentual).
+
+**Próxima ação recomendada**  
+Manter o número absoluto; decidir o denominador antes de expor o percentual.
+
 ## 7. Itens fora da rodada PostgreSQL atual
 
 ### 7.1 Perfil dos Alunos e Resultados
@@ -793,16 +1120,17 @@ A fonte futura deve vir de bases próprias validadas pelas coordenações respon
 
 ## 10. Ordem técnica recomendada
 
+> Caracterização / Infraestrutura Educacional já foi entregue (CAR-INFRA-01), incluindo a lista oficial inicial de ambientes essenciais. Não consta mais como decisão de produto bloqueante nem como tarefa de implementação futura — apenas refino opcional da lista com produto.
+
 1. Validar decisões de produto bloqueantes:
-   - ambientes essenciais;
-   - denominador de computadores inoperantes;
-   - escala de avaliação dos serviços.
+   - denominador de computadores inoperantes (Tecnologia);
+   - escala de avaliação dos serviços (Serviços Terceirizados).
 
 2. Implementar backend de Caracterização / Oferta e Funcionamento.
 
 3. Implementar frontend de Caracterização / Oferta e reposicionar Detalhamento por DRE.
 
-4. Implementar backend de Caracterização / Infraestrutura Educacional após lista de essenciais.
+4. Implementar Tecnologia conforme Data Studio (§6.5): distribuições Sim/Não (internet, projetor, lousa) e Sim/Parcialmente/Não (atendem à demanda), mediana e distribuição (%) do parque, média de projetores por escola.
 
 5. Implementar backend/frontend de Energia e Climatização.
 

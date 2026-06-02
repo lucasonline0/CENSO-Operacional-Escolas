@@ -71,21 +71,31 @@ export function HBarChart({
   rows,
   unit = "",
   color = C.primary,
+  labelWidth = "5rem",
+  rowGap = "0.5rem",
 }: {
   rows: { label: string; value: number; pct?: number; display?: string; trailing?: string }[];
   unit?: string;
   color?: string;
+  // Largura (CSS) da coluna de rótulos. Default `5rem` (equivalente ao histórico
+  // `w-20`). Aplicada via style inline — e não por classe Tailwind dinâmica — para
+  // garantir o alinhamento à direita mesmo com rótulos longos. Aumentar quando os
+  // rótulos forem extensos para evitar quebra/desalinhamento.
+  labelWidth?: string;
+  // Espaçamento vertical (CSS gap) entre as linhas. Default `0.5rem` (equivalente
+  // ao histórico `space-y-2`). Aumentar quando os rótulos quebram em várias linhas.
+  rowGap?: string;
 }) {
   const max = Math.max(...rows.map((r) => r.value), 1);
   const showPct      = rows.some((r) => r.pct      !== undefined);
   const showTrailing = rows.some((r) => r.trailing !== undefined);
   return (
-    <div className="space-y-2 w-full">
+    <div className="flex flex-col w-full" style={{ gap: rowGap }}>
       {rows.map((r) => {
         const barWidth = (r.value / max) * 100;
         return (
           <div key={r.label} className="flex items-center gap-3 text-sm">
-            <span className="w-20 shrink-0 text-right text-slate-500 text-xs">{r.label}</span>
+            <span className="shrink-0 text-right text-slate-500 text-xs" style={{ width: labelWidth }}>{r.label}</span>
             <div className="flex-1 h-6 bg-slate-100 rounded relative overflow-hidden">
               <div
                 className="h-full rounded transition-all duration-500"

@@ -246,25 +246,37 @@ export interface QuadroPessoal {
 
 // Frente 1 — Tecnologia e Equipamentos.
 // Payloads de /v1/admin/analytics/tecnologia/{infraestrutura,uso-pedagogico}.
+export interface MediaEquipamentoStat {
+  valor: string;
+  media: number;
+}
+
 export interface TecnologiaInfra {
   escolas_com_internet: number;
   percentual_internet: number;
+  disponibilidade_internet: CategoricStat[];
   por_provedor: CategoricStat[];
   por_qualidade: CategoricStat[];
   total_desktops_adm: number;
   total_desktops_alunos: number;
   total_notebooks: number;
   total_chromebooks: number;
+  media_equipamentos_por_escola: MediaEquipamentoStat[];
   escolas_com_computadores_inoperantes: number;
+  total_computadores_inoperantes: number;
   percentual_computadores_atendem: number;
+  computadores_atendem_demanda: CategoricStat[];
 }
 
 export interface TecnologiaUso {
   escolas_com_projetor: number;
   percentual_com_projetor: number;
+  possui_projetor_dist: CategoricStat[];
   total_projetores: number;
+  media_projetores_por_escola: number;
   escolas_com_lousa_digital: number;
   percentual_com_lousa_digital: number;
+  possui_lousa_digital_dist: CategoricStat[];
 }
 
 // Caracterização da Rede — Organização da Oferta e Funcionamento.

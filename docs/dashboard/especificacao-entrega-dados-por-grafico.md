@@ -759,6 +759,8 @@ Abrir decisão de produto sobre denominador antes de qualquer alteração backen
 > **Contexto.** O painel original (Data Studio/Looker Studio) organizava o tema em dois blocos visuais — "Infraestrutura Digital e Capacidade Instalada" e "Uso Pedagógico e Adequação Tecnológica". A aplicação desdobrou o primeiro em **Infraestrutura Digital** + **Parque Tecnológico** e manteve **Uso Pedagógico**. Esta seção detalha tecnicamente os gráficos mínimos do painel original que hoje estão **parciais** (existem como KPI, mas não como distribuição) ou **ausentes**. Vários indicadores já existem como percentual/KPI; a referência mínima do Data Studio exige a distribuição completa, por isso ficam classificados como pendentes. Esta seção é **somente documental** — não implementa endpoints, views nem frontend.
 >
 > Os endpoints existentes (`/v1/admin/analytics/tecnologia/{infraestrutura,uso-pedagogico}`) usam `CategoricStat` com o campo `valor`; novos contratos podem mapear `valor`→`label` no frontend ou padronizar o payload novo. As assinaturas de payload abaixo descrevem o contrato lógico desejado, não o formato atual.
+>
+> **Status de entrega (`feat/tecnologia-graficos-minimos-datastudio`).** Os gráficos §6.5.1 a §6.5.7 foram **implementados** por expansão dos dois endpoints existentes e renderização em `AbaTecnologia.tsx` (sem novo endpoint, view ou migration). Campos entregues: `disponibilidade_internet`, `media_equipamentos_por_escola` (substituiu a mediana — ver §6.5.2), distribuição do parque (% calculada no frontend), `computadores_atendem_demanda`, `possui_projetor_dist`, `possui_lousa_digital_dist`, `media_projetores_por_escola` e `total_computadores_inoperantes`. Permanece **pendente de produto** apenas o **percentual** de computadores inoperantes (§6.4.1 e §6.5.8), por falta de denominador oficial.
 
 #### 6.5.1 Disponibilidade de internet
 
@@ -800,22 +802,24 @@ Backend + Frontend.
 **Próxima ação recomendada**  
 Expor a distribuição Sim/Não no payload de infraestrutura e renderizar o donut.
 
-#### 6.5.2 Quantidade mediana de equipamentos por escola
+#### 6.5.2 Quantidade média de equipamentos por escola
+
+> **Histórico.** Este item foi originalmente especificado e entregue como **mediana** por escola. Após checagem dos dados de produção (ver abaixo), foi substituído pela **média** por escola, por decisão de produto.
 
 **O que o gráfico deve mostrar**  
-Mediana por escola para Chromebook, Desktop uso de alunos, Desktop administrativo e Notebook.
+Média por escola para Chromebook, Desktop uso de alunos, Desktop administrativo e Notebook.
 
 **Como era tratado na planilha/painel original**  
-Estatística de mediana por escola e por tipo de equipamento, no bloco de capacidade instalada.
+Estatística de capacidade instalada por escola e por tipo de equipamento, no bloco de capacidade instalada.
 
 **Origem provável do dado no banco**  
 `vw_censo_equipamentos_tecnologia.qtd_chromebooks`, `qtd_desktop_alunos`, `qtd_desktop_adm`, `qtd_notebooks`.
 
 **View ou transformação necessária**  
-A view já expõe as quantidades por escola. Hoje o endpoint só calcula `SUM` por tipo. Cálculo sugerido para a mediana:
+A view já expõe as quantidades por escola. Cálculo da média por tipo (total declarado ÷ nº de escolas do recorte):
 
 ```sql
-PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY campo)
+AVG(COALESCE(campo, 0))
 ```
 
 por tipo de equipamento, sobre escolas concluídas no recorte.
@@ -826,9 +830,9 @@ Expandir `GET /v1/admin/analytics/tecnologia/infraestrutura`.
 **Payload esperado**  
 ```ts
 {
-  mediana_equipamentos_por_escola: Array<{
-    label: string;   // ex.: "Chromebook", "Desktop alunos", "Desktop administrativo", "Notebook"
-    mediana: number;
+  media_equipamentos_por_escola: Array<{
+    valor: string;   // ex.: "Chromebooks", "Desktops de alunos", "Desktops administrativos", "Notebooks"
+    media: number;
   }>;
 }
 ```
@@ -837,13 +841,13 @@ Expandir `GET /v1/admin/analytics/tecnologia/infraestrutura`.
 Renderizar barra/tabela em `AbaTecnologia.tsx`, anchor `sec-tecnologia-parque`.
 
 **Dependências de produto/dados**  
-Confirmar se escolas que declararam zero entram no cálculo da mediana ou se há recorte por escolas que possuem o equipamento.
+Decidido após entrega: usar **média**, não mediana. A checagem em produção (822 escolas concluídas, 2026) mostrou que **70% declararam 0 desktops de alunos** (sem nenhum `NULL`), tornando a mediana legitimamente 0, mas pouco informativa — o total de 4.381 está concentrado em 30% das escolas. A média `AVG(COALESCE(campo,0))` (= total ÷ nº de escolas) é coerente com os cards de total e com a média de projetores por escola.
 
 **Tipo de lacuna**  
-Backend + Frontend.
+Entregue.
 
 **Próxima ação recomendada**  
-Adicionar a mediana por tipo ao payload de infraestrutura e renderizar.
+Manter a média por tipo; nenhuma ação pendente.
 
 #### 6.5.3 Distribuição do parque tecnológico (%)
 
@@ -1059,16 +1063,17 @@ Indicador de escolas com computadores inoperantes no bloco de uso pedagógico/ad
 `vw_censo_equipamentos_tecnologia.qtd_computadores_inoperantes`.
 
 **View ou transformação necessária**  
-O número absoluto de escolas já é entregue (`escolas_com_computadores_inoperantes`). O percentual depende de decisão de produto sobre o denominador. Ver também §6.4.1, que trata do percentual de computadores inoperantes sobre o parque.
+O número de escolas (`escolas_com_computadores_inoperantes`) e o **total absoluto** de computadores inoperantes (`total_computadores_inoperantes`, via `SUM(qtd_computadores_inoperantes)`) já são entregues. O percentual depende de decisão de produto sobre o denominador. Ver também §6.4.1, que trata do percentual de computadores inoperantes sobre o parque.
 
 **Endpoint necessário**  
-Número absoluto já entregue por `GET /v1/admin/analytics/tecnologia/infraestrutura`; percentual exigiria expansão após decisão de produto.
+Nº de escolas e total absoluto já entregues por `GET /v1/admin/analytics/tecnologia/infraestrutura`; percentual exigiria expansão após decisão de produto.
 
 **Payload esperado**  
 ```ts
 {
   escolas_com_computadores_inoperantes: number;
-  percentual_computadores_inoperantes?: number; // se aprovado
+  total_computadores_inoperantes: number;          // entregue
+  percentual_computadores_inoperantes?: number;    // pendente — decisão de produto
 }
 ```
 
@@ -1076,10 +1081,10 @@ Número absoluto já entregue por `GET /v1/admin/analytics/tecnologia/infraestru
 Definir se o percentual deve usar como denominador todas as escolas ou apenas escolas com algum computador declarado.
 
 **Tipo de lacuna**  
-Presente (número absoluto) / Produto (percentual).
+Entregue (nº de escolas + total absoluto) / Produto (percentual).
 
 **Próxima ação recomendada**  
-Manter o número absoluto; decidir o denominador antes de expor o percentual.
+Manter nº de escolas e total absoluto; decidir o denominador antes de expor o percentual.
 
 ## 7. Itens fora da rodada PostgreSQL atual
 
@@ -1130,7 +1135,7 @@ A fonte futura deve vir de bases próprias validadas pelas coordenações respon
 
 3. Implementar frontend de Caracterização / Oferta e reposicionar Detalhamento por DRE.
 
-4. Implementar Tecnologia conforme Data Studio (§6.5): distribuições Sim/Não (internet, projetor, lousa) e Sim/Parcialmente/Não (atendem à demanda), mediana e distribuição (%) do parque, média de projetores por escola.
+4. **Entregue** — Tecnologia conforme Data Studio (§6.5): distribuições Sim/Não (internet, projetor, lousa) e Sim/Parcialmente/Não (atendem à demanda), média de equipamentos por escola e distribuição do parque tecnológico (%), média de projetores por escola.
 
 5. Implementar backend/frontend de Energia e Climatização.
 

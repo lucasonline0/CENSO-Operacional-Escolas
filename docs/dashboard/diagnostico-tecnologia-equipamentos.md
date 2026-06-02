@@ -1,6 +1,10 @@
 # Diagnóstico Técnico — Tecnologia e Equipamentos
 
-> Tarefa **somente documental** (TEC-01). Nenhum código de frontend, backend, endpoint, view ou migration foi alterado. Este documento orienta o próximo PR de implementação da aba **Tecnologia e Equipamentos**.
+> Diagnóstico original **somente documental** (TEC-01). Orientou o PR de implementação da aba **Tecnologia e Equipamentos**.
+>
+> **Status de implementação (entregue):** os gráficos mínimos diagnosticados como parciais/ausentes foram implementados via **expansão dos dois endpoints existentes** (`/tecnologia/infraestrutura` e `/tecnologia/uso-pedagogico`) e **renderização em `AbaTecnologia.tsx`**, sem criar endpoint, view ou migration. Entregues: disponibilidade de internet (Sim/Não), **média de equipamentos por escola** (`media_equipamentos_por_escola`), distribuição do parque tecnológico (%), total absoluto de computadores inoperantes, distribuição "equipamentos atendem à demanda", distribuições Sim/Não de projetor e lousa digital, e média de projetores por escola. **Permanece fora de escopo** (decisão de produto): o **percentual** de computadores inoperantes (denominador oficial não definido).
+>
+> **Ajuste pós-entrega (mediana → média).** O gráfico de capacidade por escola foi originalmente entregue como **mediana** (`PERCENTILE_CONT`), mas a checagem dos dados de produção (822 escolas concluídas, 2026) mostrou que **70% das escolas declararam 0 desktops de alunos** — sem nenhum valor `NULL` —, de modo que a mediana era legitimamente 0, mas **subrepresentava** o parque (total de 4.381 concentrado em 30% das escolas). Por decisão de produto, o indicador passou a ser a **média por escola** (`AVG(COALESCE(campo,0))` = total declarado ÷ nº de escolas), coerente com os cards de total e com a média de projetores. O contrato mudou de `mediana_equipamentos_por_escola` (`{valor, mediana}`) para `media_equipamentos_por_escola` (`{valor, media}`).
 
 ## 1. Objetivo
 
@@ -213,18 +217,18 @@ Legenda das respostas: as 10 perguntas do enunciado são respondidas em cada ite
 
 | Bloco | Gráfico | Estado | Backend | Frontend | Produto | Próxima ação |
 |---|---|---|---|---|---|---|
-| Infra Digital | Disponibilidade de internet (Sim/Não) | Parcial | Opcional | Sim | Nuance "Não informado" | Donut Sim/Não derivado no frontend |
+| Infra Digital | Disponibilidade de internet (Sim/Não) | **Entregue** | Feito (Sim/Não da view) | Donut | Nuance "Não informado" colapsado em "Não" | — |
 | Infra Digital | Provedor de internet | Completo | — | — | — | Manter |
 | Infra Digital | Qualidade da internet | Completo | — | — | Refino normalização | Manter |
-| Parque Tec. | Mediana de equipamentos/escola | Ausente | **Sim** (PERCENTILE_CONT) | Sim (render) | — | Expandir `/infraestrutura` |
-| Parque Tec. | Distribuição do parque (%) | Ausente | — | **Sim** | — | Donut calculado no frontend |
+| Parque Tec. | Média de equipamentos/escola | **Entregue** | Feito (AVG; substituiu mediana) | HBarChart | — | — |
+| Parque Tec. | Distribuição do parque (%) | **Entregue** | — | Donut calculado no frontend | — | — |
 | Parque Tec. | Totais por tipo | Completo | — | — | — | Manter |
-| Parque Tec. | Computadores inoperantes (total) | Parcial | **Sim** (SUM) | Sim (render) | — | Expor total no payload |
-| Parque Tec. | Computadores inoperantes (%) | Ausente | Sim (após decisão) | Sim (render) | **Sim — denominador** | Bloquear até decisão de produto |
-| Uso Pedag. | Atendem à demanda (Sim/Parc./Não) | Parcial | **Sim** (distCateg) | Sim (render) | Confirmar categorias | Expandir `/infraestrutura` |
-| Uso Pedag. | Projetor multimídia (Sim/Não) | Parcial | Opcional | Sim | Nuance "Não informado" | Donut Sim/Não derivado no frontend |
-| Uso Pedag. | Lousa digital (Sim/Não) | Parcial | Opcional | Sim | Nuance "Não informado" | Donut Sim/Não derivado no frontend |
-| Uso Pedag. | Média de projetores/escola | Ausente | **Sim** (AVG) | Sim (render) | — | Expandir `/uso-pedagogico` |
+| Parque Tec. | Computadores inoperantes (total) | **Entregue** | Feito (SUM) | StatCard | — | — |
+| Parque Tec. | Computadores inoperantes (%) | Fora de escopo | Após decisão | Após decisão | **Sim — denominador** | Bloqueado até decisão de produto |
+| Uso Pedag. | Atendem à demanda (Sim/Parc./Não) | **Entregue** | Feito (distribuição categórica) | Donut | Categorias confirmadas em runtime | — |
+| Uso Pedag. | Projetor multimídia (Sim/Não) | **Entregue** | Feito (Sim/Não da view) | Donut | Nuance "Não informado" colapsado em "Não" | — |
+| Uso Pedag. | Lousa digital (Sim/Não) | **Entregue** | Feito (Sim/Não da view) | Donut | Nuance "Não informado" colapsado em "Não" | — |
+| Uso Pedag. | Média de projetores/escola | **Entregue** | Feito (AVG) | StatCard | — | — |
 
 Resumo: **2 completos**, **6 parciais**, **3 ausentes** (contando inoperantes-total e inoperantes-% separadamente, 11 itens da matriz mínima). Itens que exigem **somente frontend**: distribuição do parque (%), e (por escolha) os Sim/Não de internet, projetor e lousa. Itens que exigem **backend**: mediana de equipamentos, total de inoperantes, distribuição "atendem à demanda", média de projetores. Único item **bloqueado por produto**: **percentual** de computadores inoperantes.
 

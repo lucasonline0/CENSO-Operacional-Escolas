@@ -3,15 +3,38 @@
 import React, { useEffect, useState } from "react";
 import {
   MonitorSmartphone, AlertCircle, Loader2, Wifi, Signal, Monitor,
-  Laptop, Tablet, Projector, PenSquare, Gauge, ZapOff,
+  Laptop, Tablet, Projector, PenSquare, Gauge, ZapOff, Boxes, PieChart,
 } from "lucide-react";
 import { apiFetch } from "./shared/api";
 import { C, PORTE_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
+import { HBarChart } from "./shared/BarChart";
 import type {
-  TecnologiaInfra, TecnologiaUso,
+  TecnologiaInfra, TecnologiaUso, CategoricStat,
 } from "./shared/types";
+
+// Cores semânticas para distribuições Sim/Parcialmente/Não; demais rótulos
+// caem no rodízio PORTE_COLORS, preservando o estilo visual da aba.
+const DIST_COLORS: Record<string, string> = {
+  "Sim": "#10B981",
+  "Não": "#F43F5E",
+  "Parcialmente": "#F59E0B",
+  "Não informado": "#94A3B8",
+};
+
+function distColor(label: string, i: number): string {
+  return DIST_COLORS[label] ?? PORTE_COLORS[i % PORTE_COLORS.length] ?? "#94A3B8";
+}
+
+function toSegments(items: CategoricStat[] | undefined) {
+  return (items ?? []).map((it, i) => ({
+    label: it.valor,
+    value: it.escolas,
+    color: distColor(it.valor, i),
+    pct: it.percentual,
+  }));
+}
 
 type AbaTecnologiaProps = {
   token: string;
@@ -26,6 +49,11 @@ function fmtPct(v: number | null | undefined): string {
 function fmtInt(v: number | null | undefined): string {
   if (v === null || v === undefined || Number.isNaN(v)) return "—";
   return Math.round(v).toLocaleString("pt-BR");
+}
+
+function fmtDec(v: number | null | undefined): string {
+  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  return v.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
 function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?: string }) {
@@ -94,10 +122,42 @@ export function AbaTecnologia({
     color: PORTE_COLORS[i % PORTE_COLORS.length] ?? "#94A3B8",
     pct: p.percentual,
   }));
-  const qualidadeSegments = (infra?.por_qualidade ?? []).map((q, i) => ({
+  // Qualidade da internet em barras horizontais: rótulos longos não cabem bem
+  // num donut. Valor numérico dentro da barra + percentual à direita (padrão HBarChart).
+  const qualidadeBars = (infra?.por_qualidade ?? []).map((q) => ({
     label: q.valor,
     value: q.escolas,
+    display: q.escolas.toLocaleString("pt-BR"),
+    pct: q.percentual,
+  }));
+
+  // Distribuições derivadas do payload expandido.
+  const internetSegments  = toSegments(infra?.disponibilidade_internet);
+  const atendeSegments    = toSegments(infra?.computadores_atendem_demanda);
+  const projetorSegments  = toSegments(uso?.possui_projetor_dist);
+  const lousaSegments     = toSegments(uso?.possui_lousa_digital_dist);
+
+  // Média por tipo de equipamento (vinda do backend) → barras horizontais.
+  const mediaRows = (infra?.media_equipamentos_por_escola ?? []).map((m) => ({
+    label: m.valor,
+    value: m.media,
+    display: m.media.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+  }));
+
+  // Distribuição do parque tecnológico (%) — calculada no frontend a partir dos
+  // totais já entregues pelo endpoint, sem ida adicional ao backend.
+  const parqueTotals = [
+    { label: "Desktops administrativos", value: infra?.total_desktops_adm ?? 0 },
+    { label: "Desktops de alunos",       value: infra?.total_desktops_alunos ?? 0 },
+    { label: "Notebooks",                value: infra?.total_notebooks ?? 0 },
+    { label: "Chromebooks",              value: infra?.total_chromebooks ?? 0 },
+  ];
+  const parqueTotal = parqueTotals.reduce((s, r) => s + r.value, 0);
+  const parqueSegments = parqueTotals.map((r, i) => ({
+    label: r.label,
+    value: r.value,
     color: PORTE_COLORS[i % PORTE_COLORS.length] ?? "#94A3B8",
+    pct: parqueTotal > 0 ? (r.value / parqueTotal) * 100 : 0,
   }));
 
   return (
@@ -123,7 +183,9 @@ export function AbaTecnologia({
       )}
 
       {/* ── Resumo Executivo ─────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* KPIs sem duplicidade: inoperantes, projetores e lousa aparecem nos
+          blocos específicos (Parque Tecnológico / Uso Pedagógico). */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <StatCard
           label="Escolas com Internet"
           value={fmtPct(infra?.percentual_internet)}
@@ -138,31 +200,26 @@ export function AbaTecnologia({
           tone="green"
           sub="escolas que afirmam atender à demanda"
         />
-        <StatCard
-          label="Escolas c/ Computadores Inoperantes"
-          value={fmtInt(infra?.escolas_com_computadores_inoperantes)}
-          Icon={ZapOff}
-          tone="orange"
-          sub="escolas declararam"
-        />
-        <StatCard
-          label="Projetores"
-          value={fmtInt(uso?.total_projetores)}
-          Icon={Projector}
-          tone="amber"
-          sub="total declarado"
-        />
-        <StatCard
-          label="Lousa Digital"
-          value={fmtPct(uso?.percentual_com_lousa_digital)}
-          Icon={PenSquare}
-          tone="purple"
-          sub="das escolas"
-        />
       </div>
 
       {/* ── Infraestrutura Digital ───────────────────────────────── */}
-      <div id="sec-tecnologia-digital" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      {/* 4 colunas no lg: Disponibilidade e Provedores ocupam 1 cada (rótulos
+          curtos); Qualidade ocupa 2 (rótulos longos, em barras horizontais). */}
+      <div id="sec-tecnologia-digital" className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <Wifi size={16} style={{ color: C.primary }} />
+            Disponibilidade de internet
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Escolas com e sem internet declarada.
+          </p>
+          {internetSegments.length > 0 ? (
+            <Donut segments={internetSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
             <Signal size={16} style={{ color: C.primary }} />
@@ -177,7 +234,7 @@ export function AbaTecnologia({
             <NoData />
           )}
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm lg:col-span-2">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
             <Wifi size={16} style={{ color: C.primary }} />
             Qualidade da conexão
@@ -185,8 +242,8 @@ export function AbaTecnologia({
           <p className="text-xs text-slate-400 mb-5">
             Distribuição categórica auto-declarada pelas escolas.
           </p>
-          {qualidadeSegments.length > 0 ? (
-            <Donut segments={qualidadeSegments} />
+          {qualidadeBars.length > 0 ? (
+            <HBarChart rows={qualidadeBars} labelWidth="45%" rowGap="1.25rem" />
           ) : (
             <NoData />
           )}
@@ -194,7 +251,7 @@ export function AbaTecnologia({
       </div>
 
       {/* ── Parque Tecnológico ───────────────────────────────────── */}
-      <div id="sec-tecnologia-parque" className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div id="sec-tecnologia-parque" className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
           label="Desktops Administrativos"
           value={fmtInt(infra?.total_desktops_adm)}
@@ -230,6 +287,44 @@ export function AbaTecnologia({
           tone="orange"
           sub="escolas declararam"
         />
+        <StatCard
+          label="Total de Computadores Inoperantes"
+          value={fmtInt(infra?.total_computadores_inoperantes)}
+          Icon={ZapOff}
+          tone="orange"
+          sub="equipamentos declarados"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <Boxes size={16} style={{ color: C.primary }} />
+            Quantidade média de equipamentos por escola
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Média por tipo no recorte (total declarado ÷ nº de escolas).
+          </p>
+          {mediaRows.length > 0 ? (
+            <HBarChart rows={mediaRows} labelWidth="11rem" />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <PieChart size={16} style={{ color: C.primary }} />
+            Distribuição do parque tecnológico
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Participação de cada tipo no total de equipamentos declarados.
+          </p>
+          {parqueTotal > 0 ? (
+            <Donut segments={parqueSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
@@ -251,7 +346,7 @@ export function AbaTecnologia({
       </div>
 
       {/* ── Uso Pedagógico ───────────────────────────────────────── */}
-      <div id="sec-tecnologia-pedagogico" className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div id="sec-tecnologia-pedagogico" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Escolas com Projetor"
           value={fmtPct(uso?.percentual_com_projetor)}
@@ -267,12 +362,64 @@ export function AbaTecnologia({
           sub="total declarado"
         />
         <StatCard
+          label="Média de Projetores por Escola"
+          value={fmtDec(uso?.media_projetores_por_escola)}
+          Icon={Projector}
+          tone="green"
+          sub="por escola no recorte"
+        />
+        <StatCard
           label="Escolas com Lousa Digital"
           value={fmtPct(uso?.percentual_com_lousa_digital)}
           Icon={PenSquare}
           tone="purple"
           sub="das escolas"
         />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <Gauge size={16} style={{ color: C.primary }} />
+            Equipamentos atendem à demanda
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Distribuição Sim / Parcialmente / Não declarada pelas escolas.
+          </p>
+          {atendeSegments.length > 0 ? (
+            <Donut segments={atendeSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <Projector size={16} style={{ color: C.primary }} />
+            Projetor multimídia
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Escolas com e sem projetor multimídia.
+          </p>
+          {projetorSegments.length > 0 ? (
+            <Donut segments={projetorSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <PenSquare size={16} style={{ color: C.primary }} />
+            Lousa digital
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Escolas com e sem lousa digital.
+          </p>
+          {lousaSegments.length > 0 ? (
+            <Donut segments={lousaSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
       </div>
 
       <p className="text-xs text-slate-400">

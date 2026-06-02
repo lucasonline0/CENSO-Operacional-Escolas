@@ -132,6 +132,7 @@ export interface InfraCondicoes {
   pct_reforma_critica: number;
   pct_reforma_geral: number;
   pct_obra_parada: number;
+  pct_cobertura_plena: number;
 }
 
 export interface InfraSeguranca {

@@ -143,20 +143,39 @@ export function AbaInfraestruturaSeguranca({
       </div>
 
       {condicoes && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">Reforma Crítica</p>
-              <p className="text-3xl font-bold text-slate-900 mt-2 tabular-nums">
-                {fmtPct(condicoes.pct_reforma_critica)}
-              </p>
-              <p className="text-xs text-slate-400 mt-1">das escolas necessitam de reforma geral ou estão com a obra parada</p>
-              <p className="text-xs text-slate-400 mt-2">
-                Reforma geral: {fmtPct(condicoes.pct_reforma_geral)} · Obra parada: {fmtPct(condicoes.pct_obra_parada)}
-              </p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">Reforma Crítica</p>
+                <p className="text-3xl font-bold text-slate-900 mt-2 tabular-nums">
+                  {fmtPct(condicoes.pct_reforma_critica)}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">das escolas necessitam de reforma geral ou estão com a obra parada</p>
+                <p className="text-xs text-slate-400 mt-2">
+                  Reforma geral: {fmtPct(condicoes.pct_reforma_geral)} · Obra parada: {fmtPct(condicoes.pct_obra_parada)}
+                </p>
+              </div>
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-50 text-amber-700 ring-1 ring-amber-100 shrink-0">
+                <Wrench size={21} strokeWidth={2} />
+              </div>
             </div>
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-50 text-amber-700 ring-1 ring-amber-100 shrink-0">
-              <Wrench size={21} strokeWidth={2} />
+          </div>
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">Cobertura Plena de Ambientes</p>
+                <p className="text-3xl font-bold text-slate-900 mt-2 tabular-nums">
+                  {fmtPct(condicoes.pct_cobertura_plena)}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">das escolas possuem todos os 8 ambientes essenciais</p>
+                <p className="text-xs text-slate-400 mt-2">
+                  Biblioteca · Lab. Ciências · Lab. Informática · Quadra · Refeitório · Cozinha · Sala dos Professores · SAEE
+                </p>
+              </div>
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 shrink-0">
+                <Building2 size={21} strokeWidth={2} />
+              </div>
             </div>
           </div>
         </div>

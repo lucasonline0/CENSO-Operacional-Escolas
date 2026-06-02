@@ -36,6 +36,7 @@ type InfraCondicoes struct {
 	PctReformaCritica       float64         `json:"pct_reforma_critica"`
 	PctReformaGeralApenas   float64         `json:"pct_reforma_geral"`
 	PctObraParadaApenas     float64         `json:"pct_obra_parada"`
+	PctCoberturaPlena       float64         `json:"pct_cobertura_plena"`
 }
 
 type InfraSeguranca struct {
@@ -254,6 +255,19 @@ func (app *application) AdminAnalyticsInfraCondicoes(w http.ResponseWriter, r *h
 	`, filtro)).Scan(&out.PctReformaCritica, &out.PctReformaGeralApenas, &out.PctObraParadaApenas)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("pct_reforma_critica: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	err = db.QueryRowContext(ctx, coberturaEssenciaisCTE+`
+		SELECT
+			CASE WHEN COUNT(*) > 0
+				 THEN ROUND(100.0 * COUNT(*) FILTER (WHERE qtd_essenciais = 8) / COUNT(*), 2)
+				 ELSE 0
+			END::float8
+		FROM por_escola
+	`).Scan(&out.PctCoberturaPlena)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("pct_cobertura_plena: %v", err), http.StatusInternalServerError)
 		return
 	}
 

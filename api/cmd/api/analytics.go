@@ -734,3 +734,284 @@ func (app *application) AdminAnalyticsCaracterizacaoDRE(w http.ResponseWriter, r
 
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: out})
 }
+
+// =====================================================================
+// Caracterização da Rede — Organização da Oferta e Funcionamento
+// =====================================================================
+
+// LabelEscolasStat é uma linha genérica label/escolas/percentual usada
+// nas distribuições de etapas, modalidades e turnos.
+type LabelEscolasStat struct {
+	Label      string  `json:"label"`
+	Escolas    int     `json:"escolas"`
+	Percentual float64 `json:"percentual"`
+}
+
+// MediaTurnosPorPorteStat é a média de turnos distintos por faixa de porte.
+type MediaTurnosPorPorteStat struct {
+	Porte       string  `json:"porte"`
+	MediaTurnos float64 `json:"media_turnos"`
+}
+
+// CaracterizacaoOfertaFuncionamento é o payload de
+// GET /v1/admin/analytics/caracterizacao/oferta-funcionamento.
+type CaracterizacaoOfertaFuncionamento struct {
+	EtapasOfertadas      []LabelEscolasStat        `json:"etapas_ofertadas"`
+	ModalidadesOfertadas []LabelEscolasStat        `json:"modalidades_ofertadas"`
+	Turnos               []LabelEscolasStat        `json:"turnos"`
+	MediaTurnosPorPorte  []MediaTurnosPorPorteStat `json:"media_turnos_por_porte"`
+}
+
+// AdminAnalyticsCaracterizacaoOfertaFuncionamento lê os campos multivalorados
+// da tabela schools (turnos, etapas_ofertadas, modalidades_ofertadas) para
+// escolas com censo concluído no ano corrente e devolve as distribuições
+// necessárias para o bloco "Organização da Oferta e Funcionamento".
+//
+// Critérios:
+//   - Escolas elegíveis: census_responses.status='completed' AND year=ano corrente.
+//   - Denominador de percentual: COUNT(DISTINCT school_id) elegíveis.
+//   - Uma escola pode contribuir para múltiplas etapas/modalidades/turnos
+//     (campo multivalorado) — percentuais somam > 100%, o que é esperado.
+//   - Escolas sem o campo preenchido entram no denominador mas não em nenhuma
+//     categoria.
+//   - media_turnos_por_porte exclui escolas sem turnos declarados no banco.
+func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	db := app.models.Schools.DB
+
+	out := CaracterizacaoOfertaFuncionamento{
+		EtapasOfertadas:      []LabelEscolasStat{},
+		ModalidadesOfertadas: []LabelEscolasStat{},
+		Turnos:               []LabelEscolasStat{},
+		MediaTurnosPorPorte:  []MediaTurnosPorPorteStat{},
+	}
+
+	// 1) Etapas ofertadas — unnest de census_responses.data->'etapas_ofertadas'.
+	// Fonte: JSONB do censo (Step 2), não schools.etapas_ofertadas — ver
+	// docs/dashboard/jsonb-field-inventory.md seção 3.1 (duplicidade R5).
+	rowsEtapas, err := db.QueryContext(ctx, `
+		WITH completed AS (
+			SELECT cr.school_id, cr.data
+			FROM census_responses cr
+			WHERE cr.status = 'completed'
+			  AND cr.year = EXTRACT(YEAR FROM CURRENT_DATE)::int
+		),
+		total AS (
+			SELECT COUNT(DISTINCT school_id)::numeric AS n FROM completed
+		),
+		expanded AS (
+			SELECT c.school_id, trim(e.val) AS etapa
+			FROM completed c
+			CROSS JOIN jsonb_array_elements_text(
+				CASE
+					WHEN jsonb_typeof(c.data->'etapas_ofertadas') = 'array'
+					THEN c.data->'etapas_ofertadas'
+					ELSE '[]'::jsonb
+				END
+			) AS e(val)
+			WHERE trim(e.val) != ''
+		)
+		SELECT
+			ex.etapa                                                    AS label,
+			COUNT(DISTINCT ex.school_id)                                AS escolas,
+			CASE WHEN t.n > 0
+				THEN ROUND(100.0 * COUNT(DISTINCT ex.school_id) / t.n, 1)
+				ELSE 0
+			END::float8                                                 AS percentual
+		FROM expanded ex
+		CROSS JOIN total t
+		GROUP BY ex.etapa, t.n
+		ORDER BY escolas DESC, label
+	`)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro em etapas_ofertadas: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer rowsEtapas.Close()
+	for rowsEtapas.Next() {
+		var s LabelEscolasStat
+		if err := rowsEtapas.Scan(&s.Label, &s.Escolas, &s.Percentual); err != nil {
+			app.errorJSON(w, fmt.Errorf("erro lendo etapas: %v", err), http.StatusInternalServerError)
+			return
+		}
+		out.EtapasOfertadas = append(out.EtapasOfertadas, s)
+	}
+	if err := rowsEtapas.Err(); err != nil {
+		app.errorJSON(w, fmt.Errorf("erro iterando etapas: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// 2) Modalidades ofertadas — unnest de census_responses.data->'modalidades_ofertadas'.
+	// Mesma razão que etapas: fonte correta é o JSONB do censo (Step 2).
+	rowsMod, err := db.QueryContext(ctx, `
+		WITH completed AS (
+			SELECT cr.school_id, cr.data
+			FROM census_responses cr
+			WHERE cr.status = 'completed'
+			  AND cr.year = EXTRACT(YEAR FROM CURRENT_DATE)::int
+		),
+		total AS (
+			SELECT COUNT(DISTINCT school_id)::numeric AS n FROM completed
+		),
+		expanded AS (
+			SELECT c.school_id, trim(m.val) AS modalidade
+			FROM completed c
+			CROSS JOIN jsonb_array_elements_text(
+				CASE
+					WHEN jsonb_typeof(c.data->'modalidades_ofertadas') = 'array'
+					THEN c.data->'modalidades_ofertadas'
+					ELSE '[]'::jsonb
+				END
+			) AS m(val)
+			WHERE trim(m.val) != ''
+		)
+		SELECT
+			ex.modalidade                                               AS label,
+			COUNT(DISTINCT ex.school_id)                                AS escolas,
+			CASE WHEN t.n > 0
+				THEN ROUND(100.0 * COUNT(DISTINCT ex.school_id) / t.n, 1)
+				ELSE 0
+			END::float8                                                 AS percentual
+		FROM expanded ex
+		CROSS JOIN total t
+		GROUP BY ex.modalidade, t.n
+		ORDER BY escolas DESC, label
+	`)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro em modalidades_ofertadas: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer rowsMod.Close()
+	for rowsMod.Next() {
+		var s LabelEscolasStat
+		if err := rowsMod.Scan(&s.Label, &s.Escolas, &s.Percentual); err != nil {
+			app.errorJSON(w, fmt.Errorf("erro lendo modalidades: %v", err), http.StatusInternalServerError)
+			return
+		}
+		out.ModalidadesOfertadas = append(out.ModalidadesOfertadas, s)
+	}
+	if err := rowsMod.Err(); err != nil {
+		app.errorJSON(w, fmt.Errorf("erro iterando modalidades: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// CTE base para queries 3 e 4: school_id de censos concluídos (sem data).
+	const baseCTE = `
+		WITH completed AS (
+			SELECT DISTINCT cr.school_id
+			FROM census_responses cr
+			WHERE cr.status = 'completed'
+			  AND cr.year = EXTRACT(YEAR FROM CURRENT_DATE)::int
+		),
+		total AS (
+			SELECT COUNT(*)::numeric AS n FROM completed
+		)`
+
+	// 3) Distribuição por turno — unnest de schools.turnos.
+	rowsTurnos, err := db.QueryContext(ctx, baseCTE+`,
+		expanded AS (
+			SELECT c.school_id, trim(t2.val) AS turno
+			FROM completed c
+			JOIN schools s ON s.id = c.school_id
+			CROSS JOIN jsonb_array_elements_text(
+				CASE
+					WHEN s.turnos IS NOT NULL
+					 AND s.turnos != ''
+					 AND s.turnos != 'null'
+					 AND s.turnos ~ '^\s*\[.*\]\s*$'
+					THEN s.turnos::jsonb
+					ELSE '[]'::jsonb
+				END
+			) AS t2(val)
+			WHERE trim(t2.val) != ''
+		)
+		SELECT
+			ex.turno                                                    AS label,
+			COUNT(DISTINCT ex.school_id)                                AS escolas,
+			CASE WHEN t.n > 0
+				THEN ROUND(100.0 * COUNT(DISTINCT ex.school_id) / t.n, 1)
+				ELSE 0
+			END::float8                                                 AS percentual
+		FROM expanded ex
+		CROSS JOIN total t
+		GROUP BY ex.turno, t.n
+		ORDER BY escolas DESC, label
+	`)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro em turnos: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer rowsTurnos.Close()
+	for rowsTurnos.Next() {
+		var s LabelEscolasStat
+		if err := rowsTurnos.Scan(&s.Label, &s.Escolas, &s.Percentual); err != nil {
+			app.errorJSON(w, fmt.Errorf("erro lendo turnos: %v", err), http.StatusInternalServerError)
+			return
+		}
+		out.Turnos = append(out.Turnos, s)
+	}
+	if err := rowsTurnos.Err(); err != nil {
+		app.errorJSON(w, fmt.Errorf("erro iterando turnos: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// 4) Média de turnos distintos por porte — escolas sem turnos declarados
+	//    são excluídas do cálculo (não entram como zero).
+	rowsMedia, err := db.QueryContext(ctx, `
+		WITH completed AS (
+			SELECT DISTINCT cr.school_id
+			FROM census_responses cr
+			WHERE cr.status = 'completed'
+			  AND cr.year = EXTRACT(YEAR FROM CURRENT_DATE)::int
+		),
+		turnos_por_escola AS (
+			SELECT c.school_id,
+				   COUNT(DISTINCT trim(t.val))::numeric AS qtd_turnos
+			FROM completed c
+			JOIN schools s ON s.id = c.school_id
+			CROSS JOIN jsonb_array_elements_text(
+				CASE
+					WHEN s.turnos IS NOT NULL
+					 AND s.turnos != ''
+					 AND s.turnos != 'null'
+					 AND s.turnos ~ '^\s*\[.*\]\s*$'
+					THEN s.turnos::jsonb
+					ELSE '[]'::jsonb
+				END
+			) AS t(val)
+			WHERE trim(t.val) != ''
+			GROUP BY c.school_id
+		)
+		SELECT
+			e.porte_escola_nome                   AS porte,
+			ROUND(AVG(tp.qtd_turnos), 1)::float8  AS media_turnos,
+			MIN(e.porte_escola_cod)               AS ord
+		FROM turnos_por_escola tp
+		JOIN vw_censo_enriquecida e
+		  ON e.school_id = tp.school_id
+		 AND e.status    = 'completed'
+		 AND e.year      = EXTRACT(YEAR FROM CURRENT_DATE)::int
+		GROUP BY e.porte_escola_nome
+		ORDER BY ord
+	`)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro em media_turnos_por_porte: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer rowsMedia.Close()
+	for rowsMedia.Next() {
+		var s MediaTurnosPorPorteStat
+		var ord int
+		if err := rowsMedia.Scan(&s.Porte, &s.MediaTurnos, &ord); err != nil {
+			app.errorJSON(w, fmt.Errorf("erro lendo media_turnos: %v", err), http.StatusInternalServerError)
+			return
+		}
+		out.MediaTurnosPorPorte = append(out.MediaTurnosPorPorte, s)
+	}
+	if err := rowsMedia.Err(); err != nil {
+		app.errorJSON(w, fmt.Errorf("erro iterando media_turnos: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: out})
+}

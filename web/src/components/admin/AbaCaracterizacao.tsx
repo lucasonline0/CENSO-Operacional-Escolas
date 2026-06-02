@@ -3,18 +3,25 @@
 import React, { useState, useEffect } from "react";
 import {
   Building2, MapPinned, AlertCircle, Loader2,
-  TrendingUp, Users, GraduationCap, BarChart2,
+  TrendingUp, Users, GraduationCap, BarChart2, Clock, BookOpen,
   LayoutGrid, ShieldCheck, Info, X,
 } from "lucide-react";
 import { apiFetch } from "./shared/api";
 import { C, PORTE_COLORS, ZONA_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
-import { Donut } from "./shared/Donut";
+import { Donut, PieChart } from "./shared/Donut";
 import { HBarChart, VBarChart } from "./shared/BarChart";
 import type {
   CaracterizacaoPerfilPg, CaracterizacaoDREPg, SheetMetrics,
-  CaracterizacaoInfraEducacionalPg,
+  CaracterizacaoOfertaFuncionamento, CaracterizacaoInfraEducacionalPg,
 } from "./shared/types";
+
+const TURNO_COLORS: Record<string, string> = {
+  "Manhã":    "#F59E0B",
+  "Tarde":    "#3B82F6",
+  "Noite":    "#6366F1",
+  "Integral": "#10B981",
+};
 
 // Cores das faixas de cobertura essencial (donut). Da maior cobertura
 // (verde) à menor (vermelho), com cinza para "sem essenciais informados".
@@ -33,10 +40,12 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
   // fallback para qualquer parte cujo endpoint analítico falhe.
   const [perfilPg, setPerfilPg] = useState<CaracterizacaoPerfilPg | null>(null);
   const [drePg,    setDrePg]    = useState<CaracterizacaoDREPg | null>(null);
+  const [ofertaPg, setOfertaPg] = useState<CaracterizacaoOfertaFuncionamento | null>(null);
   const [infraPg,  setInfraPg]  = useState<CaracterizacaoInfraEducacionalPg | null>(null);
   const [metrics,  setMetrics]  = useState<SheetMetrics | null>(null);
   const [perfilErr, setPerfilErr] = useState("");
   const [dreErr,    setDreErr]    = useState("");
+  const [ofertaErr, setOfertaErr] = useState("");
   const [infraErr,  setInfraErr]  = useState("");
   const [sheetErr,  setSheetErr]  = useState("");
   const [loading,   setLoading]   = useState(true);
@@ -60,6 +69,10 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
       .then((d) => { if (!cancelled) setDrePg(d); })
       .catch(handleErr(setDreErr));
 
+    const pOferta = apiFetch<CaracterizacaoOfertaFuncionamento>("/v1/admin/analytics/caracterizacao/oferta-funcionamento", token)
+      .then((d) => { if (!cancelled) setOfertaPg(d); })
+      .catch(handleErr(setOfertaErr));
+
     const pInfra = apiFetch<CaracterizacaoInfraEducacionalPg>("/v1/admin/analytics/caracterizacao/infraestrutura-educacional", token)
       .then((d) => { if (!cancelled) setInfraPg(d); })
       .catch(handleErr(setInfraErr));
@@ -68,7 +81,7 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
       .then((m) => { if (!cancelled) setMetrics(m); })
       .catch(handleErr(setSheetErr));
 
-    Promise.all([pPerfil, pDre, pInfra, pSheet]).finally(() => {
+    Promise.all([pPerfil, pDre, pOferta, pInfra, pSheet]).finally(() => {
       if (!cancelled) setLoading(false);
     });
 
@@ -220,22 +233,14 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
             <BarChart2 size={16} style={{ color: C.primary }} />
             Distribuição de Escolas por Porte
           </h3>
-          <Donut
-            segments={porteDonut}
-            label={totalEscolas.toLocaleString("pt-BR")}
-            sub="escolas"
-          />
+          <PieChart segments={porteDonut} />
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
             <MapPinned size={16} style={{ color: C.primary }} />
             Distribuição de Escolas por Zona
           </h3>
-          <Donut
-            segments={zonaDonut}
-            label={totalEscolas.toLocaleString("pt-BR")}
-            sub="escolas"
-          />
+          <PieChart segments={zonaDonut} />
         </div>
       </div>
 
@@ -258,7 +263,83 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
       </div>
 
       {/* ── Organização da Oferta e Funcionamento ─────────────── */}
-      <div id="sec-perfil-oferta" />
+      <div id="sec-perfil-oferta" className="space-y-5">
+        <h2 className="text-base font-semibold text-slate-700 border-b border-slate-200 pb-2">
+          Organização da Oferta e Funcionamento
+        </h2>
+
+        {ofertaErr && (
+          <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <AlertCircle size={14} /> Oferta e funcionamento indisponível: {ofertaErr}
+          </div>
+        )}
+
+        {ofertaPg && (
+          <>
+            {/* Etapas + Modalidades */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                  <GraduationCap size={16} style={{ color: C.primary }} />
+                  Escolas por Etapa Ofertada
+                </h3>
+                <Donut
+                  segments={ofertaPg.etapas_ofertadas.map((e, i) => ({
+                    label: e.label,
+                    value: e.escolas,
+                    color: PORTE_COLORS[i] ?? "#94A3B8",
+                    pct: e.percentual,
+                  }))}
+                  label={ofertaPg.etapas_ofertadas.reduce((s, e) => s + e.escolas, 0).toLocaleString("pt-BR")}
+                  sub="registros"
+                />
+              </div>
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                  <BookOpen size={16} style={{ color: C.primary }} />
+                  Escolas por Modalidade Ofertada
+                </h3>
+                <HBarChart
+                  rows={ofertaPg.modalidades_ofertadas.map((m) => ({ label: m.label, value: m.escolas, pct: m.percentual }))}
+                  color="#2563EB"
+                />
+              </div>
+            </div>
+
+            {/* Turnos + Média por porte */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                  <Clock size={16} style={{ color: C.primary }} />
+                  Distribuição de Escolas por Turno
+                </h3>
+                <Donut
+                  segments={ofertaPg.turnos.map((t, i) => ({
+                    label: t.label,
+                    value: t.escolas,
+                    color: TURNO_COLORS[t.label] ?? PORTE_COLORS[i] ?? "#94A3B8",
+                  }))}
+                  label={totalEscolas.toLocaleString("pt-BR")}
+                  sub="escolas"
+                />
+              </div>
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                  <BarChart2 size={16} style={{ color: C.primary }} />
+                  Média de Turnos por Porte
+                </h3>
+                <HBarChart
+                  rows={ofertaPg.media_turnos_por_porte.map((p) => ({
+                    label: p.porte,
+                    value: Math.round(p.media_turnos * 10) / 10,
+                  }))}
+                  color="#8B5CF6"
+                />
+              </div>
+            </div>
+          </>
+        )}
+      </div>
 
       {/* ── Infraestrutura Educacional ────────────────────────── */}
       <div id="sec-perfil-infra" className="space-y-5">

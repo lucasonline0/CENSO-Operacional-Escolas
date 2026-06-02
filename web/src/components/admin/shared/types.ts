@@ -255,7 +255,7 @@ export interface TecnologiaInfra {
   total_desktops_alunos: number;
   total_notebooks: number;
   total_chromebooks: number;
-  total_computadores_inoperantes: number;
+  escolas_com_computadores_inoperantes: number;
   percentual_computadores_atendem: number;
 }
 
@@ -265,4 +265,15 @@ export interface TecnologiaUso {
   total_projetores: number;
   escolas_com_lousa_digital: number;
   percentual_com_lousa_digital: number;
+}
+
+// Caracterização da Rede — Organização da Oferta e Funcionamento.
+// Payload de /v1/admin/analytics/caracterizacao/oferta-funcionamento.
+export interface LabelEscolasStat { label: string; escolas: number; percentual: number; }
+export interface MediaTurnosPorPorteStat { porte: string; media_turnos: number; }
+export interface CaracterizacaoOfertaFuncionamento {
+  etapas_ofertadas:       LabelEscolasStat[];
+  modalidades_ofertadas:  LabelEscolasStat[];
+  turnos:                 LabelEscolasStat[];
+  media_turnos_por_porte: MediaTurnosPorPorteStat[];
 }

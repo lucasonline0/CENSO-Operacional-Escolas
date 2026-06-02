@@ -72,28 +72,34 @@ export function HBarChart({
   unit = "",
   color = C.primary,
 }: {
-  rows: { label: string; value: number; display?: string; trailing?: string }[];
+  rows: { label: string; value: number; pct?: number; display?: string; trailing?: string }[];
   unit?: string;
   color?: string;
 }) {
   const max = Math.max(...rows.map((r) => r.value), 1);
+  const showPct      = rows.some((r) => r.pct      !== undefined);
   const showTrailing = rows.some((r) => r.trailing !== undefined);
   return (
     <div className="space-y-2 w-full">
       {rows.map((r) => {
-        const pct = (r.value / max) * 100;
+        const barWidth = (r.value / max) * 100;
         return (
           <div key={r.label} className="flex items-center gap-3 text-sm">
             <span className="w-20 shrink-0 text-right text-slate-500 text-xs">{r.label}</span>
             <div className="flex-1 h-6 bg-slate-100 rounded relative overflow-hidden">
               <div
                 className="h-full rounded transition-all duration-500"
-                style={{ width: `${pct}%`, background: color }}
+                style={{ width: `${barWidth}%`, background: color }}
               />
               <span className="absolute inset-0 flex items-center px-2 text-xs font-semibold text-white mix-blend-luminosity">
                 {r.display ?? `${r.value.toLocaleString("pt-BR")}${unit}`}
               </span>
             </div>
+            {showPct && (
+              <span className="w-12 shrink-0 text-right text-xs text-slate-500 tabular-nums">
+                {r.pct !== undefined ? `${r.pct.toFixed(1)}%` : ""}
+              </span>
+            )}
             {showTrailing && (
               <span className="w-12 shrink-0 text-right text-slate-500 text-xs tabular-nums">
                 {r.trailing}

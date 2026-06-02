@@ -4,15 +4,16 @@ import React, { useState, useEffect } from "react";
 import {
   Building2, MapPinned, AlertCircle, Loader2,
   TrendingUp, Users, GraduationCap, BarChart2, Clock, BookOpen,
+  LayoutGrid, ShieldCheck, Info, X,
 } from "lucide-react";
 import { apiFetch } from "./shared/api";
 import { C, PORTE_COLORS, ZONA_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut, PieChart } from "./shared/Donut";
-import { HBarChart } from "./shared/BarChart";
+import { HBarChart, VBarChart } from "./shared/BarChart";
 import type {
   CaracterizacaoPerfilPg, CaracterizacaoDREPg, SheetMetrics,
-  CaracterizacaoOfertaFuncionamento,
+  CaracterizacaoOfertaFuncionamento, CaracterizacaoInfraEducacionalPg,
 } from "./shared/types";
 
 const TURNO_COLORS: Record<string, string> = {
@@ -20,6 +21,16 @@ const TURNO_COLORS: Record<string, string> = {
   "Tarde":    "#3B82F6",
   "Noite":    "#6366F1",
   "Integral": "#10B981",
+};
+
+// Cores das faixas de cobertura essencial (donut). Da maior cobertura
+// (verde) à menor (vermelho), com cinza para "sem essenciais informados".
+const FAIXA_COBERTURA_COLORS: Record<string, string> = {
+  "Cobertura plena":           "#10B981",
+  "Alta cobertura":            "#3B82F6",
+  "Cobertura intermediária":   "#F59E0B",
+  "Baixa cobertura":           "#EF4444",
+  "Sem essenciais informados": "#94A3B8",
 };
 
 export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth: () => void }) {
@@ -30,12 +41,16 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
   const [perfilPg, setPerfilPg] = useState<CaracterizacaoPerfilPg | null>(null);
   const [drePg,    setDrePg]    = useState<CaracterizacaoDREPg | null>(null);
   const [ofertaPg, setOfertaPg] = useState<CaracterizacaoOfertaFuncionamento | null>(null);
+  const [infraPg,  setInfraPg]  = useState<CaracterizacaoInfraEducacionalPg | null>(null);
   const [metrics,  setMetrics]  = useState<SheetMetrics | null>(null);
   const [perfilErr, setPerfilErr] = useState("");
   const [dreErr,    setDreErr]    = useState("");
   const [ofertaErr, setOfertaErr] = useState("");
+  const [infraErr,  setInfraErr]  = useState("");
   const [sheetErr,  setSheetErr]  = useState("");
   const [loading,   setLoading]   = useState(true);
+  // Janela informativa explicando quais ambientes são essenciais.
+  const [infoOpen, setInfoOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,11 +73,15 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
       .then((d) => { if (!cancelled) setOfertaPg(d); })
       .catch(handleErr(setOfertaErr));
 
+    const pInfra = apiFetch<CaracterizacaoInfraEducacionalPg>("/v1/admin/analytics/caracterizacao/infraestrutura-educacional", token)
+      .then((d) => { if (!cancelled) setInfraPg(d); })
+      .catch(handleErr(setInfraErr));
+
     const pSheet = apiFetch<SheetMetrics>("/v1/admin/sheet-metrics", token)
       .then((m) => { if (!cancelled) setMetrics(m); })
       .catch(handleErr(setSheetErr));
 
-    Promise.all([pPerfil, pDre, pOferta, pSheet]).finally(() => {
+    Promise.all([pPerfil, pDre, pOferta, pInfra, pSheet]).finally(() => {
       if (!cancelled) setLoading(false);
     });
 
@@ -323,7 +342,156 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
       </div>
 
       {/* ── Infraestrutura Educacional ────────────────────────── */}
-      <div id="sec-perfil-infra" />
+      <div id="sec-perfil-infra" className="space-y-5">
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+            <LayoutGrid size={18} style={{ color: C.primary }} />
+            Infraestrutura Educacional
+          </h2>
+          <button
+            type="button"
+            onClick={() => setInfoOpen(true)}
+            aria-label="Sobre os ambientes essenciais"
+            className="text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <Info size={16} />
+          </button>
+        </div>
+
+        {infraErr && !infraPg && (
+          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+            <AlertCircle size={15} className="shrink-0 mt-0.5" />
+            <span>Infraestrutura Educacional indisponível ({infraErr}).</span>
+          </div>
+        )}
+
+        {infraPg && (
+          <>
+            {/* KPIs de cobertura essencial. "Total de Escolas" não é
+                repetido aqui — já consta no bloco Dimensão e Perfil da Rede. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <StatCard
+                label="Média de Ambientes Essenciais"
+                value={infraPg.cobertura_essenciais.media_ambientes_essenciais.toLocaleString("pt-BR")}
+                Icon={LayoutGrid}
+                tone="blue"
+                sub={`de ${infraPg.cobertura_essenciais.total_essenciais} por escola`}
+              />
+              <StatCard
+                label="Cobertura Plena"
+                value={`${infraPg.cobertura_essenciais.pct_cobertura_plena.toLocaleString("pt-BR")}%`}
+                Icon={ShieldCheck}
+                tone="green"
+                sub={`possuem os ${infraPg.cobertura_essenciais.total_essenciais} essenciais`}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* Ranking de ambientes mais presentes */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                  <BarChart2 size={16} style={{ color: C.primary }} />
+                  Ambientes mais Presentes
+                </h3>
+                {infraPg.ambientes.length > 0 ? (
+                  <HBarChart
+                    rows={infraPg.ambientes.map((a) => ({
+                      label: a.label,
+                      value: a.escolas,
+                      trailing: `${a.percentual.toLocaleString("pt-BR")}%`,
+                    }))}
+                    color={C.primary}
+                  />
+                ) : (
+                  <p className="text-sm text-slate-400">Nenhum ambiente declarado.</p>
+                )}
+              </div>
+
+              {/* Distribuição por faixa de cobertura essencial */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                  <ShieldCheck size={16} style={{ color: C.primary }} />
+                  Cobertura de Ambientes Essenciais
+                </h3>
+                <Donut
+                  segments={infraPg.cobertura_essenciais.por_faixa.map((f) => ({
+                    label: f.label,
+                    value: f.escolas,
+                    color: FAIXA_COBERTURA_COLORS[f.label] ?? "#94A3B8",
+                  }))}
+                  label={totalEscolas.toLocaleString("pt-BR")}
+                  sub="escolas"
+                />
+              </div>
+            </div>
+
+            {/* Média de essenciais por porte */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                <TrendingUp size={16} style={{ color: C.primary }} />
+                Média de Essenciais por Porte
+              </h3>
+              {infraPg.media_essenciais_por_porte.length > 0 ? (
+                <VBarChart
+                  rows={infraPg.media_essenciais_por_porte.map((m) => ({ label: m.porte, value: m.media }))}
+                  color="#2563EB"
+                  showPct={false}
+                  barMaxWidth={120}
+                  gapClass="gap-1"
+                  valueInside
+                />
+              ) : (
+                <p className="text-sm text-slate-400">Sem dados de porte.</p>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Janela informativa — ambientes essenciais */}
+      {infoOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4"
+          onClick={() => setInfoOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl border border-slate-200 shadow-lg max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+                <Info size={16} style={{ color: C.primary }} />
+                Ambientes considerados essenciais
+              </h3>
+              <button
+                type="button"
+                onClick={() => setInfoOpen(false)}
+                aria-label="Fechar"
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <ul className="text-sm text-slate-600 space-y-1 mb-4">
+              {(infraPg?.ambientes_essenciais ?? [
+                "Biblioteca", "Laboratório de Ciências", "Laboratório de Informática",
+                "Quadra Esportiva", "Refeitório", "Cozinha", "Sala dos Professores", "SAEE",
+              ]).map((nome) => (
+                <li key={nome} className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+                  {nome}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Esses ambientes foram definidos como essenciais por representarem espaços
+              básicos de apoio pedagógico, alimentação, atendimento especializado e
+              funcionamento escolar. A cobertura indica quantos desses ambientes foram
+              declarados pela escola no Censo Operacional.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Tabela DRE detalhada */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">

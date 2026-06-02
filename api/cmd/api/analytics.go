@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 )
 
@@ -367,6 +368,311 @@ func (app *application) AdminAnalyticsCaracterizacaoPerfil(w http.ResponseWriter
 	}
 
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: out})
+}
+
+// =====================================================================
+// CAR-INFRA-01 — Caracterização da Rede: Infraestrutura Educacional
+// =====================================================================
+// Endpoint GET /v1/admin/analytics/caracterizacao/infraestrutura-educacional.
+// Consome vw_censo_ambientes (formato longo: 1 linha por school_id/year/
+// ambiente) e vw_censo_enriquecida (porte). Mantém o mesmo recorte
+// analítico da Caracterização: status='completed', ano corrente e
+// census_id IS NOT NULL. O denominador dos percentuais é SEMPRE o total
+// de escolas concluídas no ano corrente (não apenas as que declararam
+// algum ambiente), para responder "percentual de escolas concluídas que
+// possuem determinado ambiente".
+// =====================================================================
+
+// ambientesEssenciais é a lista oficial inicial de ambientes essenciais.
+// Os valores casam exatamente com os checkboxes da lista fixa em
+// web/src/components/forms/general-data-form.tsx — por isso a comparação
+// no SQL é direta (no máximo TRIM defensivo), sem normalização textual.
+var ambientesEssenciais = []string{
+	"Biblioteca",
+	"Laboratório de Ciências",
+	"Laboratório de Informática",
+	"Quadra Esportiva",
+	"Refeitório",
+	"Cozinha",
+	"Sala dos Professores",
+	"SAEE",
+}
+
+// faixasCobertura define os rótulos e a ordem das faixas de cobertura
+// essencial, da maior para a menor. Mantida como lista fixa para garantir
+// ordenação estável e zero-fill no payload (faixas sem escolas aparecem
+// com escolas=0).
+var faixasCobertura = []string{
+	"Cobertura plena",
+	"Alta cobertura",
+	"Cobertura intermediária",
+	"Baixa cobertura",
+	"Sem essenciais informados",
+}
+
+// AmbientePresencaStat é a presença de um ambiente (ranking).
+type AmbientePresencaStat struct {
+	Label      string  `json:"label"`
+	Escolas    int     `json:"escolas"`
+	Percentual float64 `json:"percentual"`
+}
+
+// FaixaCoberturaStat é a quantidade de escolas em uma faixa de cobertura.
+type FaixaCoberturaStat struct {
+	Label      string  `json:"label"`
+	Escolas    int     `json:"escolas"`
+	Percentual float64 `json:"percentual"`
+}
+
+// CoberturaEssenciais agrega os indicadores de cobertura dos ambientes
+// essenciais para o conjunto de escolas concluídas no ano corrente.
+type CoberturaEssenciais struct {
+	TotalEssenciais          int                  `json:"total_essenciais"`
+	MediaAmbientesEssenciais float64              `json:"media_ambientes_essenciais"`
+	PctCoberturaPlena        float64              `json:"pct_cobertura_plena"`
+	PorFaixa                 []FaixaCoberturaStat `json:"por_faixa"`
+}
+
+// MediaEssenciaisPorteStat é a média de ambientes essenciais por porte.
+type MediaEssenciaisPorteStat struct {
+	Porte string  `json:"porte"`
+	Media float64 `json:"media"`
+}
+
+// CaracterizacaoInfraEducacional é o payload de
+// GET /v1/admin/analytics/caracterizacao/infraestrutura-educacional.
+type CaracterizacaoInfraEducacional struct {
+	Ambientes            []AmbientePresencaStat     `json:"ambientes"`
+	CoberturaEssenciais  CoberturaEssenciais        `json:"cobertura_essenciais"`
+	MediaEssenciaisPorte []MediaEssenciaisPorteStat `json:"media_essenciais_por_porte"`
+	AmbientesEssenciais  []string                   `json:"ambientes_essenciais"`
+}
+
+// coberturaEssenciaisCTE monta o conjunto "por_escola": uma linha por
+// escola concluída no ano corrente, com a quantidade de ambientes
+// essenciais presentes (0 para escolas que não declararam nenhum). O
+// LEFT JOIN a partir de vw_censo_enriquecida garante que escolas sem a
+// chave 'ambientes' entrem no denominador com qtd=0.
+const coberturaEssenciaisCTE = `
+WITH escolas AS (
+    SELECT
+        e.school_id,
+        MIN(e.porte_escola_cod)  AS porte_cod,
+        MIN(e.porte_escola_nome) AS porte_nome
+    FROM vw_censo_enriquecida e
+    WHERE e.status = 'completed'
+      AND e.year   = EXTRACT(YEAR FROM CURRENT_DATE)::int
+      AND e.census_id IS NOT NULL
+    GROUP BY e.school_id
+),
+essenciais(nome) AS (
+    VALUES
+        ('Biblioteca'),
+        ('Laboratório de Ciências'),
+        ('Laboratório de Informática'),
+        ('Quadra Esportiva'),
+        ('Refeitório'),
+        ('Cozinha'),
+        ('Sala dos Professores'),
+        ('SAEE')
+),
+amb_ess AS (
+    -- LEFT JOIN explícito e escopado: parte de "escolas" (denominador) e
+    -- só conta como essencial o ambiente cujo nome casa com a lista oficial.
+    -- Escolas sem ambientes declarados permanecem com qtd = 0.
+    SELECT
+        e.school_id,
+        COUNT(DISTINCT ess.nome) AS qtd
+    FROM escolas e
+    LEFT JOIN vw_censo_ambientes a
+        ON a.school_id = e.school_id
+       AND a.status    = 'completed'
+       AND a.year      = EXTRACT(YEAR FROM CURRENT_DATE)::int
+    LEFT JOIN essenciais ess
+        ON TRIM(a.ambiente) = ess.nome
+    GROUP BY e.school_id
+),
+por_escola AS (
+    SELECT
+        e.school_id,
+        e.porte_cod,
+        e.porte_nome,
+        COALESCE(ae.qtd, 0) AS qtd_essenciais
+    FROM escolas e
+    LEFT JOIN amb_ess ae ON ae.school_id = e.school_id
+)
+`
+
+// AdminAnalyticsCaracterizacaoInfraEducacional entrega o bloco
+// "Infraestrutura Educacional" da aba Caracterização da Rede:
+//   - presença de ambientes (ranking via vw_censo_ambientes);
+//   - cobertura de ambientes essenciais (média, % plena e faixas);
+//   - média de ambientes essenciais por porte.
+//
+// Denominador de todos os percentuais: total de escolas concluídas no
+// ano corrente (CTE por_escola), e não apenas escolas que declararam
+// ambientes.
+func (app *application) AdminAnalyticsCaracterizacaoInfraEducacional(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	db := app.models.Schools.DB
+
+	out := CaracterizacaoInfraEducacional{
+		Ambientes:            []AmbientePresencaStat{},
+		MediaEssenciaisPorte: []MediaEssenciaisPorteStat{},
+		AmbientesEssenciais:  ambientesEssenciais,
+		CoberturaEssenciais: CoberturaEssenciais{
+			TotalEssenciais: len(ambientesEssenciais),
+			PorFaixa:        []FaixaCoberturaStat{},
+		},
+	}
+
+	// 1) Escalares de cobertura: total de escolas concluídas (denominador),
+	//    média de essenciais por escola e % de cobertura plena (8/8).
+	var totalEscolas int
+	err := db.QueryRowContext(ctx, coberturaEssenciaisCTE+`
+		SELECT
+			COUNT(*)                                                            AS total,
+			COALESCE(AVG(qtd_essenciais), 0)::float8                            AS media,
+			CASE WHEN COUNT(*) > 0
+				 THEN ROUND(100.0 * COUNT(*) FILTER (WHERE qtd_essenciais = 8) / COUNT(*), 2)
+				 ELSE 0
+			END::float8                                                        AS pct_plena
+		FROM por_escola
+	`).Scan(
+		&totalEscolas,
+		&out.CoberturaEssenciais.MediaAmbientesEssenciais,
+		&out.CoberturaEssenciais.PctCoberturaPlena,
+	)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro nos escalares de cobertura essencial: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// 2) Presença de ambientes (ranking). COUNT(DISTINCT school_id) evita
+	//    duplicidade caso um ambiente apareça mais de uma vez para a mesma
+	//    escola. Percentual computado em Go sobre o total de escolas
+	//    concluídas (denominador único de toda a aba).
+	rowsAmb, err := db.QueryContext(ctx, `
+		WITH yr AS (SELECT EXTRACT(YEAR FROM CURRENT_DATE)::int AS y)
+		SELECT
+			TRIM(a.ambiente)            AS label,
+			COUNT(DISTINCT a.school_id) AS escolas
+		FROM vw_censo_ambientes a, yr
+		WHERE a.status = 'completed'
+		  AND a.year   = yr.y
+		  AND a.census_id IS NOT NULL
+		GROUP BY TRIM(a.ambiente)
+		ORDER BY escolas DESC, label
+	`)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro na presença de ambientes: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer rowsAmb.Close()
+	for rowsAmb.Next() {
+		var a AmbientePresencaStat
+		if err := rowsAmb.Scan(&a.Label, &a.Escolas); err != nil {
+			app.errorJSON(w, fmt.Errorf("erro lendo presença de ambientes: %v", err), http.StatusInternalServerError)
+			return
+		}
+		if totalEscolas > 0 {
+			a.Percentual = round2(100.0 * float64(a.Escolas) / float64(totalEscolas))
+		}
+		out.Ambientes = append(out.Ambientes, a)
+	}
+	if err := rowsAmb.Err(); err != nil {
+		app.errorJSON(w, fmt.Errorf("erro iterando presença de ambientes: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// 3) Distribuição por faixa de cobertura. Contagens vêm agrupadas do
+	//    SQL; a montagem em Go garante ordem fixa e zero-fill das faixas
+	//    sem escolas. Percentual sobre o total de escolas concluídas.
+	faixaCount := map[string]int{}
+	rowsFaixa, err := db.QueryContext(ctx, coberturaEssenciaisCTE+`
+		SELECT
+			CASE
+				WHEN qtd_essenciais = 8           THEN 'Cobertura plena'
+				WHEN qtd_essenciais BETWEEN 6 AND 7 THEN 'Alta cobertura'
+				WHEN qtd_essenciais BETWEEN 4 AND 5 THEN 'Cobertura intermediária'
+				WHEN qtd_essenciais BETWEEN 1 AND 3 THEN 'Baixa cobertura'
+				ELSE 'Sem essenciais informados'
+			END           AS faixa,
+			COUNT(*)      AS escolas
+		FROM por_escola
+		GROUP BY 1
+	`)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro nas faixas de cobertura: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer rowsFaixa.Close()
+	for rowsFaixa.Next() {
+		var label string
+		var escolas int
+		if err := rowsFaixa.Scan(&label, &escolas); err != nil {
+			app.errorJSON(w, fmt.Errorf("erro lendo faixas de cobertura: %v", err), http.StatusInternalServerError)
+			return
+		}
+		faixaCount[label] = escolas
+	}
+	if err := rowsFaixa.Err(); err != nil {
+		app.errorJSON(w, fmt.Errorf("erro iterando faixas de cobertura: %v", err), http.StatusInternalServerError)
+		return
+	}
+	for _, label := range faixasCobertura {
+		escolas := faixaCount[label]
+		pct := 0.0
+		if totalEscolas > 0 {
+			pct = round2(100.0 * float64(escolas) / float64(totalEscolas))
+		}
+		out.CoberturaEssenciais.PorFaixa = append(out.CoberturaEssenciais.PorFaixa, FaixaCoberturaStat{
+			Label:      label,
+			Escolas:    escolas,
+			Percentual: pct,
+		})
+	}
+
+	// 4) Média de essenciais por porte. Ordena por porte_escola_cod para
+	//    manter a sequência natural das faixas de porte.
+	rowsPorte, err := db.QueryContext(ctx, coberturaEssenciaisCTE+`
+		SELECT
+			porte_nome                              AS porte,
+			COALESCE(AVG(qtd_essenciais), 0)::float8 AS media,
+			MIN(porte_cod)                          AS ord
+		FROM por_escola
+		GROUP BY porte_nome
+		ORDER BY ord
+	`)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro na média por porte: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer rowsPorte.Close()
+	for rowsPorte.Next() {
+		var m MediaEssenciaisPorteStat
+		var ord int
+		if err := rowsPorte.Scan(&m.Porte, &m.Media, &ord); err != nil {
+			app.errorJSON(w, fmt.Errorf("erro lendo média por porte: %v", err), http.StatusInternalServerError)
+			return
+		}
+		m.Media = round2(m.Media)
+		out.MediaEssenciaisPorte = append(out.MediaEssenciaisPorte, m)
+	}
+	if err := rowsPorte.Err(); err != nil {
+		app.errorJSON(w, fmt.Errorf("erro iterando média por porte: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	out.CoberturaEssenciais.MediaAmbientesEssenciais = round2(out.CoberturaEssenciais.MediaAmbientesEssenciais)
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: out})
+}
+
+// round2 arredonda para 2 casas decimais, usado nos percentuais e médias
+// computados em Go (o SQL já arredonda os seus; aqui mantemos paridade).
+func round2(v float64) float64 {
+	return math.Round(v*100) / 100
 }
 
 // AdminAnalyticsCaracterizacaoDRE lê vw_censo_enriquecida e devolve o

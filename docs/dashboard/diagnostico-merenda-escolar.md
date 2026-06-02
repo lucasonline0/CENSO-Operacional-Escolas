@@ -183,7 +183,7 @@ Legenda das 10 respostas (na ordem): (1) existe no frontend; (2) dado no payload
 
 #### 6.1.3 Merenda atende às necessidades
 
-- **Estado: PARCIAL.** Existe o KPI `pct_atende_necessidades` (% "Sim") no resumo executivo; **não** há distribuição Sim/Parcialmente/Não.
+- **Estado: ENTREGUE (MER-01A).** `dist_atende_necessidades` exposto em `/merenda/oferta` via `distQ("vw_censo_rh_merendeiras", "atende_necessidades")` e renderizado como `Donut` em `sec-merenda-oferta`. O KPI `pct_atende_necessidades` foi mantido no resumo executivo (duplicidade KPI + gráfico aceita).
 - (1) Não (só StatCard %). (2) Não (só o %). (3) **Sim** — `vw_censo_rh_merendeiras.atende_necessidades` (categórico). (4) Calcula só o % de "Sim". (5) **Não** — sem o array por categoria, o frontend não reconstrói Parcialmente/Não. (6) **Sim** — expandir `/merenda/oferta` (helper `distQ` já existe). (7) Não. (8) Não. (9) Confirmar categorias reais (esperado "Sim"/"Parcialmente"/"Não"). (10) `analytics_infra_merenda_servicos.go` + `types.ts` + `AbaMerenda.tsx`.
 - **Recomendação:** reusar `distQ("vw_censo_rh_merendeiras", "atende_necessidades")` e renderizar donut, mantendo o KPI.
 
@@ -196,19 +196,19 @@ Legenda das 10 respostas (na ordem): (1) existe no frontend; (2) dado no payload
 
 #### 6.2.2 Possui refeitório
 
-- **Estado: PARCIAL.** Existe o KPI `pct_possui_refeitorio`; **não** há distribuição Sim/Não.
+- **Estado: ENTREGUE (MER-01A).** `dist_possui_refeitorio` exposto em `/merenda/oferta` via `distQ("vw_censo_equipamentos_merenda", "possui_refeitorio")` e renderizado como `Donut` em `sec-merenda-estrutura`. KPI `pct_possui_refeitorio` mantido no resumo executivo. Nuance `NULL` ("não informado" fica fora da distribuição) preservada — ver §6.5 / observações.
 - (1) Parcial (StatCard %). (2) Parcial (só o %). (3) Sim — `possui_refeitorio`. (4) Calcula só % "Sim". (5) **Parcial** — `Não = 100 − pct` é derivável, mas a contagem absoluta de escolas "Não" não está no payload (o total não é exposto). (6) **Sim** (recomendado) — expandir `/merenda/oferta` via `distQ`. (7) Não. (8) Não. (9) Nuance: a view usa `NULLIF('','')`, então "não informado" vira `NULL` e **fica fora** da distribuição (diferente do booleano de Tecnologia). Decidir se "não informado" entra como categoria. (10) `analytics_infra_merenda_servicos.go` + `types.ts` + `AbaMerenda.tsx`.
 - **Recomendação:** expor `dist_possui_refeitorio` via `distQ` (mais coerente que derivar no frontend, pois dá contagens corretas e trata o `NULL`).
 
 #### 6.2.3 Tamanho da cozinha
 
-- **Estado: AUSENTE.** Campo na view, mas não no payload nem no frontend.
+- **Estado: ENTREGUE (MER-01A).** `dist_tamanho_cozinha` exposto em `/merenda/oferta` via `distQ("vw_censo_equipamentos_merenda", "tamanho_cozinha")` e renderizado como `HBarChart` em `sec-merenda-estrutura`.
 - (1) Não. (2) Não. (3) **Sim** — `vw_censo_equipamentos_merenda.tamanho_cozinha`. (4) Não. (5) Não. (6) **Sim** — expandir `/merenda/oferta` via `distQ`. (7) Não. (8) Não. (9) Confirmar categorias válidas e tratamento de texto livre. (10) `analytics_infra_merenda_servicos.go` + `types.ts` + `AbaMerenda.tsx`.
 - **Recomendação:** reusar `distQ("vw_censo_equipamentos_merenda", "tamanho_cozinha")` e renderizar donut em `sec-merenda-estrutura`.
 
 #### 6.2.4 Refeitório adequado
 
-- **Estado: AUSENTE.** Campo na view, mas não no payload nem no frontend.
+- **Estado: ENTREGUE (MER-01A).** `dist_refeitorio_adequado` exposto em `/merenda/oferta` via `distQ("vw_censo_equipamentos_merenda", "refeitorio_adequado")` e renderizado como `HBarChart` em `sec-merenda-estrutura`. Denominador: escolas com o campo informado (padrão atual do `distQ`); decisão de usar "apenas quem possui refeitório" fica como observação para fase futura.
 - (1) Não. (2) Não. (3) **Sim** — `vw_censo_equipamentos_merenda.refeitorio_adequado`. (4) Não. (5) Não. (6) **Sim** — expandir `/merenda/oferta` via `distQ`. (7) Não. (8) Não. (9) Confirmar se o denominador é "todas as concluídas" ou "apenas as que possuem refeitório". (10) `analytics_infra_merenda_servicos.go` + `types.ts` + `AbaMerenda.tsx`.
 - **Recomendação:** reusar `distQ` e renderizar; documentar a decisão de denominador.
 
@@ -312,11 +312,11 @@ Legenda das 10 respostas (na ordem): (1) existe no frontend; (2) dado no payload
 |---|---|---|---|---|---|---|
 | Oferta | Oferta regular da merenda | Completo | — | — | — | Manter |
 | Oferta | Qualidade da merenda | Completo | — | — | Refino normalização | Manter |
-| Oferta | Atende necessidades (Sim/Parc./Não) | Parcial | Expandir `/oferta` (`distQ`) | Donut | Confirmar categorias | Expor `dist_atende_necessidades` |
+| Oferta | Atende necessidades (Sim/Parc./Não) | **Entregue (MER-01A)** | `dist_atende_necessidades` em `/oferta` | Donut | Confirmar categorias | — |
 | Estrutura | Condições da cozinha | Completo | — | — | — | Manter |
-| Estrutura | Possui refeitório (Sim/Não) | Parcial | Expandir `/oferta` (`distQ`) | Donut | Nuance "não informado" (`NULL`) | Expor `dist_possui_refeitorio` |
-| Estrutura | Tamanho da cozinha | Ausente | Expandir `/oferta` (`distQ`) | Donut | Categorias válidas | Expor `dist_tamanho_cozinha` |
-| Estrutura | Refeitório adequado | Ausente | Expandir `/oferta` (`distQ`) | Donut | Denominador | Expor `dist_refeitorio_adequado` |
+| Estrutura | Possui refeitório (Sim/Não) | **Entregue (MER-01A)** | `dist_possui_refeitorio` em `/oferta` | Donut | Nuance "não informado" (`NULL`) | — |
+| Estrutura | Tamanho da cozinha | **Entregue (MER-01A)** | `dist_tamanho_cozinha` em `/oferta` | HBar | Categorias válidas | — |
+| Estrutura | Refeitório adequado | **Entregue (MER-01A)** | `dist_refeitorio_adequado` em `/oferta` | HBar | Denominador | — |
 | Equipamentos | Presença por tipo | Ausente | Expandir `/equipamentos` (`COUNT FILTER qtd>0`) | HBar | Critério "possui" | Expor `presenca_por_tipo` |
 | Equipamentos | Escolas com 1/2/3+ | Ausente | Expandir `/equipamentos` (bucketização) | Donut/HBar | **Sim — interpretação + faixas** | Bloqueado até decisão |
 | Equipamentos | Estado consolidado | Parcial | — (derivável) | Donut/empilhado | Contar escolas vs. equipamentos | Derivar de `dist_estados` no frontend |
@@ -333,6 +333,8 @@ Legenda das 10 respostas (na ordem): (1) existe no frontend; (2) dado no payload
 | RH | Média de merendeiras/escola | Ausente | Futuro (Serviços) | Futuro | — | Frente futura |
 
 Resumo dos quatro blocos finalísticos (excluindo RH): **3 completos**, **3 parciais**, **8 ausentes** (5 deles compõem o bloco inteiro de Condições Sanitárias). **Nenhuma migration/view nova** é necessária. **2 itens bloqueados por produto**: faixas de quantidade de equipamentos e definição de criticidade.
+
+> **MER-01A entregue.** Os 4 itens de Oferta/Estrutura que estavam parciais/ausentes (atende necessidades, possui refeitório, tamanho da cozinha, refeitório adequado) foram entregues expandindo `/merenda/oferta` com `dist_*`, sem nova view/migration/endpoint. Permanecem fora de escopo: Equipamentos avançados, Condições Sanitárias e Segurança, e a migração RH/Merendeiras para Serviços Terceirizados.
 
 ## 8. Payloads recomendados
 
@@ -407,7 +409,7 @@ docs/dashboard/*                                  # nota de validação/parity
 
 Ordem sugerida:
 
-1. **MER-01A — Oferta e Estrutura Física.** Expandir `/merenda/oferta` com `dist_atende_necessidades`, `dist_possui_refeitorio`, `dist_tamanho_cozinha`, `dist_refeitorio_adequado` (reuso de `distQ`); renderizar donuts em `sec-merenda-oferta`/`sec-merenda-estrutura`. **Menor risco** (mesma view, mesmo endpoint, helper pronto).
+1. **MER-01A — Oferta e Estrutura Física. ✅ ENTREGUE.** `/merenda/oferta` expandido com `dist_atende_necessidades`, `dist_possui_refeitorio`, `dist_tamanho_cozinha`, `dist_refeitorio_adequado` (reuso de `distQ`); renderizado donut/HBar em `sec-merenda-oferta`/`sec-merenda-estrutura`. Sem nova view/migration/endpoint; campos `pct_*` preservados.
 2. **MER-01B — Equipamentos.** Expandir `/merenda/equipamentos` com `presenca_por_tipo`; renderizar presença por tipo + **estado consolidado derivado no frontend** de `dist_estados`. **Carve-out obrigatório:** faixas de quantidade (1/2/3+) e criticidade ficam **fora**, bloqueados por produto.
 3. **MER-01C — Condições Sanitárias e Segurança.** Criar `GET /v1/admin/analytics/merenda/condicoes-sanitarias`, registrar rota em `main.go`, criar bloco/anchor (`sec-merenda-sanitario`) e item de menu, renderizar despensa/depósito/itens básicos/EPIs-extintor/manutenção. Maior fronteira (toca `main.go` + `page.tsx`).
 4. **MER-RH-01 — Migrar Merendeiras para Serviços Terceirizados.** Criar bloco "Manipuladores de Alimentos / Merendeiras" em `AbaServicosTerceirizados.tsx` (endpoint dedicado recomendado), e **só então** remover `sec-merenda-rh` de `AbaMerenda.tsx`. Tratar junto da rodada de Governança / Supervisão (escala de avaliação compartilhada).

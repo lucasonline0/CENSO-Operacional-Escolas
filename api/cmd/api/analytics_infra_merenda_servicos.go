@@ -34,24 +34,28 @@ type InfraCondicoes struct {
 }
 
 type InfraSeguranca struct {
-	PctGuarita          float64         `json:"pct_possui_guarita"`
-	PctControlePortao   float64         `json:"pct_controle_portao"`
-	PctIluminacao       float64         `json:"pct_iluminacao_externa"`
-	PctBotaoPanico      float64         `json:"pct_possui_botao_panico"`
-	PctCamerasFuncionais float64        `json:"pct_cameras_funcionais"`
-	PctPlanoEvacuacao   float64         `json:"pct_plano_evacuacao"`
-	PctPoliticaBullying float64         `json:"pct_politica_bullying"`
-	DistCameras         []CategoricStat `json:"dist_cameras"`
+	PctGuarita           float64         `json:"pct_possui_guarita"`
+	PctControlePortao    float64         `json:"pct_controle_portao"`
+	PctIluminacao        float64         `json:"pct_iluminacao_externa"`
+	PctBotaoPanico       float64         `json:"pct_possui_botao_panico"`
+	PctCamerasFuncionais float64         `json:"pct_cameras_funcionais"`
+	PctPlanoEvacuacao    float64         `json:"pct_plano_evacuacao"`
+	PctPoliticaBullying  float64         `json:"pct_politica_bullying"`
+	DistCameras          []CategoricStat `json:"dist_cameras"`
 }
 
 // ---- payloads Merenda ----------------------------------------------------
 
 type MerendaOferta struct {
-	DistOfertaRegular     []CategoricStat `json:"dist_oferta_regular"`
-	DistQualidade         []CategoricStat `json:"dist_qualidade"`
-	PctAtendeNecessidades float64         `json:"pct_atende_necessidades"`
-	DistCondicoesCozinha  []CategoricStat `json:"dist_condicoes_cozinha"`
-	PctPossuiRefeitorio   float64         `json:"pct_possui_refeitorio"`
+	DistOfertaRegular      []CategoricStat `json:"dist_oferta_regular"`
+	DistQualidade          []CategoricStat `json:"dist_qualidade"`
+	PctAtendeNecessidades  float64         `json:"pct_atende_necessidades"`
+	DistAtendeNecessidades []CategoricStat `json:"dist_atende_necessidades"`
+	DistCondicoesCozinha   []CategoricStat `json:"dist_condicoes_cozinha"`
+	PctPossuiRefeitorio    float64         `json:"pct_possui_refeitorio"`
+	DistPossuiRefeitorio   []CategoricStat `json:"dist_possui_refeitorio"`
+	DistTamanhoCozinha     []CategoricStat `json:"dist_tamanho_cozinha"`
+	DistRefeitorioAdequado []CategoricStat `json:"dist_refeitorio_adequado"`
 }
 
 type EquipTotais struct {
@@ -284,9 +288,13 @@ func (app *application) AdminAnalyticsMerendaOferta(w http.ResponseWriter, r *ht
 	db := app.models.Schools.DB
 
 	out := MerendaOferta{
-		DistOfertaRegular:    []CategoricStat{},
-		DistQualidade:        []CategoricStat{},
-		DistCondicoesCozinha: []CategoricStat{},
+		DistOfertaRegular:      []CategoricStat{},
+		DistQualidade:          []CategoricStat{},
+		DistAtendeNecessidades: []CategoricStat{},
+		DistCondicoesCozinha:   []CategoricStat{},
+		DistPossuiRefeitorio:   []CategoricStat{},
+		DistTamanhoCozinha:     []CategoricStat{},
+		DistRefeitorioAdequado: []CategoricStat{},
 	}
 
 	const filtro = `status = 'completed' AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int AND census_id IS NOT NULL`
@@ -318,8 +326,24 @@ func (app *application) AdminAnalyticsMerendaOferta(w http.ResponseWriter, r *ht
 		app.errorJSON(w, fmt.Errorf("dist_qualidade: %v", err), http.StatusInternalServerError)
 		return
 	}
+	if out.DistAtendeNecessidades, err = distQ("vw_censo_rh_merendeiras", "atende_necessidades"); err != nil {
+		app.errorJSON(w, fmt.Errorf("dist_atende_necessidades: %v", err), http.StatusInternalServerError)
+		return
+	}
 	if out.DistCondicoesCozinha, err = distQ("vw_censo_equipamentos_merenda", "condicoes_cozinha"); err != nil {
 		app.errorJSON(w, fmt.Errorf("dist_condicoes_cozinha: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if out.DistPossuiRefeitorio, err = distQ("vw_censo_equipamentos_merenda", "possui_refeitorio"); err != nil {
+		app.errorJSON(w, fmt.Errorf("dist_possui_refeitorio: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if out.DistTamanhoCozinha, err = distQ("vw_censo_equipamentos_merenda", "tamanho_cozinha"); err != nil {
+		app.errorJSON(w, fmt.Errorf("dist_tamanho_cozinha: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if out.DistRefeitorioAdequado, err = distQ("vw_censo_equipamentos_merenda", "refeitorio_adequado"); err != nil {
+		app.errorJSON(w, fmt.Errorf("dist_refeitorio_adequado: %v", err), http.StatusInternalServerError)
 		return
 	}
 

@@ -125,7 +125,25 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
     label: s.valor,
     value: s.escolas,
   }));
+  const atendeNecessidadesSegments = (oferta?.dist_atende_necessidades ?? []).map((s, i) => ({
+    label: s.valor,
+    value: s.escolas,
+    color: PORTE_COLORS[i % PORTE_COLORS.length] ?? "#94A3B8",
+  }));
   const condCozinhaRows = (oferta?.dist_condicoes_cozinha ?? []).map((s) => ({
+    label: s.valor,
+    value: s.escolas,
+  }));
+  const possuiRefeitorioSegments = (oferta?.dist_possui_refeitorio ?? []).map((s, i) => ({
+    label: s.valor,
+    value: s.escolas,
+    color: PORTE_COLORS[i % PORTE_COLORS.length] ?? "#94A3B8",
+  }));
+  const tamanhoCozinhaRows = (oferta?.dist_tamanho_cozinha ?? []).map((s) => ({
+    label: s.valor,
+    value: s.escolas,
+  }));
+  const refeitorioAdequadoRows = (oferta?.dist_refeitorio_adequado ?? []).map((s) => ({
     label: s.valor,
     value: s.escolas,
   }));
@@ -242,6 +260,17 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
             <NoData />
           )}
         </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <CheckCircle2 size={16} style={{ color: C.primary }} />
+            Merenda atende às necessidades dos alunos
+          </h3>
+          {atendeNecessidadesSegments.length > 0 ? (
+            <Donut segments={atendeNecessidadesSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
       </div>
 
       {/* ── Estrutura Física da Cozinha ──────────────────────────── */}
@@ -262,14 +291,31 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
               <NoData />
             )}
           </div>
-          <div className="flex items-center justify-center">
-            <StatCard
-              label="Possui Refeitório"
-              value={fmtPct(oferta?.pct_possui_refeitorio)}
-              Icon={Utensils}
-              tone="blue"
-              sub="das escolas"
-            />
+          <div>
+            <h3 className="font-semibold text-slate-800 text-sm mb-4">Possui refeitório?</h3>
+            {possuiRefeitorioSegments.length > 0 ? (
+              <Donut segments={possuiRefeitorioSegments} />
+            ) : (
+              <NoData />
+            )}
+          </div>
+          <div>
+            <h3 className="font-semibold text-slate-800 text-sm mb-4">Tamanho da cozinha</h3>
+            {tamanhoCozinhaRows.length > 0 ? (
+              <HBarChart rows={tamanhoCozinhaRows} color={C.primary} />
+            ) : (
+              <NoData />
+            )}
+          </div>
+          <div>
+            <h3 className="font-semibold text-slate-800 text-sm mb-4">
+              O refeitório atende a necessidade da escola adequadamente?
+            </h3>
+            {refeitorioAdequadoRows.length > 0 ? (
+              <HBarChart rows={refeitorioAdequadoRows} color={C.primary} />
+            ) : (
+              <NoData />
+            )}
           </div>
         </div>
       </div>

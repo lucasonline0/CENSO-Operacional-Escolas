@@ -162,8 +162,12 @@ export interface MerendaOferta {
   dist_oferta_regular: CategoricStat[];
   dist_qualidade: CategoricStat[];
   pct_atende_necessidades: number;
+  dist_atende_necessidades: CategoricStat[];
   dist_condicoes_cozinha: CategoricStat[];
   pct_possui_refeitorio: number;
+  dist_possui_refeitorio: CategoricStat[];
+  dist_tamanho_cozinha: CategoricStat[];
+  dist_refeitorio_adequado: CategoricStat[];
 }
 
 export interface MerendaEquipamentos {

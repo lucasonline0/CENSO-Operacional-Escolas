@@ -581,6 +581,8 @@ Validar escala e semântica dos campos antes da implementação.
 
 #### 6.1.1 Tamanho da cozinha
 
+> **Status: ✅ ENTREGUE (MER-01A).** Mesmo gráfico de §6.6.3 — `dist_tamanho_cozinha` exposto em `/merenda/oferta` e renderizado em `sec-merenda-estrutura`.
+
 **O que o gráfico deve mostrar**  
 Distribuição de escolas por tamanho declarado da cozinha.
 
@@ -1092,9 +1094,11 @@ Manter nº de escolas e total absoluto; decidir o denominador antes de expor o p
 >
 > **Dados disponíveis na view.** A view `vw_censo_equipamentos_merenda` (migration `0009`) já contém: `condicoes_cozinha`, `tamanho_cozinha`, `possui_refeitorio`, `refeitorio_adequado`, `possui_balanca`, `bancadas_inox`, `sistema_exaustao`, `despensa_exclusiva`, `deposito_conserva`, `estoque_epi_extintor`, `manutencao_extintores`, `qtd_freezers`, `qtd_geladeiras`, `qtd_fogoes`, `qtd_fornos`, `qtd_bebedouros`, `estado_freezers`, `estado_geladeiras`, `estado_fogoes`, `estado_fornos`, `estado_bebedouros`. A view `vw_censo_rh_merendeiras` (migration `0010`) contém `oferta_regular`, `qualidade_merenda`, `atende_necessidades` e os campos de RH. **Isto não significa que tudo esteja implementado**: vários campos existem na view mas **não são expostos** em endpoint nem renderizados — cada item abaixo indica o que falta. Endpoints/frontend precisam ser diagnosticados antes de implementar (próxima etapa).
 >
-> Endpoints atuais de Merenda: `GET /v1/admin/analytics/merenda/{oferta,equipamentos,recursos-humanos}`. O endpoint `/oferta` (payload `MerendaOferta`) hoje entrega `dist_oferta_regular`, `dist_qualidade`, `pct_atende_necessidades`, `dist_condicoes_cozinha`, `pct_possui_refeitorio`. As distribuições usam `CategoricStat` (`{valor, escolas, percentual}`); novos contratos podem mapear `valor`→`label` no frontend.
+> Endpoints atuais de Merenda: `GET /v1/admin/analytics/merenda/{oferta,equipamentos,recursos-humanos}`. O endpoint `/oferta` (payload `MerendaOferta`) entrega `dist_oferta_regular`, `dist_qualidade`, `pct_atende_necessidades`, `dist_condicoes_cozinha`, `pct_possui_refeitorio` e — **após MER-01A** — `dist_atende_necessidades`, `dist_possui_refeitorio`, `dist_tamanho_cozinha`, `dist_refeitorio_adequado`. As distribuições usam `CategoricStat` (`{valor, escolas, percentual}`); novos contratos podem mapear `valor`→`label` no frontend.
 
 #### 6.6.1 Merenda atende necessidades — distribuição
+
+> **Status: ✅ ENTREGUE (MER-01A).** `dist_atende_necessidades` exposto em `/merenda/oferta` (helper `distQ`, view `vw_censo_rh_merendeiras.atende_necessidades`) e renderizado como `Donut` em `sec-merenda-oferta`. KPI `pct_atende_necessidades` mantido no resumo executivo.
 
 **O que o gráfico deve mostrar**  
 Distribuição de escolas por resposta (Sim / Parcialmente / Não) sobre se a merenda atende às necessidades dos alunos, com contagem e percentual.
@@ -1136,6 +1140,8 @@ Expor `dist_atende_necessidades` e renderizar a distribuição.
 
 #### 6.6.2 Possui refeitório — distribuição Sim/Não
 
+> **Status: ✅ ENTREGUE (MER-01A).** `dist_possui_refeitorio` exposto em `/merenda/oferta` (helper `distQ`, view `vw_censo_equipamentos_merenda.possui_refeitorio`) e renderizado como `Donut` em `sec-merenda-estrutura`. KPI `pct_possui_refeitorio` mantido. Nuance: "não informado" (`NULL` via `NULLIF('','')`) fica fora da distribuição — observação para fase futura.
+
 **O que o gráfico deve mostrar**  
 Distribuição Sim/Não de escolas que possuem refeitório, com contagem e percentual.
 
@@ -1176,6 +1182,8 @@ Expor a distribuição Sim/Não e renderizar o donut.
 
 #### 6.6.3 Tamanho da cozinha
 
+> **Status: ✅ ENTREGUE (MER-01A).** `dist_tamanho_cozinha` exposto em `/merenda/oferta` (helper `distQ`, view `vw_censo_equipamentos_merenda.tamanho_cozinha`) e renderizado como `HBarChart` em `sec-merenda-estrutura`.
+
 **O que o gráfico deve mostrar**  
 Distribuição de escolas por tamanho declarado da cozinha.
 
@@ -1215,6 +1223,8 @@ Backend + Frontend.
 Expor `dist_tamanho_cozinha` e renderizar (consolidar com §6.1.1, que trata o mesmo gráfico).
 
 #### 6.6.4 Refeitório adequado
+
+> **Status: ✅ ENTREGUE (MER-01A).** `dist_refeitorio_adequado` exposto em `/merenda/oferta` (helper `distQ`, view `vw_censo_equipamentos_merenda.refeitorio_adequado`) e renderizado como `HBarChart` em `sec-merenda-estrutura`. Denominador atual: escolas com o campo informado (padrão do `distQ`); decisão "apenas quem possui refeitório" fica como observação futura.
 
 **O que o gráfico deve mostrar**  
 Distribuição de escolas conforme o refeitório atende adequadamente à necessidade da escola.
@@ -1657,7 +1667,7 @@ A fonte futura deve vir de bases próprias validadas pelas coordenações respon
 | `/v1/admin/analytics/caracterizacao/oferta-funcionamento` | Etapas, modalidades, turnos, média de turnos por porte | Recomendado | Confirmar estrutura dos campos multivalorados |
 | `/v1/admin/analytics/caracterizacao/infraestrutura-educacional` | Ambientes e essenciais | **Entregue (CAR-INFRA-01)** | Lista oficial inicial definida; refino futuro com produto |
 | `/v1/admin/analytics/infraestrutura/energia-climatizacao` | Energia e climatização | Recomendado ou expansão de `/condicoes` | Confirmar semântica dos campos |
-| `/v1/admin/analytics/merenda/estrutura-fisica` | Tamanho da cozinha, refeitório adequado, distribuição Sim/Não de refeitório | Opcional | Pode ser expansão de `/merenda/oferta` |
+| `/v1/admin/analytics/merenda/estrutura-fisica` | Tamanho da cozinha, refeitório adequado, distribuição Sim/Não de refeitório | **Entregue como expansão de `/merenda/oferta` (MER-01A)** | Não criado endpoint próprio; `dist_tamanho_cozinha`, `dist_refeitorio_adequado`, `dist_possui_refeitorio` em `/merenda/oferta` |
 | `/v1/admin/analytics/merenda/condicoes-sanitarias` | Despensa, depósito, itens básicos, EPIs/extintor, manutenção de extintores | Recomendado (bloco ausente) | Campos já existem em `vw_censo_equipamentos_merenda` |
 | `/v1/admin/analytics/servicos-terceirizados/governanca` | Supervisão e avaliações | Recomendado | Escala oficial das avaliações |
 | `/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos` | RH de merendeiras migrado de Merenda | Futuro (rodada própria) | Reaproveita `vw_censo_rh_merendeiras` |
@@ -1672,8 +1682,8 @@ A fonte futura deve vir de bases próprias validadas pelas coordenações respon
 | Ambientes por escola | Presença de ambientes | Sim, `vw_censo_ambientes` | Entregue (CAR-INFRA-01) |
 | Ambientes essenciais | Cobertura e média por porte | Sim, lista oficial inicial | Entregue (CAR-INFRA-01); refino futuro da lista |
 | Energia/climatização | KPIs e distribuição | Parcial | Campos existem, não expostos |
-| Tamanho da cozinha / refeitório adequado | Distribuição categórica | Sim, `vw_censo_equipamentos_merenda` | Falta payload |
-| Atende necessidades (Merenda) | Distribuição Sim/Parc./Não | Sim, `vw_censo_rh_merendeiras` | Hoje só `pct_atende_necessidades` |
+| Tamanho da cozinha / refeitório adequado | Distribuição categórica | Sim, `vw_censo_equipamentos_merenda` | **Entregue (MER-01A)** — `dist_tamanho_cozinha`, `dist_refeitorio_adequado` em `/merenda/oferta` |
+| Atende necessidades (Merenda) | Distribuição Sim/Parc./Não | Sim, `vw_censo_rh_merendeiras` | **Entregue (MER-01A)** — `dist_atende_necessidades` (KPI `pct_atende_necessidades` mantido) |
 | Presença/quantidade/criticidade de equipamentos (Merenda) | Presença, faixas, estado consolidado | Sim, `vw_censo_equipamentos_merenda` | Faltam payload e definições de produto (faixas/criticidade) |
 | Condições sanitárias (Merenda) | KPIs/distribuições do bloco ausente | Sim, `vw_censo_equipamentos_merenda` | Campos existem, sem endpoint/frontend |
 | RH merendeiras → Serviços Terceirizados | Reorganização conceitual | Sim, `vw_censo_rh_merendeiras` | Migração de bloco; sem mudança de dado nesta rodada |

@@ -127,17 +127,37 @@ export interface InfraCondicoes {
   pct_com_muro_ou_cerca: number;
   pct_perimetro_fechado: number;
   top_ambientes: AmbienteStat[];
+  dist_muro_cerca: CategoricStat[];
+  dist_perimetro_fechado: CategoricStat[];
+  pct_reforma_critica: number;
+  pct_reforma_geral: number;
+  pct_obra_parada: number;
 }
 
 export interface InfraSeguranca {
   pct_possui_guarita: number;
   pct_controle_portao: number;
-  pct_iluminacao_externa: number;
   pct_possui_botao_panico: number;
   pct_cameras_funcionais: number;
   pct_plano_evacuacao: number;
   pct_politica_bullying: number;
   dist_cameras: CategoricStat[];
+  dist_iluminacao_externa: CategoricStat[];
+  dist_controle_portao: CategoricStat[];
+}
+
+export interface ClimatizacaoSalaRow {
+  faixa:            string;
+  total_salas:      number;
+  climatizadas:     number;
+  nao_climatizadas: number;
+}
+
+export interface InfraEnergia {
+  dist_rede_eletrica_atende:    CategoricStat[];
+  dist_estrutura_climatizacao:  CategoricStat[];
+  dist_climatizacao_salas:      CategoricStat[];
+  tabela_climatizacao:          ClimatizacaoSalaRow[];
 }
 
 // Frente 2 — Merenda Escolar.

@@ -2,9 +2,9 @@
 
 import React, { useEffect, useState } from "react";
 import {
-  ShieldCheck, Building2, Construction, AlertCircle, Loader2,
+  ShieldCheck, Building2, AlertCircle, Loader2,
   Camera, DoorClosed, Lightbulb, Siren, MapPinned, Layers, Home,
-  Sparkles, BellRing, Zap,
+  Sparkles, BellRing, Zap, Wrench,
 } from "lucide-react";
 import { apiFetch } from "./shared/api";
 import { C, PORTE_COLORS } from "./shared/constants";
@@ -12,7 +12,7 @@ import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
 import { HBarChart } from "./shared/BarChart";
 import type {
-  InfraCondicoes, InfraSeguranca,
+  InfraCondicoes, InfraSeguranca, InfraEnergia,
 } from "./shared/types";
 
 type AbaInfraestruturaSegurancaProps = {
@@ -38,6 +38,7 @@ export function AbaInfraestruturaSeguranca({
 }: AbaInfraestruturaSegurancaProps) {
   const [condicoes, setCondicoes] = useState<InfraCondicoes | null>(null);
   const [seguranca, setSeguranca] = useState<InfraSeguranca | null>(null);
+  const [energia,   setEnergia]   = useState<InfraEnergia | null>(null);
   const [condErr,   setCondErr]   = useState("");
   const [segErr,    setSegErr]    = useState("");
   const [loading,   setLoading]   = useState(true);
@@ -59,7 +60,14 @@ export function AbaInfraestruturaSeguranca({
       .then((d) => { if (!cancelled) setSeguranca(d); })
       .catch(handleErr(setSegErr));
 
-    Promise.all([pCond, pSeg]).finally(() => {
+    const pEnergia = apiFetch<InfraEnergia>("/v1/admin/analytics/infraestrutura/energia", token)
+      .then((d) => { if (!cancelled) setEnergia(d); })
+      .catch((e: unknown) => {
+        const msg = (e as Error).message;
+        if (msg === "UNAUTHORIZED" && !cancelled) onUnauth();
+      });
+
+    Promise.all([pCond, pSeg, pEnergia]).finally(() => {
       if (!cancelled) setLoading(false);
     });
 
@@ -127,51 +135,34 @@ export function AbaInfraestruturaSeguranca({
         </div>
       )}
 
-      {/* ── Resumo Executivo ─────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Muro ou Cerca"
-          value={fmtPct(condicoes?.pct_com_muro_ou_cerca)}
-          Icon={Home}
-          tone="blue"
-          sub="das escolas"
-        />
-        <StatCard
-          label="Perímetro Fechado"
-          value={fmtPct(condicoes?.pct_perimetro_fechado)}
-          Icon={ShieldCheck}
-          tone="green"
-          sub="das escolas"
-        />
-        <StatCard
-          label="Controle de Portão"
-          value={fmtPct(seguranca?.pct_controle_portao)}
-          Icon={DoorClosed}
-          tone="amber"
-          sub="das escolas"
-        />
-        <StatCard
-          label="Câmeras Funcionais"
-          value={fmtPct(seguranca?.pct_cameras_funcionais)}
-          Icon={Camera}
-          tone="purple"
-          sub="das escolas"
-        />
+      {/* ── Condições Estruturais e Ambientes ────────────────────── */}
+      <div className="flex items-center gap-3">
+        <Layers size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Condições Estruturais e Ambientes</h2>
+        <div className="flex-1 h-px bg-slate-200" />
       </div>
 
-      {/* ── Condições Estruturais e Ambientes ────────────────────── */}
-      <div id="sec-infra-condicoes" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <Building2 size={16} style={{ color: C.primary }} />
-            Distribuição por Tipo de Prédio
-          </h3>
-          {tipoPredioSegments.length > 0 ? (
-            <Donut segments={tipoPredioSegments} />
-          ) : (
-            <NoData />
-          )}
+      {condicoes && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">Reforma Crítica</p>
+              <p className="text-3xl font-bold text-slate-900 mt-2 tabular-nums">
+                {fmtPct(condicoes.pct_reforma_critica)}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">das escolas necessitam de reforma geral ou estão com a obra parada</p>
+              <p className="text-xs text-slate-400 mt-2">
+                Reforma geral: {fmtPct(condicoes.pct_reforma_geral)} · Obra parada: {fmtPct(condicoes.pct_obra_parada)}
+              </p>
+            </div>
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-50 text-amber-700 ring-1 ring-amber-100 shrink-0">
+              <Wrench size={21} strokeWidth={2} />
+            </div>
+          </div>
         </div>
+      )}
+
+      <div id="sec-infra-condicoes" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
             <Layers size={16} style={{ color: C.primary }} />
@@ -179,6 +170,17 @@ export function AbaInfraestruturaSeguranca({
           </h3>
           {situacaoSegments.length > 0 ? (
             <Donut segments={situacaoSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <Building2 size={16} style={{ color: C.primary }} />
+            Distribuição por Tipo de Prédio
+          </h3>
+          {tipoPredioSegments.length > 0 ? (
+            <Donut segments={tipoPredioSegments} />
           ) : (
             <NoData />
           )}
@@ -197,43 +199,114 @@ export function AbaInfraestruturaSeguranca({
         )}
       </div>
 
-      {/* ── Energia, Climatização e Capacidade Elétrica (empty interno) ── */}
-      <div id="sec-infra-energia" className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-        <div
-          className="px-6 py-4 border-b flex items-center gap-2"
-          style={{ background: C.primaryLight }}
-        >
-          <Zap size={16} className="shrink-0" strokeWidth={2} style={{ color: C.primary }} />
-          <h2 className="font-semibold text-slate-800 text-sm">Energia, Climatização e Capacidade Elétrica</h2>
+      {/* ── Energia, Climatização e Capacidade Elétrica ── */}
+      <div id="sec-infra-energia" className="flex items-center gap-3">
+        <Zap size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Energia, Climatização e Cap. Elétrica</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <Zap size={16} style={{ color: C.primary }} />
+            Rede elétrica atende a demanda?
+          </h3>
+          {energia && energia.dist_rede_eletrica_atende.length > 0 ? (
+            <Donut segments={energia.dist_rede_eletrica_atende.map((s, i) => ({
+              label: s.valor,
+              value: s.escolas,
+              color: PORTE_COLORS[i % PORTE_COLORS.length] ?? "#94A3B8",
+            }))} />
+          ) : (
+            <NoData />
+          )}
         </div>
-        <div className="px-6 py-8 flex flex-col items-center text-center">
-          <div
-            className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-sm mb-3"
-            style={{ background: C.primary }}
-          >
-            <Construction size={22} strokeWidth={1.75} />
-          </div>
-          <p className="text-sm text-slate-600 max-w-2xl">
-            Dados de energia, climatização e capacidade elétrica ainda não estão disponíveis nos endpoints
-            analíticos desta aba. Este bloco será integrado em etapa posterior.
-          </p>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <Sparkles size={16} style={{ color: C.primary }} />
+            Estrutura permite climatizar salas?
+          </h3>
+          {energia && energia.dist_estrutura_climatizacao.length > 0 ? (
+            <Donut segments={energia.dist_estrutura_climatizacao.map((s, i) => ({
+              label: s.valor,
+              value: s.escolas,
+              color: PORTE_COLORS[i % PORTE_COLORS.length] ?? "#94A3B8",
+            }))} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <Lightbulb size={16} style={{ color: C.primary }} />
+            Climatização das salas de aula
+          </h3>
+          {energia && energia.dist_climatizacao_salas.length > 0 ? (
+            <Donut segments={energia.dist_climatizacao_salas.map((s, i) => ({
+              label: s.valor,
+              value: s.escolas,
+              color: PORTE_COLORS[i % PORTE_COLORS.length] ?? "#94A3B8",
+            }))} />
+          ) : (
+            <NoData />
+          )}
         </div>
       </div>
 
+      {/* Tabela: salas climatizadas por faixa */}
+      {energia && (energia.tabela_climatizacao ?? []).length > 0 && (() => {
+        const rows = energia.tabela_climatizacao;
+        const totSalas = rows.reduce((s, r) => s + r.total_salas, 0);
+        const totClimat = rows.reduce((s, r) => s + r.climatizadas, 0);
+        const totNao = rows.reduce((s, r) => s + r.nao_climatizadas, 0);
+        return (
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="text-left px-5 py-3 font-semibold text-slate-700">Climatização de salas de aula</th>
+                    <th className="text-right px-5 py-3 font-semibold text-slate-700">Total de salas</th>
+                    <th className="text-right px-5 py-3 font-semibold text-slate-700">Climatizadas</th>
+                    <th className="text-right px-5 py-3 font-semibold text-slate-700">Não climatizadas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => (
+                    <tr key={r.faixa} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                      <td className="px-5 py-3 text-slate-700">{r.faixa}</td>
+                      <td className="px-5 py-3 text-right text-slate-600">{r.total_salas.toLocaleString("pt-BR")}</td>
+                      <td className="px-5 py-3 text-right text-slate-600">{r.climatizadas.toLocaleString("pt-BR")}</td>
+                      <td className="px-5 py-3 text-right text-slate-600">{r.nao_climatizadas.toLocaleString("pt-BR")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold">
+                    <td className="px-5 py-3 text-slate-800">Total geral</td>
+                    <td className="px-5 py-3 text-right text-slate-800">{totSalas.toLocaleString("pt-BR")}</td>
+                    <td className="px-5 py-3 text-right text-slate-800">{totClimat.toLocaleString("pt-BR")}</td>
+                    <td className="px-5 py-3 text-right text-slate-800">{totNao.toLocaleString("pt-BR")}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Segurança Física e Patrimonial ───────────────────────── */}
-      <div id="sec-infra-seguranca" className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="flex items-center gap-3">
+        <ShieldCheck size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Segurança Física e Patrimonial</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+      <div id="sec-infra-seguranca" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Guarita"
           value={fmtPct(seguranca?.pct_possui_guarita)}
           Icon={ShieldCheck}
           tone="blue"
-          sub="das escolas"
-        />
-        <StatCard
-          label="Iluminação Externa"
-          value={fmtPct(seguranca?.pct_iluminacao_externa)}
-          Icon={Lightbulb}
-          tone="amber"
           sub="das escolas"
         />
         <StatCard
@@ -259,16 +332,104 @@ export function AbaInfraestruturaSeguranca({
         />
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <Camera size={16} style={{ color: C.primary }} />
+            Distribuição do status das câmeras
+          </h3>
+          {camerasSegments.length > 0 ? (
+            <Donut segments={camerasSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <DoorClosed size={16} style={{ color: C.primary }} />
+            Controle de Portão
+          </h3>
+          {(seguranca?.dist_controle_portao ?? []).length > 0 ? (
+            <Donut segments={(seguranca!.dist_controle_portao).map((s, i) => ({
+              label: s.valor,
+              value: s.escolas,
+              color: PORTE_COLORS[i % PORTE_COLORS.length] ?? "#94A3B8",
+            }))} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+      </div>
+
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-          <Camera size={16} style={{ color: C.primary }} />
-          Distribuição do status das câmeras
+          <Lightbulb size={16} style={{ color: "#ec4899" }} />
+          Iluminação Externa
         </h3>
-        {camerasSegments.length > 0 ? (
-          <Donut segments={camerasSegments} />
+        {(seguranca?.dist_iluminacao_externa ?? []).length > 0 ? (
+          <div className="space-y-3">
+            {(seguranca!.dist_iluminacao_externa).map((s) => {
+              const color =
+                s.valor === "Adequada"    ? "#22c55e" :
+                s.valor === "Regular"     ? "#f97316" : "#ec4899";
+              return (
+                <div key={s.valor}>
+                  <div className="flex justify-between text-xs text-slate-600 mb-1">
+                    <span className="font-medium">{s.valor}</span>
+                    <span>{s.escolas} escola{s.escolas !== 1 ? "s" : ""} · {s.percentual.toFixed(1).replace(".", ",")}%</span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                    <div
+                      className="h-3 rounded-full transition-all"
+                      style={{ width: `${s.percentual}%`, background: color }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         ) : (
           <NoData />
         )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <Home size={16} style={{ color: C.primary }} />
+            A escola possui muro ou cerca no perímetro?
+          </h3>
+          {(condicoes?.dist_muro_cerca ?? []).length > 0 ? (
+            <HBarChart
+              rows={(condicoes!.dist_muro_cerca).map((s) => ({
+                label: s.valor,
+                value: s.escolas,
+                pct: s.percentual,
+              }))}
+              color={C.primary}
+            />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <Home size={16} style={{ color: C.primary }} />
+            O muro ou cerca fecham todo o perímetro?
+          </h3>
+          {(condicoes?.dist_perimetro_fechado ?? []).length > 0 ? (
+            <HBarChart
+              rows={(condicoes!.dist_perimetro_fechado).map((s) => ({
+                label: s.valor,
+                value: s.escolas,
+                pct: s.percentual,
+              }))}
+              color={C.primary}
+            />
+          ) : (
+            <NoData />
+          )}
+        </div>
       </div>
     </div>
   );

@@ -26,22 +26,42 @@ type EmpresaStat struct {
 // ---- payloads Infraestrutura ---------------------------------------------
 
 type InfraCondicoes struct {
-	PorTipoPredio        []CategoricStat `json:"por_tipo_predio"`
-	PorSituacaoEstrutura []CategoricStat `json:"por_situacao_estrutura"`
-	PctMuroCerca         float64         `json:"pct_com_muro_ou_cerca"`
-	PctPerimetroFechado  float64         `json:"pct_perimetro_fechado"`
-	TopAmbientes         []AmbienteStat  `json:"top_ambientes"`
+	PorTipoPredio           []CategoricStat `json:"por_tipo_predio"`
+	PorSituacaoEstrutura    []CategoricStat `json:"por_situacao_estrutura"`
+	PctMuroCerca            float64         `json:"pct_com_muro_ou_cerca"`
+	PctPerimetroFechado     float64         `json:"pct_perimetro_fechado"`
+	TopAmbientes            []AmbienteStat  `json:"top_ambientes"`
+	DistMuroCerca           []CategoricStat `json:"dist_muro_cerca"`
+	DistPerimetroFechado    []CategoricStat `json:"dist_perimetro_fechado"`
+	PctReformaCritica       float64         `json:"pct_reforma_critica"`
+	PctReformaGeralApenas   float64         `json:"pct_reforma_geral"`
+	PctObraParadaApenas     float64         `json:"pct_obra_parada"`
 }
 
 type InfraSeguranca struct {
-	PctGuarita          float64         `json:"pct_possui_guarita"`
-	PctControlePortao   float64         `json:"pct_controle_portao"`
-	PctIluminacao       float64         `json:"pct_iluminacao_externa"`
-	PctBotaoPanico      float64         `json:"pct_possui_botao_panico"`
-	PctCamerasFuncionais float64        `json:"pct_cameras_funcionais"`
-	PctPlanoEvacuacao   float64         `json:"pct_plano_evacuacao"`
-	PctPoliticaBullying float64         `json:"pct_politica_bullying"`
-	DistCameras         []CategoricStat `json:"dist_cameras"`
+	PctGuarita              float64         `json:"pct_possui_guarita"`
+	PctControlePortao       float64         `json:"pct_controle_portao"`
+	PctBotaoPanico          float64         `json:"pct_possui_botao_panico"`
+	PctCamerasFuncionais    float64         `json:"pct_cameras_funcionais"`
+	PctPlanoEvacuacao       float64         `json:"pct_plano_evacuacao"`
+	PctPoliticaBullying     float64         `json:"pct_politica_bullying"`
+	DistCameras             []CategoricStat `json:"dist_cameras"`
+	DistIluminacaoExterna   []CategoricStat `json:"dist_iluminacao_externa"`
+	DistControlePortao      []CategoricStat `json:"dist_controle_portao"`
+}
+
+type ClimatizacaoSalaRow struct {
+	Faixa           string `json:"faixa"`
+	TotalSalas      int    `json:"total_salas"`
+	Climatizadas    int    `json:"climatizadas"`
+	NaoClimatizadas int    `json:"nao_climatizadas"`
+}
+
+type InfraEnergia struct {
+	DistRedeEletrica       []CategoricStat      `json:"dist_rede_eletrica_atende"`
+	DistEstruturaClimatiz  []CategoricStat      `json:"dist_estrutura_climatizacao"`
+	DistClimatizacaoSalas  []CategoricStat      `json:"dist_climatizacao_salas"`
+	TabelaClimatizacao     []ClimatizacaoSalaRow `json:"tabela_climatizacao"`
 }
 
 // ---- payloads Merenda ----------------------------------------------------
@@ -140,6 +160,8 @@ func (app *application) AdminAnalyticsInfraCondicoes(w http.ResponseWriter, r *h
 		PorTipoPredio:        []CategoricStat{},
 		PorSituacaoEstrutura: []CategoricStat{},
 		TopAmbientes:         []AmbienteStat{},
+		DistMuroCerca:        []CategoricStat{},
+		DistPerimetroFechado: []CategoricStat{},
 	}
 
 	const filtro = `status = 'completed' AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int AND census_id IS NOT NULL`
@@ -213,6 +235,28 @@ func (app *application) AdminAnalyticsInfraCondicoes(w http.ResponseWriter, r *h
 		return
 	}
 
+	if out.DistMuroCerca, err = distQ("muro_cerca"); err != nil {
+		app.errorJSON(w, fmt.Errorf("dist_muro_cerca: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if out.DistPerimetroFechado, err = distQ("perimetro_fechado"); err != nil {
+		app.errorJSON(w, fmt.Errorf("dist_perimetro_fechado: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	err = db.QueryRowContext(ctx, fmt.Sprintf(`
+		SELECT
+			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE situacao_estrutura IN ('Necessita de reforma geral', 'Está em reforma, porém a obra está parada')) / NULLIF(COUNT(*), 0), 1), 0)::float8,
+			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE situacao_estrutura = 'Necessita de reforma geral') / NULLIF(COUNT(*), 0), 1), 0)::float8,
+			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE situacao_estrutura = 'Está em reforma, porém a obra está parada') / NULLIF(COUNT(*), 0), 1), 0)::float8
+		FROM vw_censo_infraestrutura_seguranca
+		WHERE %s
+	`, filtro)).Scan(&out.PctReformaCritica, &out.PctReformaGeralApenas, &out.PctObraParadaApenas)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("pct_reforma_critica: %v", err), http.StatusInternalServerError)
+		return
+	}
+
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: out})
 }
 
@@ -220,7 +264,11 @@ func (app *application) AdminAnalyticsInfraSeguranca(w http.ResponseWriter, r *h
 	ctx := r.Context()
 	db := app.models.Schools.DB
 
-	out := InfraSeguranca{DistCameras: []CategoricStat{}}
+	out := InfraSeguranca{
+		DistCameras:           []CategoricStat{},
+		DistIluminacaoExterna: []CategoricStat{},
+		DistControlePortao:    []CategoricStat{},
+	}
 
 	const filtro = `status = 'completed' AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int AND census_id IS NOT NULL`
 
@@ -228,7 +276,6 @@ func (app *application) AdminAnalyticsInfraSeguranca(w http.ResponseWriter, r *h
 		SELECT
 			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE lower(possui_guarita)    = 'sim')                                          / NULLIF(COUNT(*), 0), 1), 0)::float8,
 			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE controle_portao IS NOT NULL)                                               / NULLIF(COUNT(*), 0), 1), 0)::float8,
-			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE iluminacao_externa IS NOT NULL)                                            / NULLIF(COUNT(*), 0), 1), 0)::float8,
 			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE lower(possui_botao_panico) = 'sim')                                        / NULLIF(COUNT(*), 0), 1), 0)::float8,
 			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE cameras_funcionamento IS NOT NULL AND lower(cameras_funcionamento) NOT LIKE '%%não possui%%') / NULLIF(COUNT(*), 0), 1), 0)::float8,
 			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE lower(plano_evacuacao)   = 'sim')                                          / NULLIF(COUNT(*), 0), 1), 0)::float8,
@@ -238,7 +285,6 @@ func (app *application) AdminAnalyticsInfraSeguranca(w http.ResponseWriter, r *h
 	`, filtro)).Scan(
 		&out.PctGuarita,
 		&out.PctControlePortao,
-		&out.PctIluminacao,
 		&out.PctBotaoPanico,
 		&out.PctCamerasFuncionais,
 		&out.PctPlanoEvacuacao,
@@ -246,6 +292,29 @@ func (app *application) AdminAnalyticsInfraSeguranca(w http.ResponseWriter, r *h
 	)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("seguranca_pcts: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	rowsIlum, err := db.QueryContext(ctx, fmt.Sprintf(`
+		WITH base AS (
+			SELECT school_id, iluminacao_externa AS val
+			FROM vw_censo_infraestrutura_seguranca
+			WHERE %s AND iluminacao_externa IS NOT NULL
+		),
+		tot AS (SELECT COUNT(DISTINCT school_id)::numeric AS n FROM base)
+		SELECT val,
+			COUNT(DISTINCT school_id) AS escolas,
+			ROUND(100.0 * COUNT(DISTINCT school_id) / NULLIF(tot.n, 0), 1)::float8
+		FROM base CROSS JOIN tot
+		GROUP BY val, tot.n
+		ORDER BY CASE val WHEN 'Adequada' THEN 1 WHEN 'Regular' THEN 2 ELSE 3 END
+	`, filtro))
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("dist_iluminacao: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if out.DistIluminacaoExterna, err = app.scanCategoricRows(rowsIlum); err != nil {
+		app.errorJSON(w, fmt.Errorf("scan dist_iluminacao: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -269,6 +338,135 @@ func (app *application) AdminAnalyticsInfraSeguranca(w http.ResponseWriter, r *h
 	}
 	if out.DistCameras, err = app.scanCategoricRows(rows); err != nil {
 		app.errorJSON(w, fmt.Errorf("scan dist_cameras: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	rowsPortao, err := db.QueryContext(ctx, fmt.Sprintf(`
+		WITH base AS (
+			SELECT school_id, controle_portao AS val
+			FROM vw_censo_infraestrutura_seguranca
+			WHERE %s AND controle_portao IS NOT NULL
+		),
+		tot AS (SELECT COUNT(DISTINCT school_id)::numeric AS n FROM base)
+		SELECT val,
+			COUNT(DISTINCT school_id) AS escolas,
+			ROUND(100.0 * COUNT(DISTINCT school_id) / NULLIF(tot.n, 0), 1)::float8
+		FROM base CROSS JOIN tot
+		GROUP BY val, tot.n
+		ORDER BY escolas DESC
+	`, filtro))
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("dist_controle_portao: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if out.DistControlePortao, err = app.scanCategoricRows(rowsPortao); err != nil {
+		app.errorJSON(w, fmt.Errorf("scan dist_controle_portao: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: out})
+}
+
+func (app *application) AdminAnalyticsInfraEnergia(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	db := app.models.Schools.DB
+
+	out := InfraEnergia{
+		DistRedeEletrica:      []CategoricStat{},
+		DistEstruturaClimatiz: []CategoricStat{},
+		DistClimatizacaoSalas: []CategoricStat{},
+		TabelaClimatizacao:    []ClimatizacaoSalaRow{},
+	}
+
+	const filtro = `status = 'completed' AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int AND census_id IS NOT NULL`
+
+	distInfra := func(campo string) ([]CategoricStat, error) {
+		rows, err := db.QueryContext(ctx, fmt.Sprintf(`
+			WITH base AS (
+				SELECT school_id, %s AS val
+				FROM vw_censo_infraestrutura_seguranca
+				WHERE %s AND %s IS NOT NULL
+			),
+			tot AS (SELECT COUNT(DISTINCT school_id)::numeric AS n FROM base)
+			SELECT val,
+				COUNT(DISTINCT school_id) AS escolas,
+				ROUND(100.0 * COUNT(DISTINCT school_id) / NULLIF(tot.n, 0), 1)::float8
+			FROM base CROSS JOIN tot
+			GROUP BY val, tot.n
+			ORDER BY escolas DESC
+		`, campo, filtro, campo))
+		if err != nil {
+			return nil, err
+		}
+		return app.scanCategoricRows(rows)
+	}
+
+	var err error
+	if out.DistRedeEletrica, err = distInfra("rede_eletrica_atende"); err != nil {
+		app.errorJSON(w, fmt.Errorf("dist_rede_eletrica: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if out.DistEstruturaClimatiz, err = distInfra("estrutura_climatizacao"); err != nil {
+		app.errorJSON(w, fmt.Errorf("dist_estrutura_climatizacao: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
+		WITH base AS (
+			SELECT school_id, situacao_climatizacao_salas AS val
+			FROM vw_censo_enriquecida
+			WHERE %s AND situacao_climatizacao_salas IS NOT NULL AND situacao_climatizacao_salas <> 'Não informado'
+		),
+		tot AS (SELECT COUNT(DISTINCT school_id)::numeric AS n FROM base)
+		SELECT val,
+			COUNT(DISTINCT school_id) AS escolas,
+			ROUND(100.0 * COUNT(DISTINCT school_id) / NULLIF(tot.n, 0), 1)::float8
+		FROM base CROSS JOIN tot
+		GROUP BY val, tot.n
+		ORDER BY escolas DESC
+	`, filtro))
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("dist_climatizacao_salas: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if out.DistClimatizacaoSalas, err = app.scanCategoricRows(rows); err != nil {
+		app.errorJSON(w, fmt.Errorf("scan dist_climatizacao_salas: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	rowsTabela, err := db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT
+			situacao_climatizacao_salas AS faixa,
+			COALESCE(SUM(qtd_salas_aula), 0)::int             AS total_salas,
+			COALESCE(SUM(salas_climatizadas), 0)::int          AS climatizadas,
+			COALESCE(SUM(qtd_salas_nao_climatizadas), 0)::int  AS nao_climatizadas
+		FROM vw_censo_enriquecida
+		WHERE %s
+		  AND situacao_climatizacao_salas IS NOT NULL
+		  AND situacao_climatizacao_salas <> 'Não informado'
+		GROUP BY situacao_climatizacao_salas
+		ORDER BY CASE situacao_climatizacao_salas
+			WHEN 'Totalmente climatizadas'   THEN 1
+			WHEN 'Parcialmente climatizadas' THEN 2
+			WHEN 'Não climatizadas'          THEN 3
+			ELSE 4
+		END
+	`, filtro))
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("tabela_climatizacao: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer rowsTabela.Close()
+	for rowsTabela.Next() {
+		var r ClimatizacaoSalaRow
+		if err := rowsTabela.Scan(&r.Faixa, &r.TotalSalas, &r.Climatizadas, &r.NaoClimatizadas); err != nil {
+			app.errorJSON(w, fmt.Errorf("scan tabela_climatizacao: %v", err), http.StatusInternalServerError)
+			return
+		}
+		out.TabelaClimatizacao = append(out.TabelaClimatizacao, r)
+	}
+	if err := rowsTabela.Err(); err != nil {
+		app.errorJSON(w, fmt.Errorf("iter tabela_climatizacao: %v", err), http.StatusInternalServerError)
 		return
 	}
 

@@ -84,11 +84,21 @@ func main() {
 
 	var cfg config
 
+	// Valida configuração de segurança crítica antes de subir o servidor.
+	// Aborta cedo (em vez de cair num segredo default inseguro) se o JWT
+	// não estiver corretamente configurado.
+	if err := validateSecurityConfig(); err != nil {
+		logger.Fatal("ERRO FATAL SEGURANÇA: ", err)
+	}
+
 	cfg.port = os.Getenv("PORT")
 	if cfg.port == "" {
 		cfg.port = "8000"
 	}
-	cfg.env = "production"
+	cfg.env = os.Getenv("APP_ENV")
+	if cfg.env == "" {
+		cfg.env = "production"
+	}
 
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -98,8 +108,14 @@ func main() {
 	if dsn == "" {
 		dbHost := os.Getenv("DB_HOST")
 		if dbHost != "" {
-			dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable timezone=UTC connect_timeout=5",
-				os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"))
+			// sslmode configurável: padrão "disable" para o docker local sem TLS,
+			// mas permite exigir TLS (DB_SSLMODE=require) em produção.
+			sslmode := os.Getenv("DB_SSLMODE")
+			if sslmode == "" {
+				sslmode = "disable"
+			}
+			dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s timezone=UTC connect_timeout=5",
+				os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"), sslmode)
 		}
 	}
 
@@ -293,12 +309,19 @@ func (app *application) routes() http.Handler {
 
 	mux.Route("/v1", func(r chi.Router) {
 		r.Get("/health", app.HealthCheck)
-		r.Get("/locations", app.GetLocations)
-		r.Get("/schools", app.GetSchools)
-		r.Post("/schools", app.CreateSchool)
-		r.Get("/census", app.GetCenso)
-		r.Post("/census", app.CreateOrUpdateCenso)
-		r.Post("/upload", app.uploadPhoto)
+
+		// Endpoints públicos do formulário. Ficam atrás do gate opcional de
+		// X-API-Key (requirePublicAPIKey): inerte até PUBLIC_API_KEY ser
+		// definido no servidor, então não quebra nada em produção.
+		r.Group(func(pub chi.Router) {
+			pub.Use(app.requirePublicAPIKey)
+			pub.Get("/locations", app.GetLocations)
+			pub.Get("/schools", app.GetSchools)
+			pub.Post("/schools", app.CreateSchool)
+			pub.Get("/census", app.GetCenso)
+			pub.Post("/census", app.CreateOrUpdateCenso)
+			pub.Post("/upload", app.uploadPhoto)
+		})
 
 		// Admin: login público + rotas protegidas por JWT
 		r.Post("/admin/login", app.AdminLogin)
@@ -319,6 +342,8 @@ func (app *application) routes() http.Handler {
 			// Adicionais; a UI segue consumindo sheet-metrics até a Fase 2B.
 			protected.Get("/admin/analytics/caracterizacao/perfil", app.AdminAnalyticsCaracterizacaoPerfil)
 			protected.Get("/admin/analytics/caracterizacao/dre", app.AdminAnalyticsCaracterizacaoDRE)
+			protected.Get("/admin/analytics/caracterizacao/oferta-funcionamento", app.AdminAnalyticsCaracterizacaoOfertaFuncionamento)
+			protected.Get("/admin/analytics/caracterizacao/infraestrutura-educacional", app.AdminAnalyticsCaracterizacaoInfraEducacional)
 
 			// Frente 1 — Pessoal e Gestão Escolar + Tecnologia
 			protected.Get("/admin/analytics/pessoal-gestao/estrutura", app.AdminAnalyticsPessoalEstrutura)

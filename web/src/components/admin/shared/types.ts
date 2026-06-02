@@ -68,7 +68,45 @@ export interface CaracterizacaoDREPg {
   detalhamento: DreSummaryPg[];
 }
 
+// CAR-INFRA-01 — Caracterização da Rede: Infraestrutura Educacional.
+// Payload de /v1/admin/analytics/caracterizacao/infraestrutura-educacional.
+export interface CaracterizacaoAmbienteStat {
+  label: string;
+  escolas: number;
+  percentual: number;
+}
+
+export interface CaracterizacaoCoberturaEssenciais {
+  total_essenciais: number;
+  media_ambientes_essenciais: number;
+  pct_cobertura_plena: number;
+  por_faixa: Array<{
+    label: string;
+    escolas: number;
+    percentual: number;
+  }>;
+}
+
+export interface CaracterizacaoMediaEssenciaisPorPorte {
+  porte: string;
+  media: number;
+}
+
+export interface CaracterizacaoInfraEducacionalPg {
+  ambientes: CaracterizacaoAmbienteStat[];
+  cobertura_essenciais: CaracterizacaoCoberturaEssenciais;
+  media_essenciais_por_porte: CaracterizacaoMediaEssenciaisPorPorte[];
+  ambientes_essenciais: string[];
+}
+
 export interface CensusFull extends CensusRow { data: unknown; created_at: string; }
+
+export interface CensusPage {
+  rows: CensusRow[];
+  total: number;
+  page: number;
+  limit: number;
+}
 
 // Frente 2 — Infraestrutura e Segurança.
 // Payloads de /v1/admin/analytics/infraestrutura/{condicoes,seguranca}.
@@ -143,4 +181,111 @@ export interface MerendaRH {
   total_temporaria: number;
   pct_com_supervisor: number;
   top_empresas: EmpresaStat[];
+}
+
+// Frente 2 — Serviços Terceirizados.
+// Payloads de /v1/admin/analytics/servicos-terceirizados/{visao-geral,servicos-gerais,portaria}.
+export interface TerceirizacaoArea {
+  area: string;
+  escolas: number;
+  percentual: number;
+}
+
+export interface ServicosVisaoGeral {
+  por_area: TerceirizacaoArea[];
+  por_quantidade_areas: CategoricStat[];
+}
+
+export interface ServicosGerais {
+  total_efetivo: number;
+  total_temporario: number;
+  total_terceirizado: number;
+  media_total_por_escola: number;
+}
+
+export interface ServicosPortaria {
+  pct_com_agentes: number;
+  media_agentes_por_escola: number;
+  top_empresas: EmpresaStat[];
+}
+
+// Frente 1 — Pessoal e Gestão Escolar.
+// Payloads de /v1/admin/analytics/pessoal-gestao/{estrutura,coordenacao,quadro-pessoal}.
+export interface PessoalEstrutura {
+  composicao_gestao: CategoricStat[];
+  total_coordenadores_pedagogicos: number;
+}
+
+export interface PessoalCoordenacao {
+  por_area: CategoricStat[];
+  cobertura_media: number;
+}
+
+export interface QuadroPessoalMedias {
+  efetivos: number;
+  temporarios: number;
+  administrativos: number;
+  readaptados: number;
+}
+
+export interface QuadroPessoalDRE {
+  dre: string;
+  total_efetivos: number;
+  total_temporarios: number;
+  media_total_professores: number;
+}
+
+export interface QuadroPessoal {
+  total_professores_efetivos: number;
+  total_professores_temporarios: number;
+  total_servidores_administrativos: number;
+  total_professores_readaptados: number;
+  media_por_escola: QuadroPessoalMedias;
+  por_dre: QuadroPessoalDRE[];
+}
+
+// Frente 1 — Tecnologia e Equipamentos.
+// Payloads de /v1/admin/analytics/tecnologia/{infraestrutura,uso-pedagogico}.
+export interface MediaEquipamentoStat {
+  valor: string;
+  media: number;
+}
+
+export interface TecnologiaInfra {
+  escolas_com_internet: number;
+  percentual_internet: number;
+  disponibilidade_internet: CategoricStat[];
+  por_provedor: CategoricStat[];
+  por_qualidade: CategoricStat[];
+  total_desktops_adm: number;
+  total_desktops_alunos: number;
+  total_notebooks: number;
+  total_chromebooks: number;
+  media_equipamentos_por_escola: MediaEquipamentoStat[];
+  escolas_com_computadores_inoperantes: number;
+  total_computadores_inoperantes: number;
+  percentual_computadores_atendem: number;
+  computadores_atendem_demanda: CategoricStat[];
+}
+
+export interface TecnologiaUso {
+  escolas_com_projetor: number;
+  percentual_com_projetor: number;
+  possui_projetor_dist: CategoricStat[];
+  total_projetores: number;
+  media_projetores_por_escola: number;
+  escolas_com_lousa_digital: number;
+  percentual_com_lousa_digital: number;
+  possui_lousa_digital_dist: CategoricStat[];
+}
+
+// Caracterização da Rede — Organização da Oferta e Funcionamento.
+// Payload de /v1/admin/analytics/caracterizacao/oferta-funcionamento.
+export interface LabelEscolasStat { label: string; escolas: number; percentual: number; }
+export interface MediaTurnosPorPorteStat { porte: string; media_turnos: number; }
+export interface CaracterizacaoOfertaFuncionamento {
+  etapas_ofertadas:       LabelEscolasStat[];
+  modalidades_ofertadas:  LabelEscolasStat[];
+  turnos:                 LabelEscolasStat[];
+  media_turnos_por_porte: MediaTurnosPorPorteStat[];
 }

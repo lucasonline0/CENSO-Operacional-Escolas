@@ -68,9 +68,15 @@ func NewDriveService() (*DriveService, error) {
 }
 
 func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, contentType string, fileContent io.Reader) (string, error) {
-	rootFolderID := os.Getenv("DRIVER_ROOT_FOLDER_ID")
+	// Nome canônico documentado no .env.example é DRIVE_ROOT_FOLDER_ID.
+	// Mantemos fallback para DRIVER_ROOT_FOLDER_ID (nome legado usado no código
+	// antigo) para não quebrar ambientes já configurados com a chave antiga.
+	rootFolderID := os.Getenv("DRIVE_ROOT_FOLDER_ID")
 	if rootFolderID == "" {
-		return "", fmt.Errorf("DRIVER_ROOT_FOLDER_ID não configurado")
+		rootFolderID = os.Getenv("DRIVER_ROOT_FOLDER_ID")
+	}
+	if rootFolderID == "" {
+		return "", fmt.Errorf("DRIVE_ROOT_FOLDER_ID não configurado")
 	}
 
 	// Tenta rebobinar o arquivo se ele for um ReadSeeker (segurança extra)

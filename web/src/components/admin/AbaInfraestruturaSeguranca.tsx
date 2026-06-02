@@ -160,7 +160,7 @@ export function AbaInfraestruturaSeguranca({
       </div>
 
       {/* ── Condições Estruturais e Ambientes ────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div id="sec-infra-condicoes" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
             <Building2 size={16} style={{ color: C.primary }} />
@@ -198,7 +198,7 @@ export function AbaInfraestruturaSeguranca({
       </div>
 
       {/* ── Energia, Climatização e Capacidade Elétrica (empty interno) ── */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+      <div id="sec-infra-energia" className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         <div
           className="px-6 py-4 border-b flex items-center gap-2"
           style={{ background: C.primaryLight }}
@@ -221,7 +221,7 @@ export function AbaInfraestruturaSeguranca({
       </div>
 
       {/* ── Segurança Física e Patrimonial ───────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div id="sec-infra-seguranca" className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard
           label="Guarita"
           value={fmtPct(seguranca?.pct_possui_guarita)}

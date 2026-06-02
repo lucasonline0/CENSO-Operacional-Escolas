@@ -1,15 +1,28 @@
 # Frente 1 — Backend Pessoal/Gestão Escolar + Tecnologia
 
-> **Status:** ⏳ **Pendente — próxima frente backend a executar.**
+> **Status:** ✅ **Concluída e integrada à `develop`.**
 >
-> As Frentes 2 (backend Infra/Merenda/Serviços) e 3 (frontend + qualidade) já foram mergeadas em `develop`. O microfix preventivo de `total_alunos` e o placeholder institucional de "Gestão Financeira e Governança" também já estão integrados. Esta frente continua sendo o próximo bloco de backend a entregar, e o documento abaixo permanece como o guia operacional vigente.
+> Entregas mergeadas:
+> - Migrations `0003_vw_censo_direcao_escolar.sql` a `0006_vw_censo_equipamentos_tecnologia.sql` (com espelhos em `api/cmd/api/migrations/` e replicação em `infra/init.sql`).
+> - Handlers em `api/cmd/api/analytics_pessoal_tecnologia.go` (novo).
+> - Registro de rotas em `api/cmd/api/main.go`.
+> - Validação em [validacao-fase-pessoal-tecnologia.md](validacao-fase-pessoal-tecnologia.md).
 >
-> Restrições atuais (continuam valendo):
-> - **Não tocar `web/`** — os placeholders já existem; a integração visual desta frente é feita em PRs posteriores, fora desta rodada.
-> - **Não tocar nas migrations `0007_*` a `0012_*`** (já integradas pela Frente 2) nem em `vw_censo_base`/`vw_censo_enriquecida`.
-> - **Não tocar nos handlers da Frente 2** (`api/cmd/api/analytics_infra_merenda_servicos.go`) nem em `api/cmd/api/analytics.go`.
-> - **Não alterar endpoints Sheets** (`sheet-metrics`, `indicadores-metrics`, `/v1/locations`, `sheetSyncRetryJob`).
-> - **Não alterar a aba "Caracterização da Rede"** nem placeholders já criados pela Frente 3.
+> Endpoints ativos sob `requireAdminAuth`:
+>
+> ```
+> GET /v1/admin/analytics/pessoal-gestao/estrutura
+> GET /v1/admin/analytics/pessoal-gestao/coordenacao
+> GET /v1/admin/analytics/pessoal-gestao/quadro-pessoal
+> GET /v1/admin/analytics/tecnologia/infraestrutura
+> GET /v1/admin/analytics/tecnologia/uso-pedagogico
+> ```
+>
+> **Integração visual de primeira versão também já concluída** — `AbaPessoalGestao.tsx` e `AbaTecnologia.tsx` em `web/src/components/admin/` consomem os endpoints acima. Os antigos placeholders foram substituídos pelos componentes integrados.
+>
+> **Próximas ações estão na matriz oficial** — ver [matriz-abas-e-graficos.md](matriz-abas-e-graficos.md) §5.2 (Pessoal e Gestão Escolar) e §5.3 (Tecnologia e Equipamentos) para a lista de blocos, gráficos mínimos e lacunas. Não introduzir gráficos novos antes da validação da matriz com as áreas finalísticas.
+>
+> O conteúdo abaixo permanece como **registro histórico** da frente concluída (escopo, decisões, views, payloads). Em caso de conflito com a matriz oficial, a matriz prevalece.
 
 **Branch:** `feat/analytics-pessoal-tecnologia` (parte de `develop`).
 **Documentos companheiros:**

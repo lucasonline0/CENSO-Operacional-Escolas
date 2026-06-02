@@ -53,7 +53,7 @@ export function ServidoresForm({ schoolId, onSuccess, onBack }: ServidoresFormPr
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/v1/census`, {
         method: "POST", 
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-API-Key": process.env.NEXT_PUBLIC_API_KEY || "" },
         body: JSON.stringify({
             school_id: schoolId,
             year: new Date().getFullYear(),

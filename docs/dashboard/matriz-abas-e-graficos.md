@@ -171,17 +171,18 @@ A antiga seção "Infraestrutura Digital e Capacidade Instalada" do Data Studio 
 
 | Bloco | Gráficos mínimos | Fonte atual | Status | Lacuna backend | Lacuna frontend | Observações |
 |---|---|---|---|---|---|---|
-| Infraestrutura Digital | Disponibilidade de internet — distribuição Sim/Não | PG `/tecnologia/infraestrutura` (`percentual_internet`, `escolas_com_internet`) | parcial | Endpoint só entrega KPI % e contagem; não há distribuição Sim/Não | Donut/barra Sim/Não a criar | Data Studio mostrava distribuição Sim/Não; hoje só KPI "Escolas com Internet" no resumo executivo. |
+| Infraestrutura Digital | Disponibilidade de internet — distribuição Sim/Não | PG `/tecnologia/infraestrutura` (`disponibilidade_internet`) | **entregue** | — | — | Donut Sim/Não renderizado; "Não" inclui não informado (booleano da view). |
 | Infraestrutura Digital | Provedor de internet | PG `/tecnologia/infraestrutura` (`por_provedor`) | presente | — | — | Donut renderizado. |
 | Infraestrutura Digital | Qualidade da internet | PG `/tecnologia/infraestrutura` (`por_qualidade`) | presente | Confirmar normalização das opções | — | Donut renderizado. |
-| Parque Tecnológico | Quantidade mediana de equipamentos por escola | PG | planejado | View/endpoint não calculam mediana (hoje só `SUM` por tipo) | Componente a criar | Data Studio exibia mediana por escola por tipo (chromebook, desktop alunos, desktop adm, notebook). Lacuna backend + frontend. |
-| Parque Tecnológico | Distribuição do parque tecnológico (%) | PG `/tecnologia/infraestrutura` (totais por tipo) | planejado | Percentuais por tipo não calculados (só totais absolutos) | Gráfico de participação % a criar | Pode ser derivado dos totais já entregues; lacuna frontend (e backend se o % for calculado no servidor). |
+| Parque Tecnológico | Quantidade média de equipamentos por escola | PG `/tecnologia/infraestrutura` (`media_equipamentos_por_escola`) | **entregue** | — | — | `AVG(COALESCE(campo,0))` por tipo (total declarado ÷ nº de escolas). Substituiu a mediana, que ficava 0 para equipamentos concentrados numa minoria de escolas (ex.: Desktops de alunos). Barra horizontal renderizada. |
+| Parque Tecnológico | Distribuição do parque tecnológico (%) | PG `/tecnologia/infraestrutura` (totais por tipo) | **entregue** | — | — | Participação % calculada no frontend a partir dos totais; donut renderizado. |
 | Parque Tecnológico | Totais por tipo de equipamento | PG `/tecnologia/infraestrutura` (`total_desktops_adm`, `total_desktops_alunos`, `total_notebooks`, `total_chromebooks`) | presente | — | — | KPIs renderizados (desktops adm/alunos, notebooks, chromebooks). |
-| Parque Tecnológico | Computadores inoperantes (nº de escolas; % a confirmar) | PG `/tecnologia/infraestrutura` (`escolas_com_computadores_inoperantes`) | presente parcial | Número absoluto de escolas presente; percentual depende de denominador oficial (produto) | KPI % a criar se aprovado | Hoje só nº de escolas que declararam. Percentual = decisão de produto (denominador). |
-| Uso Pedagógico | Equipamentos atendem à demanda — distribuição Sim/Parcialmente/Não | PG `/tecnologia/infraestrutura` (`percentual_computadores_atendem`) | parcial | Endpoint só entrega % de "Sim"; não há distribuição Sim/Parcialmente/Não | Donut/barra de distribuição a criar | Data Studio mostrava as três categorias. |
-| Uso Pedagógico | Projetor multimídia — distribuição Sim/Não | PG `/tecnologia/uso-pedagogico` (`percentual_com_projetor`) | parcial | Endpoint só entrega KPI %; não há distribuição Sim/Não | Donut Sim/Não a criar | Data Studio mostrava distribuição Sim/Não. |
-| Uso Pedagógico | Lousa digital — distribuição Sim/Não | PG `/tecnologia/uso-pedagogico` (`percentual_com_lousa_digital`) | parcial | Endpoint só entrega KPI %; não há distribuição Sim/Não | Donut Sim/Não a criar | Data Studio mostrava distribuição Sim/Não. |
-| Uso Pedagógico | Quantidade média de projetores por escola | PG `/tecnologia/uso-pedagogico` (`total_projetores` + total de escolas) | planejado | Endpoint só entrega total de projetores e % com projetor; média por escola não exposta | KPI média a criar | Denominador (total de escolas do recorte) já disponível no backend; média pode ser calculada no servidor. |
+| Parque Tecnológico | Computadores inoperantes (nº de escolas e total absoluto) | PG `/tecnologia/infraestrutura` (`escolas_com_computadores_inoperantes`, `total_computadores_inoperantes`) | **entregue** | — | — | Nº de escolas + total absoluto (SUM) renderizados como KPI. |
+| Parque Tecnológico | Computadores inoperantes (KPI %) | PG | pendente/produto | Percentual depende de denominador oficial (produto) | KPI % a criar após decisão | Decisão de produto pendente (denominador). |
+| Uso Pedagógico | Equipamentos atendem à demanda — distribuição Sim/Parcialmente/Não | PG `/tecnologia/uso-pedagogico` (`computadores_atendem_demanda`) | **entregue** | — | — | Distribuição categórica (com "Não informado") renderizada como donut. |
+| Uso Pedagógico | Projetor multimídia — distribuição Sim/Não | PG `/tecnologia/uso-pedagogico` (`possui_projetor_dist`) | **entregue** | — | — | Donut Sim/Não renderizado; "Não" inclui não informado. |
+| Uso Pedagógico | Lousa digital — distribuição Sim/Não | PG `/tecnologia/uso-pedagogico` (`possui_lousa_digital_dist`) | **entregue** | — | — | Donut Sim/Não renderizado; "Não" inclui não informado. |
+| Uso Pedagógico | Quantidade média de projetores por escola | PG `/tecnologia/uso-pedagogico` (`media_projetores_por_escola`) | **entregue** | — | — | `AVG(COALESCE(qtd_projetores,0))`; KPI renderizado. |
 
 ### 5.4 Infraestrutura e Segurança
 
@@ -332,14 +333,14 @@ Itens identificados na matriz como `planejado` ou `presente / a confirmar`. Não
 - **Infraestrutura — Energia/Climatização:** confirmar se `0008_vw_censo_infraestrutura_seguranca` expõe os campos `rede_eletrica_atende_demanda`, `estrutura_permite_climatizacao`, `climatizacao_salas` — caso contrário, expandir view/endpoint.
 - **Merenda — Estrutura Física:** confirmar se `condicoes_cozinha`, `possui_refeitorio`, `tamanho_cozinha` estão no payload atual ou requerem extensão.
 - **Serviços Terceirizados — Governança/Supervisão:** sem endpoint dedicado hoje. Avaliar criação de `/v1/admin/analytics/servicos-terceirizados/governanca` cobrindo presença de supervisor por serviço, avaliação da supervisão e avaliação dos serviços.
-- **Tecnologia — Parque Tecnológico:** gráficos mínimos do Data Studio ainda não totalmente refletidos — falta **mediana de equipamentos por escola** (hoje só `SUM` por tipo) e **distribuição do parque tecnológico (%)** por tipo. Prioridade média/alta.
-- **Tecnologia — Uso Pedagógico:** indicadores existem como KPIs, mas faltam as **distribuições Sim/Não** (projetor, lousa) e **Sim/Parcialmente/Não** (equipamentos atendem à demanda), além da **média de projetores por escola**. Prioridade média/alta.
-- **Tecnologia — Infraestrutura Digital:** "Disponibilidade de internet" hoje só como KPI %; o Data Studio exibia distribuição Sim/Não — backend não entrega a distribuição.
+- **Tecnologia — Parque Tecnológico:** **entregue** — **média de equipamentos por escola** e **distribuição do parque tecnológico (%)** por tipo renderizadas; **total de computadores inoperantes** exposto. O **percentual de computadores inoperantes permanece pendente** por depender de denominador oficial (produto).
+- **Tecnologia — Uso Pedagógico:** **entregue** — **distribuições Sim/Não** (projetor, lousa), **Sim/Parcialmente/Não** (equipamentos atendem à demanda) e **média de projetores por escola** (entregue).
+- **Tecnologia — Infraestrutura Digital:** **entregue** — "Disponibilidade de internet" agora com **distribuição Sim/Não**, além do KPI %.
 - **Total de alunos com decimais (legado):** documentado em [criterios-contagem-e-qualidade-dados.md](criterios-contagem-e-qualidade-dados.md) §8; correção retroativa fora desta rodada.
 
 ### 7.2 Lacunas de frontend
 
-- **Tecnologia e Equipamentos:** renderizar as distribuições/medianas mínimas do Data Studio (donuts Sim/Não de internet, projetor e lousa; Sim/Parcialmente/Não de "atendem à demanda"; distribuição (%) do parque; mediana e média de projetores) assim que o backend expuser o payload — ver §5.3.
+- **Tecnologia e Equipamentos:** **entregue** — renderizadas as distribuições/médias mínimas do Data Studio (donuts Sim/Não de internet, projetor e lousa; Sim/Parcialmente/Não de "atendem à demanda"; distribuição (%) do parque; média de equipamentos por escola e média de projetores) — ver §5.3.
 - **Confirmações pontuais ("presente / a confirmar"):** auditar visualmente cada Aba\*.tsx para confirmar render dos campos sinalizados na §5.
 - **Subabas como navegação interna:** não implementar nesta rodada. Hoje os blocos são seções verticais — manter assim até a matriz mínima ser validada.
 - **Sem gráficos inéditos** (fora do escopo do painel original) nas 5 abas temáticas integradas antes da validação com as áreas finalísticas. Gráficos mínimos do Data Studio ainda não refletidos (caso de Tecnologia) são exceção e podem ser implementados após diagnóstico técnico.

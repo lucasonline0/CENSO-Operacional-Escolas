@@ -1086,6 +1086,556 @@ Entregue (nº de escolas + total absoluto) / Produto (percentual).
 **Próxima ação recomendada**  
 Manter nº de escolas e total absoluto; decidir o denominador antes de expor o percentual.
 
+### 6.6 Merenda Escolar — Gráficos mínimos do Data Studio
+
+> **Contexto.** O painel original (Data Studio/Looker Studio) organizava Merenda em cinco blocos: **Oferta e Adequação**, **Estrutura Física**, **Equipamentos**, **Condições Sanitárias e Segurança** e **Recursos Humanos**. A aplicação preserva os quatro primeiros como blocos finalísticos e **reencaminha o quinto (RH) para o menu Serviços Terceirizados** (bloco "Manipuladores de Alimentos / Merendeiras") — ver §6.6.14 e `matriz-abas-e-graficos.md` §2.8/§5.5. Esta seção detalha tecnicamente, no mesmo padrão da Tecnologia (§6.5), os gráficos mínimos do painel original que hoje estão **parciais** (existem como KPI, não como distribuição) ou **ausentes** (bloco inteiro). Esta seção é **somente documental** — não cria endpoint, view, migration ou frontend.
+>
+> **Dados disponíveis na view.** A view `vw_censo_equipamentos_merenda` (migration `0009`) já contém: `condicoes_cozinha`, `tamanho_cozinha`, `possui_refeitorio`, `refeitorio_adequado`, `possui_balanca`, `bancadas_inox`, `sistema_exaustao`, `despensa_exclusiva`, `deposito_conserva`, `estoque_epi_extintor`, `manutencao_extintores`, `qtd_freezers`, `qtd_geladeiras`, `qtd_fogoes`, `qtd_fornos`, `qtd_bebedouros`, `estado_freezers`, `estado_geladeiras`, `estado_fogoes`, `estado_fornos`, `estado_bebedouros`. A view `vw_censo_rh_merendeiras` (migration `0010`) contém `oferta_regular`, `qualidade_merenda`, `atende_necessidades` e os campos de RH. **Isto não significa que tudo esteja implementado**: vários campos existem na view mas **não são expostos** em endpoint nem renderizados — cada item abaixo indica o que falta. Endpoints/frontend precisam ser diagnosticados antes de implementar (próxima etapa).
+>
+> Endpoints atuais de Merenda: `GET /v1/admin/analytics/merenda/{oferta,equipamentos,recursos-humanos}`. O endpoint `/oferta` (payload `MerendaOferta`) hoje entrega `dist_oferta_regular`, `dist_qualidade`, `pct_atende_necessidades`, `dist_condicoes_cozinha`, `pct_possui_refeitorio`. As distribuições usam `CategoricStat` (`{valor, escolas, percentual}`); novos contratos podem mapear `valor`→`label` no frontend.
+
+#### 6.6.1 Merenda atende necessidades — distribuição
+
+**O que o gráfico deve mostrar**  
+Distribuição de escolas por resposta (Sim / Parcialmente / Não) sobre se a merenda atende às necessidades dos alunos, com contagem e percentual.
+
+**Como era tratado no Data Studio**  
+Distribuição categórica de três respostas no bloco de oferta/adequação, não apenas como KPI percentual.
+
+**Origem provável no banco**  
+`vw_censo_rh_merendeiras.atende_necessidades` (categórico, `NULLIF('','')`).
+
+**View ou transformação necessária**  
+A view já expõe o campo. Hoje o endpoint só calcula `pct_atende_necessidades` (% "Sim"). Falta agregar a distribuição completa (helper `distQ` já usado no handler).
+
+**Endpoint necessário**  
+Expandir `GET /v1/admin/analytics/merenda/oferta`.
+
+**Payload esperado**  
+```ts
+{
+  dist_atende_necessidades: Array<{
+    label: string;   // "Sim" | "Parcialmente" | "Não" (conforme normalização)
+    escolas: number;
+    percentual: number;
+  }>;
+}
+```
+
+**Frontend necessário**  
+Renderizar donut/barra em `web/src/components/admin/AbaMerenda.tsx`, anchor `sec-merenda-oferta`, sem remover o KPI atual no resumo executivo.
+
+**Dependências de produto/dados**  
+Confirmar categorias oficiais e normalização de variações textuais ("Parcialmente", "Em parte", etc.).
+
+**Tipo de lacuna**  
+Backend + Frontend.
+
+**Próxima ação recomendada**  
+Expor `dist_atende_necessidades` e renderizar a distribuição.
+
+#### 6.6.2 Possui refeitório — distribuição Sim/Não
+
+**O que o gráfico deve mostrar**  
+Distribuição Sim/Não de escolas que possuem refeitório, com contagem e percentual.
+
+**Como era tratado no Data Studio**  
+Distribuição Sim/Não no bloco de estrutura física.
+
+**Origem provável no banco**  
+`vw_censo_equipamentos_merenda.possui_refeitorio` (categórico/texto).
+
+**View ou transformação necessária**  
+A view já expõe o campo. Hoje o endpoint só entrega `pct_possui_refeitorio`. Falta agregar a distribuição Sim/Não.
+
+**Endpoint necessário**  
+Expandir `GET /v1/admin/analytics/merenda/oferta` (ou um futuro `/merenda/estrutura-fisica`).
+
+**Payload esperado**  
+```ts
+{
+  dist_possui_refeitorio: Array<{
+    label: "Sim" | "Não";
+    escolas: number;
+    percentual: number;
+  }>;
+}
+```
+
+**Frontend necessário**  
+Renderizar donut Sim/Não em `AbaMerenda.tsx`, anchor `sec-merenda-estrutura`, mantendo o KPI atual.
+
+**Dependências de produto/dados**  
+Confirmar tratamento de respostas vazias/não informadas.
+
+**Tipo de lacuna**  
+Backend + Frontend.
+
+**Próxima ação recomendada**  
+Expor a distribuição Sim/Não e renderizar o donut.
+
+#### 6.6.3 Tamanho da cozinha
+
+**O que o gráfico deve mostrar**  
+Distribuição de escolas por tamanho declarado da cozinha.
+
+**Como era tratado no Data Studio**  
+Campo categórico agregado em distribuição no bloco de estrutura física.
+
+**Origem provável no banco**  
+`vw_censo_equipamentos_merenda.tamanho_cozinha`.
+
+**View ou transformação necessária**  
+A view já expõe o campo. Falta incluir a distribuição no payload (ver também §6.1.1).
+
+**Endpoint necessário**  
+Expandir `GET /v1/admin/analytics/merenda/oferta` ou criar `GET /v1/admin/analytics/merenda/estrutura-fisica`.
+
+**Payload esperado**  
+```ts
+{
+  dist_tamanho_cozinha: Array<{
+    label: string;
+    escolas: number;
+    percentual: number;
+  }>;
+}
+```
+
+**Frontend necessário**  
+Renderizar em `AbaMerenda.tsx`, anchor `sec-merenda-estrutura`, junto de condições da cozinha e refeitório.
+
+**Dependências de produto/dados**  
+Confirmar categorias válidas e tratamento de texto livre, se existir.
+
+**Tipo de lacuna**  
+Backend + Frontend.
+
+**Próxima ação recomendada**  
+Expor `dist_tamanho_cozinha` e renderizar (consolidar com §6.1.1, que trata o mesmo gráfico).
+
+#### 6.6.4 Refeitório adequado
+
+**O que o gráfico deve mostrar**  
+Distribuição de escolas conforme o refeitório atende adequadamente à necessidade da escola.
+
+**Como era tratado no Data Studio**  
+Campo categórico/booleano agregado em distribuição no bloco de estrutura física.
+
+**Origem provável no banco**  
+`vw_censo_equipamentos_merenda.refeitorio_adequado`.
+
+**View ou transformação necessária**  
+A view já expõe o campo. Falta agregação no endpoint.
+
+**Endpoint necessário**  
+Expandir `GET /v1/admin/analytics/merenda/oferta` ou `/merenda/estrutura-fisica`.
+
+**Payload esperado**  
+```ts
+{
+  dist_refeitorio_adequado: Array<{
+    label: string;
+    escolas: number;
+    percentual: number;
+  }>;
+}
+```
+
+**Frontend necessário**  
+Renderizar donut/barra em `AbaMerenda.tsx`, anchor `sec-merenda-estrutura`.
+
+**Dependências de produto/dados**  
+Confirmar se o denominador inclui apenas escolas que possuem refeitório ou todas as concluídas.
+
+**Tipo de lacuna**  
+Backend + Frontend.
+
+**Próxima ação recomendada**  
+Expor `dist_refeitorio_adequado` e renderizar.
+
+#### 6.6.5 Presença de equipamentos por tipo
+
+**O que o gráfico deve mostrar**  
+Percentual de escolas que possuem cada tipo de equipamento (freezer, geladeira, fogão, forno, bebedouro), isto é, escolas com `qtd_* > 0`.
+
+**Como era tratado no Data Studio**  
+Indicador de presença por tipo de equipamento, distinto da contagem total/média.
+
+**Origem provável no banco**  
+`vw_censo_equipamentos_merenda.qtd_freezers`, `qtd_geladeiras`, `qtd_fogoes`, `qtd_fornos`, `qtd_bebedouros`.
+
+**View ou transformação necessária**  
+A view já expõe as quantidades. Falta `COUNT(DISTINCT school_id) FILTER (WHERE qtd_tipo > 0)` por tipo, sobre escolas concluídas no recorte.
+
+**Endpoint necessário**  
+Expandir `GET /v1/admin/analytics/merenda/equipamentos`.
+
+**Payload esperado**  
+```ts
+{
+  presenca_por_tipo: Array<{
+    label: string;     // "Freezers" | "Geladeiras" | ...
+    escolas: number;
+    percentual: number;
+  }>;
+}
+```
+
+**Frontend necessário**  
+Renderizar barra horizontal em `AbaMerenda.tsx`, anchor `sec-merenda-equipamentos`, ao lado dos KPIs de total/média.
+
+**Dependências de produto/dados**  
+Confirmar se "presença" considera `qtd > 0` ou um campo booleano específico, caso exista.
+
+**Tipo de lacuna**  
+Backend + Frontend.
+
+**Próxima ação recomendada**  
+Expor `presenca_por_tipo` e renderizar a barra.
+
+#### 6.6.6 Quantidade de equipamentos por escola
+
+**O que o gráfico deve mostrar**  
+Distribuição de escolas por faixa de quantidade de equipamentos (ex.: escolas com 1, 2 ou 3+ equipamentos), por tipo ou consolidado.
+
+**Como era tratado no Data Studio**  
+Distribuição de escolas por faixa de quantidade de equipamentos.
+
+**Origem provável no banco**  
+`vw_censo_equipamentos_merenda.qtd_*` por tipo.
+
+**View ou transformação necessária**  
+Bucketizar a quantidade por escola em faixas (`CASE` por faixa) e contar escolas por faixa. Depende da definição de faixas oficiais.
+
+**Endpoint necessário**  
+Expandir `GET /v1/admin/analytics/merenda/equipamentos`.
+
+**Payload esperado**  
+```ts
+{
+  dist_qtd_por_escola: Array<{
+    label: string;     // "1" | "2" | "3+" (faixas a confirmar)
+    escolas: number;
+    percentual: number;
+  }>;
+}
+```
+
+**Frontend necessário**  
+Renderizar donut/barra em `AbaMerenda.tsx`, anchor `sec-merenda-equipamentos`.
+
+**Dependências de produto/dados**  
+Definir faixas oficiais (1, 2, 3+?) e se o gráfico é por tipo ou consolidado.
+
+**Tipo de lacuna**  
+Produto, depois Backend + Frontend.
+
+**Próxima ação recomendada**  
+Validar faixas com produto; então bucketizar e renderizar.
+
+#### 6.6.7 Estado de conservação consolidado
+
+**O que o gráfico deve mostrar**  
+Visão consolidada do estado de conservação dos equipamentos da merenda (ex.: distribuição global Bom/Regular/Ruim somando todos os tipos), além da tabela atual por equipamento×estado.
+
+**Como era tratado no Data Studio**  
+Visão consolidada do estado de conservação dos equipamentos.
+
+**Origem provável no banco**  
+`estado_freezers`, `estado_geladeiras`, `estado_fogoes`, `estado_fornos`, `estado_bebedouros` (normalizados com `lower()` na view).
+
+**View ou transformação necessária**  
+A distribuição por equipamento já é entregue em `dist_estados`. Para a visão consolidada, agregar por `estado` somando os cinco tipos (pode ser cálculo no frontend a partir de `dist_estados`, ou um `UNION ALL` agregado no backend).
+
+**Endpoint necessário**  
+Derivável no frontend a partir de `dist_estados` (já no payload de `/merenda/equipamentos`); alternativamente, expor consolidado no servidor.
+
+**Payload esperado**  
+```ts
+{
+  estado_consolidado: Array<{
+    label: string;   // "Bom" | "Regular" | "Ruim" | ...
+    escolas: number; // ou contagem de equipamentos, conforme definição
+    percentual: number;
+  }>;
+}
+```
+
+**Frontend necessário**  
+Renderizar donut consolidado em `AbaMerenda.tsx`, anchor `sec-merenda-equipamentos`, mantendo a tabela por equipamento.
+
+**Dependências de produto/dados**  
+Definir se a consolidação conta escolas ou equipamentos e a normalização das categorias de estado.
+
+**Tipo de lacuna**  
+Frontend (e Backend se consolidado no servidor).
+
+**Próxima ação recomendada**  
+Decidir onde consolidar e renderizar a visão consolidada.
+
+#### 6.6.8 Criticidade por equipamento
+
+**O que o gráfico deve mostrar**  
+Indicador de criticidade por tipo de equipamento (ex.: % de escolas/equipamentos em estado ruim ou inservível), destacando os equipamentos mais críticos.
+
+**Como era tratado no Data Studio**  
+Destaque de criticidade por equipamento, derivado do estado de conservação.
+
+**Origem provável no banco**  
+`estado_*` por tipo em `vw_censo_equipamentos_merenda`.
+
+**View ou transformação necessária**  
+Após definição de "criticidade", calcular por tipo a proporção em estado(s) crítico(s). Não implementar antes da decisão de produto.
+
+**Endpoint necessário**  
+Expandir `GET /v1/admin/analytics/merenda/equipamentos` após decisão.
+
+**Payload esperado**  
+```ts
+{
+  criticidade_por_equipamento: Array<{
+    label: string;       // tipo de equipamento
+    percentual: number;  // % em estado crítico
+  }>;
+}
+```
+
+**Frontend necessário**  
+Renderizar barra em `AbaMerenda.tsx`, anchor `sec-merenda-equipamentos`.
+
+**Dependências de produto/dados**  
+Definir quais estados contam como "crítico" e o denominador (escolas com o equipamento vs. todas).
+
+**Tipo de lacuna**  
+Produto, depois Backend + Frontend.
+
+**Próxima ação recomendada**  
+Validar a definição de criticidade antes de qualquer SQL.
+
+#### 6.6.9 Despensa exclusiva para gêneros alimentícios
+
+**O que o gráfico deve mostrar**  
+Percentual/distribuição de escolas com despensa exclusiva para gêneros alimentícios. Pertence ao **bloco Condições Sanitárias e Segurança — ausente hoje**.
+
+**Como era tratado no Data Studio**  
+Campo categórico/booleano agregado como KPI ou distribuição no bloco de condições sanitárias e segurança.
+
+**Origem provável no banco**  
+`vw_censo_equipamentos_merenda.despensa_exclusiva`.
+
+**View ou transformação necessária**  
+A view já expõe o campo. Não há endpoint nem frontend para este bloco — é preciso criá-los.
+
+**Endpoint necessário**  
+Endpoint dedicado recomendado: `GET /v1/admin/analytics/merenda/condicoes-sanitarias`. Alternativa: expansão controlada de `/merenda/oferta`.
+
+**Payload esperado**  
+```ts
+{
+  pct_despensa_exclusiva: number;
+  // ou dist_despensa_exclusiva: Array<{ label; escolas; percentual }>
+}
+```
+
+**Frontend necessário**  
+Criar bloco "Condições Sanitárias e Segurança" em `AbaMerenda.tsx` (novo anchor, ex.: `sec-merenda-sanitario`) e renderizar KPI/distribuição.
+
+**Dependências de produto/dados**  
+Confirmar semântica do campo e respostas que equivalem a "Sim".
+
+**Tipo de lacuna**  
+Backend + Frontend.
+
+**Próxima ação recomendada**  
+Diagnosticar o conjunto do bloco e criar endpoint + bloco frontend.
+
+#### 6.6.10 Depósito conserva adequadamente os alimentos
+
+**O que o gráfico deve mostrar**  
+Percentual/distribuição de escolas cujo depósito conserva adequadamente os alimentos. Bloco Condições Sanitárias e Segurança.
+
+**Como era tratado no Data Studio**  
+Campo categórico/booleano agregado no bloco de condições sanitárias e segurança.
+
+**Origem provável no banco**  
+`vw_censo_equipamentos_merenda.deposito_conserva`.
+
+**View ou transformação necessária**  
+A view já expõe o campo. Falta endpoint e frontend (mesmo bloco de §6.6.9).
+
+**Endpoint necessário**  
+`GET /v1/admin/analytics/merenda/condicoes-sanitarias` (mesmo endpoint do bloco).
+
+**Payload esperado**  
+```ts
+{
+  pct_deposito_conserva: number;
+  // ou dist_deposito_conserva: Array<{ label; escolas; percentual }>
+}
+```
+
+**Frontend necessário**  
+Renderizar no novo bloco de Condições Sanitárias e Segurança em `AbaMerenda.tsx`.
+
+**Dependências de produto/dados**  
+Confirmar semântica e normalização de respostas.
+
+**Tipo de lacuna**  
+Backend + Frontend.
+
+**Próxima ação recomendada**  
+Incluir no mesmo endpoint/bloco do item anterior.
+
+#### 6.6.11 Presença de itens básicos
+
+**O que o gráfico deve mostrar**  
+Presença de itens básicos da estrutura sanitária/operacional: balança, bancadas inox e sistema de exaustão (% de escolas que possuem cada item). Bloco Condições Sanitárias e Segurança.
+
+**Como era tratado no Data Studio**  
+Conjunto de indicadores de presença de itens básicos no bloco de condições sanitárias e segurança.
+
+**Origem provável no banco**  
+`vw_censo_equipamentos_merenda.possui_balanca`, `bancadas_inox`, `sistema_exaustao`.
+
+**View ou transformação necessária**  
+A view já expõe os campos. Falta agregação por item no endpoint do bloco.
+
+**Endpoint necessário**  
+`GET /v1/admin/analytics/merenda/condicoes-sanitarias`.
+
+**Payload esperado**  
+```ts
+{
+  itens_basicos: Array<{
+    label: string;     // "Balança" | "Bancadas inox" | "Sistema de exaustão"
+    escolas: number;
+    percentual: number;
+  }>;
+}
+```
+
+**Frontend necessário**  
+Renderizar barra horizontal no novo bloco de Condições Sanitárias e Segurança em `AbaMerenda.tsx`.
+
+**Dependências de produto/dados**  
+Confirmar a lista oficial de "itens básicos" e a semântica de cada campo.
+
+**Tipo de lacuna**  
+Backend + Frontend.
+
+**Próxima ação recomendada**  
+Agregar presença por item e renderizar.
+
+#### 6.6.12 Estoque de EPIs e extintor de incêndio
+
+**O que o gráfico deve mostrar**  
+Percentual/distribuição de escolas com estoque de EPIs e extintor de incêndio. Bloco Condições Sanitárias e Segurança.
+
+**Como era tratado no Data Studio**  
+Indicador de presença de EPIs/extintor no bloco de condições sanitárias e segurança.
+
+**Origem provável no banco**  
+`vw_censo_equipamentos_merenda.estoque_epi_extintor`.
+
+**View ou transformação necessária**  
+A view já expõe o campo. Falta endpoint/frontend do bloco.
+
+**Endpoint necessário**  
+`GET /v1/admin/analytics/merenda/condicoes-sanitarias`.
+
+**Payload esperado**  
+```ts
+{
+  pct_estoque_epi_extintor: number;
+  // ou dist_estoque_epi_extintor: Array<{ label; escolas; percentual }>
+}
+```
+
+**Frontend necessário**  
+Renderizar no novo bloco de Condições Sanitárias e Segurança em `AbaMerenda.tsx`.
+
+**Dependências de produto/dados**  
+Confirmar se o campo agrega EPI e extintor numa só resposta ou se há campos distintos.
+
+**Tipo de lacuna**  
+Backend + Frontend.
+
+**Próxima ação recomendada**  
+Incluir no endpoint/bloco de condições sanitárias.
+
+#### 6.6.13 Manutenção dos extintores
+
+**O que o gráfico deve mostrar**  
+Percentual/distribuição de escolas com recarga/manutenção dos extintores em dia. Bloco Condições Sanitárias e Segurança.
+
+**Como era tratado no Data Studio**  
+Indicador de recarga/manutenção dos extintores no bloco de condições sanitárias e segurança.
+
+**Origem provável no banco**  
+`vw_censo_equipamentos_merenda.manutencao_extintores`.
+
+**View ou transformação necessária**  
+A view já expõe o campo. Falta endpoint/frontend do bloco.
+
+**Endpoint necessário**  
+`GET /v1/admin/analytics/merenda/condicoes-sanitarias`.
+
+**Payload esperado**  
+```ts
+{
+  dist_manutencao_extintores: Array<{
+    label: string;
+    escolas: number;
+    percentual: number;
+  }>;
+}
+```
+
+**Frontend necessário**  
+Renderizar no novo bloco de Condições Sanitárias e Segurança em `AbaMerenda.tsx`.
+
+**Dependências de produto/dados**  
+Confirmar categorias (em dia / vencida / não informado) e normalização.
+
+**Tipo de lacuna**  
+Backend + Frontend.
+
+**Próxima ação recomendada**  
+Incluir no endpoint/bloco de condições sanitárias.
+
+#### 6.6.14 Migração de Recursos Humanos para Serviços Terceirizados
+
+**O que o gráfico deve mostrar**  
+Os indicadores de RH de merendeiras — total por vínculo (estatutária/terceirizada/temporária), adequação do quantitativo, avaliação do serviço, média de merendeiras por escola, empresas terceirizadas e supervisão — passam a compor um bloco **"Manipuladores de Alimentos / Merendeiras"** no menu **Serviços Terceirizados**, ao lado de Serviços Gerais e Portaria. **Não é** lacuna técnica de dado: é **reorganização conceitual** decidida pelo produto.
+
+**Como era tratado no Data Studio**  
+Subaba "Recursos Humanos" dentro de Merenda, com total de merendeiras por vínculo, adequação do quantitativo, avaliação do serviço, média por escola, empresas e abrangência, e supervisão do serviço pelas empresas.
+
+**Origem provável no banco**  
+`vw_censo_rh_merendeiras` (já existente): `qtd_merendeiras_estatutaria`, `qtd_merendeiras_terceirizada`, `qtd_merendeiras_temporaria`, `qtd_atende_necessidade_merenda`, `quantitativo_necessario_merenda`, `empresa_terceirizada_merenda`, `possui_supervisor_merenda`. Avaliação do serviço pode vir de campos de avaliação em `vw_censo_servicos_terceirizados` (a confirmar na rodada de Serviços Terceirizados).
+
+**View ou transformação necessária**  
+Nenhuma nova nesta rodada. A view já alimenta o endpoint atual `/merenda/recursos-humanos`. Na rodada de Serviços Terceirizados, decidir se o bloco reaproveita esse endpoint ou ganha um endpoint próprio sob `/servicos-terceirizados/*`.
+
+**Endpoint necessário**  
+Nenhum novo agora. `GET /v1/admin/analytics/merenda/recursos-humanos` **permanece ativo e inalterado**. Futuramente, possível `GET /v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos` ou inclusão no endpoint de governança/visão-geral de Serviços Terceirizados.
+
+**Payload esperado**  
+Reaproveitar o payload `MerendaRH` atual na rodada futura, eventualmente acrescido de avaliação do serviço e adequação do quantitativo.
+
+**Frontend necessário**  
+Nenhum agora. O bloco `sec-merenda-rh` em `AbaMerenda.tsx` **permanece**. Na rodada futura, criar o bloco "Manipuladores de Alimentos / Merendeiras" em `AbaServicosTerceirizados.tsx` e então planejar a retirada do bloco RH de `AbaMerenda.tsx`.
+
+**Dependências de produto/dados**  
+Decisão de produto já registrada (`matriz-abas-e-graficos.md` §2.8). Resta planejar a rodada de Serviços Terceirizados e a escala oficial de avaliação (compartilhada com Governança / Supervisão, §5.4).
+
+**Tipo de lacuna**  
+Reorganização conceitual / Produto (não é lacuna de dado).
+
+**Próxima ação recomendada**  
+Não remover código nesta rodada. Tratar a migração na rodada própria de Serviços Terceirizados, junto do bloco Governança / Supervisão.
+
 ## 7. Itens fora da rodada PostgreSQL atual
 
 ### 7.1 Perfil dos Alunos e Resultados
@@ -1107,8 +1657,10 @@ A fonte futura deve vir de bases próprias validadas pelas coordenações respon
 | `/v1/admin/analytics/caracterizacao/oferta-funcionamento` | Etapas, modalidades, turnos, média de turnos por porte | Recomendado | Confirmar estrutura dos campos multivalorados |
 | `/v1/admin/analytics/caracterizacao/infraestrutura-educacional` | Ambientes e essenciais | **Entregue (CAR-INFRA-01)** | Lista oficial inicial definida; refino futuro com produto |
 | `/v1/admin/analytics/infraestrutura/energia-climatizacao` | Energia e climatização | Recomendado ou expansão de `/condicoes` | Confirmar semântica dos campos |
-| `/v1/admin/analytics/merenda/estrutura-fisica` | Tamanho da cozinha e estrutura | Opcional | Pode ser expansão de `/merenda/oferta` |
+| `/v1/admin/analytics/merenda/estrutura-fisica` | Tamanho da cozinha, refeitório adequado, distribuição Sim/Não de refeitório | Opcional | Pode ser expansão de `/merenda/oferta` |
+| `/v1/admin/analytics/merenda/condicoes-sanitarias` | Despensa, depósito, itens básicos, EPIs/extintor, manutenção de extintores | Recomendado (bloco ausente) | Campos já existem em `vw_censo_equipamentos_merenda` |
 | `/v1/admin/analytics/servicos-terceirizados/governanca` | Supervisão e avaliações | Recomendado | Escala oficial das avaliações |
+| `/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos` | RH de merendeiras migrado de Merenda | Futuro (rodada própria) | Reaproveita `vw_censo_rh_merendeiras` |
 
 ## 9. Resumo de views/transformações recomendadas
 
@@ -1120,7 +1672,11 @@ A fonte futura deve vir de bases próprias validadas pelas coordenações respon
 | Ambientes por escola | Presença de ambientes | Sim, `vw_censo_ambientes` | Entregue (CAR-INFRA-01) |
 | Ambientes essenciais | Cobertura e média por porte | Sim, lista oficial inicial | Entregue (CAR-INFRA-01); refino futuro da lista |
 | Energia/climatização | KPIs e distribuição | Parcial | Campos existem, não expostos |
-| Tamanho da cozinha | Distribuição categórica | Sim | Falta payload |
+| Tamanho da cozinha / refeitório adequado | Distribuição categórica | Sim, `vw_censo_equipamentos_merenda` | Falta payload |
+| Atende necessidades (Merenda) | Distribuição Sim/Parc./Não | Sim, `vw_censo_rh_merendeiras` | Hoje só `pct_atende_necessidades` |
+| Presença/quantidade/criticidade de equipamentos (Merenda) | Presença, faixas, estado consolidado | Sim, `vw_censo_equipamentos_merenda` | Faltam payload e definições de produto (faixas/criticidade) |
+| Condições sanitárias (Merenda) | KPIs/distribuições do bloco ausente | Sim, `vw_censo_equipamentos_merenda` | Campos existem, sem endpoint/frontend |
+| RH merendeiras → Serviços Terceirizados | Reorganização conceitual | Sim, `vw_censo_rh_merendeiras` | Migração de bloco; sem mudança de dado nesta rodada |
 | Governança serviços | Supervisão e avaliação | Parcial | Campos existem, escala a validar |
 
 ## 10. Ordem técnica recomendada
@@ -1139,6 +1695,6 @@ A fonte futura deve vir de bases próprias validadas pelas coordenações respon
 
 5. Implementar backend/frontend de Energia e Climatização.
 
-6. Implementar Merenda / tamanho da cozinha.
+6. Implementar Merenda conforme Data Studio (§6.6), em PRs pequenos: (a) distribuições de Oferta/Estrutura (atende necessidades, possui refeitório Sim/Não, tamanho da cozinha, refeitório adequado); (b) Equipamentos (presença por tipo, faixas de quantidade, estado consolidado, criticidade — estes dois últimos após decisão de produto); (c) novo bloco **Condições Sanitárias e Segurança** (endpoint + bloco frontend). Não remover o bloco RH de Merenda nesta rodada.
 
-7. Implementar Serviços Terceirizados / Governança e Supervisão após validação da escala.
+7. Implementar Serviços Terceirizados / Governança e Supervisão após validação da escala — e, na mesma rodada, planejar o bloco **Manipuladores de Alimentos / Merendeiras** recebendo o RH migrado de Merenda (§6.6.14).

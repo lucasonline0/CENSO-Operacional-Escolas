@@ -45,7 +45,8 @@ Decisões registradas pelo time, válidas para todo o trabalho a partir desta br
 4. **Gestão Financeira e Governança** é **placeholder institucional**. Sem fetch, sem endpoint, sem view SQL, sem dado fake.
 5. **Gestão Financeira e Governança não deve consumir o banco PostgreSQL do formulário do censo** nesta rodada.
 6. A **fonte futura** de "Gestão Financeira / Governança" virá de **bases próprias validadas pelas coordenações responsáveis**, não do banco do censo operacional.
-7. As **5 abas temáticas já integradas em primeira versão** (Pessoal e Gestão Escolar, Tecnologia e Equipamentos, Infraestrutura e Segurança, Merenda Escolar, Serviços Terceirizados) **não devem receber gráficos inéditos** (fora do escopo do painel original) antes desta matriz mínima ser validada com as áreas finalísticas da SEDUC. **Exceção:** gráficos mínimos que já existiam no painel original (Data Studio/Looker Studio) e ainda não estão refletidos na aplicação podem ser **documentados como lacunas** nesta matriz e **implementados após diagnóstico técnico**, mesmo antes da validação — eles não são novidade de escopo, e sim recuperação da referência mínima. O caso de Tecnologia e Equipamentos (ver §5.3) é o primeiro a seguir esse caminho.
+7. As **5 abas temáticas já integradas em primeira versão** (Pessoal e Gestão Escolar, Tecnologia e Equipamentos, Infraestrutura e Segurança, Merenda Escolar, Serviços Terceirizados) **não devem receber gráficos inéditos** (fora do escopo do painel original) antes desta matriz mínima ser validada com as áreas finalísticas da SEDUC. **Exceção:** gráficos mínimos que já existiam no painel original (Data Studio/Looker Studio) e ainda não estão refletidos na aplicação podem ser **documentados como lacunas** nesta matriz e **implementados após diagnóstico técnico**, mesmo antes da validação — eles não são novidade de escopo, e sim recuperação da referência mínima. O caso de Tecnologia e Equipamentos (ver §5.3) foi o primeiro a seguir esse caminho; **Merenda Escolar (ver §5.5) é o segundo**, alinhado neste PR documental.
+8. **Recursos Humanos da Merenda (merendeiras/manipuladores de alimentos) sai da aba Merenda Escolar como bloco finalístico.** O Data Studio mantinha uma subaba "Recursos Humanos" dentro de Merenda; por decisão de produto, esses indicadores (total de merendeiras por vínculo, adequação do quantitativo, avaliação do serviço, média por escola, empresas e supervisão) passam a ser **enquadrados conceitualmente no menu "Serviços Terceirizados"**, em bloco próprio de **"Manipuladores de Alimentos / Merendeiras"**, junto de Serviços Gerais e Portaria. Esta rodada **apenas documenta** a decisão e a lacuna — **não remove código**. O bloco RH hoje renderizado em `AbaMerenda.tsx` permanece intacto até a rodada de remodelagem de Serviços Terceirizados.
 
 ---
 
@@ -81,7 +82,7 @@ Visão consolidada das abas, **com foco analítico**. As abas operacionais (Oper
 | Pessoal e Gestão Escolar | Integrada (1ª versão) | PostgreSQL | Estrutura de Gestão Escolar · Coordenação Pedagógica · Quadro de Pessoal | Endpoints `/pessoal-gestao/*`. Próximos gráficos só após validação. |
 | Tecnologia e Equipamentos | Integrada (1ª versão) | PostgreSQL | Infraestrutura Digital · Parque Tecnológico · Uso Pedagógico | Endpoints `/tecnologia/*`. |
 | Infraestrutura e Segurança | Integrada (1ª versão) | PostgreSQL | Condições Estruturais e Ambientes · Energia, Climatização e Capacidade Elétrica · Segurança Física e Patrimonial | Endpoints `/infraestrutura/*`. Bloco de Energia/Climatização possivelmente sob-coberto pelo backend atual (ver §5.4). |
-| Merenda Escolar | Integrada (1ª versão) | PostgreSQL | Oferta e Adequação da Merenda · Estrutura Física · Equipamentos da Merenda · Recursos Humanos | Endpoints `/merenda/*`. Bloco "Estrutura Física" precisa ser confirmado contra payload atual (ver §5.5). |
+| Merenda Escolar | Integrada (1ª versão) | PostgreSQL | Oferta e Adequação da Merenda · Estrutura Física · Equipamentos da Merenda · Condições Sanitárias e Segurança | Endpoints `/merenda/*`. Blocos oficiais realinhados aos gráficos mínimos do Data Studio (ver §5.5). "Condições Sanitárias e Segurança" é bloco novo (campos já existem na view, sem endpoint/frontend). **Recursos Humanos / merendeiras migra conceitualmente para Serviços Terceirizados** (§2.8), não é mais bloco finalístico de Merenda. |
 | Serviços Terceirizados | Integrada (1ª versão) | PostgreSQL | Visão Geral · Serviços Gerais · Portaria · Governança / Supervisão | Endpoints `/servicos-terceirizados/*`. Bloco "Governança / Supervisão" depende de campos de supervisão/avaliação (ver §5.6). |
 | Perfil dos Alunos e Resultados | Implementação atual mantida | Sheets `/indicadores-metrics` | Perfil Socioeducacional e Permanência (futuro) · Resultados e Desempenho (futuro) | Remodelagem futura, **fora desta rodada**. |
 | Gestão Financeira e Governança | Placeholder institucional | — | Governança Institucional e Regularização (futuro) · Execução Financeira e Prestação de Contas (futuro) · Participação Comunitária e Risco de Governança (futuro) | Sem fetch. Fonte futura: base própria das coordenações, **fora do banco do censo**. |
@@ -214,33 +215,40 @@ Endpoints atuais: `/v1/admin/analytics/infraestrutura/{condicoes,seguranca}` (vi
 
 ### 5.5 Merenda Escolar
 
-Blocos oficiais:
+Blocos oficiais (4), realinhados aos gráficos mínimos do painel original do Data Studio/Looker Studio:
 - **Oferta e Adequação da Merenda**
 - **Estrutura Física**
 - **Equipamentos da Merenda**
-- **Recursos Humanos**
+- **Condições Sanitárias e Segurança**
 
-Endpoints atuais: `/v1/admin/analytics/merenda/{oferta,equipamentos,recursos-humanos}` (views `0009_*`, `0010_*`).
+Endpoints atuais: `/v1/admin/analytics/merenda/{oferta,equipamentos,recursos-humanos}` (views `0009_vw_censo_equipamentos_merenda`, `0010_vw_censo_rh_merendeiras`).
+
+> **Nota sobre Recursos Humanos / merendeiras.** O painel original do Data Studio mantinha em Merenda uma subaba **"Recursos Humanos"** (total de merendeiras por vínculo, adequação do quantitativo, avaliação do serviço, média por escola, empresas e supervisão). Por decisão de produto (§2.8), esse bloco **deixa de ser bloco finalístico da aba Merenda** e **migra conceitualmente para o menu "Serviços Terceirizados"**, como bloco **"Manipuladores de Alimentos / Merendeiras"**, ao lado de Serviços Gerais e Portaria. Por isso ele **não aparece** na lista de blocos oficiais acima nem na matriz mínima abaixo. O endpoint `/v1/admin/analytics/merenda/recursos-humanos` e o bloco RH hoje renderizados em `AbaMerenda.tsx` **permanecem intactos** — esta rodada é só documental. A migração efetiva será planejada em rodada própria de Serviços Terceirizados.
+>
+> **Equivalência com o painel original (Data Studio).** O Data Studio organizava Merenda em: Oferta e Adequação · Estrutura Física · Equipamentos · Condições Sanitárias e Segurança · Recursos Humanos. A aplicação preserva os quatro primeiros como blocos finalísticos e reencaminha o quinto (RH) para Serviços Terceirizados. Indicadores que hoje existem só como KPI percentual, mas que no Data Studio eram exibidos como distribuição, ficam classificados como **parcial** (não "presente"), porque a referência mínima exige a distribuição.
 
 | Bloco | Gráficos mínimos | Fonte atual | Status | Lacuna backend | Lacuna frontend | Observações |
 |---|---|---|---|---|---|---|
-| Oferta e Adequação da Merenda | Oferta regular da merenda (KPI %) | PG `/merenda/oferta` | presente | — | — | — |
-| Oferta e Adequação da Merenda | Qualidade da merenda (donut) | PG `/merenda/oferta` | presente | — | — | — |
-| Oferta e Adequação da Merenda | Merenda atende necessidades (KPI %) | PG `/merenda/oferta` | presente / a confirmar | Confirmar campo | Confirmar render | — |
-| Estrutura Física | Condições da cozinha (donut) | PG `/merenda/oferta` ou novo endpoint | presente / a confirmar | Possível lacuna — confirmar se está em `/merenda/oferta` ou requer expansão | Confirmar render | Bloco "Estrutura Física" pode estar parcialmente coberto. |
-| Estrutura Física | Possui refeitório (KPI %) | PG | presente / a confirmar | Confirmar campo | Confirmar render | — |
-| Estrutura Física | Tamanho da cozinha (donut) | PG | planejado | Confirmar/expor campo | Componente a criar se faltar | — |
-| Equipamentos da Merenda | Freezers (KPI total + média) | PG `/merenda/equipamentos` | presente | — | — | — |
-| Equipamentos da Merenda | Geladeiras (KPI total + média) | PG `/merenda/equipamentos` | presente | — | — | — |
-| Equipamentos da Merenda | Fogões (KPI total + média) | PG `/merenda/equipamentos` | presente | — | — | — |
-| Equipamentos da Merenda | Fornos (KPI total + média) | PG `/merenda/equipamentos` | presente | — | — | — |
-| Equipamentos da Merenda | Bebedouros (KPI total + média) | PG `/merenda/equipamentos` | presente | — | — | — |
-| Equipamentos da Merenda | Estado de conservação (donut) | PG `/merenda/equipamentos` | presente / a confirmar | Confirmar campo | Confirmar render | Pode estar agregado por equipamento. |
-| Recursos Humanos | Merendeiras estatutárias (KPI total) | PG `/merenda/recursos-humanos` | presente | — | — | — |
-| Recursos Humanos | Merendeiras terceirizadas (KPI total) | PG `/merenda/recursos-humanos` | presente | — | — | — |
-| Recursos Humanos | Merendeiras temporárias (KPI total) | PG `/merenda/recursos-humanos` | presente | — | — | — |
-| Recursos Humanos | Supervisor de merenda (KPI %) | PG `/merenda/recursos-humanos` | presente | — | — | — |
-| Recursos Humanos | Empresas terceirizadas da merenda (lista/tabela) | PG `/merenda/recursos-humanos` | presente / a confirmar | Confirmar agregação | Confirmar render | — |
+| Oferta e Adequação da Merenda | Oferta regular da merenda | PG `/merenda/oferta` (`dist_oferta_regular`) | presente | — | — | Donut renderizado. |
+| Oferta e Adequação da Merenda | Qualidade da merenda | PG `/merenda/oferta` (`dist_qualidade`) | presente | — | — | Barra renderizada. |
+| Oferta e Adequação da Merenda | Merenda atende necessidades — distribuição Sim/Parcialmente/Não | PG `/merenda/oferta` (`pct_atende_necessidades`) | parcial | Expor distribuição categórica (hoje só `pct_atende_necessidades` = % "Sim") | Renderizar donut/barra; hoje só KPI % | Campo `atende_necessidades` está em `vw_censo_rh_merendeiras`. |
+| Estrutura Física | Condições da cozinha | PG `/merenda/oferta` (`dist_condicoes_cozinha`) | presente | — | — | Barra renderizada em `sec-merenda-estrutura`. |
+| Estrutura Física | Possui refeitório — distribuição Sim/Não | PG `/merenda/oferta` (`pct_possui_refeitorio`) | parcial | Expor distribuição Sim/Não (hoje só `pct_possui_refeitorio`) | Renderizar distribuição; hoje só KPI % | Campo `possui_refeitorio` está em `vw_censo_equipamentos_merenda`. |
+| Estrutura Física | Tamanho da cozinha | PG | planejado | Expor `tamanho_cozinha` no payload (campo já existe na view) | Componente a criar | `vw_censo_equipamentos_merenda.tamanho_cozinha` existe, não exposto. |
+| Estrutura Física | Refeitório atende adequadamente | PG | planejado | Expor `refeitorio_adequado` no payload (campo já existe na view) | Componente a criar | `vw_censo_equipamentos_merenda.refeitorio_adequado` existe, não exposto. |
+| Equipamentos da Merenda | Totais por equipamento (freezers, geladeiras, fogões, fornos, bebedouros) | PG `/merenda/equipamentos` | presente | — | — | 5 KPIs (total) renderizados. |
+| Equipamentos da Merenda | Média por equipamento por escola | PG `/merenda/equipamentos` (`media_por_escola`) | presente | — | — | Exibida em cada `EquipCard`. |
+| Equipamentos da Merenda | Presença de equipamentos por tipo (% de escolas que possuem) | PG | planejado | Expor % de escolas com `qtd_* > 0` por tipo | Componente a criar | Campos `qtd_*` existem na view; só o total/média é exposto hoje. |
+| Equipamentos da Merenda | Escolas com 1, 2 ou 3+ equipamentos (distribuição) | PG | planejado | Expor distribuição por faixa de quantidade | Componente a criar | Dependente de produto: faixas oficiais. |
+| Equipamentos da Merenda | Estado de conservação consolidado | PG `/merenda/equipamentos` (`dist_estados`) | parcial | Hoje há distribuição por equipamento×estado; falta visão consolidada | Renderizar visão consolidada além da tabela atual | Tabela por equipamento/estado já renderizada. |
+| Equipamentos da Merenda | Criticidade por equipamento | PG | planejado | Definir e expor índice de criticidade (ex.: % em estado ruim/inservível) | Componente a criar | Dependente de produto: definição de "criticidade". |
+| Condições Sanitárias e Segurança | Despensa exclusiva para gêneros alimentícios | PG | planejado | Expor `despensa_exclusiva` (campo já existe na view) | Bloco/componente a criar | Bloco **ausente** hoje; campo em `vw_censo_equipamentos_merenda`. |
+| Condições Sanitárias e Segurança | Depósito conserva adequadamente os alimentos | PG | planejado | Expor `deposito_conserva` (campo já existe na view) | Bloco/componente a criar | Idem. |
+| Condições Sanitárias e Segurança | Presença de itens básicos (balança, bancadas inox, exaustão) | PG | planejado | Expor `possui_balanca`, `bancadas_inox`, `sistema_exaustao` (campos já existem) | Bloco/componente a criar | Idem. |
+| Condições Sanitárias e Segurança | Estoque de EPIs e extintor de incêndio | PG | planejado | Expor `estoque_epi_extintor` (campo já existe na view) | Bloco/componente a criar | Idem. |
+| Condições Sanitárias e Segurança | Recarga/manutenção dos extintores | PG | planejado | Expor `manutencao_extintores` (campo já existe na view) | Bloco/componente a criar | Idem. |
+
+**Recursos Humanos (fora da matriz finalística da aba Merenda).** Os indicadores de RH/merendeiras — total de merendeiras estatutárias/terceirizadas/temporárias, adequação do quantitativo, avaliação do serviço, média por escola, empresas e supervisão — **não compõem mais a matriz mínima de Merenda Escolar**. Eles serão tratados em rodada própria no menu **Serviços Terceirizados**, como bloco **"Manipuladores de Alimentos / Merendeiras"** (§2.8 e §5.6). O endpoint `/merenda/recursos-humanos` e o bloco `sec-merenda-rh` permanecem ativos até essa migração — sem remoção nesta rodada.
 
 ### 5.6 Serviços Terceirizados
 
@@ -251,6 +259,8 @@ Blocos oficiais:
 - **Governança / Supervisão**
 
 Endpoints atuais: `/v1/admin/analytics/servicos-terceirizados/{visao-geral,servicos-gerais,portaria}` (views `0011_*`, `0012_*`).
+
+> **Bloco futuro — Manipuladores de Alimentos / Merendeiras.** Por decisão de produto (§2.8), os indicadores de RH de merendeiras hoje na aba Merenda (vínculo, adequação do quantitativo, avaliação, média por escola, empresas, supervisão) serão **enquadrados aqui** em rodada própria, como bloco análogo a Serviços Gerais e Portaria. A fonte provável é `vw_censo_rh_merendeiras` (já existente, hoje consumida por `/merenda/recursos-humanos`). Esta rodada **não cria** o bloco — apenas registra a intenção e a origem dos dados.
 
 | Bloco | Gráficos mínimos | Fonte atual | Status | Lacuna backend | Lacuna frontend | Observações |
 |---|---|---|---|---|---|---|
@@ -331,7 +341,11 @@ Itens identificados na matriz como `planejado` ou `presente / a confirmar`. Não
 - **Caracterização — Infraestrutura Educacional:** **entregue (CAR-INFRA-01)** — endpoint `/caracterizacao/infraestrutura-educacional` em produção com lista oficial inicial de ambientes essenciais. Resta apenas refino futuro da lista com produto (não bloqueante).
 - **Caracterização — Organização da Oferta:** confirmar exposição de etapas, modalidades, turnos no payload analítico atual ou criar recorte específico para a aba Caracterização.
 - **Infraestrutura — Energia/Climatização:** confirmar se `0008_vw_censo_infraestrutura_seguranca` expõe os campos `rede_eletrica_atende_demanda`, `estrutura_permite_climatizacao`, `climatizacao_salas` — caso contrário, expandir view/endpoint.
-- **Merenda — Estrutura Física:** confirmar se `condicoes_cozinha`, `possui_refeitorio`, `tamanho_cozinha` estão no payload atual ou requerem extensão.
+- **Merenda — Estrutura Física:** `condicoes_cozinha` e `possui_refeitorio` já no payload (`/merenda/oferta`). Faltam: distribuição Sim/Não de `possui_refeitorio` (hoje só KPI %), distribuição de `tamanho_cozinha` e `refeitorio_adequado` — campos existem em `vw_censo_equipamentos_merenda`, não expostos.
+- **Merenda — Oferta atende necessidades:** hoje `/merenda/oferta` expõe `pct_atende_necessidades` (% "Sim"); falta a **distribuição completa** Sim/Parcialmente/Não (`atende_necessidades` está em `vw_censo_rh_merendeiras`).
+- **Merenda — Equipamentos:** totais e média por escola entregues. Faltam: presença por tipo (% de escolas com `qtd_* > 0`), distribuição de escolas por faixa de quantidade (1/2/3+), visão consolidada de estado de conservação e índice de criticidade por equipamento.
+- **Merenda — Condições Sanitárias e Segurança:** **bloco ausente** (sem endpoint, sem frontend). Campos já existem em `vw_censo_equipamentos_merenda`: `despensa_exclusiva`, `deposito_conserva`, `possui_balanca`, `bancadas_inox`, `sistema_exaustao`, `estoque_epi_extintor`, `manutencao_extintores`. Avaliar endpoint dedicado (ex.: `/v1/admin/analytics/merenda/condicoes-sanitarias`) ou expansão de `/merenda/oferta`.
+- **Merenda — Recursos Humanos:** **migra conceitualmente para Serviços Terceirizados** (§2.8). Não é mais lacuna de Merenda; o endpoint `/merenda/recursos-humanos` permanece até a rodada de remodelagem de Serviços Terceirizados.
 - **Serviços Terceirizados — Governança/Supervisão:** sem endpoint dedicado hoje. Avaliar criação de `/v1/admin/analytics/servicos-terceirizados/governanca` cobrindo presença de supervisor por serviço, avaliação da supervisão e avaliação dos serviços.
 - **Tecnologia — Parque Tecnológico:** **entregue** — **média de equipamentos por escola** e **distribuição do parque tecnológico (%)** por tipo renderizadas; **total de computadores inoperantes** exposto. O **percentual de computadores inoperantes permanece pendente** por depender de denominador oficial (produto).
 - **Tecnologia — Uso Pedagógico:** **entregue** — **distribuições Sim/Não** (projetor, lousa), **Sim/Parcialmente/Não** (equipamentos atendem à demanda) e **média de projetores por escola** (entregue).

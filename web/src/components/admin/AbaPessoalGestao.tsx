@@ -218,24 +218,6 @@ export function AbaPessoalGestao({
             <NoData />
           )}
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col">
-          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
-            <BookOpen size={16} style={{ color: C.primary }} />
-            Cobertura média
-          </h3>
-          <p className="text-xs text-slate-400 mb-5">
-            Média de áreas de coordenação cobertas por escola.
-          </p>
-          <div className="flex-1 flex items-center justify-center">
-            <StatCard
-              label="Áreas por escola"
-              value={fmtMedia(coordenacao?.cobertura_media)}
-              Icon={ClipboardList}
-              tone="green"
-              sub="média declarada"
-            />
-          </div>
-        </div>
       </div>
 
       {/* ── Quadro de Pessoal ────────────────────────────────────── */}

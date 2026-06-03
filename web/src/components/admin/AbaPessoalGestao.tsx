@@ -134,6 +134,13 @@ export function AbaPessoalGestao({
         <span>Fonte: PostgreSQL · ano corrente · censos concluídos</span>
       </div>
 
+      {/* ── Estrutura de Gestão Escolar ──────────────────────────── */}
+      <div id="sec-pessoal-estrutura" className="flex items-center gap-3">
+        <UsersRound size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Estrutura de Gestão Escolar</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
       {/* Banners de erro parcial */}
       {estruturaErr && (coordenacao || quadro) && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
@@ -186,8 +193,7 @@ export function AbaPessoalGestao({
         />
       </div>
 
-      {/* ── Estrutura de Gestão Escolar ──────────────────────────── */}
-      <div id="sec-pessoal-estrutura" className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
           <UsersRound size={16} style={{ color: C.primary }} />
           Composição da Gestão Escolar
@@ -203,7 +209,13 @@ export function AbaPessoalGestao({
       </div>
 
       {/* ── Coordenação Pedagógica ───────────────────────────────── */}
-      <div id="sec-pessoal-coordenacao" className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div id="sec-pessoal-coordenacao" className="flex items-center gap-3">
+        <GraduationCap size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Coordenação Pedagógica</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
             <Layers size={16} style={{ color: C.primary }} />
@@ -221,7 +233,13 @@ export function AbaPessoalGestao({
       </div>
 
       {/* ── Quadro de Pessoal ────────────────────────────────────── */}
-      <div id="sec-pessoal-quadro" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div id="sec-pessoal-quadro" className="flex items-center gap-3">
+        <Briefcase size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Quadro de Pessoal</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Servidores Administrativos"
           value={fmtInt(quadro?.total_servidores_administrativos)}

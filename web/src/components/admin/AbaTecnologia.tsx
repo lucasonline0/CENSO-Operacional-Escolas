@@ -182,9 +182,13 @@ export function AbaTecnologia({
         </div>
       )}
 
-      {/* ── Resumo Executivo ─────────────────────────────────────── */}
-      {/* KPIs sem duplicidade: inoperantes, projetores e lousa aparecem nos
-          blocos específicos (Parque Tecnológico / Uso Pedagógico). */}
+      {/* ── Infraestrutura Digital ───────────────────────────────── */}
+      <div id="sec-tecnologia-digital" className="flex items-center gap-3">
+        <Wifi size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Infraestrutura Digital</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <StatCard
           label="Escolas com Internet"
@@ -202,10 +206,9 @@ export function AbaTecnologia({
         />
       </div>
 
-      {/* ── Infraestrutura Digital ───────────────────────────────── */}
       {/* 4 colunas no lg: Disponibilidade e Provedores ocupam 1 cada (rótulos
           curtos); Qualidade ocupa 2 (rótulos longos, em barras horizontais). */}
-      <div id="sec-tecnologia-digital" className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
             <Wifi size={16} style={{ color: C.primary }} />
@@ -251,7 +254,13 @@ export function AbaTecnologia({
       </div>
 
       {/* ── Parque Tecnológico ───────────────────────────────────── */}
-      <div id="sec-tecnologia-parque" className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+      <div id="sec-tecnologia-parque" className="flex items-center gap-3">
+        <Boxes size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Parque Tecnológico</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
           label="Desktops Administrativos"
           value={fmtInt(infra?.total_desktops_adm)}
@@ -346,7 +355,13 @@ export function AbaTecnologia({
       </div>
 
       {/* ── Uso Pedagógico ───────────────────────────────────────── */}
-      <div id="sec-tecnologia-pedagogico" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div id="sec-tecnologia-pedagogico" className="flex items-center gap-3">
+        <Projector size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Uso Pedagógico</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Escolas com Projetor"
           value={fmtPct(uso?.percentual_com_projetor)}

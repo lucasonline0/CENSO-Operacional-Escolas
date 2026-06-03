@@ -281,7 +281,13 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
         </div>
       )}
 
-      {/* ── Resumo Executivo ─────────────────────────────────────── */}
+      {/* ── Oferta e Adequação da Merenda ────────────────────────── */}
+      <div id="sec-merenda-oferta" className="flex items-center gap-3">
+        <Utensils size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Oferta e Adequação da Merenda</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Atende às Necessidades"
@@ -313,8 +319,7 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
         />
       </div>
 
-      {/* ── Oferta e Adequação da Merenda ────────────────────────── */}
-      <div id="sec-merenda-oferta" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
             <ClipboardList size={16} style={{ color: C.primary }} />
@@ -403,7 +408,13 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       </div>
 
       {/* ── Equipamentos da Merenda ──────────────────────────────── */}
-      <div id="sec-merenda-equipamentos" className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div id="sec-merenda-equipamentos" className="flex items-center gap-3">
+        <Refrigerator size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Equipamentos da Merenda</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <EquipCard label="Freezers"   dados={equip?.freezers}   Icon={Snowflake}    tone="blue" />
         <EquipCard label="Geladeiras" dados={equip?.geladeiras} Icon={Refrigerator} tone="green" />
         <EquipCard label="Fogões"     dados={equip?.fogoes}     Icon={Flame}        tone="orange" />

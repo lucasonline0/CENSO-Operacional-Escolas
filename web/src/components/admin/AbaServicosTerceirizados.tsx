@@ -155,7 +155,13 @@ export function AbaServicosTerceirizados({
         </div>
       )}
 
-      {/* ── Resumo Executivo ─────────────────────────────────────── */}
+      {/* ── Visão Geral ──────────────────────────────────────────── */}
+      <div id="sec-servicos-visao" className="flex items-center gap-3">
+        <Layers size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Visão Geral</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Áreas com Terceirização"
@@ -187,8 +193,7 @@ export function AbaServicosTerceirizados({
         />
       </div>
 
-      {/* ── Visão Geral ──────────────────────────────────────────── */}
-      <div id="sec-servicos-visao" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
             <Layers size={16} style={{ color: C.primary }} />
@@ -220,7 +225,13 @@ export function AbaServicosTerceirizados({
       </div>
 
       {/* ── Serviços Gerais ──────────────────────────────────────── */}
-      <div id="sec-servicos-gerais" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div id="sec-servicos-gerais" className="flex items-center gap-3">
+        <Users size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Serviços Gerais</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Efetivos"
           value={Math.round(sg?.total_efetivo ?? 0).toLocaleString("pt-BR")}
@@ -267,7 +278,13 @@ export function AbaServicosTerceirizados({
       </div>
 
       {/* ── Portaria ─────────────────────────────────────────────── */}
-      <div id="sec-servicos-portaria" className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div id="sec-servicos-portaria" className="flex items-center gap-3">
+        <ShieldCheck size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Portaria</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <StatCard
           label="Escolas com agentes de portaria"
           value={fmtPct(portaria?.pct_com_agentes)}
@@ -306,27 +323,24 @@ export function AbaServicosTerceirizados({
         )}
       </div>
 
-      {/* ── Governança / Supervisão (empty interno) ──────────────── */}
-      <div id="sec-servicos-governanca" className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+      {/* ── Governança / Supervisão ──────────────────────────────── */}
+      <div id="sec-servicos-governanca" className="flex items-center gap-3">
+        <UserCheck size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Governança / Supervisão</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col items-center text-center py-8">
         <div
-          className="px-6 py-4 border-b flex items-center gap-2"
-          style={{ background: C.primaryLight }}
+          className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-sm mb-3"
+          style={{ background: C.primary }}
         >
-          <UserCheck size={16} className="shrink-0" strokeWidth={2} style={{ color: C.primary }} />
-          <h2 className="font-semibold text-slate-800 text-sm">Governança / Supervisão</h2>
+          <Construction size={22} strokeWidth={1.75} />
         </div>
-        <div className="px-6 py-8 flex flex-col items-center text-center">
-          <div
-            className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-sm mb-3"
-            style={{ background: C.primary }}
-          >
-            <Construction size={22} strokeWidth={1.75} />
-          </div>
-          <p className="text-sm text-slate-600 max-w-2xl">
-            Dados de supervisão/governança dos serviços terceirizados ainda não estão disponíveis nos
-            endpoints analíticos desta aba.
-          </p>
-        </div>
+        <p className="text-sm text-slate-600 max-w-2xl">
+          Dados de supervisão/governança dos serviços terceirizados ainda não estão disponíveis nos
+          endpoints analíticos desta aba.
+        </p>
       </div>
     </div>
   );

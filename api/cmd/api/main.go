@@ -342,6 +342,8 @@ func (app *application) routes() http.Handler {
 			// Adicionais; a UI segue consumindo sheet-metrics até a Fase 2B.
 			protected.Get("/admin/analytics/caracterizacao/perfil", app.AdminAnalyticsCaracterizacaoPerfil)
 			protected.Get("/admin/analytics/caracterizacao/dre", app.AdminAnalyticsCaracterizacaoDRE)
+			protected.Get("/admin/analytics/caracterizacao/oferta-funcionamento", app.AdminAnalyticsCaracterizacaoOfertaFuncionamento)
+			protected.Get("/admin/analytics/caracterizacao/infraestrutura-educacional", app.AdminAnalyticsCaracterizacaoInfraEducacional)
 
 			// Frente 1 — Pessoal e Gestão Escolar + Tecnologia
 			protected.Get("/admin/analytics/pessoal-gestao/estrutura", app.AdminAnalyticsPessoalEstrutura)
@@ -353,6 +355,7 @@ func (app *application) routes() http.Handler {
 			// Frente 2 — Infraestrutura/Segurança + Merenda + Serviços Terceirizados.
 			protected.Get("/admin/analytics/infraestrutura/condicoes", app.AdminAnalyticsInfraCondicoes)
 			protected.Get("/admin/analytics/infraestrutura/seguranca", app.AdminAnalyticsInfraSeguranca)
+			protected.Get("/admin/analytics/infraestrutura/energia", app.AdminAnalyticsInfraEnergia)
 			protected.Get("/admin/analytics/merenda/oferta", app.AdminAnalyticsMerendaOferta)
 			protected.Get("/admin/analytics/merenda/equipamentos", app.AdminAnalyticsMerendaEquipamentos)
 			protected.Get("/admin/analytics/merenda/recursos-humanos", app.AdminAnalyticsMerendaRH)

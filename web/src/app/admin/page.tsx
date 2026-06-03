@@ -6,6 +6,7 @@ import {
   AlertCircle, Loader2, PanelLeftClose, Eye, EyeOff, ArrowRight,
   BarChart2, UsersRound, MonitorSmartphone, ShieldCheck, Utensils,
   ClipboardCheck, Activity, Landmark, LayoutDashboard, Database, MapPinned,
+  Menu, X, ChevronDown,
 } from "lucide-react";
 
 import "./admin.css";
@@ -203,21 +204,68 @@ const PAGE_META: Record<Tab, { title: string }> = {
   dre:            { title: "Por DRE"                        },
 };
 
+type SubItem = { label: string; anchor: string };
+
 type NavItem = {
   id: Tab;
   label: string;
   Icon: React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>;
+  subItems?: SubItem[];
 };
 
 const NAV_INDICATORS: NavItem[] = [
-  { id: "perfil",         label: "Caracterização da Rede",         Icon: BarChart2         },
-  { id: "pessoal",        label: "Pessoal e Gestão Escolar",       Icon: UsersRound        },
-  { id: "tecnologia",     label: "Tecnologia e Equipamentos",      Icon: MonitorSmartphone },
-  { id: "infraestrutura", label: "Infraestrutura e Segurança",     Icon: ShieldCheck       },
-  { id: "merenda",        label: "Merenda Escolar",                Icon: Utensils          },
-  { id: "servicos",       label: "Serviços Terceirizados",         Icon: ClipboardCheck    },
-  { id: "alunos",         label: "Perfil dos Alunos e Resultados", Icon: Activity          },
-  { id: "governanca",     label: "Gestão Financeira e Governança", Icon: Landmark          },
+  {
+    id: "perfil", label: "Caracterização da Rede", Icon: BarChart2,
+    subItems: [
+      { label: "Dimensão e Perfil da Rede",              anchor: "sec-perfil-dimensao" },
+      { label: "Organização da Oferta e Funcionamento",  anchor: "sec-perfil-oferta"   },
+      { label: "Infraestrutura Educacional",             anchor: "sec-perfil-infra"    },
+    ],
+  },
+  {
+    id: "pessoal", label: "Pessoal e Gestão Escolar", Icon: UsersRound,
+    subItems: [
+      { label: "Estrutura de Gestão Escolar", anchor: "sec-pessoal-estrutura"   },
+      { label: "Coordenação Pedagógica",      anchor: "sec-pessoal-coordenacao" },
+      { label: "Quadro de Pessoal",           anchor: "sec-pessoal-quadro"      },
+    ],
+  },
+  {
+    id: "tecnologia", label: "Tecnologia e Equipamentos", Icon: MonitorSmartphone,
+    subItems: [
+      { label: "Infraestrutura Digital", anchor: "sec-tecnologia-digital"    },
+      { label: "Parque Tecnológico",     anchor: "sec-tecnologia-parque"     },
+      { label: "Uso Pedagógico",         anchor: "sec-tecnologia-pedagogico" },
+    ],
+  },
+  {
+    id: "infraestrutura", label: "Infraestrutura e Segurança", Icon: ShieldCheck,
+    subItems: [
+      { label: "Condições Estruturais e Ambientes",       anchor: "sec-infra-condicoes" },
+      { label: "Energia, Climatização e Cap. Elétrica",   anchor: "sec-infra-energia"   },
+      { label: "Segurança Física e Patrimonial",          anchor: "sec-infra-seguranca" },
+    ],
+  },
+  {
+    id: "merenda", label: "Merenda Escolar", Icon: Utensils,
+    subItems: [
+      { label: "Oferta e Adequação da Merenda", anchor: "sec-merenda-oferta"       },
+      { label: "Estrutura Física",              anchor: "sec-merenda-estrutura"    },
+      { label: "Equipamentos da Merenda",       anchor: "sec-merenda-equipamentos" },
+      { label: "Recursos Humanos",              anchor: "sec-merenda-rh"           },
+    ],
+  },
+  {
+    id: "servicos", label: "Serviços Terceirizados", Icon: ClipboardCheck,
+    subItems: [
+      { label: "Visão Geral",             anchor: "sec-servicos-visao"       },
+      { label: "Serviços Gerais",         anchor: "sec-servicos-gerais"      },
+      { label: "Portaria",                anchor: "sec-servicos-portaria"    },
+      { label: "Governança / Supervisão", anchor: "sec-servicos-governanca"  },
+    ],
+  },
+  { id: "alunos",     label: "Perfil dos Alunos e Resultados", Icon: Activity  },
+  { id: "governanca", label: "Gestão Financeira e Governança", Icon: Landmark  },
 ];
 
 const NAV_OPERACIONAL: NavItem[] = [
@@ -227,16 +275,54 @@ const NAV_OPERACIONAL: NavItem[] = [
 ];
 
 function NavGroup({ items, active, onNav }: { items: NavItem[]; active: Tab; onNav: (id: Tab) => void }) {
+  const [openSub, setOpenSub] = useState<Tab | null>(null);
+
+  const scrollTo = (anchor: string) => {
+    document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const handleItemClick = (it: NavItem) => {
+    if (it.subItems) {
+      if (openSub === it.id) {
+        setOpenSub(null);
+      } else {
+        setOpenSub(it.id);
+        if (it.id !== active) onNav(it.id);
+      }
+    } else {
+      onNav(it.id);
+    }
+  };
+
   return (
     <>
       {items.map((it) => (
-        <div
-          key={it.id}
-          className={`ca-nav-item${active === it.id ? " active" : ""}`}
-          onClick={() => onNav(it.id)}
-        >
-          <it.Icon size={17} strokeWidth={1.6} className="ca-icon" />
-          <span>{it.label}</span>
+        <div key={it.id}>
+          <div
+            className={`ca-nav-item${active === it.id ? " active" : ""}`}
+            onClick={() => handleItemClick(it)}
+          >
+            <it.Icon size={17} strokeWidth={1.6} className="ca-icon" />
+            <span>{it.label}</span>
+            {it.subItems && (
+              <ChevronDown
+                size={13}
+                strokeWidth={2}
+                className={`ca-nav-chevron${openSub === it.id ? " open" : ""}`}
+              />
+            )}
+          </div>
+          {it.subItems && (
+            <div className={`ca-nav-subitems${openSub === it.id ? " open" : ""}`}>
+              <div className="ca-nav-subitems-inner">
+                {it.subItems.map((sub) => (
+                  <div key={sub.anchor} className="ca-nav-subitem" onClick={() => scrollTo(sub.anchor)}>
+                    {sub.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ))}
     </>
@@ -258,6 +344,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const [visited,        setVisited]        = useState<Set<Tab>>(() => new Set<Tab>(["perfil"]));
   const [censusLimit,    setCensusLimit]    = useState(10);
   const [censusPageNum,  setCensusPageNum]  = useState(1);
+  const [mobileNavOpen,  setMobileNavOpen]  = useState(false);
 
   const logout = useCallback(() => { clearToken(); clearApiCache(); onLogout(); }, [onLogout]);
 
@@ -307,7 +394,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const filteredRecent  = (dbData?.recent ?? []).filter((r) => !search || match(r, search));
   const filteredCensus  = (censusPage?.rows ?? []).filter((r) => !search || match(r, search));
 
-  const handleNav = (id: Tab) => { setTab(id); setSearch(""); setVisited((prev) => new Set([...prev, id])); };
+  const handleNav = (id: Tab) => { setTab(id); setSearch(""); setVisited((prev) => new Set([...prev, id])); setMobileNavOpen(false); };
 
   if (loading) return (
     <div className="censo-admin" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -317,7 +404,10 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
   return (
     <div className="censo-admin">
-      <div className={`ca-app${collapsed ? " collapsed" : ""}`}>
+      <div className={`ca-app${collapsed ? " collapsed" : ""}${mobileNavOpen ? " nav-open" : ""}`}>
+
+        {/* Overlay da gaveta de navegação — visível apenas no mobile (CSS) */}
+        <div className="ca-nav-overlay" onClick={() => setMobileNavOpen(false)} />
 
         {/* ── Sidebar ──────────────────────────────────────────── */}
         <aside className="ca-sidebar">
@@ -338,6 +428,13 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             >
               <PanelLeftClose size={17} strokeWidth={1.6} />
             </div>
+            <button
+              className="ca-drawer-close"
+              aria-label="Fechar menu"
+              onClick={() => setMobileNavOpen(false)}
+            >
+              <X size={18} strokeWidth={1.8} />
+            </button>
           </div>
 
           <div className="ca-nav-group">
@@ -365,10 +462,19 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         <main className="ca-main">
           {/* Topbar */}
           <div className="ca-topbar">
-            <div className="ca-crumbs">
-              <span>Painel SEDUC</span>
-              <span className="sep">/</span>
-              <span className="cur">{PAGE_META[tab].title}</span>
+            <div className="ca-topbar-left">
+              <button
+                className="ca-mobile-menu-btn"
+                aria-label="Abrir menu de navegação"
+                onClick={() => setMobileNavOpen(true)}
+              >
+                <Menu size={18} strokeWidth={1.8} />
+              </button>
+              <div className="ca-crumbs">
+                <span>Painel SEDUC</span>
+                <span className="sep">/</span>
+                <span className="cur">{PAGE_META[tab].title}</span>
+              </div>
             </div>
             <div className="ca-topbar-right">
               <div className="ca-search">

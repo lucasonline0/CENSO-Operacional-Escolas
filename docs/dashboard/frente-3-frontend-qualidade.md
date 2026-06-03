@@ -11,6 +11,11 @@
 > - Documentação de paridade Fase 2A atualizada em [validacao-fase-2.md](validacao-fase-2.md).
 > - Investigação de decimais em `total_alunos` documentada em [criterios-contagem-e-qualidade-dados.md](criterios-contagem-e-qualidade-dados.md) §8.
 >
+> **Evolução posterior dos placeholders (fora desta frente, já mergeada em `develop`):**
+> - Os 5 placeholders temáticos criados por esta frente (`AbaPessoalGestao`, `AbaTecnologia`, `AbaInfraestruturaSeguranca`, `AbaMerenda`, `AbaServicosTerceirizados`) foram substituídos por componentes **integrados** que consomem os endpoints PostgreSQL das Frentes 1 e 2. Hoje todas exibem dados reais em primeira versão.
+> - **Exceção:** `AbaGestaoFinanceiraGovernanca.tsx` continua como **placeholder institucional** — sem fetch, sem endpoint, sem dado fake. Fonte futura virá de bases próprias das coordenações responsáveis, **fora do banco do censo**, e ainda está em definição.
+> - Para o detalhamento de blocos e gráficos por aba, ver [matriz-abas-e-graficos.md](matriz-abas-e-graficos.md).
+>
 > **Pendências futuras (não reabrem esta frente):**
 > - Coleta do lado Sheets da paridade Fase 2A (operador autorizado com acesso ao banco).
 > - Coleta nominal de casos legados de `total_alunos` decimal — registro em §8.5 do documento de critérios, se necessário.

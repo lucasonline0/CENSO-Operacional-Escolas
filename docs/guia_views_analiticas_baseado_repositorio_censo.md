@@ -1,5 +1,7 @@
 # Guia técnico — Views, Tabelas Analíticas e Serviços de Indicadores do Dashboard Próprio
 
+> **Aviso (2026-05-29).** Este documento é **referência metodológica histórica/preliminar**. Parte do conteúdo (recortes de seções, sugestões de gráficos e endpoints) foi escrito antes da matriz oficial e pode conflitar com o estado real da `develop`. Em caso de conflito, vale a **[matriz oficial de abas, blocos e gráficos](dashboard/matriz-abas-e-graficos.md)**. Estado atual do `/admin` e dos endpoints integrados está em [`dashboard/plano-trabalho-paralelo.md`](dashboard/plano-trabalho-paralelo.md) §1.1 e §2.1. As decisões consolidadas (incl. remoção/adiamento de "Estatística Descritiva", tratamento de "Perfil dos Alunos" e "Gestão Financeira e Governança") estão em §2 da matriz.
+
 **Projeto:** Censo Operacional e Estrutural das Escolas da Rede Estadual da SEDUC/PA  
 **Repositório:** `lucasonline0/CENSO-Operacional-Escolas`  
 **Objetivo:** orientar a criação da camada analítica que substituirá a dependência de Google Sheets/Looker Studio, usando como fonte oficial o banco PostgreSQL atualmente utilizado pela aplicação.

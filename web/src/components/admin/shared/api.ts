@@ -45,6 +45,7 @@ const DASHBOARD_ENDPOINTS = [
   "/v1/admin/census?limit=10&page=1",
   "/v1/admin/analytics/caracterizacao/perfil",
   "/v1/admin/analytics/caracterizacao/dre",
+  "/v1/admin/analytics/caracterizacao/oferta-funcionamento",
   "/v1/admin/sheet-metrics",
   "/v1/admin/analytics/pessoal-gestao/estrutura",
   "/v1/admin/analytics/pessoal-gestao/coordenacao",

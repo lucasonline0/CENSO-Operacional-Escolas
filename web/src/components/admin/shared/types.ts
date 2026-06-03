@@ -68,6 +68,37 @@ export interface CaracterizacaoDREPg {
   detalhamento: DreSummaryPg[];
 }
 
+// CAR-INFRA-01 — Caracterização da Rede: Infraestrutura Educacional.
+// Payload de /v1/admin/analytics/caracterizacao/infraestrutura-educacional.
+export interface CaracterizacaoAmbienteStat {
+  label: string;
+  escolas: number;
+  percentual: number;
+}
+
+export interface CaracterizacaoCoberturaEssenciais {
+  total_essenciais: number;
+  media_ambientes_essenciais: number;
+  pct_cobertura_plena: number;
+  por_faixa: Array<{
+    label: string;
+    escolas: number;
+    percentual: number;
+  }>;
+}
+
+export interface CaracterizacaoMediaEssenciaisPorPorte {
+  porte: string;
+  media: number;
+}
+
+export interface CaracterizacaoInfraEducacionalPg {
+  ambientes: CaracterizacaoAmbienteStat[];
+  cobertura_essenciais: CaracterizacaoCoberturaEssenciais;
+  media_essenciais_por_porte: CaracterizacaoMediaEssenciaisPorPorte[];
+  ambientes_essenciais: string[];
+}
+
 export interface CensusFull extends CensusRow { data: unknown; created_at: string; }
 
 export interface CensusPage {
@@ -96,17 +127,38 @@ export interface InfraCondicoes {
   pct_com_muro_ou_cerca: number;
   pct_perimetro_fechado: number;
   top_ambientes: AmbienteStat[];
+  dist_muro_cerca: CategoricStat[];
+  dist_perimetro_fechado: CategoricStat[];
+  pct_reforma_critica: number;
+  pct_reforma_geral: number;
+  pct_obra_parada: number;
+  pct_cobertura_plena: number;
 }
 
 export interface InfraSeguranca {
   pct_possui_guarita: number;
   pct_controle_portao: number;
-  pct_iluminacao_externa: number;
   pct_possui_botao_panico: number;
   pct_cameras_funcionais: number;
   pct_plano_evacuacao: number;
   pct_politica_bullying: number;
   dist_cameras: CategoricStat[];
+  dist_iluminacao_externa: CategoricStat[];
+  dist_controle_portao: CategoricStat[];
+}
+
+export interface ClimatizacaoSalaRow {
+  faixa:            string;
+  total_salas:      number;
+  climatizadas:     number;
+  nao_climatizadas: number;
+}
+
+export interface InfraEnergia {
+  dist_rede_eletrica_atende:    CategoricStat[];
+  dist_estrutura_climatizacao:  CategoricStat[];
+  dist_climatizacao_salas:      CategoricStat[];
+  tabela_climatizacao:          ClimatizacaoSalaRow[];
 }
 
 // Frente 2 — Merenda Escolar.
@@ -215,23 +267,46 @@ export interface QuadroPessoal {
 
 // Frente 1 — Tecnologia e Equipamentos.
 // Payloads de /v1/admin/analytics/tecnologia/{infraestrutura,uso-pedagogico}.
+export interface MediaEquipamentoStat {
+  valor: string;
+  media: number;
+}
+
 export interface TecnologiaInfra {
   escolas_com_internet: number;
   percentual_internet: number;
+  disponibilidade_internet: CategoricStat[];
   por_provedor: CategoricStat[];
   por_qualidade: CategoricStat[];
   total_desktops_adm: number;
   total_desktops_alunos: number;
   total_notebooks: number;
   total_chromebooks: number;
+  media_equipamentos_por_escola: MediaEquipamentoStat[];
+  escolas_com_computadores_inoperantes: number;
   total_computadores_inoperantes: number;
   percentual_computadores_atendem: number;
+  computadores_atendem_demanda: CategoricStat[];
 }
 
 export interface TecnologiaUso {
   escolas_com_projetor: number;
   percentual_com_projetor: number;
+  possui_projetor_dist: CategoricStat[];
   total_projetores: number;
+  media_projetores_por_escola: number;
   escolas_com_lousa_digital: number;
   percentual_com_lousa_digital: number;
+  possui_lousa_digital_dist: CategoricStat[];
+}
+
+// Caracterização da Rede — Organização da Oferta e Funcionamento.
+// Payload de /v1/admin/analytics/caracterizacao/oferta-funcionamento.
+export interface LabelEscolasStat { label: string; escolas: number; percentual: number; }
+export interface MediaTurnosPorPorteStat { porte: string; media_turnos: number; }
+export interface CaracterizacaoOfertaFuncionamento {
+  etapas_ofertadas:       LabelEscolasStat[];
+  modalidades_ofertadas:  LabelEscolasStat[];
+  turnos:                 LabelEscolasStat[];
+  media_turnos_por_porte: MediaTurnosPorPorteStat[];
 }

@@ -219,7 +219,7 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       </div>
 
       {/* ── Oferta e Adequação da Merenda ────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div id="sec-merenda-oferta" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
             <ClipboardList size={16} style={{ color: C.primary }} />
@@ -245,7 +245,7 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       </div>
 
       {/* ── Estrutura Física da Cozinha ──────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+      <div id="sec-merenda-estrutura" className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         <div
           className="px-6 py-4 border-b flex items-center gap-2"
           style={{ background: C.primaryLight }}
@@ -275,7 +275,7 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       </div>
 
       {/* ── Equipamentos da Merenda ──────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div id="sec-merenda-equipamentos" className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <EquipCard label="Freezers"   dados={equip?.freezers}   Icon={Snowflake}    tone="blue" />
         <EquipCard label="Geladeiras" dados={equip?.geladeiras} Icon={Refrigerator} tone="green" />
         <EquipCard label="Fogões"     dados={equip?.fogoes}     Icon={Flame}        tone="orange" />
@@ -326,7 +326,7 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       </div>
 
       {/* ── Recursos Humanos da Merenda ──────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div id="sec-merenda-rh" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Merendeiras Estatutárias"
           value={Math.round(rh?.total_estatutaria ?? 0).toLocaleString("pt-BR")}

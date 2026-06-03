@@ -334,25 +334,38 @@ func (app *application) AdminAnalyticsPessoalQuadro(w http.ResponseWriter, r *ht
 // Tecnologia e Equipamentos
 // =========================================================================
 
+// MediaEquipamentoStat representa a média de um tipo de equipamento por escola.
+type MediaEquipamentoStat struct {
+	Valor string  `json:"valor"`
+	Media float64 `json:"media"`
+}
+
 type TecnologiaInfra struct {
-	EscolasComInternet      int64           `json:"escolas_com_internet"`
-	PercentualInternet      float64         `json:"percentual_internet"`
-	PorProvedor             []CategoricStat `json:"por_provedor"`
-	PorQualidade            []CategoricStat `json:"por_qualidade"`
-	TotalDesktopsAdm        float64         `json:"total_desktops_adm"`
-	TotalDesktopsAlunos     float64         `json:"total_desktops_alunos"`
-	TotalNotebooks          float64         `json:"total_notebooks"`
-	TotalChromebooks        float64         `json:"total_chromebooks"`
-	TotalInoperantes        float64         `json:"total_computadores_inoperantes"`
-	PercentualAtendeDemanda float64         `json:"percentual_computadores_atendem"`
+	EscolasComInternet         int64                    `json:"escolas_com_internet"`
+	PercentualInternet         float64                  `json:"percentual_internet"`
+	DisponibilidadeInternet    []CategoricStat          `json:"disponibilidade_internet"`
+	PorProvedor                []CategoricStat          `json:"por_provedor"`
+	PorQualidade               []CategoricStat          `json:"por_qualidade"`
+	TotalDesktopsAdm           float64                  `json:"total_desktops_adm"`
+	TotalDesktopsAlunos        float64                  `json:"total_desktops_alunos"`
+	TotalNotebooks             float64                  `json:"total_notebooks"`
+	TotalChromebooks           float64                  `json:"total_chromebooks"`
+	MediaEquipamentos          []MediaEquipamentoStat   `json:"media_equipamentos_por_escola"`
+	EscolasComInoperantes      int64                    `json:"escolas_com_computadores_inoperantes"`
+	TotalInoperantes           float64                  `json:"total_computadores_inoperantes"`
+	PercentualAtendeDemanda    float64                  `json:"percentual_computadores_atendem"`
+	ComputadoresAtendemDemanda []CategoricStat          `json:"computadores_atendem_demanda"`
 }
 
 type TecnologiaUso struct {
-	EscolasComProjetor     int64   `json:"escolas_com_projetor"`
-	PercentualComProjetor  float64 `json:"percentual_com_projetor"`
-	TotalProjetores        float64 `json:"total_projetores"`
-	EscolasComLousa        int64   `json:"escolas_com_lousa_digital"`
-	PercentualComLousa     float64 `json:"percentual_com_lousa_digital"`
+	EscolasComProjetor       int64           `json:"escolas_com_projetor"`
+	PercentualComProjetor    float64         `json:"percentual_com_projetor"`
+	PossuiProjetorDist       []CategoricStat `json:"possui_projetor_dist"`
+	TotalProjetores          float64         `json:"total_projetores"`
+	MediaProjetoresPorEscola float64         `json:"media_projetores_por_escola"`
+	EscolasComLousa          int64           `json:"escolas_com_lousa_digital"`
+	PercentualComLousa       float64         `json:"percentual_com_lousa_digital"`
+	PossuiLousaDigitalDist   []CategoricStat `json:"possui_lousa_digital_dist"`
 }
 
 // AdminAnalyticsTecnologiaInfra retorna indicadores de conectividade e parque de computadores.
@@ -377,8 +390,11 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 	}
 
 	out := TecnologiaInfra{
-		PorProvedor:  []CategoricStat{},
-		PorQualidade: []CategoricStat{},
+		DisponibilidadeInternet:    []CategoricStat{},
+		PorProvedor:                []CategoricStat{},
+		PorQualidade:               []CategoricStat{},
+		MediaEquipamentos:          []MediaEquipamentoStat{},
+		ComputadoresAtendemDemanda: []CategoricStat{},
 	}
 
 	const baseWhere = `
@@ -392,7 +408,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 		  AND ($5 = '' OR e.porte_escola_nome = $5)
 	`
 
-	// 1) Totais de internet e equipamentos
+	// 1) Totais de internet e equipamentos (inclui total absoluto de inoperantes)
 	err := db.QueryRowContext(ctx, fmt.Sprintf(`
 		WITH base AS (SELECT v.* %s),
 		tot AS (SELECT COUNT(DISTINCT school_id)::numeric AS n FROM base)
@@ -403,6 +419,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 			COALESCE(SUM(qtd_desktop_alunos), 0)::float8,
 			COALESCE(SUM(qtd_notebooks), 0)::float8,
 			COALESCE(SUM(qtd_chromebooks), 0)::float8,
+			COUNT(DISTINCT school_id) FILTER (WHERE qtd_computadores_inoperantes > 0)::bigint,
 			COALESCE(SUM(qtd_computadores_inoperantes), 0)::float8,
 			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE computadores_atendem = 'Sim') / NULLIF(MAX(tot.n), 0), 1), 0)::float8
 		FROM base CROSS JOIN tot
@@ -413,12 +430,66 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 		&out.TotalDesktopsAlunos,
 		&out.TotalNotebooks,
 		&out.TotalChromebooks,
+		&out.EscolasComInoperantes,
 		&out.TotalInoperantes,
 		&out.PercentualAtendeDemanda,
 	)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("tecnologia_infra totais: %v", err), http.StatusInternalServerError)
 		return
+	}
+
+	// 1b) Disponibilidade de internet — distribuição Sim/Não.
+	// Derivada do booleano internet_disponivel da view (que colapsa vazio/null em FALSE).
+	// Denominador: COUNT(DISTINCT school_id) no recorte.
+	{
+		var simEsc, naoEsc int
+		var simPct, naoPct float64
+		if e := db.QueryRowContext(ctx, fmt.Sprintf(`
+			WITH base AS (SELECT v.* %s),
+			tot AS (SELECT COUNT(DISTINCT school_id)::numeric AS n FROM base)
+			SELECT
+				COUNT(DISTINCT school_id) FILTER (WHERE internet_disponivel)::int,
+				COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE internet_disponivel) / NULLIF(MAX(tot.n), 0), 1), 0)::float8,
+				COUNT(DISTINCT school_id) FILTER (WHERE NOT internet_disponivel)::int,
+				COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE NOT internet_disponivel) / NULLIF(MAX(tot.n), 0), 1), 0)::float8
+			FROM base CROSS JOIN tot
+		`, baseWhere), year, dre, municipio, zona, porte).Scan(&simEsc, &simPct, &naoEsc, &naoPct); e != nil {
+			app.errorJSON(w, fmt.Errorf("disponibilidade_internet: %v", e), http.StatusInternalServerError)
+			return
+		}
+		out.DisponibilidadeInternet = []CategoricStat{
+			{Valor: "Sim", Escolas: simEsc, Percentual: simPct},
+			{Valor: "Não", Escolas: naoEsc, Percentual: naoPct},
+		}
+	}
+
+	// 1c) Média de equipamentos por escola no recorte.
+	// media = total declarado / nº de escolas do recorte = AVG(COALESCE(campo, 0)),
+	// coerente com os cards de total já exibidos (ex.: 4.381 desktops ÷ 822 escolas).
+	// Optou-se por média (e não mediana): quando o equipamento está concentrado numa
+	// minoria de escolas, a mediana fica 0 e subrepresenta o parque (ver diagnóstico
+	// em docs/dashboard/diagnostico-tecnologia-equipamentos.md).
+	{
+		var medChromebooks, medDesktopAlunos, medDesktopAdm, medNotebooks float64
+		if e := db.QueryRowContext(ctx, fmt.Sprintf(`
+			WITH base AS (SELECT v.* %s)
+			SELECT
+				COALESCE(ROUND(AVG(COALESCE(qtd_chromebooks, 0)), 2), 0)::float8,
+				COALESCE(ROUND(AVG(COALESCE(qtd_desktop_alunos, 0)), 2), 0)::float8,
+				COALESCE(ROUND(AVG(COALESCE(qtd_desktop_adm, 0)), 2), 0)::float8,
+				COALESCE(ROUND(AVG(COALESCE(qtd_notebooks, 0)), 2), 0)::float8
+			FROM base
+		`, baseWhere), year, dre, municipio, zona, porte).Scan(&medChromebooks, &medDesktopAlunos, &medDesktopAdm, &medNotebooks); e != nil {
+			app.errorJSON(w, fmt.Errorf("media_equipamentos: %v", e), http.StatusInternalServerError)
+			return
+		}
+		out.MediaEquipamentos = []MediaEquipamentoStat{
+			{Valor: "Chromebooks", Media: medChromebooks},
+			{Valor: "Desktops de alunos", Media: medDesktopAlunos},
+			{Valor: "Desktops administrativos", Media: medDesktopAdm},
+			{Valor: "Notebooks", Media: medNotebooks},
+		}
 	}
 
 	// helper: distribuição categórica por campo
@@ -466,6 +537,35 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 		out.PorQualidade = stats
 	}
 
+	// 4) Equipamentos atendem à demanda — distribuição completa por categoria.
+	// Inclui o bucket "Não informado" para nulos/vazios (NULLIF na view); não inventa categorias.
+	{
+		rows, err := db.QueryContext(ctx, fmt.Sprintf(`
+			WITH base AS (SELECT v.* %s),
+			tot AS (SELECT COUNT(DISTINCT school_id)::numeric AS n FROM base)
+			SELECT
+				COALESCE(computadores_atendem, 'Não informado') AS valor,
+				COUNT(DISTINCT school_id)::int AS escolas,
+				COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) / NULLIF(tot.n, 0), 1), 0)::float8 AS percentual
+			FROM base CROSS JOIN tot
+			GROUP BY COALESCE(computadores_atendem, 'Não informado'), tot.n
+			ORDER BY escolas DESC
+		`, baseWhere), year, dre, municipio, zona, porte)
+		if err != nil {
+			app.errorJSON(w, fmt.Errorf("computadores_atendem_demanda: %v", err), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var s CategoricStat
+			if err := rows.Scan(&s.Valor, &s.Escolas, &s.Percentual); err != nil {
+				app.errorJSON(w, fmt.Errorf("scan computadores_atendem_demanda: %v", err), http.StatusInternalServerError)
+				return
+			}
+			out.ComputadoresAtendemDemanda = append(out.ComputadoresAtendemDemanda, s)
+		}
+	}
+
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: out})
 }
 
@@ -490,38 +590,86 @@ func (app *application) AdminAnalyticsTecnologiaUso(w http.ResponseWriter, r *ht
 		}
 	}
 
-	var out TecnologiaUso
+	out := TecnologiaUso{
+		PossuiProjetorDist:     []CategoricStat{},
+		PossuiLousaDigitalDist: []CategoricStat{},
+	}
 
-	err := db.QueryRowContext(ctx, `
-		WITH base AS (
-			SELECT v.*
-			FROM vw_censo_equipamentos_tecnologia v
-			JOIN vw_censo_enriquecida e ON e.census_id = v.census_id
-			WHERE v.status = 'completed'
-			  AND v.year = $1
-			  AND ($2 = '' OR v.dre = $2)
-			  AND ($3 = '' OR v.municipio = $3)
-			  AND ($4 = '' OR v.zona = $4)
-			  AND ($5 = '' OR e.porte_escola_nome = $5)
-		),
+	const baseWhere = `
+		FROM vw_censo_equipamentos_tecnologia v
+		JOIN vw_censo_enriquecida e ON e.census_id = v.census_id
+		WHERE v.status = 'completed'
+		  AND v.year = $1
+		  AND ($2 = '' OR v.dre = $2)
+		  AND ($3 = '' OR v.municipio = $3)
+		  AND ($4 = '' OR v.zona = $4)
+		  AND ($5 = '' OR e.porte_escola_nome = $5)
+	`
+
+	// 1) KPIs de projetor/lousa e média de projetores por escola.
+	// media_projetores_por_escola = AVG(COALESCE(qtd_projetores, 0)) — média sobre todas as
+	// escolas do recorte, tratando "não informado" como zero (coerente com a divisão pelo total).
+	err := db.QueryRowContext(ctx, fmt.Sprintf(`
+		WITH base AS (SELECT v.* %s),
 		tot AS (SELECT COUNT(DISTINCT school_id)::numeric AS n FROM base)
 		SELECT
 			COUNT(DISTINCT school_id) FILTER (WHERE possui_projetor)::bigint,
 			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE possui_projetor) / NULLIF(MAX(tot.n), 0), 1), 0)::float8,
 			COALESCE(SUM(qtd_projetores), 0)::float8,
+			COALESCE(ROUND(AVG(COALESCE(qtd_projetores, 0)), 2), 0)::float8,
 			COUNT(DISTINCT school_id) FILTER (WHERE possui_lousa_digital)::bigint,
 			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE possui_lousa_digital) / NULLIF(MAX(tot.n), 0), 1), 0)::float8
 		FROM base CROSS JOIN tot
-	`, year, dre, municipio, zona, porte).Scan(
+	`, baseWhere), year, dre, municipio, zona, porte).Scan(
 		&out.EscolasComProjetor,
 		&out.PercentualComProjetor,
 		&out.TotalProjetores,
+		&out.MediaProjetoresPorEscola,
 		&out.EscolasComLousa,
 		&out.PercentualComLousa,
 	)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("tecnologia_uso: %v", err), http.StatusInternalServerError)
 		return
+	}
+
+	// helper: distribuição Sim/Não de um campo booleano da view.
+	// A view colapsa vazio/null em FALSE, portanto "Não" inclui também os não declarados.
+	distBool := func(campo string) ([]CategoricStat, error) {
+		var simEsc, naoEsc int
+		var simPct, naoPct float64
+		if e := db.QueryRowContext(ctx, fmt.Sprintf(`
+			WITH base AS (SELECT v.* %s),
+			tot AS (SELECT COUNT(DISTINCT school_id)::numeric AS n FROM base)
+			SELECT
+				COUNT(DISTINCT school_id) FILTER (WHERE %s)::int,
+				COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE %s) / NULLIF(MAX(tot.n), 0), 1), 0)::float8,
+				COUNT(DISTINCT school_id) FILTER (WHERE NOT %s)::int,
+				COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE NOT %s) / NULLIF(MAX(tot.n), 0), 1), 0)::float8
+			FROM base CROSS JOIN tot
+		`, baseWhere, campo, campo, campo, campo), year, dre, municipio, zona, porte).Scan(&simEsc, &simPct, &naoEsc, &naoPct); e != nil {
+			return nil, e
+		}
+		return []CategoricStat{
+			{Valor: "Sim", Escolas: simEsc, Percentual: simPct},
+			{Valor: "Não", Escolas: naoEsc, Percentual: naoPct},
+		}, nil
+	}
+
+	// 2) Projetor multimídia — distribuição Sim/Não
+	if stats, e := distBool("possui_projetor"); e != nil {
+		app.errorJSON(w, fmt.Errorf("possui_projetor_dist: %v", e), http.StatusInternalServerError)
+		return
+	} else {
+		out.PossuiProjetorDist = stats
+	}
+
+	// 3) Lousa digital — distribuição Sim/Não
+	if stats, e := distBool("possui_lousa_digital"); e != nil {
+		app.errorJSON(w, fmt.Errorf("possui_lousa_digital_dist: %v", e), http.StatusInternalServerError)
+		return
+	} else {
+		out.PossuiLousaDigitalDist = stats
 	}
 
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: out})

@@ -356,9 +356,10 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       </div>
 
       {/* ── Estrutura Física da Cozinha ──────────────────────────── */}
-      <div id="sec-merenda-estrutura" className="flex items-center gap-2">
-        <ChefHat size={16} className="shrink-0" strokeWidth={2} style={{ color: C.primary }} />
-        <h2 className="font-semibold text-slate-800 text-sm">Estrutura Física da Cozinha</h2>
+      <div id="sec-merenda-estrutura" className="flex items-center gap-3">
+        <ChefHat size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Estrutura Física da Cozinha</h2>
+        <div className="flex-1 h-px bg-slate-200" />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
@@ -565,9 +566,10 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       </div>
 
       {/* ── Condições Sanitárias e Segurança ─────────────────────── */}
-      <div id="sec-merenda-sanitarias" className="flex items-center gap-2">
-        <ShieldCheck size={16} className="shrink-0" strokeWidth={2} style={{ color: C.primary }} />
-        <h2 className="font-semibold text-slate-800 text-sm">Condições Sanitárias e Segurança</h2>
+      <div id="sec-merenda-sanitarias" className="flex items-center gap-3">
+        <ShieldCheck size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Condições Sanitárias e Segurança</h2>
+        <div className="flex-1 h-px bg-slate-200" />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
@@ -629,7 +631,13 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       </div>
 
       {/* ── Recursos Humanos da Merenda ──────────────────────────── */}
-      <div id="sec-merenda-rh" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div id="sec-merenda-rh" className="flex items-center gap-3">
+        <Users size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Recursos Humanos</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Merendeiras Estatutárias"
           value={Math.round(rh?.total_estatutaria ?? 0).toLocaleString("pt-BR")}

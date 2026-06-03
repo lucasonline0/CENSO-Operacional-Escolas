@@ -252,6 +252,7 @@ const NAV_INDICATORS: NavItem[] = [
       { label: "Oferta e Adequação da Merenda", anchor: "sec-merenda-oferta"       },
       { label: "Estrutura Física",              anchor: "sec-merenda-estrutura"    },
       { label: "Equipamentos da Merenda",       anchor: "sec-merenda-equipamentos" },
+      { label: "Condições Sanitárias e Segurança", anchor: "sec-merenda-sanitarias" },
       { label: "Recursos Humanos",              anchor: "sec-merenda-rh"           },
     ],
   },

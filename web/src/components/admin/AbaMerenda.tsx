@@ -186,7 +186,13 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
         </div>
       )}
 
-      {/* ── Resumo Executivo ─────────────────────────────────────── */}
+      {/* ── Oferta e Adequação da Merenda ────────────────────────── */}
+      <div id="sec-merenda-oferta" className="flex items-center gap-3">
+        <Utensils size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Oferta e Adequação da Merenda</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Atende às Necessidades"
@@ -218,8 +224,7 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
         />
       </div>
 
-      {/* ── Oferta e Adequação da Merenda ────────────────────────── */}
-      <div id="sec-merenda-oferta" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
             <ClipboardList size={16} style={{ color: C.primary }} />
@@ -244,18 +249,20 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
         </div>
       </div>
 
-      {/* ── Estrutura Física da Cozinha ──────────────────────────── */}
-      <div id="sec-merenda-estrutura" className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-        <div
-          className="px-6 py-4 border-b flex items-center gap-2"
-          style={{ background: C.primaryLight }}
-        >
-          <ChefHat size={16} className="shrink-0" strokeWidth={2} style={{ color: C.primary }} />
-          <h2 className="font-semibold text-slate-800 text-sm">Estrutura Física da Cozinha</h2>
-        </div>
-        <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* ── Estrutura Física ─────────────────────────────────────── */}
+      <div id="sec-merenda-estrutura" className="flex items-center gap-3">
+        <ChefHat size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Estrutura Física</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
-            <h3 className="font-semibold text-slate-800 text-sm mb-4">Condições da cozinha</h3>
+            <h3 className="font-semibold text-slate-800 text-sm mb-4 flex items-center gap-2">
+              <ChefHat size={16} style={{ color: C.primary }} />
+              Condições da cozinha
+            </h3>
             {condCozinhaRows.length > 0 ? (
               <HBarChart rows={condCozinhaRows} color={C.primary} />
             ) : (
@@ -275,7 +282,13 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       </div>
 
       {/* ── Equipamentos da Merenda ──────────────────────────────── */}
-      <div id="sec-merenda-equipamentos" className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div id="sec-merenda-equipamentos" className="flex items-center gap-3">
+        <Refrigerator size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Equipamentos da Merenda</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <EquipCard label="Freezers"   dados={equip?.freezers}   Icon={Snowflake}    tone="blue" />
         <EquipCard label="Geladeiras" dados={equip?.geladeiras} Icon={Refrigerator} tone="green" />
         <EquipCard label="Fogões"     dados={equip?.fogoes}     Icon={Flame}        tone="orange" />
@@ -325,8 +338,14 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
         </div>
       </div>
 
-      {/* ── Recursos Humanos da Merenda ──────────────────────────── */}
-      <div id="sec-merenda-rh" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ── Recursos Humanos ─────────────────────────────────────── */}
+      <div id="sec-merenda-rh" className="flex items-center gap-3">
+        <Users size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Recursos Humanos</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Merendeiras Estatutárias"
           value={Math.round(rh?.total_estatutaria ?? 0).toLocaleString("pt-BR")}

@@ -1266,6 +1266,8 @@ Expor `dist_refeitorio_adequado` e renderizar.
 
 #### 6.6.5 Presença de equipamentos por tipo
 
+> **Status: ✅ ENTREGUE (MER-01B).** `presenca_por_tipo` exposto em `/merenda/equipamentos` (`COUNT(DISTINCT school_id) FILTER (qtd_* > 0)`, denominador = escolas concluídas no recorte) e renderizado como HBar em `sec-merenda-equipamentos`. Critério "possui = qtd > 0" confirmado. O `label` no payload final é o slug do equipamento (`freezers`/`geladeiras`/…); o frontend mapeia para o nome amigável.
+
 **O que o gráfico deve mostrar**  
 Percentual de escolas que possuem cada tipo de equipamento (freezer, geladeira, fogão, forno, bebedouro), isto é, escolas com `qtd_* > 0`.
 
@@ -1305,6 +1307,8 @@ Backend + Frontend.
 Expor `presenca_por_tipo` e renderizar a barra.
 
 #### 6.6.6 Quantidade de equipamentos por escola
+
+> **Status: ✅ ENTREGUE (MER-01B).** Implementado como **`faixas_qtd_tipos`** — faixas **cumulativas por nº de tipos** de equipamento presentes na escola (Interpretação A do diagnóstico): "1 ou mais tipos", "2 ou mais tipos", "3 ou mais tipos". Rótulos escolhidos de forma explícita (em vez de "Até 1/Até 2/3+") para deixar claro que os percentuais são decrescentes. Exposto em `/merenda/equipamentos` e renderizado como HBar. O nome de campo `dist_qtd_por_escola` abaixo era a sugestão original; o campo entregue chama-se `faixas_qtd_tipos`.
 
 **O que o gráfico deve mostrar**  
 Distribuição de escolas por faixa de quantidade de equipamentos (ex.: escolas com 1, 2 ou 3+ equipamentos), por tipo ou consolidado.
@@ -1346,6 +1350,8 @@ Validar faixas com produto; então bucketizar e renderizar.
 
 #### 6.6.7 Estado de conservação consolidado
 
+> **Status: ✅ ENTREGUE (MER-01B).** Consolidado **no backend** (em vez de derivado no frontend) para padronizar os agrupamentos: `estado_consolidado` agrupa os estados em **Bom** (`lower(estado) LIKE 'bom%'`), **Regular** (`LIKE 'regular%'`) e **Ruim/Inoperante** (`LIKE 'ruim%' OR LIKE 'inoperante%'`), **por equipamento**, com denominador = escolas com estado informado para aquele equipamento. Renderizado como tabela compacta em `sec-merenda-equipamentos`, acima da tabela detalhada (`dist_estados` mantida). O payload entregue traz `{ equipamento, estado, escolas, percentual }` por linha (3 linhas por equipamento), e não o formato `{ label, … }` sugerido abaixo.
+
 **O que o gráfico deve mostrar**  
 Visão consolidada do estado de conservação dos equipamentos da merenda (ex.: distribuição global Bom/Regular/Ruim somando todos os tipos), além da tabela atual por equipamento×estado.
 
@@ -1386,6 +1392,8 @@ Decidir onde consolidar e renderizar a visão consolidada.
 
 #### 6.6.8 Criticidade por equipamento
 
+> **Status: ✅ ENTREGUE (MER-01B).** Definição de criticidade fixada: **% de escolas com estado ruim ou inoperante** por equipamento. Numerador = escolas cujo estado casa `lower(estado) LIKE 'ruim%' OR LIKE 'inoperante%'`; denominador = escolas com estado informado para aquele equipamento. Exposto em `/merenda/equipamentos` como `criticidade_por_equipamento` (`{ equipamento, escolas_criticas, percentual }`) e renderizado como HBar com destaque (cor rosa) em `sec-merenda-equipamentos`.
+
 **O que o gráfico deve mostrar**  
 Indicador de criticidade por tipo de equipamento (ex.: % de escolas/equipamentos em estado ruim ou inservível), destacando os equipamentos mais críticos.
 
@@ -1422,6 +1430,8 @@ Produto, depois Backend + Frontend.
 
 **Próxima ação recomendada**  
 Validar a definição de criticidade antes de qualquer SQL.
+
+> ✅ **MER-01C entregue (6.6.9–6.6.13).** O bloco **Condições Sanitárias e Segurança** foi implementado via endpoint dedicado `GET /v1/admin/analytics/merenda/condicoes-sanitarias` (payload `MerendaCondicoesSanitarias`), sobre `vw_censo_equipamentos_merenda`, sem nova view/migration. Campos entregues: `dist_despensa_exclusiva`, `dist_deposito_conserva`, `presenca_itens_basicos` (despensa exclusiva, sistema de exaustão, bancadas de inox), `dist_estoque_epi_extintor`, `dist_manutencao_extintores`. Bloco renderizado em `AbaMerenda.tsx` sob o anchor `sec-merenda-sanitarias`, com item de menu em `page.tsx`. **Denominadores:** distribuições categóricas sobre escolas com valor informado; `presenca_itens_basicos` sobre o total de escolas concluídas no recorte. As subseções abaixo preservam a especificação original (pré-entrega); onde indicarem "bloco ausente" ou anchor `sec-merenda-sanitario`, considerar superado por esta nota.
 
 #### 6.6.9 Despensa exclusiva para gêneros alimentícios
 
@@ -1530,6 +1540,8 @@ Renderizar barra horizontal no novo bloco de Condições Sanitárias e Seguranç
 
 **Dependências de produto/dados**  
 Confirmar a lista oficial de "itens básicos" e a semântica de cada campo.
+
+> **Observação (MER-01C entregue):** o campo `possui_balanca` existe na view `vw_censo_equipamentos_merenda`, mas **não compõe** `presenca_itens_basicos` nesta entrega. A composição adotada segue o escopo da MER-01C: **despensa exclusiva, sistema de exaustão e bancadas de inox**. A inclusão de balança pode ser avaliada futuramente se a área finalística considerar o item essencial para o indicador.
 
 **Tipo de lacuna**  
 Backend + Frontend.
@@ -1668,7 +1680,7 @@ A fonte futura deve vir de bases próprias validadas pelas coordenações respon
 | `/v1/admin/analytics/caracterizacao/infraestrutura-educacional` | Ambientes e essenciais | **Entregue (CAR-INFRA-01)** | Lista oficial inicial definida; refino futuro com produto |
 | `/v1/admin/analytics/infraestrutura/energia-climatizacao` | Energia e climatização | Recomendado ou expansão de `/condicoes` | Confirmar semântica dos campos |
 | `/v1/admin/analytics/merenda/estrutura-fisica` | Tamanho da cozinha, refeitório adequado, distribuição Sim/Não de refeitório | **Entregue como expansão de `/merenda/oferta` (MER-01A)** | Não criado endpoint próprio; `dist_tamanho_cozinha`, `dist_refeitorio_adequado`, `dist_possui_refeitorio` em `/merenda/oferta` |
-| `/v1/admin/analytics/merenda/condicoes-sanitarias` | Despensa, depósito, itens básicos, EPIs/extintor, manutenção de extintores | Recomendado (bloco ausente) | Campos já existem em `vw_censo_equipamentos_merenda` |
+| `/v1/admin/analytics/merenda/condicoes-sanitarias` | Despensa, depósito, itens básicos, EPIs/extintor, manutenção de extintores | **Entregue (MER-01C)** | `dist_*` + `presenca_itens_basicos` sobre `vw_censo_equipamentos_merenda`; renderizado em `sec-merenda-sanitarias` |
 | `/v1/admin/analytics/servicos-terceirizados/governanca` | Supervisão e avaliações | Recomendado | Escala oficial das avaliações |
 | `/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos` | RH de merendeiras migrado de Merenda | Futuro (rodada própria) | Reaproveita `vw_censo_rh_merendeiras` |
 
@@ -1685,7 +1697,7 @@ A fonte futura deve vir de bases próprias validadas pelas coordenações respon
 | Tamanho da cozinha / refeitório adequado | Distribuição categórica | Sim, `vw_censo_equipamentos_merenda` | **Entregue (MER-01A)** — `dist_tamanho_cozinha`, `dist_refeitorio_adequado` em `/merenda/oferta` |
 | Atende necessidades (Merenda) | Distribuição Sim/Parc./Não | Sim, `vw_censo_rh_merendeiras` | **Entregue (MER-01A)** — `dist_atende_necessidades` (KPI `pct_atende_necessidades` mantido) |
 | Presença/quantidade/criticidade de equipamentos (Merenda) | Presença, faixas, estado consolidado | Sim, `vw_censo_equipamentos_merenda` | Faltam payload e definições de produto (faixas/criticidade) |
-| Condições sanitárias (Merenda) | KPIs/distribuições do bloco ausente | Sim, `vw_censo_equipamentos_merenda` | Campos existem, sem endpoint/frontend |
+| Condições sanitárias (Merenda) | Distribuições + presença de itens básicos | Sim, `vw_censo_equipamentos_merenda` | **Entregue (MER-01C)** — `/merenda/condicoes-sanitarias`, renderizado em `sec-merenda-sanitarias` |
 | RH merendeiras → Serviços Terceirizados | Reorganização conceitual | Sim, `vw_censo_rh_merendeiras` | Migração de bloco; sem mudança de dado nesta rodada |
 | Governança serviços | Supervisão e avaliação | Parcial | Campos existem, escala a validar |
 
@@ -1705,6 +1717,6 @@ A fonte futura deve vir de bases próprias validadas pelas coordenações respon
 
 5. Implementar backend/frontend de Energia e Climatização.
 
-6. Implementar Merenda conforme Data Studio (§6.6), em PRs pequenos: (a) distribuições de Oferta/Estrutura (atende necessidades, possui refeitório Sim/Não, tamanho da cozinha, refeitório adequado); (b) Equipamentos (presença por tipo, faixas de quantidade, estado consolidado, criticidade — estes dois últimos após decisão de produto); (c) novo bloco **Condições Sanitárias e Segurança** (endpoint + bloco frontend). Não remover o bloco RH de Merenda nesta rodada.
+6. Implementar Merenda conforme Data Studio (§6.6): (a) **entregue (MER-01A)** distribuições de Oferta/Estrutura (atende necessidades, possui refeitório Sim/Não, tamanho da cozinha, refeitório adequado); (b) **entregue (MER-01B)** Equipamentos (presença por tipo, faixas de quantidade, estado consolidado, criticidade); (c) **entregue (MER-01C)** bloco **Condições Sanitárias e Segurança** (endpoint `/merenda/condicoes-sanitarias` + bloco frontend `sec-merenda-sanitarias`). Bloco RH de Merenda mantido intacto nesta rodada.
 
 7. Implementar Serviços Terceirizados / Governança e Supervisão após validação da escala — e, na mesma rodada, planejar o bloco **Manipuladores de Alimentos / Merendeiras** recebendo o RH migrado de Merenda (§6.6.14).

@@ -170,6 +170,36 @@ export interface MerendaOferta {
   dist_refeitorio_adequado: CategoricStat[];
 }
 
+export interface PresencaEquipamentoStat {
+  equipamento: string;
+  escolas: number;
+  percentual: number;
+}
+
+export interface FaixaQtdTiposEquipamentosStat {
+  label: string;
+  escolas: number;
+  percentual: number;
+}
+
+export interface EstadoConsolidadoEquipamentoStat {
+  equipamento: string;
+  estado: string;
+  escolas: number;
+  percentual: number;
+}
+
+export interface MediaEquipamentoMerendaStat {
+  equipamento: string;
+  media: number;
+}
+
+export interface CriticidadeEquipamentoStat {
+  equipamento: string;
+  escolas_criticas: number;
+  percentual: number;
+}
+
 export interface MerendaEquipamentos {
   freezers: EquipTotais;
   geladeiras: EquipTotais;
@@ -177,6 +207,11 @@ export interface MerendaEquipamentos {
   fornos: EquipTotais;
   bebedouros: EquipTotais;
   dist_estados: EstadoEquipStat[];
+  presenca_por_tipo: PresencaEquipamentoStat[];
+  faixas_qtd_tipos: FaixaQtdTiposEquipamentosStat[];
+  estado_consolidado: EstadoConsolidadoEquipamentoStat[];
+  media_por_tipo: MediaEquipamentoMerendaStat[];
+  criticidade_por_equipamento: CriticidadeEquipamentoStat[];
 }
 
 export interface MerendaRH {
@@ -185,6 +220,24 @@ export interface MerendaRH {
   total_temporaria: number;
   pct_com_supervisor: number;
   top_empresas: EmpresaStat[];
+}
+
+// MER-01C — Merenda Escolar: Condições Sanitárias e Segurança.
+// Payload de /v1/admin/analytics/merenda/condicoes-sanitarias.
+// As distribuições categóricas usam denominador = escolas com valor informado.
+// presenca_itens_basicos usa denominador = total de escolas concluídas no recorte.
+export interface MerendaItemBasicoStat {
+  item: string;
+  escolas: number;
+  percentual: number;
+}
+
+export interface MerendaCondicoesSanitarias {
+  dist_despensa_exclusiva: CategoricStat[];
+  dist_deposito_conserva: CategoricStat[];
+  presenca_itens_basicos: MerendaItemBasicoStat[];
+  dist_estoque_epi_extintor: CategoricStat[];
+  dist_manutencao_extintores: CategoricStat[];
 }
 
 // Frente 2 — Serviços Terceirizados.

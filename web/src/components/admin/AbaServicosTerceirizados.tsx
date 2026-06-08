@@ -6,7 +6,7 @@ import {
   Briefcase, Building, UserCheck, Construction, BadgeCheck,
   ChefHat,
 } from "lucide-react";
-import { apiFetch } from "./shared/api";
+import { apiFetch, getCached, allCached } from "./shared/api";
 import { C, PORTE_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
@@ -40,15 +40,28 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
 export function AbaServicosTerceirizados({
   token, onUnauth,
 }: AbaServicosTerceirizadosProps) {
-  const [visao,    setVisao]    = useState<ServicosVisaoGeral | null>(null);
-  const [sg,       setSg]       = useState<ServicosGerais | null>(null);
-  const [portaria, setPortaria] = useState<ServicosPortaria | null>(null);
-  const [manip,    setManip]    = useState<ServicosManipuladoresAlimentos | null>(null);
+  const [visao,    setVisao]    = useState<ServicosVisaoGeral | null>(
+    () => getCached("/v1/admin/analytics/servicos-terceirizados/visao-geral"),
+  );
+  const [sg,       setSg]       = useState<ServicosGerais | null>(
+    () => getCached("/v1/admin/analytics/servicos-terceirizados/servicos-gerais"),
+  );
+  const [portaria, setPortaria] = useState<ServicosPortaria | null>(
+    () => getCached("/v1/admin/analytics/servicos-terceirizados/portaria"),
+  );
+  const [manip,    setManip]    = useState<ServicosManipuladoresAlimentos | null>(
+    () => getCached("/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos"),
+  );
   const [visaoErr,    setVisaoErr]    = useState("");
   const [sgErr,       setSgErr]       = useState("");
   const [portariaErr, setPortariaErr] = useState("");
   const [manipErr,    setManipErr]    = useState("");
-  const [loading,     setLoading]     = useState(true);
+  const [loading,     setLoading]     = useState<boolean>(() => !allCached([
+    "/v1/admin/analytics/servicos-terceirizados/visao-geral",
+    "/v1/admin/analytics/servicos-terceirizados/servicos-gerais",
+    "/v1/admin/analytics/servicos-terceirizados/portaria",
+    "/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos",
+  ]));
 
   useEffect(() => {
     let cancelled = false;

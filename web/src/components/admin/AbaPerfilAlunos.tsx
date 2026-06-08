@@ -4,15 +4,19 @@ import React, { useState, useEffect } from "react";
 import {
   AlertCircle, Loader2, Users, Activity, AlertTriangle,
 } from "lucide-react";
-import { apiFetch } from "./shared/api";
+import { apiFetch, getCached } from "./shared/api";
 import { C } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { VBarChart } from "./shared/BarChart";
 import type { IndicadoresMetrics } from "./shared/types";
 
 export function AbaPerfilAlunos({ token, onUnauth }: { token: string; onUnauth: () => void }) {
-  const [metrics, setMetrics] = useState<IndicadoresMetrics | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [metrics, setMetrics] = useState<IndicadoresMetrics | null>(
+    () => getCached("/v1/admin/indicadores-metrics"),
+  );
+  const [loading, setLoading] = useState<boolean>(
+    () => getCached("/v1/admin/indicadores-metrics") === null,
+  );
   const [err, setErr]         = useState("");
 
   useEffect(() => {

@@ -6,7 +6,7 @@ import {
   TrendingUp, Users, GraduationCap, BarChart2, Clock, BookOpen,
   LayoutGrid, ShieldCheck, Info, X,
 } from "lucide-react";
-import { apiFetch } from "./shared/api";
+import { apiFetch, getCached, allCached } from "./shared/api";
 import { C, PORTE_COLORS, ZONA_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut, PieChart } from "./shared/Donut";
@@ -38,17 +38,32 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
   // /v1/admin/analytics/caracterizacao/perfil e /caracterizacao/dre. Os dados
   // legados de /v1/admin/sheet-metrics continuam carregados em paralelo como
   // fallback para qualquer parte cujo endpoint analítico falhe.
-  const [perfilPg, setPerfilPg] = useState<CaracterizacaoPerfilPg | null>(null);
-  const [drePg,    setDrePg]    = useState<CaracterizacaoDREPg | null>(null);
-  const [ofertaPg, setOfertaPg] = useState<CaracterizacaoOfertaFuncionamento | null>(null);
-  const [infraPg,  setInfraPg]  = useState<CaracterizacaoInfraEducacionalPg | null>(null);
-  const [metrics,  setMetrics]  = useState<SheetMetrics | null>(null);
+  const [perfilPg, setPerfilPg] = useState<CaracterizacaoPerfilPg | null>(
+    () => getCached("/v1/admin/analytics/caracterizacao/perfil"),
+  );
+  const [drePg,    setDrePg]    = useState<CaracterizacaoDREPg | null>(
+    () => getCached("/v1/admin/analytics/caracterizacao/dre"),
+  );
+  const [ofertaPg, setOfertaPg] = useState<CaracterizacaoOfertaFuncionamento | null>(
+    () => getCached("/v1/admin/analytics/caracterizacao/oferta-funcionamento"),
+  );
+  const [infraPg,  setInfraPg]  = useState<CaracterizacaoInfraEducacionalPg | null>(
+    () => getCached("/v1/admin/analytics/caracterizacao/infraestrutura-educacional"),
+  );
+  const [metrics,  setMetrics]  = useState<SheetMetrics | null>(
+    () => getCached("/v1/admin/sheet-metrics"),
+  );
   const [perfilErr, setPerfilErr] = useState("");
   const [dreErr,    setDreErr]    = useState("");
   const [ofertaErr, setOfertaErr] = useState("");
   const [infraErr,  setInfraErr]  = useState("");
   const [sheetErr,  setSheetErr]  = useState("");
-  const [loading,   setLoading]   = useState(true);
+  const [loading,   setLoading]   = useState<boolean>(() => !allCached([
+    "/v1/admin/analytics/caracterizacao/perfil",
+    "/v1/admin/analytics/caracterizacao/dre",
+    "/v1/admin/analytics/caracterizacao/oferta-funcionamento",
+    "/v1/admin/analytics/caracterizacao/infraestrutura-educacional",
+  ]));
   // Janela informativa explicando quais ambientes são essenciais.
   const [infoOpen, setInfoOpen] = useState(false);
 

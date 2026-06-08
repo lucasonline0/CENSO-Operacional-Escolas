@@ -6,7 +6,7 @@ import {
   TrendingUp, Users, GraduationCap, BarChart2, Clock, BookOpen,
   LayoutGrid, ShieldCheck, Info, X,
 } from "lucide-react";
-import { apiFetch } from "./shared/api";
+import { apiFetch, getCached, allCached } from "./shared/api";
 import { C, PORTE_COLORS, ZONA_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut, PieChart } from "./shared/Donut";
@@ -38,17 +38,32 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
   // /v1/admin/analytics/caracterizacao/perfil e /caracterizacao/dre. Os dados
   // legados de /v1/admin/sheet-metrics continuam carregados em paralelo como
   // fallback para qualquer parte cujo endpoint analítico falhe.
-  const [perfilPg, setPerfilPg] = useState<CaracterizacaoPerfilPg | null>(null);
-  const [drePg,    setDrePg]    = useState<CaracterizacaoDREPg | null>(null);
-  const [ofertaPg, setOfertaPg] = useState<CaracterizacaoOfertaFuncionamento | null>(null);
-  const [infraPg,  setInfraPg]  = useState<CaracterizacaoInfraEducacionalPg | null>(null);
-  const [metrics,  setMetrics]  = useState<SheetMetrics | null>(null);
+  const [perfilPg, setPerfilPg] = useState<CaracterizacaoPerfilPg | null>(
+    () => getCached("/v1/admin/analytics/caracterizacao/perfil"),
+  );
+  const [drePg,    setDrePg]    = useState<CaracterizacaoDREPg | null>(
+    () => getCached("/v1/admin/analytics/caracterizacao/dre"),
+  );
+  const [ofertaPg, setOfertaPg] = useState<CaracterizacaoOfertaFuncionamento | null>(
+    () => getCached("/v1/admin/analytics/caracterizacao/oferta-funcionamento"),
+  );
+  const [infraPg,  setInfraPg]  = useState<CaracterizacaoInfraEducacionalPg | null>(
+    () => getCached("/v1/admin/analytics/caracterizacao/infraestrutura-educacional"),
+  );
+  const [metrics,  setMetrics]  = useState<SheetMetrics | null>(
+    () => getCached("/v1/admin/sheet-metrics"),
+  );
   const [perfilErr, setPerfilErr] = useState("");
   const [dreErr,    setDreErr]    = useState("");
   const [ofertaErr, setOfertaErr] = useState("");
   const [infraErr,  setInfraErr]  = useState("");
   const [sheetErr,  setSheetErr]  = useState("");
-  const [loading,   setLoading]   = useState(true);
+  const [loading,   setLoading]   = useState<boolean>(() => !allCached([
+    "/v1/admin/analytics/caracterizacao/perfil",
+    "/v1/admin/analytics/caracterizacao/dre",
+    "/v1/admin/analytics/caracterizacao/oferta-funcionamento",
+    "/v1/admin/analytics/caracterizacao/infraestrutura-educacional",
+  ]));
   // Janela informativa explicando quais ambientes são essenciais.
   const [infoOpen, setInfoOpen] = useState(false);
 
@@ -219,7 +234,13 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
       )}
 
       {/* ── Dimensão e Perfil da Rede ─────────────────────────── */}
-      <div id="sec-perfil-dimensao" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div id="sec-perfil-dimensao" className="flex items-center gap-3">
+        <Building2 size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Dimensão e Perfil da Rede</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total de Escolas" value={totalEscolas} Icon={Building2} tone="blue" sub="Censos concluídos" />
         <StatCard label="Total de Alunos" value={totalAlunos} Icon={Users} tone="green" />
         <StatCard label="Média por Escola" value={mediaAlunos} Icon={TrendingUp} tone="amber" sub="alunos/escola" />
@@ -263,11 +284,13 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
       </div>
 
       {/* ── Organização da Oferta e Funcionamento ─────────────── */}
-      <div id="sec-perfil-oferta" className="space-y-5">
-        <h2 className="text-base font-semibold text-slate-700 border-b border-slate-200 pb-2">
-          Organização da Oferta e Funcionamento
-        </h2>
+      <div id="sec-perfil-oferta" className="flex items-center gap-3">
+        <Clock size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Organização da Oferta e Funcionamento</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
 
+      <div className="space-y-5">
         {ofertaErr && (
           <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
             <AlertCircle size={14} /> Oferta e funcionamento indisponível: {ofertaErr}
@@ -342,22 +365,21 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
       </div>
 
       {/* ── Infraestrutura Educacional ────────────────────────── */}
-      <div id="sec-perfil-infra" className="space-y-5">
-        <div className="flex items-center gap-2">
-          <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-            <LayoutGrid size={18} style={{ color: C.primary }} />
-            Infraestrutura Educacional
-          </h2>
-          <button
-            type="button"
-            onClick={() => setInfoOpen(true)}
-            aria-label="Sobre os ambientes essenciais"
-            className="text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            <Info size={16} />
-          </button>
-        </div>
+      <div id="sec-perfil-infra" className="flex items-center gap-3">
+        <LayoutGrid size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Infraestrutura Educacional</h2>
+        <button
+          type="button"
+          onClick={() => setInfoOpen(true)}
+          aria-label="Sobre os ambientes essenciais"
+          className="text-slate-400 hover:text-slate-600 transition-colors"
+        >
+          <Info size={16} />
+        </button>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
 
+      <div className="space-y-5">
         {infraErr && !infraPg && (
           <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
             <AlertCircle size={15} className="shrink-0 mt-0.5" />

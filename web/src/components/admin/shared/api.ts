@@ -16,6 +16,20 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
 export function clearApiCache() { apiCache.clear(); }
 
+export function getCached<T>(path: string): T | null {
+  const entry = apiCache.get(path);
+  if (entry && entry.expiresAt > Date.now()) return entry.data as T;
+  return null;
+}
+
+export function allCached(paths: string[]): boolean {
+  const now = Date.now();
+  return paths.every((p) => {
+    const e = apiCache.get(p);
+    return e !== undefined && e.expiresAt > now;
+  });
+}
+
 export async function apiFetch<T>(path: string, token: string, opts?: RequestInit): Promise<T> {
   const isGet = !opts?.method || opts.method.toUpperCase() === "GET";
 
@@ -46,6 +60,7 @@ const DASHBOARD_ENDPOINTS = [
   "/v1/admin/analytics/caracterizacao/perfil",
   "/v1/admin/analytics/caracterizacao/dre",
   "/v1/admin/analytics/caracterizacao/oferta-funcionamento",
+  "/v1/admin/analytics/caracterizacao/infraestrutura-educacional",
   "/v1/admin/sheet-metrics",
   "/v1/admin/analytics/pessoal-gestao/estrutura",
   "/v1/admin/analytics/pessoal-gestao/coordenacao",
@@ -54,12 +69,15 @@ const DASHBOARD_ENDPOINTS = [
   "/v1/admin/analytics/tecnologia/uso-pedagogico",
   "/v1/admin/analytics/infraestrutura/condicoes",
   "/v1/admin/analytics/infraestrutura/seguranca",
+  "/v1/admin/analytics/infraestrutura/energia",
   "/v1/admin/analytics/merenda/oferta",
   "/v1/admin/analytics/merenda/equipamentos",
   "/v1/admin/analytics/merenda/recursos-humanos",
+  "/v1/admin/analytics/merenda/condicoes-sanitarias",
   "/v1/admin/analytics/servicos-terceirizados/visao-geral",
   "/v1/admin/analytics/servicos-terceirizados/servicos-gerais",
   "/v1/admin/analytics/servicos-terceirizados/portaria",
+  "/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos",
   "/v1/admin/indicadores-metrics",
 ];
 

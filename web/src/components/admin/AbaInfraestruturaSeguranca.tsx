@@ -6,7 +6,7 @@ import {
   Camera, DoorClosed, Lightbulb, Siren, MapPinned, Layers, Home,
   Sparkles, BellRing, Zap, Wrench,
 } from "lucide-react";
-import { apiFetch } from "./shared/api";
+import { apiFetch, getCached, allCached } from "./shared/api";
 import { C, PORTE_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
@@ -36,12 +36,22 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
 export function AbaInfraestruturaSeguranca({
   token, onUnauth,
 }: AbaInfraestruturaSegurancaProps) {
-  const [condicoes, setCondicoes] = useState<InfraCondicoes | null>(null);
-  const [seguranca, setSeguranca] = useState<InfraSeguranca | null>(null);
-  const [energia,   setEnergia]   = useState<InfraEnergia | null>(null);
+  const [condicoes, setCondicoes] = useState<InfraCondicoes | null>(
+    () => getCached("/v1/admin/analytics/infraestrutura/condicoes"),
+  );
+  const [seguranca, setSeguranca] = useState<InfraSeguranca | null>(
+    () => getCached("/v1/admin/analytics/infraestrutura/seguranca"),
+  );
+  const [energia,   setEnergia]   = useState<InfraEnergia | null>(
+    () => getCached("/v1/admin/analytics/infraestrutura/energia"),
+  );
   const [condErr,   setCondErr]   = useState("");
   const [segErr,    setSegErr]    = useState("");
-  const [loading,   setLoading]   = useState(true);
+  const [loading,   setLoading]   = useState<boolean>(() => !allCached([
+    "/v1/admin/analytics/infraestrutura/condicoes",
+    "/v1/admin/analytics/infraestrutura/seguranca",
+    "/v1/admin/analytics/infraestrutura/energia",
+  ]));
 
   useEffect(() => {
     let cancelled = false;

@@ -2,17 +2,19 @@
 
 import React, { useEffect, useState } from "react";
 import {
-  Utensils, AlertCircle, Loader2, CheckCircle2, UserCheck, Users,
+  Utensils, AlertCircle, Loader2, CheckCircle2, Users,
   Snowflake, Refrigerator, Flame, Microwave, GlassWater,
-  ChefHat, ClipboardList, Building, Briefcase,
+  ChefHat, ClipboardList,
+  ShieldCheck, Package, FireExtinguisher,
 } from "lucide-react";
-import { apiFetch } from "./shared/api";
+import { apiFetch, getCached, allCached } from "./shared/api";
 import { C, PORTE_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
 import { HBarChart } from "./shared/BarChart";
 import type {
-  MerendaOferta, MerendaEquipamentos, MerendaRH, EquipTotais,
+  MerendaOferta, MerendaEquipamentos, EquipTotais,
+  MerendaCondicoesSanitarias,
 } from "./shared/types";
 
 type AbaMerendaProps = {
@@ -58,14 +60,110 @@ function EquipCard({
   );
 }
 
+// Cores institucionais por estado de conservação.
+const CONSERVACAO_CORES: Record<string, string> = {
+  "Bom": "#10B981",            // verde positivo
+  "Regular": "#F59E0B",        // âmbar
+  "Ruim/Inoperante": "#E11D48", // vermelho/rose
+};
+
+// Barras empilhadas horizontais (100%) do estado de conservação por equipamento.
+// Reaproveita a estrutura já pivotada de `estado_consolidado`.
+function StackedConservationBar({
+  equipamentos,
+  estados,
+  dados,
+  nomeEquip,
+}: {
+  equipamentos: string[];
+  estados: string[];
+  dados: Record<string, Record<string, { escolas: number; percentual: number }>>;
+  nomeEquip: (eq: string) => string;
+}) {
+  return (
+    <div className="space-y-4">
+      {/* Legenda */}
+      <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
+        {estados.map((est) => (
+          <span key={est} className="flex items-center gap-1.5">
+            <span
+              className="inline-block w-3 h-3 rounded-sm shrink-0"
+              style={{ background: CONSERVACAO_CORES[est] ?? "#94A3B8" }}
+            />
+            {est}
+          </span>
+        ))}
+      </div>
+
+      {/* Uma barra 100% por equipamento */}
+      <div className="space-y-3">
+        {equipamentos.map((eq) => {
+          const linha = dados[eq] ?? {};
+          const total = estados.reduce((acc, est) => acc + (linha[est]?.escolas ?? 0), 0);
+          const ruimCell = linha["Ruim/Inoperante"];
+          const ruimWidth = total > 0 && ruimCell ? (ruimCell.escolas / total) * 100 : 0;
+          const showRuimOutside = !!ruimCell && ruimCell.escolas > 0 && ruimWidth < 12;
+          const ruimOutsideLabel = showRuimOutside && ruimCell ? fmtPct(ruimCell.percentual) : "0%";
+          const ruimOutsideTitle =
+            showRuimOutside && ruimCell
+              ? `${nomeEquip(eq)} · Ruim/Inoperante: ${ruimCell.escolas.toLocaleString("pt-BR")} (${fmtPct(ruimCell.percentual)})`
+              : undefined;
+          return (
+            <div key={eq} className="flex items-center gap-3">
+              <span className="w-24 shrink-0 text-sm text-slate-700">{nomeEquip(eq)}</span>
+              <div className="flex-1 flex h-6 rounded-md overflow-hidden bg-slate-100">
+                {total > 0 &&
+                  estados.map((est) => {
+                    const cell = linha[est];
+                    if (!cell || cell.escolas <= 0) return null;
+                    const w = (cell.escolas / total) * 100;
+                    return (
+                      <div
+                        key={est}
+                        className="flex items-center justify-center text-[11px] font-medium text-white overflow-hidden whitespace-nowrap"
+                        style={{ width: `${w}%`, background: CONSERVACAO_CORES[est] ?? "#94A3B8" }}
+                        title={`${nomeEquip(eq)} · ${est}: ${cell.escolas.toLocaleString("pt-BR")} (${fmtPct(cell.percentual)})`}
+                      >
+                        {w >= 12 ? `${Math.round(w)}%` : ""}
+                      </div>
+                    );
+                  })}
+              </div>
+              <span
+                className={`w-14 shrink-0 text-xs font-semibold tabular-nums ${
+                  showRuimOutside ? "text-rose-700" : "text-transparent"
+                }`}
+                title={ruimOutsideTitle}
+                aria-hidden={!showRuimOutside}
+              >
+                {ruimOutsideLabel}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
-  const [oferta,     setOferta]     = useState<MerendaOferta | null>(null);
-  const [equip,      setEquip]      = useState<MerendaEquipamentos | null>(null);
-  const [rh,         setRh]         = useState<MerendaRH | null>(null);
+  const [oferta,     setOferta]     = useState<MerendaOferta | null>(
+    () => getCached("/v1/admin/analytics/merenda/oferta"),
+  );
+  const [equip,      setEquip]      = useState<MerendaEquipamentos | null>(
+    () => getCached("/v1/admin/analytics/merenda/equipamentos"),
+  );
+  const [sanit,      setSanit]      = useState<MerendaCondicoesSanitarias | null>(
+    () => getCached("/v1/admin/analytics/merenda/condicoes-sanitarias"),
+  );
   const [ofertaErr,  setOfertaErr]  = useState("");
   const [equipErr,   setEquipErr]   = useState("");
-  const [rhErr,      setRhErr]      = useState("");
-  const [loading,    setLoading]    = useState(true);
+  const [sanitErr,   setSanitErr]   = useState("");
+  const [loading,    setLoading]    = useState<boolean>(() => !allCached([
+    "/v1/admin/analytics/merenda/oferta",
+    "/v1/admin/analytics/merenda/equipamentos",
+    "/v1/admin/analytics/merenda/condicoes-sanitarias",
+  ]));
 
   useEffect(() => {
     let cancelled = false;
@@ -84,11 +182,11 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       .then((d) => { if (!cancelled) setEquip(d); })
       .catch(handleErr(setEquipErr));
 
-    const pRh = apiFetch<MerendaRH>("/v1/admin/analytics/merenda/recursos-humanos", token)
-      .then((d) => { if (!cancelled) setRh(d); })
-      .catch(handleErr(setRhErr));
+    const pSanit = apiFetch<MerendaCondicoesSanitarias>("/v1/admin/analytics/merenda/condicoes-sanitarias", token)
+      .then((d) => { if (!cancelled) setSanit(d); })
+      .catch(handleErr(setSanitErr));
 
-    Promise.all([pOferta, pEquip, pRh]).finally(() => {
+    Promise.all([pOferta, pEquip, pSanit]).finally(() => {
       if (!cancelled) setLoading(false);
     });
 
@@ -103,17 +201,14 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
     );
   }
 
-  if (!oferta && !equip && !rh) {
-    const msg = ofertaErr || equipErr || rhErr || "Não foi possível carregar indicadores.";
+  if (!oferta && !equip && !sanit) {
+    const msg = ofertaErr || equipErr || sanitErr || "Não foi possível carregar indicadores.";
     return (
       <div className="flex items-start gap-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl px-4 py-3 text-sm">
         <AlertCircle size={16} className="shrink-0 mt-0.5" /> {msg}
       </div>
     );
   }
-
-  const totalMerendeiras =
-    Math.round((rh?.total_estatutaria ?? 0) + (rh?.total_terceirizada ?? 0) + (rh?.total_temporaria ?? 0));
 
   // Segmentos pré-computados — empty arrays vira NoData.
   const ofertaSegments = (oferta?.dist_oferta_regular ?? []).map((s, i) => ({
@@ -125,22 +220,27 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
     label: s.valor,
     value: s.escolas,
   }));
+  const atendeNecessidadesSegments = (oferta?.dist_atende_necessidades ?? []).map((s, i) => ({
+    label: s.valor,
+    value: s.escolas,
+    color: PORTE_COLORS[i % PORTE_COLORS.length] ?? "#94A3B8",
+  }));
   const condCozinhaRows = (oferta?.dist_condicoes_cozinha ?? []).map((s) => ({
     label: s.valor,
     value: s.escolas,
   }));
-
-  const vinculoSegments = rh
-    ? [
-        { label: "Estatutária",  value: Math.round(rh.total_estatutaria),  color: "#1E5B8A" },
-        { label: "Terceirizada", value: Math.round(rh.total_terceirizada), color: "#F59E0B" },
-        { label: "Temporária",   value: Math.round(rh.total_temporaria),   color: "#8B5CF6" },
-      ].filter((s) => s.value > 0)
-    : [];
-
-  const topEmpresasRows = (rh?.top_empresas ?? []).map((e) => ({
-    label: e.empresa,
-    value: e.escolas,
+  const possuiRefeitorioSegments = (oferta?.dist_possui_refeitorio ?? []).map((s, i) => ({
+    label: s.valor,
+    value: s.escolas,
+    color: PORTE_COLORS[i % PORTE_COLORS.length] ?? "#94A3B8",
+  }));
+  const tamanhoCozinhaRows = (oferta?.dist_tamanho_cozinha ?? []).map((s) => ({
+    label: s.valor,
+    value: s.escolas,
+  }));
+  const refeitorioAdequadoRows = (oferta?.dist_refeitorio_adequado ?? []).map((s) => ({
+    label: s.valor,
+    value: s.escolas,
   }));
 
   // Agrupar dist_estados por equipamento para a tabela compacta.
@@ -157,6 +257,64 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
     bebedouros: "Bebedouros",
   };
   const equipOrder = ["freezers", "geladeiras", "fogoes", "fornos", "bebedouros"];
+  const equipNome = (eq: string) => equipLabels[eq] ?? eq;
+
+  // Gráficos sintéticos de equipamentos (MER-01B).
+  const presencaRows = (equip?.presenca_por_tipo ?? []).map((p) => ({
+    label: equipNome(p.equipamento),
+    value: p.escolas,
+    pct: p.percentual,
+  }));
+  const faixasRows = (equip?.faixas_qtd_tipos ?? []).map((f) => ({
+    label: f.label,
+    value: f.escolas,
+    pct: f.percentual,
+  }));
+  const mediaRows = (equip?.media_por_tipo ?? []).map((m) => ({
+    label: equipNome(m.equipamento),
+    value: m.media,
+    display: fmtMedia(m.media),
+  }));
+  const criticidadeRows = (equip?.criticidade_por_equipamento ?? []).map((c) => ({
+    label: equipNome(c.equipamento),
+    value: c.percentual,
+    display: fmtPct(c.percentual),
+    trailing: `${c.escolas_criticas} esc.`,
+  }));
+
+  // Estado consolidado pivotado por equipamento (Bom / Regular / Ruim-Inoperante).
+  const estadosConsolidados = ["Bom", "Regular", "Ruim/Inoperante"];
+  const consolidadoPorEquip: Record<string, Record<string, { escolas: number; percentual: number }>> = {};
+  (equip?.estado_consolidado ?? []).forEach((s) => {
+    if (!consolidadoPorEquip[s.equipamento]) consolidadoPorEquip[s.equipamento] = {};
+    consolidadoPorEquip[s.equipamento][s.estado] = { escolas: s.escolas, percentual: s.percentual };
+  });
+  const consolidadoEquipList = equipOrder.filter((eq) => consolidadoPorEquip[eq]);
+
+  // ── Condições Sanitárias e Segurança (MER-01C) ──────────────────
+  const despensaSegments = (sanit?.dist_despensa_exclusiva ?? []).map((s, i) => ({
+    label: s.valor,
+    value: s.escolas,
+    color: PORTE_COLORS[i % PORTE_COLORS.length] ?? "#94A3B8",
+  }));
+  const depositoSegments = (sanit?.dist_deposito_conserva ?? []).map((s, i) => ({
+    label: s.valor,
+    value: s.escolas,
+    color: PORTE_COLORS[i % PORTE_COLORS.length] ?? "#94A3B8",
+  }));
+  const itensBasicosRows = (sanit?.presenca_itens_basicos ?? []).map((p) => ({
+    label: p.item,
+    value: p.escolas,
+    pct: p.percentual,
+  }));
+  const epiExtintorRows = (sanit?.dist_estoque_epi_extintor ?? []).map((s) => ({
+    label: s.valor,
+    value: s.escolas,
+  }));
+  const manutencaoExtintorRows = (sanit?.dist_manutencao_extintores ?? []).map((s) => ({
+    label: s.valor,
+    value: s.escolas,
+  }));
 
   return (
     <div className="space-y-6">
@@ -167,27 +325,33 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       </div>
 
       {/* Banners de erro parcial */}
-      {ofertaErr && (equip || rh) && (
+      {ofertaErr && (equip || sanit) && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Oferta e estrutura da merenda indisponíveis ({ofertaErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
-      {equipErr && (oferta || rh) && (
+      {equipErr && (oferta || sanit) && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Equipamentos da merenda indisponíveis ({equipErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
-      {rhErr && (oferta || equip) && (
+      {sanitErr && (oferta || equip) && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
-          <span>Recursos humanos da merenda indisponíveis ({rhErr}). Exibindo apenas os demais blocos.</span>
+          <span>Condições sanitárias e segurança da merenda indisponíveis ({sanitErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
 
-      {/* ── Resumo Executivo ─────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ── Oferta e Adequação da Merenda ────────────────────────── */}
+      <div id="sec-merenda-oferta" className="flex items-center gap-3">
+        <Utensils size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Oferta e Adequação da Merenda</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <StatCard
           label="Atende às Necessidades"
           value={fmtPct(oferta?.pct_atende_necessidades)}
@@ -202,24 +366,9 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
           tone="blue"
           sub="das escolas"
         />
-        <StatCard
-          label="Com Supervisor"
-          value={fmtPct(rh?.pct_com_supervisor)}
-          Icon={UserCheck}
-          tone="amber"
-          sub="das escolas"
-        />
-        <StatCard
-          label="Total de Merendeiras"
-          value={totalMerendeiras.toLocaleString("pt-BR")}
-          Icon={Users}
-          tone="purple"
-          sub="estatutária + terceirizada + temporária"
-        />
       </div>
 
-      {/* ── Oferta e Adequação da Merenda ────────────────────────── */}
-      <div id="sec-merenda-oferta" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
             <ClipboardList size={16} style={{ color: C.primary }} />
@@ -242,45 +391,157 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
             <NoData />
           )}
         </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <CheckCircle2 size={16} style={{ color: C.primary }} />
+            Merenda atende às necessidades dos alunos
+          </h3>
+          {atendeNecessidadesSegments.length > 0 ? (
+            <Donut segments={atendeNecessidadesSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
       </div>
 
       {/* ── Estrutura Física da Cozinha ──────────────────────────── */}
-      <div id="sec-merenda-estrutura" className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-        <div
-          className="px-6 py-4 border-b flex items-center gap-2"
-          style={{ background: C.primaryLight }}
-        >
-          <ChefHat size={16} className="shrink-0" strokeWidth={2} style={{ color: C.primary }} />
-          <h2 className="font-semibold text-slate-800 text-sm">Estrutura Física da Cozinha</h2>
+      <div id="sec-merenda-estrutura" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+        <ChefHat size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Estrutura Física da Cozinha</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <ClipboardList size={16} style={{ color: C.primary }} />
+            Condições da cozinha
+          </h3>
+          {condCozinhaRows.length > 0 ? (
+            <HBarChart rows={condCozinhaRows} color={C.primary} />
+          ) : (
+            <NoData />
+          )}
         </div>
-        <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div>
-            <h3 className="font-semibold text-slate-800 text-sm mb-4">Condições da cozinha</h3>
-            {condCozinhaRows.length > 0 ? (
-              <HBarChart rows={condCozinhaRows} color={C.primary} />
-            ) : (
-              <NoData />
-            )}
-          </div>
-          <div className="flex items-center justify-center">
-            <StatCard
-              label="Possui Refeitório"
-              value={fmtPct(oferta?.pct_possui_refeitorio)}
-              Icon={Utensils}
-              tone="blue"
-              sub="das escolas"
-            />
-          </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <Utensils size={16} style={{ color: C.primary }} />
+            Possui refeitório?
+          </h3>
+          {possuiRefeitorioSegments.length > 0 ? (
+            <Donut segments={possuiRefeitorioSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <ChefHat size={16} style={{ color: C.primary }} />
+            Tamanho da cozinha
+          </h3>
+          {tamanhoCozinhaRows.length > 0 ? (
+            <HBarChart rows={tamanhoCozinhaRows} color={C.primary} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <CheckCircle2 size={16} style={{ color: C.primary }} />
+            O refeitório atende a necessidade da escola adequadamente?
+          </h3>
+          {refeitorioAdequadoRows.length > 0 ? (
+            <HBarChart rows={refeitorioAdequadoRows} color={C.primary} />
+          ) : (
+            <NoData />
+          )}
         </div>
       </div>
 
       {/* ── Equipamentos da Merenda ──────────────────────────────── */}
-      <div id="sec-merenda-equipamentos" className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div id="sec-merenda-equipamentos" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+        <Refrigerator size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Equipamentos da Merenda</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <EquipCard label="Freezers"   dados={equip?.freezers}   Icon={Snowflake}    tone="blue" />
         <EquipCard label="Geladeiras" dados={equip?.geladeiras} Icon={Refrigerator} tone="green" />
         <EquipCard label="Fogões"     dados={equip?.fogoes}     Icon={Flame}        tone="orange" />
         <EquipCard label="Fornos"     dados={equip?.fornos}     Icon={Microwave}    tone="amber" />
         <EquipCard label="Bebedouros" dados={equip?.bebedouros} Icon={GlassWater}   tone="purple" />
+      </div>
+
+      {/* Gráficos sintéticos de equipamentos */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <CheckCircle2 size={16} style={{ color: C.primary }} />
+            Presença de equipamentos por tipo
+          </h3>
+          {presencaRows.length > 0 ? (
+            <HBarChart rows={presencaRows} color={C.primary} labelWidth="6rem" />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <Users size={16} style={{ color: C.primary }} />
+            Escolas com 1, 2 ou mais tipos de equipamentos
+          </h3>
+          {faixasRows.length > 0 ? (
+            <HBarChart rows={faixasRows} color={C.primary} labelWidth="7rem" />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <ClipboardList size={16} style={{ color: C.primary }} />
+            Quantidade média de equipamentos por escola
+          </h3>
+          {mediaRows.some((r) => r.value > 0) ? (
+            <HBarChart rows={mediaRows} color={C.primary} labelWidth="6rem" />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <AlertCircle size={16} className="text-rose-500" />
+            Criticidade por equipamento
+          </h3>
+          <p className="text-xs text-slate-400 -mt-3 mb-4">% de escolas com estado ruim ou inoperante</p>
+          {criticidadeRows.length > 0 ? (
+            <HBarChart rows={criticidadeRows} color="#E11D48" labelWidth="6rem" />
+          ) : (
+            <NoData />
+          )}
+        </div>
+      </div>
+
+      {/* Estado de conservação — visão consolidada */}
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div
+          className="px-6 py-4 border-b flex items-center gap-2"
+          style={{ background: C.primaryLight }}
+        >
+          <ClipboardList size={16} className="shrink-0" strokeWidth={2} style={{ color: C.primary }} />
+          <h2 className="font-semibold text-slate-800 text-sm">Estado de conservação — visão consolidada</h2>
+        </div>
+        <div className="p-6">
+          {consolidadoEquipList.length > 0 ? (
+            <StackedConservationBar
+              equipamentos={consolidadoEquipList}
+              estados={estadosConsolidados}
+              dados={consolidadoPorEquip}
+              nomeEquip={equipNome}
+            />
+          ) : (
+            <NoData />
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
@@ -325,57 +586,65 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
         </div>
       </div>
 
-      {/* ── Recursos Humanos da Merenda ──────────────────────────── */}
-      <div id="sec-merenda-rh" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Merendeiras Estatutárias"
-          value={Math.round(rh?.total_estatutaria ?? 0).toLocaleString("pt-BR")}
-          Icon={Briefcase}
-          tone="blue"
-          sub="total"
-        />
-        <StatCard
-          label="Merendeiras Terceirizadas"
-          value={Math.round(rh?.total_terceirizada ?? 0).toLocaleString("pt-BR")}
-          Icon={Building}
-          tone="amber"
-          sub="total"
-        />
-        <StatCard
-          label="Merendeiras Temporárias"
-          value={Math.round(rh?.total_temporaria ?? 0).toLocaleString("pt-BR")}
-          Icon={Users}
-          tone="purple"
-          sub="total"
-        />
-        <StatCard
-          label="Supervisor de Merenda"
-          value={fmtPct(rh?.pct_com_supervisor)}
-          Icon={UserCheck}
-          tone="green"
-          sub="das escolas"
-        />
+      {/* ── Condições Sanitárias e Segurança ─────────────────────── */}
+      <div id="sec-merenda-sanitarias" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+        <ShieldCheck size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Condições Sanitárias e Segurança</h2>
+        <div className="flex-1 h-px bg-slate-200" />
       </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <Users size={16} style={{ color: C.primary }} />
-            Distribuição por vínculo
+            <Package size={16} style={{ color: C.primary }} />
+            Despensa exclusiva p/ gêneros alimentícios
           </h3>
-          {vinculoSegments.length > 0 ? (
-            <Donut segments={vinculoSegments} />
+          {despensaSegments.length > 0 ? (
+            <Donut segments={despensaSegments} />
           ) : (
             <NoData />
           )}
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <Building size={16} style={{ color: C.primary }} />
-            Top empresas terceirizadas
+            <CheckCircle2 size={16} style={{ color: C.primary }} />
+            O depósito conserva adequadamente os alimentos?
           </h3>
-          {topEmpresasRows.length > 0 ? (
-            <HBarChart rows={topEmpresasRows} color={C.primary} />
+          {depositoSegments.length > 0 ? (
+            <Donut segments={depositoSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <ClipboardList size={16} style={{ color: C.primary }} />
+            Presença de itens básicos
+          </h3>
+          <p className="text-xs text-slate-400 -mt-4 mb-5">% sobre o total de escolas concluídas no recorte</p>
+          {itensBasicosRows.length > 0 ? (
+            <HBarChart rows={itensBasicosRows} color={C.primary} labelWidth="9rem" />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <FireExtinguisher size={16} style={{ color: C.primary }} />
+            Estoque de EPIs e extintor de incêndio
+          </h3>
+          {epiExtintorRows.length > 0 ? (
+            <HBarChart rows={epiExtintorRows} color={C.primary} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <Flame size={16} style={{ color: C.primary }} />
+            Recarga e manutenção dos extintores
+          </h3>
+          {manutencaoExtintorRows.length > 0 ? (
+            <HBarChart rows={manutencaoExtintorRows} color={C.primary} />
           ) : (
             <NoData />
           )}

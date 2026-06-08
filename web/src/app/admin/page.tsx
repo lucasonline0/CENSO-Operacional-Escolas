@@ -252,7 +252,7 @@ const NAV_INDICATORS: NavItem[] = [
       { label: "Oferta e Adequação da Merenda", anchor: "sec-merenda-oferta"       },
       { label: "Estrutura Física",              anchor: "sec-merenda-estrutura"    },
       { label: "Equipamentos da Merenda",       anchor: "sec-merenda-equipamentos" },
-      { label: "Recursos Humanos",              anchor: "sec-merenda-rh"           },
+      { label: "Condições Sanitárias e Segurança", anchor: "sec-merenda-sanitarias" },
     ],
   },
   {
@@ -261,6 +261,7 @@ const NAV_INDICATORS: NavItem[] = [
       { label: "Visão Geral",             anchor: "sec-servicos-visao"       },
       { label: "Serviços Gerais",         anchor: "sec-servicos-gerais"      },
       { label: "Portaria",                anchor: "sec-servicos-portaria"    },
+      { label: "Manipulador de Alimentos", anchor: "sec-servicos-manipuladores" },
       { label: "Governança / Supervisão", anchor: "sec-servicos-governanca"  },
     ],
   },

@@ -5,7 +5,7 @@ import {
   UsersRound, AlertCircle, Loader2, GraduationCap, BookOpen,
   Briefcase, UserCheck, Users, ClipboardList, MapPinned, Layers,
 } from "lucide-react";
-import { apiFetch } from "./shared/api";
+import { apiFetch, getCached, allCached } from "./shared/api";
 import { C } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
@@ -38,13 +38,23 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
 export function AbaPessoalGestao({
   token, onUnauth,
 }: AbaPessoalGestaoProps) {
-  const [estrutura,   setEstrutura]   = useState<PessoalEstrutura | null>(null);
-  const [coordenacao, setCoordenacao] = useState<PessoalCoordenacao | null>(null);
-  const [quadro,      setQuadro]      = useState<QuadroPessoal | null>(null);
+  const [estrutura,   setEstrutura]   = useState<PessoalEstrutura | null>(
+    () => getCached("/v1/admin/analytics/pessoal-gestao/estrutura"),
+  );
+  const [coordenacao, setCoordenacao] = useState<PessoalCoordenacao | null>(
+    () => getCached("/v1/admin/analytics/pessoal-gestao/coordenacao"),
+  );
+  const [quadro,      setQuadro]      = useState<QuadroPessoal | null>(
+    () => getCached("/v1/admin/analytics/pessoal-gestao/quadro-pessoal"),
+  );
   const [estruturaErr,   setEstruturaErr]   = useState("");
   const [coordenacaoErr, setCoordenacaoErr] = useState("");
   const [quadroErr,      setQuadroErr]      = useState("");
-  const [loading,        setLoading]        = useState(true);
+  const [loading,        setLoading]        = useState<boolean>(() => !allCached([
+    "/v1/admin/analytics/pessoal-gestao/estrutura",
+    "/v1/admin/analytics/pessoal-gestao/coordenacao",
+    "/v1/admin/analytics/pessoal-gestao/quadro-pessoal",
+  ]));
 
   useEffect(() => {
     let cancelled = false;
@@ -134,6 +144,13 @@ export function AbaPessoalGestao({
         <span>Fonte: PostgreSQL · ano corrente · censos concluídos</span>
       </div>
 
+      {/* ── Estrutura de Gestão Escolar ──────────────────────────── */}
+      <div id="sec-pessoal-estrutura" className="flex items-center gap-3">
+        <UsersRound size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Estrutura de Gestão Escolar</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
       {/* Banners de erro parcial */}
       {estruturaErr && (coordenacao || quadro) && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
@@ -186,8 +203,7 @@ export function AbaPessoalGestao({
         />
       </div>
 
-      {/* ── Estrutura de Gestão Escolar ──────────────────────────── */}
-      <div id="sec-pessoal-estrutura" className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
           <UsersRound size={16} style={{ color: C.primary }} />
           Composição da Gestão Escolar
@@ -203,7 +219,13 @@ export function AbaPessoalGestao({
       </div>
 
       {/* ── Coordenação Pedagógica ───────────────────────────────── */}
-      <div id="sec-pessoal-coordenacao" className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div id="sec-pessoal-coordenacao" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+        <GraduationCap size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Coordenação Pedagógica</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
             <Layers size={16} style={{ color: C.primary }} />
@@ -218,28 +240,16 @@ export function AbaPessoalGestao({
             <NoData />
           )}
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col">
-          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
-            <BookOpen size={16} style={{ color: C.primary }} />
-            Cobertura média
-          </h3>
-          <p className="text-xs text-slate-400 mb-5">
-            Média de áreas de coordenação cobertas por escola.
-          </p>
-          <div className="flex-1 flex items-center justify-center">
-            <StatCard
-              label="Áreas por escola"
-              value={fmtMedia(coordenacao?.cobertura_media)}
-              Icon={ClipboardList}
-              tone="green"
-              sub="média declarada"
-            />
-          </div>
-        </div>
       </div>
 
       {/* ── Quadro de Pessoal ────────────────────────────────────── */}
-      <div id="sec-pessoal-quadro" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div id="sec-pessoal-quadro" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+        <Briefcase size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Quadro de Pessoal</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Servidores Administrativos"
           value={fmtInt(quadro?.total_servidores_administrativos)}

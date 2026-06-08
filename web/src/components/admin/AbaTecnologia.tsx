@@ -254,7 +254,7 @@ export function AbaTecnologia({
       </div>
 
       {/* ── Parque Tecnológico ───────────────────────────────────── */}
-      <div id="sec-tecnologia-parque" className="flex items-center gap-3">
+      <div id="sec-tecnologia-parque" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <Boxes size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Parque Tecnológico</h2>
         <div className="flex-1 h-px bg-slate-200" />
@@ -355,7 +355,7 @@ export function AbaTecnologia({
       </div>
 
       {/* ── Uso Pedagógico ───────────────────────────────────────── */}
-      <div id="sec-tecnologia-pedagogico" className="flex items-center gap-3">
+      <div id="sec-tecnologia-pedagogico" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <Projector size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Uso Pedagógico</h2>
         <div className="flex-1 h-px bg-slate-200" />

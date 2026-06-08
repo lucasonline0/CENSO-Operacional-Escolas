@@ -356,7 +356,7 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       </div>
 
       {/* ── Estrutura Física da Cozinha ──────────────────────────── */}
-      <div id="sec-merenda-estrutura" className="flex items-center gap-3">
+      <div id="sec-merenda-estrutura" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <ChefHat size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Estrutura Física da Cozinha</h2>
         <div className="flex-1 h-px bg-slate-200" />
@@ -409,7 +409,7 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       </div>
 
       {/* ── Equipamentos da Merenda ──────────────────────────────── */}
-      <div id="sec-merenda-equipamentos" className="flex items-center gap-3">
+      <div id="sec-merenda-equipamentos" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <Refrigerator size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Equipamentos da Merenda</h2>
         <div className="flex-1 h-px bg-slate-200" />
@@ -566,7 +566,7 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       </div>
 
       {/* ── Condições Sanitárias e Segurança ─────────────────────── */}
-      <div id="sec-merenda-sanitarias" className="flex items-center gap-3">
+      <div id="sec-merenda-sanitarias" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <ShieldCheck size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Condições Sanitárias e Segurança</h2>
         <div className="flex-1 h-px bg-slate-200" />
@@ -631,7 +631,7 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       </div>
 
       {/* ── Recursos Humanos da Merenda ──────────────────────────── */}
-      <div id="sec-merenda-rh" className="flex items-center gap-3">
+      <div id="sec-merenda-rh" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <Users size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Recursos Humanos</h2>
         <div className="flex-1 h-px bg-slate-200" />

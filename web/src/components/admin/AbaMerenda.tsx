@@ -7,7 +7,7 @@ import {
   ChefHat, ClipboardList,
   ShieldCheck, Package, FireExtinguisher,
 } from "lucide-react";
-import { apiFetch } from "./shared/api";
+import { apiFetch, getCached, allCached } from "./shared/api";
 import { C, PORTE_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
@@ -147,13 +147,23 @@ function StackedConservationBar({
 }
 
 export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
-  const [oferta,     setOferta]     = useState<MerendaOferta | null>(null);
-  const [equip,      setEquip]      = useState<MerendaEquipamentos | null>(null);
-  const [sanit,      setSanit]      = useState<MerendaCondicoesSanitarias | null>(null);
+  const [oferta,     setOferta]     = useState<MerendaOferta | null>(
+    () => getCached("/v1/admin/analytics/merenda/oferta"),
+  );
+  const [equip,      setEquip]      = useState<MerendaEquipamentos | null>(
+    () => getCached("/v1/admin/analytics/merenda/equipamentos"),
+  );
+  const [sanit,      setSanit]      = useState<MerendaCondicoesSanitarias | null>(
+    () => getCached("/v1/admin/analytics/merenda/condicoes-sanitarias"),
+  );
   const [ofertaErr,  setOfertaErr]  = useState("");
   const [equipErr,   setEquipErr]   = useState("");
   const [sanitErr,   setSanitErr]   = useState("");
-  const [loading,    setLoading]    = useState(true);
+  const [loading,    setLoading]    = useState<boolean>(() => !allCached([
+    "/v1/admin/analytics/merenda/oferta",
+    "/v1/admin/analytics/merenda/equipamentos",
+    "/v1/admin/analytics/merenda/condicoes-sanitarias",
+  ]));
 
   useEffect(() => {
     let cancelled = false;

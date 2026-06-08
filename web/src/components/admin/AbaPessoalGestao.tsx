@@ -5,7 +5,7 @@ import {
   UsersRound, AlertCircle, Loader2, GraduationCap, BookOpen,
   Briefcase, UserCheck, Users, ClipboardList, MapPinned, Layers,
 } from "lucide-react";
-import { apiFetch } from "./shared/api";
+import { apiFetch, getCached, allCached } from "./shared/api";
 import { C } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
@@ -38,13 +38,23 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
 export function AbaPessoalGestao({
   token, onUnauth,
 }: AbaPessoalGestaoProps) {
-  const [estrutura,   setEstrutura]   = useState<PessoalEstrutura | null>(null);
-  const [coordenacao, setCoordenacao] = useState<PessoalCoordenacao | null>(null);
-  const [quadro,      setQuadro]      = useState<QuadroPessoal | null>(null);
+  const [estrutura,   setEstrutura]   = useState<PessoalEstrutura | null>(
+    () => getCached("/v1/admin/analytics/pessoal-gestao/estrutura"),
+  );
+  const [coordenacao, setCoordenacao] = useState<PessoalCoordenacao | null>(
+    () => getCached("/v1/admin/analytics/pessoal-gestao/coordenacao"),
+  );
+  const [quadro,      setQuadro]      = useState<QuadroPessoal | null>(
+    () => getCached("/v1/admin/analytics/pessoal-gestao/quadro-pessoal"),
+  );
   const [estruturaErr,   setEstruturaErr]   = useState("");
   const [coordenacaoErr, setCoordenacaoErr] = useState("");
   const [quadroErr,      setQuadroErr]      = useState("");
-  const [loading,        setLoading]        = useState(true);
+  const [loading,        setLoading]        = useState<boolean>(() => !allCached([
+    "/v1/admin/analytics/pessoal-gestao/estrutura",
+    "/v1/admin/analytics/pessoal-gestao/coordenacao",
+    "/v1/admin/analytics/pessoal-gestao/quadro-pessoal",
+  ]));
 
   useEffect(() => {
     let cancelled = false;

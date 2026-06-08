@@ -5,7 +5,7 @@ import {
   MonitorSmartphone, AlertCircle, Loader2, Wifi, Signal, Monitor,
   Laptop, Tablet, Projector, PenSquare, Gauge, ZapOff, Boxes, PieChart,
 } from "lucide-react";
-import { apiFetch } from "./shared/api";
+import { apiFetch, getCached, allCached } from "./shared/api";
 import { C, PORTE_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
@@ -65,11 +65,18 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
 export function AbaTecnologia({
   token, onUnauth,
 }: AbaTecnologiaProps) {
-  const [infra, setInfra] = useState<TecnologiaInfra | null>(null);
-  const [uso,   setUso]   = useState<TecnologiaUso | null>(null);
+  const [infra, setInfra] = useState<TecnologiaInfra | null>(
+    () => getCached("/v1/admin/analytics/tecnologia/infraestrutura"),
+  );
+  const [uso,   setUso]   = useState<TecnologiaUso | null>(
+    () => getCached("/v1/admin/analytics/tecnologia/uso-pedagogico"),
+  );
   const [infraErr, setInfraErr] = useState("");
   const [usoErr,   setUsoErr]   = useState("");
-  const [loading,  setLoading]  = useState(true);
+  const [loading,  setLoading]  = useState<boolean>(() => !allCached([
+    "/v1/admin/analytics/tecnologia/infraestrutura",
+    "/v1/admin/analytics/tecnologia/uso-pedagogico",
+  ]));
 
   useEffect(() => {
     let cancelled = false;

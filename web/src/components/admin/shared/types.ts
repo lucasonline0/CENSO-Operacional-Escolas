@@ -262,7 +262,7 @@ export interface MerendaCondicoesSanitarias {
 }
 
 // Frente 2 — Serviços Terceirizados.
-// Payloads de /v1/admin/analytics/servicos-terceirizados/{visao-geral,servicos-gerais,portaria}.
+// Payloads de /v1/admin/analytics/servicos-terceirizados/{visao-geral,servicos-gerais,portaria,manipuladores-alimentos}.
 export interface TerceirizacaoArea {
   area: string;
   escolas: number;
@@ -284,6 +284,18 @@ export interface ServicosGerais {
 export interface ServicosPortaria {
   pct_com_agentes: number;
   media_agentes_por_escola: number;
+  top_empresas: EmpresaStat[];
+}
+
+export interface ServicosManipuladoresAlimentos {
+  total_estatutaria: number;
+  total_terceirizada: number;
+  total_temporaria: number;
+  total_geral: number;
+  media_por_escola: number;
+  pct_com_supervisor: number;
+  dist_vinculo: CategoricStat[];
+  dist_atende_necessidade: CategoricStat[];
   top_empresas: EmpresaStat[];
 }
 

@@ -2,9 +2,9 @@
 
 import React, { useEffect, useState } from "react";
 import {
-  Utensils, AlertCircle, Loader2, CheckCircle2, UserCheck, Users,
+  Utensils, AlertCircle, Loader2, CheckCircle2, Users,
   Snowflake, Refrigerator, Flame, Microwave, GlassWater,
-  ChefHat, ClipboardList, Building, Briefcase,
+  ChefHat, ClipboardList,
   ShieldCheck, Package, FireExtinguisher,
 } from "lucide-react";
 import { apiFetch } from "./shared/api";
@@ -13,7 +13,7 @@ import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
 import { HBarChart } from "./shared/BarChart";
 import type {
-  MerendaOferta, MerendaEquipamentos, MerendaRH, EquipTotais,
+  MerendaOferta, MerendaEquipamentos, EquipTotais,
   MerendaCondicoesSanitarias,
 } from "./shared/types";
 
@@ -60,14 +60,98 @@ function EquipCard({
   );
 }
 
+// Cores institucionais por estado de conservação.
+const CONSERVACAO_CORES: Record<string, string> = {
+  "Bom": "#10B981",            // verde positivo
+  "Regular": "#F59E0B",        // âmbar
+  "Ruim/Inoperante": "#E11D48", // vermelho/rose
+};
+
+// Barras empilhadas horizontais (100%) do estado de conservação por equipamento.
+// Reaproveita a estrutura já pivotada de `estado_consolidado`.
+function StackedConservationBar({
+  equipamentos,
+  estados,
+  dados,
+  nomeEquip,
+}: {
+  equipamentos: string[];
+  estados: string[];
+  dados: Record<string, Record<string, { escolas: number; percentual: number }>>;
+  nomeEquip: (eq: string) => string;
+}) {
+  return (
+    <div className="space-y-4">
+      {/* Legenda */}
+      <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
+        {estados.map((est) => (
+          <span key={est} className="flex items-center gap-1.5">
+            <span
+              className="inline-block w-3 h-3 rounded-sm shrink-0"
+              style={{ background: CONSERVACAO_CORES[est] ?? "#94A3B8" }}
+            />
+            {est}
+          </span>
+        ))}
+      </div>
+
+      {/* Uma barra 100% por equipamento */}
+      <div className="space-y-3">
+        {equipamentos.map((eq) => {
+          const linha = dados[eq] ?? {};
+          const total = estados.reduce((acc, est) => acc + (linha[est]?.escolas ?? 0), 0);
+          const ruimCell = linha["Ruim/Inoperante"];
+          const ruimWidth = total > 0 && ruimCell ? (ruimCell.escolas / total) * 100 : 0;
+          const showRuimOutside = !!ruimCell && ruimCell.escolas > 0 && ruimWidth < 12;
+          const ruimOutsideLabel = showRuimOutside && ruimCell ? fmtPct(ruimCell.percentual) : "0%";
+          const ruimOutsideTitle =
+            showRuimOutside && ruimCell
+              ? `${nomeEquip(eq)} · Ruim/Inoperante: ${ruimCell.escolas.toLocaleString("pt-BR")} (${fmtPct(ruimCell.percentual)})`
+              : undefined;
+          return (
+            <div key={eq} className="flex items-center gap-3">
+              <span className="w-24 shrink-0 text-sm text-slate-700">{nomeEquip(eq)}</span>
+              <div className="flex-1 flex h-6 rounded-md overflow-hidden bg-slate-100">
+                {total > 0 &&
+                  estados.map((est) => {
+                    const cell = linha[est];
+                    if (!cell || cell.escolas <= 0) return null;
+                    const w = (cell.escolas / total) * 100;
+                    return (
+                      <div
+                        key={est}
+                        className="flex items-center justify-center text-[11px] font-medium text-white overflow-hidden whitespace-nowrap"
+                        style={{ width: `${w}%`, background: CONSERVACAO_CORES[est] ?? "#94A3B8" }}
+                        title={`${nomeEquip(eq)} · ${est}: ${cell.escolas.toLocaleString("pt-BR")} (${fmtPct(cell.percentual)})`}
+                      >
+                        {w >= 12 ? `${Math.round(w)}%` : ""}
+                      </div>
+                    );
+                  })}
+              </div>
+              <span
+                className={`w-14 shrink-0 text-xs font-semibold tabular-nums ${
+                  showRuimOutside ? "text-rose-700" : "text-transparent"
+                }`}
+                title={ruimOutsideTitle}
+                aria-hidden={!showRuimOutside}
+              >
+                {ruimOutsideLabel}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
   const [oferta,     setOferta]     = useState<MerendaOferta | null>(null);
   const [equip,      setEquip]      = useState<MerendaEquipamentos | null>(null);
-  const [rh,         setRh]         = useState<MerendaRH | null>(null);
   const [sanit,      setSanit]      = useState<MerendaCondicoesSanitarias | null>(null);
   const [ofertaErr,  setOfertaErr]  = useState("");
   const [equipErr,   setEquipErr]   = useState("");
-  const [rhErr,      setRhErr]      = useState("");
   const [sanitErr,   setSanitErr]   = useState("");
   const [loading,    setLoading]    = useState(true);
 
@@ -88,15 +172,11 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       .then((d) => { if (!cancelled) setEquip(d); })
       .catch(handleErr(setEquipErr));
 
-    const pRh = apiFetch<MerendaRH>("/v1/admin/analytics/merenda/recursos-humanos", token)
-      .then((d) => { if (!cancelled) setRh(d); })
-      .catch(handleErr(setRhErr));
-
     const pSanit = apiFetch<MerendaCondicoesSanitarias>("/v1/admin/analytics/merenda/condicoes-sanitarias", token)
       .then((d) => { if (!cancelled) setSanit(d); })
       .catch(handleErr(setSanitErr));
 
-    Promise.all([pOferta, pEquip, pRh, pSanit]).finally(() => {
+    Promise.all([pOferta, pEquip, pSanit]).finally(() => {
       if (!cancelled) setLoading(false);
     });
 
@@ -111,17 +191,14 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
     );
   }
 
-  if (!oferta && !equip && !rh && !sanit) {
-    const msg = ofertaErr || equipErr || rhErr || sanitErr || "Não foi possível carregar indicadores.";
+  if (!oferta && !equip && !sanit) {
+    const msg = ofertaErr || equipErr || sanitErr || "Não foi possível carregar indicadores.";
     return (
       <div className="flex items-start gap-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl px-4 py-3 text-sm">
         <AlertCircle size={16} className="shrink-0 mt-0.5" /> {msg}
       </div>
     );
   }
-
-  const totalMerendeiras =
-    Math.round((rh?.total_estatutaria ?? 0) + (rh?.total_terceirizada ?? 0) + (rh?.total_temporaria ?? 0));
 
   // Segmentos pré-computados — empty arrays vira NoData.
   const ofertaSegments = (oferta?.dist_oferta_regular ?? []).map((s, i) => ({
@@ -154,19 +231,6 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
   const refeitorioAdequadoRows = (oferta?.dist_refeitorio_adequado ?? []).map((s) => ({
     label: s.valor,
     value: s.escolas,
-  }));
-
-  const vinculoSegments = rh
-    ? [
-        { label: "Estatutária",  value: Math.round(rh.total_estatutaria),  color: "#1E5B8A" },
-        { label: "Terceirizada", value: Math.round(rh.total_terceirizada), color: "#F59E0B" },
-        { label: "Temporária",   value: Math.round(rh.total_temporaria),   color: "#8B5CF6" },
-      ].filter((s) => s.value > 0)
-    : [];
-
-  const topEmpresasRows = (rh?.top_empresas ?? []).map((e) => ({
-    label: e.empresa,
-    value: e.escolas,
   }));
 
   // Agrupar dist_estados por equipamento para a tabela compacta.
@@ -216,11 +280,6 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
     consolidadoPorEquip[s.equipamento][s.estado] = { escolas: s.escolas, percentual: s.percentual };
   });
   const consolidadoEquipList = equipOrder.filter((eq) => consolidadoPorEquip[eq]);
-  const estadoCorClasse: Record<string, string> = {
-    "Bom": "text-emerald-700",
-    "Regular": "text-amber-700",
-    "Ruim/Inoperante": "text-rose-700",
-  };
 
   // ── Condições Sanitárias e Segurança (MER-01C) ──────────────────
   const despensaSegments = (sanit?.dist_despensa_exclusiva ?? []).map((s, i) => ({
@@ -256,25 +315,19 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       </div>
 
       {/* Banners de erro parcial */}
-      {ofertaErr && (equip || rh) && (
+      {ofertaErr && (equip || sanit) && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Oferta e estrutura da merenda indisponíveis ({ofertaErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
-      {equipErr && (oferta || rh) && (
+      {equipErr && (oferta || sanit) && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Equipamentos da merenda indisponíveis ({equipErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
-      {rhErr && (oferta || equip) && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
-          <AlertCircle size={15} className="shrink-0 mt-0.5" />
-          <span>Recursos humanos da merenda indisponíveis ({rhErr}). Exibindo apenas os demais blocos.</span>
-        </div>
-      )}
-      {sanitErr && (oferta || equip || rh) && (
+      {sanitErr && (oferta || equip) && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Condições sanitárias e segurança da merenda indisponíveis ({sanitErr}). Exibindo apenas os demais blocos.</span>
@@ -288,7 +341,7 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <StatCard
           label="Atende às Necessidades"
           value={fmtPct(oferta?.pct_atende_necessidades)}
@@ -302,20 +355,6 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
           Icon={Utensils}
           tone="blue"
           sub="das escolas"
-        />
-        <StatCard
-          label="Com Supervisor"
-          value={fmtPct(rh?.pct_com_supervisor)}
-          Icon={UserCheck}
-          tone="amber"
-          sub="das escolas"
-        />
-        <StatCard
-          label="Total de Merendeiras"
-          value={totalMerendeiras.toLocaleString("pt-BR")}
-          Icon={Users}
-          tone="purple"
-          sub="estatutária + terceirizada + temporária"
         />
       </div>
 
@@ -483,40 +522,12 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
         </div>
         <div className="p-6">
           {consolidadoEquipList.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-200">
-                    <th className="py-2 pr-4 font-medium">Equipamento</th>
-                    {estadosConsolidados.map((est) => (
-                      <th key={est} className="py-2 px-4 font-medium text-right">{est}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {consolidadoEquipList.map((eq) => (
-                    <tr key={eq} className="border-b border-slate-100 last:border-0">
-                      <td className="py-2 pr-4 text-slate-700">{equipNome(eq)}</td>
-                      {estadosConsolidados.map((est) => {
-                        const cell = consolidadoPorEquip[eq]?.[est];
-                        return (
-                          <td key={est} className={`py-2 px-4 text-right tabular-nums font-semibold ${estadoCorClasse[est] ?? "text-slate-800"}`}>
-                            {cell ? (
-                              <>
-                                {cell.escolas.toLocaleString("pt-BR")}
-                                <span className="text-slate-400 font-normal"> ({fmtPct(cell.percentual)})</span>
-                              </>
-                            ) : (
-                              <span className="text-slate-300">—</span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <StackedConservationBar
+              equipamentos={consolidadoEquipList}
+              estados={estadosConsolidados}
+              dados={consolidadoPorEquip}
+              nomeEquip={equipNome}
+            />
           ) : (
             <NoData />
           )}
@@ -624,69 +635,6 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
           </h3>
           {manutencaoExtintorRows.length > 0 ? (
             <HBarChart rows={manutencaoExtintorRows} color={C.primary} />
-          ) : (
-            <NoData />
-          )}
-        </div>
-      </div>
-
-      {/* ── Recursos Humanos da Merenda ──────────────────────────── */}
-      <div id="sec-merenda-rh" className="flex items-center gap-3 border-t border-slate-200 pt-4">
-        <Users size={18} style={{ color: C.primary }} />
-        <h2 className="font-semibold text-slate-800 text-base">Recursos Humanos</h2>
-        <div className="flex-1 h-px bg-slate-200" />
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Merendeiras Estatutárias"
-          value={Math.round(rh?.total_estatutaria ?? 0).toLocaleString("pt-BR")}
-          Icon={Briefcase}
-          tone="blue"
-          sub="total"
-        />
-        <StatCard
-          label="Merendeiras Terceirizadas"
-          value={Math.round(rh?.total_terceirizada ?? 0).toLocaleString("pt-BR")}
-          Icon={Building}
-          tone="amber"
-          sub="total"
-        />
-        <StatCard
-          label="Merendeiras Temporárias"
-          value={Math.round(rh?.total_temporaria ?? 0).toLocaleString("pt-BR")}
-          Icon={Users}
-          tone="purple"
-          sub="total"
-        />
-        <StatCard
-          label="Supervisor de Merenda"
-          value={fmtPct(rh?.pct_com_supervisor)}
-          Icon={UserCheck}
-          tone="green"
-          sub="das escolas"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <Users size={16} style={{ color: C.primary }} />
-            Distribuição por vínculo
-          </h3>
-          {vinculoSegments.length > 0 ? (
-            <Donut segments={vinculoSegments} />
-          ) : (
-            <NoData />
-          )}
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <Building size={16} style={{ color: C.primary }} />
-            Top empresas terceirizadas
-          </h3>
-          {topEmpresasRows.length > 0 ? (
-            <HBarChart rows={topEmpresasRows} color={C.primary} />
           ) : (
             <NoData />
           )}

@@ -1,8 +1,8 @@
 # Diagnóstico Técnico — Merenda Escolar
 
-> Diagnóstico **somente documental** (MER-01). Destina-se a orientar o(s) PR(s) de implementação da aba **Merenda Escolar**, no mesmo padrão do `diagnostico-tecnologia-equipamentos.md`.
+> **Status atualizado:** MER-01A/B/C e **MER-RH-01** foram entregues. Este documento preserva o diagnóstico original da aba Merenda e registra que Recursos Humanos / Merendeiras foi efetivamente migrado para Serviços Terceirizados.
 >
-> **Não implementa código.** Não altera frontend, backend, endpoints, views ou migrations. As assinaturas de payload descrevem o **contrato lógico desejado**, não o formato atual.
+> MER-RH-01 não criou migration/view nova, não alterou formulário, schemas, autenticação ou Google Sheets, e manteve `/v1/admin/analytics/merenda/recursos-humanos` como endpoint legado.
 
 ## 1. Objetivo
 
@@ -19,7 +19,7 @@ A aba foi realinhada (ver `matriz-abas-e-graficos.md` §5.5) a **quatro blocos f
 - **Equipamentos da Merenda**
 - **Condições Sanitárias e Segurança**
 
-O antigo bloco **Recursos Humanos / Merendeiras** **deixa de ser finalístico de Merenda** e **migra conceitualmente para o menu Serviços Terceirizados** ("Manipuladores de Alimentos / Merendeiras"). Este diagnóstico **não propõe implementação de RH dentro de Merenda** — apenas registra o estado atual e a frente futura (§6.5).
+O antigo bloco **Recursos Humanos / Merendeiras** **deixou de ser finalístico de Merenda** e foi migrado para o menu **Serviços Terceirizados** como **Manipulador de Alimentos** (`sec-servicos-manipuladores`). A aba Merenda não renderiza mais `sec-merenda-rh`.
 
 ## 2. Fontes analisadas
 
@@ -53,7 +53,7 @@ Data Studio: Oferta e Adequação da Merenda     → Aplicação: Oferta e Adequ
 Data Studio: Estrutura Física                  → Aplicação: Estrutura Física                   (sec-merenda-estrutura)
 Data Studio: Equipamentos                      → Aplicação: Equipamentos da Merenda            (sec-merenda-equipamentos)
 Data Studio: Condições Sanitárias e Segurança  → Aplicação: Condições Sanitárias e Segurança  (sec-merenda-sanitarias) — MER-01C
-Data Studio: Recursos Humanos                  → Aplicação: hoje em sec-merenda-rh; MIGRA para Serviços Terceirizados
+Data Studio: Recursos Humanos                  → Aplicação: Serviços Terceirizados / Manipulador de Alimentos (sec-servicos-manipuladores)
 ```
 
 Mapeamento técnico:
@@ -61,7 +61,7 @@ Mapeamento técnico:
 - **Oferta e Adequação** + **Estrutura Física** são servidos pelo **mesmo endpoint** `GET /v1/admin/analytics/merenda/oferta` (payload `MerendaOferta`), que lê **duas views**: `vw_censo_rh_merendeiras` (oferta/qualidade/atende) e `vw_censo_equipamentos_merenda` (condições da cozinha/refeitório).
 - **Equipamentos da Merenda** é servido por `GET /v1/admin/analytics/merenda/equipamentos` (payload `MerendaEquipamentos`), lendo `vw_censo_equipamentos_merenda`.
 - **Condições Sanitárias e Segurança** (MER-01C) é servido por `GET /v1/admin/analytics/merenda/condicoes-sanitarias` (payload `MerendaCondicoesSanitarias`), lendo `vw_censo_equipamentos_merenda` (`despensa_exclusiva`, `deposito_conserva`, `sistema_exaustao`, `bancadas_inox`, `estoque_epi_extintor`, `manutencao_extintores`); renderizado em `sec-merenda-sanitarias`.
-- **Recursos Humanos** é servido por `GET /v1/admin/analytics/merenda/recursos-humanos` (payload `MerendaRH`), lendo `vw_censo_rh_merendeiras`.
+- **Recursos Humanos / merendeiras** agora é servido em Serviços Terceirizados por `GET /v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos`, lendo `vw_censo_rh_merendeiras`. O endpoint `GET /v1/admin/analytics/merenda/recursos-humanos` permanece ativo como legado.
 
 > **Boa notícia estrutural:** as duas views (`0009` e `0010`) **já contêm todos os campos** dos gráficos mínimos dos quatro blocos finalísticos. **Nenhuma migration/view nova é necessária.** As lacunas são de **exposição em endpoint** e de **renderização**, mais algumas **decisões de produto** (faixas de quantidade, criticidade).
 
@@ -138,26 +138,25 @@ Observações relevantes (para a frente futura de Serviços Terceirizados):
 
 ## 5. Estado atual do frontend
 
-`AbaMerenda.tsx` consome os **três** endpoints em paralelo (`/oferta`, `/equipamentos`, `/recursos-humanos`) e renderiza:
+`AbaMerenda.tsx` consome os endpoints finalísticos de Merenda em paralelo (`/oferta`, `/equipamentos`, `/condicoes-sanitarias`) e renderiza:
 
-**Resumo executivo (4 StatCards):** % atende necessidades, % possui refeitório, % com supervisor, total de merendeiras (soma dos três vínculos).
+**Resumo executivo:** % atende necessidades e % possui refeitório. Os cards de supervisor e total de merendeiras foram removidos em MER-RH-01.
 
 **Oferta e Adequação (`#sec-merenda-oferta`):**
 - Donut **Oferta regular da merenda** (de `dist_oferta_regular`).
 - `HBarChart` **Qualidade da merenda** (de `dist_qualidade`).
 
-**Estrutura Física (`#sec-merenda-estrutura`):** card "Estrutura Física da Cozinha" com:
+**Estrutura Física (`#sec-merenda-estrutura`):**
 - `HBarChart` **Condições da cozinha** (de `dist_condicoes_cozinha`).
-- `StatCard` **Possui Refeitório** (% — `pct_possui_refeitorio`).
+- Donut **Possui refeitório?** (`dist_possui_refeitorio`).
+- `HBarChart` **Tamanho da cozinha** (`dist_tamanho_cozinha`).
+- `HBarChart` **O refeitório atende a necessidade da escola adequadamente?** (`dist_refeitorio_adequado`).
 
 **Equipamentos (`#sec-merenda-equipamentos`):**
 - 5 `EquipCard` (Freezers, Geladeiras, Fogões, Fornos, Bebedouros) — cada um com **total** + **média por escola**.
 - Tabela **Distribuição do estado dos equipamentos** (de `dist_estados`, agrupada por equipamento).
 
-**Recursos Humanos (`#sec-merenda-rh`):**
-- 4 `StatCards`: estatutárias, terceirizadas, temporárias, supervisor (%).
-- Donut **Distribuição por vínculo**.
-- `HBarChart` **Top empresas terceirizadas**.
+**Recursos Humanos / Merendeiras:** removido de Merenda em MER-RH-01; o bloco equivalente está em Serviços Terceirizados (`#sec-servicos-manipuladores`).
 
 **Condições Sanitárias e Segurança (`#sec-merenda-sanitarias`, MER-01C):**
 - Donut **Despensa exclusiva p/ gêneros alimentícios** (`dist_despensa_exclusiva`).
@@ -229,7 +228,7 @@ Legenda das 10 respostas (na ordem): (1) existe no frontend; (2) dado no payload
 
 #### 6.3.3 Estado de conservação consolidado
 
-- **Estado: ENTREGUE (MER-01B).** Consolidado **no backend** (não derivado no frontend) para padronizar os agrupamentos: `estado_consolidado` agrupa por equipamento em **Bom** / **Regular** / **Ruim/Inoperante** (`lower()` + `LIKE` defensivo), contando **escolas**, com denominador = escolas com estado informado para aquele equipamento. Renderizado como tabela compacta acima da tabela detalhada (`dist_estados` mantida).
+- **Estado: ENTREGUE (MER-01B; refinamento visual MER-EQP-REFINE-01).** Consolidado **no backend** (não derivado no frontend) para padronizar os agrupamentos: `estado_consolidado` agrupa por equipamento em **Bom** / **Regular** / **Ruim/Inoperante** (`lower()` + `LIKE` defensivo), contando **escolas**, com denominador = escolas com estado informado para aquele equipamento. Renderizado, após MER-EQP-REFINE-01, como **gráfico de barras empilhadas horizontais** (uma barra 100% por equipamento) acima da tabela detalhada (`dist_estados` mantida) — frontend puro, sem alteração de backend.
 - (1) Sim. (2) Sim. (3) Sim — `estado_*` (normalizados com `lower()`). (4) Sim. (5) n/a. (6) Sim (consolidado no servidor). (7) Não. (8) Não. (9) Decisão tomada: conta **escolas**; rótulos Bom/Regular/Ruim-Inoperante. (10) `analytics_infra_merenda_servicos.go` + `types.ts` + `AbaMerenda.tsx`.
 
 #### 6.3.4 Quantidade média de equipamentos por escola
@@ -282,28 +281,27 @@ Legenda das 10 respostas (na ordem): (1) existe no frontend; (2) dado no payload
 
 ### 6.5 Recursos Humanos / Merendeiras
 
-> **Não é gráfico mínimo da aba Merenda.** Diagnóstico do estado atual + frente futura. **Não implementar nesta rodada de Merenda.**
+> **MER-RH-01 entregue.** Não é gráfico mínimo da aba Merenda. O bloco foi removido de Merenda e adicionado em Serviços Terceirizados como **Manipulador de Alimentos**.
 
-#### 6.5.1 Situação atual na aba Merenda
+#### 6.5.1 Situação atual após MER-RH-01
 
-- O endpoint `GET /v1/admin/analytics/merenda/recursos-humanos` (payload `MerendaRH`) **entrega hoje**: `total_estatutaria`, `total_terceirizada`, `total_temporaria`, `pct_com_supervisor`, `top_empresas`.
-- `AbaMerenda.tsx` renderiza, em `sec-merenda-rh`: 4 StatCards (vínculos + supervisor), Donut de distribuição por vínculo e `HBarChart` de top empresas.
-- Cobre, do Data Studio: **total por vínculo**, **empresas e abrangência** (top empresas), **supervisão pelas empresas** (% com supervisor).
-- **Não cobre hoje** (campos existem na view, mas não expostos): **"a quantidade atual atende à necessidade?"** (`qtd_atende_necessidade_merenda`, `quantitativo_necessario_merenda`), **quantidade média de merendeiras por escola** (derivável de `qtd_merendeiras_*`).
+- O endpoint novo `GET /v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos` entrega: `total_estatutaria`, `total_terceirizada`, `total_temporaria`, `total_geral`, `media_por_escola`, `pct_com_supervisor`, `dist_vinculo`, `dist_atende_necessidade`, `top_empresas`.
+- `AbaServicosTerceirizados.tsx` renderiza o bloco `sec-servicos-manipuladores` com KPIs, Donut de distribuição por vínculo, Donut de atendimento à necessidade e `HBarChart` de top empresas terceirizadas.
+- `AbaMerenda.tsx` deixou de consumir `/merenda/recursos-humanos` e não renderiza mais `sec-merenda-rh`, nem os cards "Com Supervisor" e "Total de Merendeiras" no resumo executivo.
+- Cobre, do Data Studio: **total por vínculo**, **empresas e abrangência** (top empresas), **supervisão pelas empresas**, **média por escola** e **adequação do quantitativo** por `atende_necessidades`.
 - **Não há na view `0010`** campo de **avaliação do serviço das merendeiras** — provável origem em `vw_censo_servicos_terceirizados.avaliacao_merendeiras` (a confirmar).
 
 #### 6.5.2 Decisão de migração para Serviços Terceirizados
 
-- Por decisão de produto (`matriz-abas-e-graficos.md` §2.8), o bloco RH **deve migrar conceitualmente** para o menu **Serviços Terceirizados**, como bloco **"Manipuladores de Alimentos / Merendeiras"**, ao lado de Serviços Gerais e Portaria.
-- Nesta rodada, **nada muda no código**: o endpoint `/merenda/recursos-humanos` e o bloco `sec-merenda-rh` **permanecem ativos e intactos**.
-- A retirada de `sec-merenda-rh` de `AbaMerenda.tsx` só deve ocorrer **depois** que o bloco equivalente existir em `AbaServicosTerceirizados.tsx`, para não criar regressão visual.
+- Por decisão de produto (`matriz-abas-e-graficos.md` §2.8), o bloco RH migrou para o menu **Serviços Terceirizados**, como bloco **"Manipulador de Alimentos"**, ao lado de Serviços Gerais e Portaria.
+- O endpoint `/merenda/recursos-humanos` permanece ativo como legado para compatibilidade.
+- A avaliação do serviço das merendeiras permanece pendência futura/produto, sem payload consolidado nesta entrega.
 
-#### 6.5.3 Endpoint futuro recomendado
+#### 6.5.3 Endpoint entregue
 
-- **Opção preferida:** criar `GET /v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos`, reaproveitando `vw_censo_rh_merendeiras` e, se necessário, juntando avaliação de `vw_censo_servicos_terceirizados`. Mantém a coerência de menu (tudo de terceirizados sob `/servicos-terceirizados/*`).
-- **Alternativa:** manter `/merenda/recursos-humanos` ativo e apenas **consumi-lo a partir de `AbaServicosTerceirizados.tsx`** (sem novo endpoint). É mais barato, mas deixa o contrato semanticamente "fora de lugar" (rota `merenda/*` servindo aba de terceirizados).
-- **Não recomendado:** renomear/remover `/merenda/recursos-humanos` agora — quebraria o frontend atual sem ganho, antes da rodada de Serviços Terceirizados.
-- **Decisão:** tratar na rodada **MER-RH-01** (ver §10), junto com o bloco **Governança / Supervisão** de Serviços Terceirizados (que compartilha a decisão de escala de avaliação).
+- `GET /v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos` reaproveita `vw_censo_rh_merendeiras` e o filtro fixo de Frente 2 (`status = 'completed'`, ano corrente, `census_id IS NOT NULL`).
+- `dist_vinculo` representa a composição percentual dos quantitativos somados por vínculo; `dist_atende_necessidade` representa escolas por resposta informada em `atende_necessidades`.
+- `GET /v1/admin/analytics/merenda/recursos-humanos` não foi removido.
 
 ## 7. Tabela consolidada de lacunas
 
@@ -318,7 +316,7 @@ Legenda das 10 respostas (na ordem): (1) existe no frontend; (2) dado no payload
 | Estrutura | Refeitório adequado | **Entregue (MER-01A)** | `dist_refeitorio_adequado` em `/oferta` | HBar | Denominador | — |
 | Equipamentos | Presença por tipo | **Entregue (MER-01B)** | `presenca_por_tipo` em `/equipamentos` (`COUNT FILTER qtd>0`) | HBar | Critério "possui = qtd>0" | — |
 | Equipamentos | Escolas com 1/2/3+ tipos | **Entregue (MER-01B)** | `faixas_qtd_tipos` em `/equipamentos` (faixas cumulativas) | HBar | Interpretação A + faixas definidas | — |
-| Equipamentos | Estado consolidado | **Entregue (MER-01B)** | `estado_consolidado` em `/equipamentos` (Bom/Regular/Ruim-Inoperante) | Tabela compacta | Conta escolas | — |
+| Equipamentos | Estado consolidado | **Entregue (MER-01B + MER-EQP-REFINE-01)** | `estado_consolidado` em `/equipamentos` (Bom/Regular/Ruim-Inoperante) | Barras empilhadas horizontais (100%) | Conta escolas | — |
 | Equipamentos | Média por escola | Completo | `media_por_tipo` (espelho) | Card + HBar | Denominador (refino) | Manter |
 | Equipamentos | Criticidade por equipamento | **Entregue (MER-01B)** | `criticidade_por_equipamento` em `/equipamentos` | HBar destaque | % ruim/inoperante definido | — |
 | Cond. Sanitárias | Despensa exclusiva | Ausente | Novo endpoint/bloco | Novo bloco | Semântica | Criar bloco |
@@ -326,18 +324,20 @@ Legenda das 10 respostas (na ordem): (1) existe no frontend; (2) dado no payload
 | Cond. Sanitárias | Presença de itens básicos | Ausente | Novo endpoint/bloco | Novo bloco | Lista oficial | Criar bloco |
 | Cond. Sanitárias | Estoque EPIs/extintor | Ausente | Novo endpoint/bloco | Novo bloco | Campo agregado? | Criar bloco |
 | Cond. Sanitárias | Manutenção dos extintores | Ausente | Novo endpoint/bloco | Novo bloco | Categorias | Criar bloco |
-| RH | Total/empresas/supervisão | Completo (em Merenda hoje) | — | — | **Migração para Serviços Terceirizados** | Não mexer agora |
-| RH | Atende necessidade (quantitativo) | Parcial (campo na view) | Futuro (Serviços) | Futuro | — | Frente futura |
-| RH | Avaliação do serviço | Ausente | Futuro (Serviços) | Futuro | Escala de avaliação | Frente futura |
-| RH | Média de merendeiras/escola | Ausente | Futuro (Serviços) | Futuro | — | Frente futura |
+| RH | Total/empresas/supervisão | **Entregue em Serviços (MER-RH-01)** | `/servicos-terceirizados/manipuladores-alimentos` | `sec-servicos-manipuladores` | — | `/merenda/recursos-humanos` legado |
+| RH | Atende necessidade (quantitativo) | **Entregue em Serviços (MER-RH-01)** | `dist_atende_necessidade` | Donut | — | Usa `atende_necessidades` |
+| RH | Avaliação do serviço | Ausente | — | — | Escala/fonte de avaliação | Produto futuro |
+| RH | Média de merendeiras/escola | **Entregue em Serviços (MER-RH-01)** | `media_por_escola` | StatCard | — | Média do total por escola |
 
-Resumo dos quatro blocos finalísticos (excluindo RH): após MER-01A, MER-01B e MER-01C, os blocos **Oferta**, **Estrutura Física**, **Equipamentos da Merenda** e **Condições Sanitárias e Segurança** estão **completos**. **Nenhuma migration/view nova** foi necessária. Não há mais itens bloqueados por produto nos quatro blocos finalísticos. Pendência remanescente (não finalística): migração RH/Merendeiras para Serviços Terceirizados.
+Resumo dos quatro blocos finalísticos (excluindo RH): após MER-01A, MER-01B e MER-01C, os blocos **Oferta**, **Estrutura Física**, **Equipamentos da Merenda** e **Condições Sanitárias e Segurança** estão **completos**. **Nenhuma migration/view nova** foi necessária. A pendência não finalística RH/Merendeiras foi resolvida em MER-RH-01 com migração para Serviços Terceirizados.
 
 > **MER-01A entregue.** Os 4 itens de Oferta/Estrutura que estavam parciais/ausentes (atende necessidades, possui refeitório, tamanho da cozinha, refeitório adequado) foram entregues expandindo `/merenda/oferta` com `dist_*`, sem nova view/migration/endpoint.
 >
 > **MER-01B entregue.** Os itens avançados de Equipamentos (presença por tipo, faixas por nº de tipos, estado consolidado, média por tipo, criticidade) foram entregues expandindo `/merenda/equipamentos`, sem nova view/migration/endpoint.
 >
-> **MER-01C entregue.** O bloco **Condições Sanitárias e Segurança** foi entregue com o endpoint dedicado `GET /v1/admin/analytics/merenda/condicoes-sanitarias` (payload `MerendaCondicoesSanitarias`) sobre `vw_censo_equipamentos_merenda`, renderizado em `sec-merenda-sanitarias`, sem nova view/migration. Permanece fora de escopo a migração RH/Merendeiras para Serviços Terceirizados.
+> **MER-01C entregue.** O bloco **Condições Sanitárias e Segurança** foi entregue com o endpoint dedicado `GET /v1/admin/analytics/merenda/condicoes-sanitarias` (payload `MerendaCondicoesSanitarias`) sobre `vw_censo_equipamentos_merenda`, renderizado em `sec-merenda-sanitarias`, sem nova view/migration.
+>
+> **MER-RH-01 entregue.** RH/Merendeiras foi migrado para Serviços Terceirizados como **Manipulador de Alimentos**, sem remover o endpoint legado `/merenda/recursos-humanos`.
 
 ## 8. Payloads recomendados
 
@@ -376,7 +376,7 @@ Bloco **Condições Sanitárias e Segurança** — **entregue (MER-01C)** via en
 }
 ```
 
-Frente futura (Serviços Terceirizados — **não nesta rodada**): `GET /v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos` reaproveitando `MerendaRH` + `qtd_atende_necessidade_merenda`/`quantitativo_necessario_merenda` + avaliação de `vw_censo_servicos_terceirizados`.
+MER-RH-01 entregue em Serviços Terceirizados: `GET /v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos` reaproveita `vw_censo_rh_merendeiras` e expõe totais, média por escola, supervisor, distribuição por vínculo, atendimento à necessidade e top empresas. Avaliação do serviço segue fora do escopo por falta de fonte/escala consolidada.
 
 ## 9. Arquivos prováveis da implementação
 
@@ -403,23 +403,23 @@ docs/dashboard/*                                  # nota de validação/parity
 Ordem sugerida:
 
 1. **MER-01A — Oferta e Estrutura Física. ✅ ENTREGUE.** `/merenda/oferta` expandido com `dist_atende_necessidades`, `dist_possui_refeitorio`, `dist_tamanho_cozinha`, `dist_refeitorio_adequado` (reuso de `distQ`); renderizado donut/HBar em `sec-merenda-oferta`/`sec-merenda-estrutura`. Sem nova view/migration/endpoint; campos `pct_*` preservados.
-2. **MER-01B — Equipamentos. ✅ ENTREGUE.** `/merenda/equipamentos` expandido com `presenca_por_tipo`, `faixas_qtd_tipos` (faixas cumulativas por nº de tipos — Interpretação A), `estado_consolidado` (Bom/Regular/Ruim-Inoperante, consolidado no backend), `media_por_tipo` e `criticidade_por_equipamento` (% ruim/inoperante). Renderizados em `sec-merenda-equipamentos` (HBars + tabela consolidada), preservando cards e tabela detalhada. As decisões de produto antes bloqueadas (interpretação/faixas e definição de criticidade) foram tomadas nesta task. Sem nova view/migration/endpoint.
+2. **MER-01B — Equipamentos. ✅ ENTREGUE.** `/merenda/equipamentos` expandido com `presenca_por_tipo`, `faixas_qtd_tipos` (faixas cumulativas por nº de tipos — Interpretação A), `estado_consolidado` (Bom/Regular/Ruim-Inoperante, consolidado no backend), `media_por_tipo` e `criticidade_por_equipamento` (% ruim/inoperante). Renderizados em `sec-merenda-equipamentos` com HBars, gráfico de barras empilhadas horizontais para o estado consolidado e tabela detalhada complementar, preservando os cards. As decisões de produto antes bloqueadas (interpretação/faixas e definição de criticidade) foram tomadas nesta task. Sem nova view/migration/endpoint.
 3. **MER-01C — Condições Sanitárias e Segurança. ✅ ENTREGUE.** Criado `GET /v1/admin/analytics/merenda/condicoes-sanitarias` (payload `MerendaCondicoesSanitarias`), rota registrada em `main.go`, bloco/anchor `sec-merenda-sanitarias` e item de menu em `page.tsx`, renderizando despensa exclusiva (donut), depósito conserva (donut), presença de itens básicos (HBar), estoque de EPIs/extintor (HBar) e manutenção dos extintores (HBar). Sem nova view/migration. RH/Merendeiras mantido intacto.
-4. **MER-RH-01 — Migrar Merendeiras para Serviços Terceirizados.** Criar bloco "Manipuladores de Alimentos / Merendeiras" em `AbaServicosTerceirizados.tsx` (endpoint dedicado recomendado), e **só então** remover `sec-merenda-rh` de `AbaMerenda.tsx`. Tratar junto da rodada de Governança / Supervisão (escala de avaliação compartilhada).
+4. **MER-RH-01 — Migrar Merendeiras para Serviços Terceirizados. ✅ ENTREGUE.** Criado bloco "Manipulador de Alimentos" em `AbaServicosTerceirizados.tsx`, com endpoint dedicado `/servicos-terceirizados/manipuladores-alimentos`; `sec-merenda-rh` foi removido de `AbaMerenda.tsx`; `/merenda/recursos-humanos` foi mantido como legado. Governança / Supervisão e avaliação do serviço permanecem frentes futuras.
 
 **Decisão sobre endpoint de Estrutura/Sanitárias (§8.9):** **expandir `/merenda/oferta`** para as distribuições de Estrutura Física (já vêm dessa rota) e **criar `/merenda/condicoes-sanitarias`** para o bloco novo. **Não** criar `/merenda/estrutura-fisica` movendo `condicoes_cozinha`/`possui_refeitorio` — isso quebraria o contrato atual do frontend sem ganho. (Opção A descartada por misturar bloco novo + mudança conceitual num PR grande; Opção C de backend-first descartada porque as expansões são pequenas e acopladas à renderização de cada bloco.)
 
 ## 11. Itens fora de escopo
 
-Não implementar nesta etapa (MER-01 é diagnóstico):
+Não implementar nesta etapa histórica de MER-01:
 
 - código frontend/backend, migrations, endpoints novos;
 - alteração de formulário, schemas Zod, autenticação ou sincronização Google Sheets;
 - alteração de outras abas (Caracterização, Pessoal, Tecnologia, Infraestrutura, Serviços, Perfil dos Alunos, Gestão Financeira);
-- **remover o bloco RH da aba Merenda** — apenas diagnosticar; a remoção só ocorre em MER-RH-01, após o bloco existir em Serviços Terceirizados;
+- remover o endpoint legado `/merenda/recursos-humanos` sem fase de depreciação;
 - implementar **faixas de quantidade de equipamentos** ou **criticidade** sem decisão de produto;
 - criar categoria "não informado" nas distribuições sem pedido explícito de produto.
 
 ## 12. Conclusão
 
-A aba **Merenda Escolar** está estruturalmente correta e com a **base de dados completa**: as views `0009` e `0010` já contêm **todos** os campos dos gráficos mínimos dos quatro blocos finalísticos. Após **MER-01A** (Oferta + Estrutura) e **MER-01B** (Equipamentos), três dos quatro blocos finalísticos estão completos; resta **ausente** o bloco inteiro de **Condições Sanitárias e Segurança** (5 itens), que **não tem endpoint, anchor nem menu**. **Nenhuma migration/view nova** foi necessária; as lacunas resolvidas foram de **exposição em endpoint** (reusando helpers e expandindo `/merenda/oferta` e `/merenda/equipamentos`) e de **renderização**. As decisões de produto antes bloqueantes em Equipamentos (interpretação/faixas e definição de criticidade) foram tomadas em MER-01B. Recomenda-se **PRs separados por bloco** (MER-01A Oferta+Estrutura ✅ → MER-01B Equipamentos ✅ → MER-01C Condições Sanitárias), por serem fatias verticais reversíveis e por o bloco novo tocar `main.go`/`page.tsx`. O bloco **Recursos Humanos / Merendeiras** permanece intacto nesta rodada e será migrado para **Serviços Terceirizados** ("Manipuladores de Alimentos / Merendeiras") em **MER-RH-01**, junto da rodada de Governança / Supervisão.
+A aba **Merenda Escolar** está estruturalmente correta e com a **base de dados completa**: os quatro blocos finalísticos estão entregues após MER-01A, MER-01B e MER-01C. **Nenhuma migration/view nova** foi necessária; as lacunas resolvidas foram de **exposição em endpoint** e de **renderização**. O bloco **Recursos Humanos / Merendeiras** foi migrado para **Serviços Terceirizados** em **MER-RH-01**, como **Manipulador de Alimentos**, mantendo `/merenda/recursos-humanos` como legado. Governança / Supervisão e eventual avaliação do serviço das merendeiras seguem como frentes futuras/produto.

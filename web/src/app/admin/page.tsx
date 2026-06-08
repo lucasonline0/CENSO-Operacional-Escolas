@@ -275,7 +275,11 @@ const NAV_OPERACIONAL: NavItem[] = [
   { id: "dre",         label: "Por DRE",         Icon: MapPinned      },
 ];
 
-function NavGroup({ items, active, onNav }: { items: NavItem[]; active: Tab; onNav: (id: Tab) => void }) {
+function NavGroup({
+  items, active, onNav, mobileOpen = false,
+}: {
+  items: NavItem[]; active: Tab; onNav: (id: Tab) => void; mobileOpen?: boolean;
+}) {
   const [openSub, setOpenSub] = useState<Tab | null>(null);
 
   const scrollTo = (anchor: string) => {
@@ -288,10 +292,22 @@ function NavGroup({ items, active, onNav }: { items: NavItem[]; active: Tab; onN
         setOpenSub(null);
       } else {
         setOpenSub(it.id);
-        if (it.id !== active) onNav(it.id);
+        // No mobile (menu aberto): apenas expande os sub-itens — não navega ainda.
+        // No desktop: navega imediatamente como antes.
+        if (!mobileOpen && it.id !== active) onNav(it.id);
       }
     } else {
       onNav(it.id);
+    }
+  };
+
+  const handleSubItemClick = (parentId: Tab, anchor: string) => {
+    if (mobileOpen) {
+      // Navega para a aba (fecha o menu) e depois rola até a seção.
+      onNav(parentId);
+      setTimeout(() => scrollTo(anchor), 350);
+    } else {
+      scrollTo(anchor);
     }
   };
 
@@ -317,7 +333,7 @@ function NavGroup({ items, active, onNav }: { items: NavItem[]; active: Tab; onN
             <div className={`ca-nav-subitems${openSub === it.id ? " open" : ""}`}>
               <div className="ca-nav-subitems-inner">
                 {it.subItems.map((sub) => (
-                  <div key={sub.anchor} className="ca-nav-subitem" onClick={() => scrollTo(sub.anchor)}>
+                  <div key={sub.anchor} className="ca-nav-subitem" onClick={() => handleSubItemClick(it.id, sub.anchor)}>
                     {sub.label}
                   </div>
                 ))}
@@ -440,12 +456,12 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
           <div className="ca-nav-group">
             <div className="ca-nav-group-label">Indicadores</div>
-            <NavGroup items={NAV_INDICATORS} active={tab} onNav={handleNav} />
+            <NavGroup items={NAV_INDICATORS} active={tab} onNav={handleNav} mobileOpen={mobileNavOpen} />
           </div>
 
           <div className="ca-nav-group">
             <div className="ca-nav-group-label">Operacional</div>
-            <NavGroup items={NAV_OPERACIONAL} active={tab} onNav={handleNav} />
+            <NavGroup items={NAV_OPERACIONAL} active={tab} onNav={handleNav} mobileOpen={mobileNavOpen} />
           </div>
 
           <div className="ca-side-footer">

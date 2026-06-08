@@ -209,7 +209,7 @@ export function AbaPessoalGestao({
       </div>
 
       {/* ── Coordenação Pedagógica ───────────────────────────────── */}
-      <div id="sec-pessoal-coordenacao" className="flex items-center gap-3">
+      <div id="sec-pessoal-coordenacao" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <GraduationCap size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Coordenação Pedagógica</h2>
         <div className="flex-1 h-px bg-slate-200" />
@@ -233,7 +233,7 @@ export function AbaPessoalGestao({
       </div>
 
       {/* ── Quadro de Pessoal ────────────────────────────────────── */}
-      <div id="sec-pessoal-quadro" className="flex items-center gap-3">
+      <div id="sec-pessoal-quadro" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <Briefcase size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Quadro de Pessoal</h2>
         <div className="flex-1 h-px bg-slate-200" />

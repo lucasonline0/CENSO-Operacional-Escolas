@@ -225,7 +225,7 @@ export function AbaServicosTerceirizados({
       </div>
 
       {/* ── Serviços Gerais ──────────────────────────────────────── */}
-      <div id="sec-servicos-gerais" className="flex items-center gap-3">
+      <div id="sec-servicos-gerais" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <Users size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Serviços Gerais</h2>
         <div className="flex-1 h-px bg-slate-200" />
@@ -278,7 +278,7 @@ export function AbaServicosTerceirizados({
       </div>
 
       {/* ── Portaria ─────────────────────────────────────────────── */}
-      <div id="sec-servicos-portaria" className="flex items-center gap-3">
+      <div id="sec-servicos-portaria" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <ShieldCheck size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Portaria</h2>
         <div className="flex-1 h-px bg-slate-200" />
@@ -324,7 +324,7 @@ export function AbaServicosTerceirizados({
       </div>
 
       {/* ── Governança / Supervisão ──────────────────────────────── */}
-      <div id="sec-servicos-governanca" className="flex items-center gap-3">
+      <div id="sec-servicos-governanca" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <UserCheck size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Governança / Supervisão</h2>
         <div className="flex-1 h-px bg-slate-200" />

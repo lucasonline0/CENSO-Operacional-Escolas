@@ -60,6 +60,92 @@ function EquipCard({
   );
 }
 
+// Cores institucionais por estado de conservação.
+const CONSERVACAO_CORES: Record<string, string> = {
+  "Bom": "#10B981",            // verde positivo
+  "Regular": "#F59E0B",        // âmbar
+  "Ruim/Inoperante": "#E11D48", // vermelho/rose
+};
+
+// Barras empilhadas horizontais (100%) do estado de conservação por equipamento.
+// Reaproveita a estrutura já pivotada de `estado_consolidado`.
+function StackedConservationBar({
+  equipamentos,
+  estados,
+  dados,
+  nomeEquip,
+}: {
+  equipamentos: string[];
+  estados: string[];
+  dados: Record<string, Record<string, { escolas: number; percentual: number }>>;
+  nomeEquip: (eq: string) => string;
+}) {
+  return (
+    <div className="space-y-4">
+      {/* Legenda */}
+      <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
+        {estados.map((est) => (
+          <span key={est} className="flex items-center gap-1.5">
+            <span
+              className="inline-block w-3 h-3 rounded-sm shrink-0"
+              style={{ background: CONSERVACAO_CORES[est] ?? "#94A3B8" }}
+            />
+            {est}
+          </span>
+        ))}
+      </div>
+
+      {/* Uma barra 100% por equipamento */}
+      <div className="space-y-3">
+        {equipamentos.map((eq) => {
+          const linha = dados[eq] ?? {};
+          const total = estados.reduce((acc, est) => acc + (linha[est]?.escolas ?? 0), 0);
+          const ruimCell = linha["Ruim/Inoperante"];
+          const ruimWidth = total > 0 && ruimCell ? (ruimCell.escolas / total) * 100 : 0;
+          const showRuimOutside = !!ruimCell && ruimCell.escolas > 0 && ruimWidth < 12;
+          const ruimOutsideLabel = showRuimOutside && ruimCell ? fmtPct(ruimCell.percentual) : "0%";
+          const ruimOutsideTitle =
+            showRuimOutside && ruimCell
+              ? `${nomeEquip(eq)} · Ruim/Inoperante: ${ruimCell.escolas.toLocaleString("pt-BR")} (${fmtPct(ruimCell.percentual)})`
+              : undefined;
+          return (
+            <div key={eq} className="flex items-center gap-3">
+              <span className="w-24 shrink-0 text-sm text-slate-700">{nomeEquip(eq)}</span>
+              <div className="flex-1 flex h-6 rounded-md overflow-hidden bg-slate-100">
+                {total > 0 &&
+                  estados.map((est) => {
+                    const cell = linha[est];
+                    if (!cell || cell.escolas <= 0) return null;
+                    const w = (cell.escolas / total) * 100;
+                    return (
+                      <div
+                        key={est}
+                        className="flex items-center justify-center text-[11px] font-medium text-white overflow-hidden whitespace-nowrap"
+                        style={{ width: `${w}%`, background: CONSERVACAO_CORES[est] ?? "#94A3B8" }}
+                        title={`${nomeEquip(eq)} · ${est}: ${cell.escolas.toLocaleString("pt-BR")} (${fmtPct(cell.percentual)})`}
+                      >
+                        {w >= 12 ? `${Math.round(w)}%` : ""}
+                      </div>
+                    );
+                  })}
+              </div>
+              <span
+                className={`w-14 shrink-0 text-xs font-semibold tabular-nums ${
+                  showRuimOutside ? "text-rose-700" : "text-transparent"
+                }`}
+                title={ruimOutsideTitle}
+                aria-hidden={!showRuimOutside}
+              >
+                {ruimOutsideLabel}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
   const [oferta,     setOferta]     = useState<MerendaOferta | null>(null);
   const [equip,      setEquip]      = useState<MerendaEquipamentos | null>(null);
@@ -216,11 +302,6 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
     consolidadoPorEquip[s.equipamento][s.estado] = { escolas: s.escolas, percentual: s.percentual };
   });
   const consolidadoEquipList = equipOrder.filter((eq) => consolidadoPorEquip[eq]);
-  const estadoCorClasse: Record<string, string> = {
-    "Bom": "text-emerald-700",
-    "Regular": "text-amber-700",
-    "Ruim/Inoperante": "text-rose-700",
-  };
 
   // ── Condições Sanitárias e Segurança (MER-01C) ──────────────────
   const despensaSegments = (sanit?.dist_despensa_exclusiva ?? []).map((s, i) => ({
@@ -483,40 +564,12 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
         </div>
         <div className="p-6">
           {consolidadoEquipList.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-200">
-                    <th className="py-2 pr-4 font-medium">Equipamento</th>
-                    {estadosConsolidados.map((est) => (
-                      <th key={est} className="py-2 px-4 font-medium text-right">{est}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {consolidadoEquipList.map((eq) => (
-                    <tr key={eq} className="border-b border-slate-100 last:border-0">
-                      <td className="py-2 pr-4 text-slate-700">{equipNome(eq)}</td>
-                      {estadosConsolidados.map((est) => {
-                        const cell = consolidadoPorEquip[eq]?.[est];
-                        return (
-                          <td key={est} className={`py-2 px-4 text-right tabular-nums font-semibold ${estadoCorClasse[est] ?? "text-slate-800"}`}>
-                            {cell ? (
-                              <>
-                                {cell.escolas.toLocaleString("pt-BR")}
-                                <span className="text-slate-400 font-normal"> ({fmtPct(cell.percentual)})</span>
-                              </>
-                            ) : (
-                              <span className="text-slate-300">—</span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <StackedConservationBar
+              equipamentos={consolidadoEquipList}
+              estados={estadosConsolidados}
+              dados={consolidadoPorEquip}
+              nomeEquip={equipNome}
+            />
           ) : (
             <NoData />
           )}

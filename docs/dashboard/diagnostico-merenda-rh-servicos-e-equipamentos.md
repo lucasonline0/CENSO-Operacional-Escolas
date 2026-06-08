@@ -204,6 +204,8 @@ Em `page.tsx`:
 
 ## 5. Frente B — Estado de conservação em barras empilhadas
 
+> **Status: ✅ Implementado (MER-EQP-REFINE-01).** O bloco "Estado de conservação — visão consolidada" foi refinado de **tabela compacta** para **gráfico de barras empilhadas horizontais** (100% por equipamento, segmentos Bom / Regular / Ruim-Inoperante) via o componente local `StackedConservationBar` em `AbaMerenda.tsx`, reaproveitando o pivô `consolidadoPorEquip` já existente. A tabela detalhada "Distribuição do estado dos equipamentos" permanece como detalhamento complementar. Frontend puro: nenhum backend, endpoint, view, migration ou tipo compartilhado foi alterado. As subseções abaixo descrevem o diagnóstico original.
+
 ### 5.1 Estado atual
 
 O bloco Equipamentos da Merenda renderiza o estado consolidado como **tabela compacta** "Estado de conservação — visão consolidada" (`AbaMerenda.tsx:476–524`): uma linha por equipamento (`Freezers`, `Geladeiras`, `Fogões`, `Fornos`, `Bebedouros`) e colunas `Bom | Regular | Ruim/Inoperante`, cada célula mostrando `escolas (percentual%)`. Logo abaixo há uma segunda tabela, "Distribuição do estado dos equipamentos" (526–566), que detalha `dist_estados` (equipamento × estado × escolas).

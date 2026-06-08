@@ -575,6 +575,53 @@ Produto, depois Backend + Frontend.
 **Próxima ação recomendada**  
 Validar escala e semântica dos campos antes da implementação.
 
+### 5.5 Serviços Terceirizados — Serviços Gerais
+
+#### 5.5.1 Top empresas terceirizadas — Serviços Gerais
+
+> **Status: ENTREGUE (SERV-GERAIS-EMP-01).** O endpoint existente `/v1/admin/analytics/servicos-terceirizados/servicos-gerais` foi expandido e o ranking foi adicionado ao bloco `sec-servicos-gerais`.
+
+**O que o gráfico deve mostrar**
+As 10 empresas terceirizadas de Serviços Gerais mais frequentes, medidas pelo número de escolas distintas que declararam cada empresa.
+
+**Como era tratado na planilha/painel original**
+O Data Studio apresentava o recorte de empresas terceirizadas no bloco de Serviços Gerais.
+
+**Origem do dado no banco**
+`vw_censo_servicos_terceirizados.empresa_terceirizada_sg`.
+
+**View ou transformação necessária**
+Nenhuma view ou migration nova. A agregação usa `COUNT(DISTINCT school_id)`, censos concluídos do ano corrente e descarta valores nulos ou vazios.
+
+**Endpoint**
+Expansão de `GET /v1/admin/analytics/servicos-terceirizados/servicos-gerais`, preservando os totais e a média já existentes.
+
+**Payload entregue**
+```ts
+{
+  total_efetivo: number;
+  total_temporario: number;
+  total_terceirizado: number;
+  media_total_por_escola: number;
+  top_empresas: Array<{
+    empresa: string;
+    escolas: number;
+  }>;
+}
+```
+
+**Frontend entregue**
+`AbaServicosTerceirizados.tsx`, no bloco `sec-servicos-gerais`, renderiza `top_empresas` em `HBarChart` ao lado da distribuição por vínculo e usa `NoData` quando o ranking está vazio.
+
+**Dependências de produto/dados**
+O campo é textual; variações de caixa, abreviação e grafia podem aparecer como empresas separadas. Normalização cadastral fica para uma frente futura.
+
+**Tipo de lacuna**
+Backend + Frontend, resolvida por SERV-GERAIS-EMP-01.
+
+**Próxima ação recomendada**
+Validar o Top 10 em homologação contra o painel original, observando possíveis duplicidades de grafia.
+
 ## 6. Gráficos pendentes ou parciais — Média prioridade
 
 ### 6.1 Merenda Escolar — Estrutura Física

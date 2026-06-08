@@ -144,6 +144,10 @@ export function AbaServicosTerceirizados({
         { label: "Terceirizado", value: Math.round(sg.total_terceirizado), color: "#F59E0B" },
       ].filter((s) => s.value > 0)
     : [];
+  const topEmpresasSgRows = (sg?.top_empresas ?? []).map((e) => ({
+    label: e.empresa,
+    value: e.escolas,
+  }));
 
   const topEmpresasPortariaRows = (portaria?.top_empresas ?? []).map((e) => ({
     label: e.empresa,
@@ -309,19 +313,35 @@ export function AbaServicosTerceirizados({
         />
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-        <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
-          <Users size={16} style={{ color: C.primary }} />
-          Serviços Gerais — distribuição por vínculo
-        </h3>
-        <p className="text-xs text-slate-400 mb-5">
-          Soma dos quantitativos declarados pelas escolas em cada vínculo.
-        </p>
-        {sgVinculoSegments.length > 0 ? (
-          <Donut segments={sgVinculoSegments} />
-        ) : (
-          <NoData />
-        )}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <Users size={16} style={{ color: C.primary }} />
+            Serviços Gerais — distribuição por vínculo
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Soma dos quantitativos declarados pelas escolas em cada vínculo.
+          </p>
+          {sgVinculoSegments.length > 0 ? (
+            <Donut segments={sgVinculoSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <Building size={16} style={{ color: C.primary }} />
+            Top empresas terceirizadas — Serviços Gerais
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Empresas informadas em campo textual; variações de grafia podem aparecer separadamente.
+          </p>
+          {topEmpresasSgRows.length > 0 ? (
+            <HBarChart rows={topEmpresasSgRows} color={C.primary} labelWidth="9rem" />
+          ) : (
+            <NoData />
+          )}
+        </div>
       </div>
 
       {/* ── Portaria ─────────────────────────────────────────────── */}
@@ -358,7 +378,7 @@ export function AbaServicosTerceirizados({
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
           <Building size={16} style={{ color: C.primary }} />
-          Top empresas de portaria
+          Top empresas terceirizadas — Agentes de Portaria
         </h3>
         <p className="text-xs text-slate-400 mb-5">
           Empresas informadas em campo textual; variações de grafia podem aparecer separadamente.
@@ -458,7 +478,7 @@ export function AbaServicosTerceirizados({
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm lg:col-span-2">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
             <Building size={16} style={{ color: C.primary }} />
-            Top empresas terceirizadas
+            Top empresas terceirizadas — Manipulador de Alimentos
           </h3>
           <p className="text-xs text-slate-400 mb-5">
             Empresas informadas em campo textual; variações de grafia podem aparecer separadamente.

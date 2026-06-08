@@ -271,6 +271,7 @@ Endpoints atuais: `/v1/admin/analytics/servicos-terceirizados/{visao-geral,servi
 | Serviços Gerais | Terceirizados (KPI total) | PG `/servicos-terceirizados/servicos-gerais` | presente | — | — | — |
 | Serviços Gerais | Média total por escola (KPI) | PG `/servicos-terceirizados/servicos-gerais` | presente | — | — | — |
 | Serviços Gerais | Distribuição por vínculo (donut) | PG `/servicos-terceirizados/servicos-gerais` | presente | — | — | — |
+| Serviços Gerais | Top empresas terceirizadas (barra) | PG `/servicos-terceirizados/servicos-gerais` | presente (SERV-GERAIS-EMP-01) | — | — | Top 10 por escolas em `vw_censo_servicos_terceirizados.empresa_terceirizada_sg`; campo textual sujeito a variações de grafia. |
 | Portaria | Escolas com agentes de portaria (KPI %) | PG `/servicos-terceirizados/portaria` | presente | — | — | — |
 | Portaria | Média de agentes por escola (KPI) | PG `/servicos-terceirizados/portaria` | presente | — | — | — |
 | Portaria | Top empresas de portaria (barra/tabela) | PG `/servicos-terceirizados/portaria` | presente | — | — | — |

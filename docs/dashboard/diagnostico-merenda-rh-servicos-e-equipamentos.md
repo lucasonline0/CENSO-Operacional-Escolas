@@ -1,6 +1,8 @@
 # Diagnóstico Técnico — Migração de RH da Merenda e Refinamento de Equipamentos
 
-> Diagnóstico **somente documental** (MER-RH-01 + MER-EQP-REFINE-01). Destina-se a orientar o(s) PR(s) de implementação. **Não implementa código.** Não altera frontend, backend, endpoints, views ou migrations. As assinaturas de payload descrevem o **contrato lógico desejado**, não necessariamente o formato atual.
+> **Status atualizado:** MER-EQP-REFINE-01 e **MER-RH-01 foram entregues**. Este documento preserva o diagnóstico original como histórico e registra a migração efetiva de Recursos Humanos da Merenda para Serviços Terceirizados.
+>
+> MER-RH-01 criou `GET /v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos`, manteve `GET /v1/admin/analytics/merenda/recursos-humanos` como legado, removeu `sec-merenda-rh` de `AbaMerenda.tsx` e adicionou `sec-servicos-manipuladores` em `AbaServicosTerceirizados.tsx`. Nenhuma migration, view, formulário, schema, autenticação ou integração Google Sheets foi alterada.
 
 ## 1. Objetivo
 
@@ -9,23 +11,23 @@ Diagnosticar, por leitura estática do código na branch `feat/merenda-oferta-es
 - **Frente A — MER-RH-01:** migrar o bloco **Recursos Humanos / Merendeiras** da aba Merenda para o menu **Serviços Terceirizados**, como bloco **"Manipulador de Alimentos"** (ou "Manipuladores de Alimentos / Merendeiras"). Responder: que dados existem, onde são buscados/renderizados, como remover de Merenda sem quebrar a tela, como adicionar em Serviços Terceirizados, se reaproveita o endpoint atual ou cria endpoint novo, e quais documentos atualizar.
 - **Frente B — MER-EQP-REFINE-01:** converter a tabela **"Estado de conservação — visão consolidada"** (Equipamentos da Merenda) em **gráfico de barras empilhadas horizontais** (cada equipamento = barra 100%, segmentada em Bom / Regular / Ruim-Inoperante), conforme o painel original do Data Studio. Responder: se o payload `estado_consolidado` basta, se há componente de barra empilhada, se cria componente novo, o menor componente possível, se mantém a tabela detalhada e quais documentos atualizar.
 
-Esta tarefa é **apenas diagnóstico**; nenhum código foi alterado.
+Este documento começou como diagnóstico; após MER-RH-01, a frente A passou a registrar também a implementação entregue.
 
 ## 2. Fontes analisadas
 
 Frontend:
 
 - `web/src/app/admin/page.tsx` — menu/submenu e montagem das abas (linhas 185–265, 535–545).
-- `web/src/components/admin/AbaMerenda.tsx` — consumo dos 4 endpoints de Merenda e render dos blocos.
-- `web/src/components/admin/AbaServicosTerceirizados.tsx` — consumo dos 3 endpoints de Serviços Terceirizados e blocos.
-- `web/src/components/admin/shared/types.ts` — `MerendaRH`, `MerendaEquipamentos`, `EstadoConsolidadoEquipamentoStat`, `ServicosVisaoGeral`, `ServicosGerais`, `ServicosPortaria`, `EmpresaStat`, `CategoricStat`.
+- `web/src/components/admin/AbaMerenda.tsx` — consumo dos endpoints finalísticos de Merenda e render dos blocos.
+- `web/src/components/admin/AbaServicosTerceirizados.tsx` — consumo dos endpoints de Serviços Terceirizados, incluindo Manipulador de Alimentos.
+- `web/src/components/admin/shared/types.ts` — `MerendaRH` legado, `MerendaEquipamentos`, `EstadoConsolidadoEquipamentoStat`, `ServicosVisaoGeral`, `ServicosGerais`, `ServicosPortaria`, `ServicosManipuladoresAlimentos`, `EmpresaStat`, `CategoricStat`.
 - `web/src/components/admin/shared/BarChart.tsx` — `VBarChart`, `HBarChart` (não há barra empilhada).
 - `web/src/components/admin/shared/Donut.tsx`, `StatCard.tsx`.
 
 Backend e banco:
 
-- `api/cmd/api/analytics_infra_merenda_servicos.go` — handlers `AdminAnalyticsMerendaRH` (849), `AdminAnalyticsMerendaEquipamentos` (644), `AdminAnalyticsServicos*` (1008/1080/1114); structs de payload.
-- `api/cmd/api/main.go` — registro das rotas (linhas 359–365).
+- `api/cmd/api/analytics_infra_merenda_servicos.go` — handlers `AdminAnalyticsMerendaRH` legado, `AdminAnalyticsServicosManipuladoresAlimentos`, `AdminAnalyticsMerendaEquipamentos` e `AdminAnalyticsServicos*`; structs de payload.
+- `api/cmd/api/main.go` — registro das rotas protegidas, incluindo `/servicos-terceirizados/manipuladores-alimentos`.
 - `api/cmd/api/migrations/0010_vw_censo_rh_merendeiras.sql` (espelhada idêntica em `infra/migrations/0010_*`).
 
 Documentação:
@@ -39,16 +41,16 @@ Observação metodológica: diagnóstico por **leitura estática**. Os endpoints
 
 ## 3. Situação atual na branch
 
-- A aba **Merenda Escolar** tem 5 blocos renderizados em `AbaMerenda.tsx`: Oferta e Adequação (`sec-merenda-oferta`), Estrutura Física (`sec-merenda-estrutura`), Equipamentos (`sec-merenda-equipamentos`), Condições Sanitárias e Segurança (`sec-merenda-sanitarias`) e **Recursos Humanos** (`sec-merenda-rh`).
-- Os quatro primeiros são os blocos finalísticos entregues (MER-01A/B/C). **Recursos Humanos** já está documentado como **não-finalístico de Merenda**, com migração conceitual decidida para Serviços Terceirizados (matriz §2.8). O código, porém, **ainda não foi migrado** — o bloco RH continua em `AbaMerenda.tsx`.
-- A aba **Serviços Terceirizados** (`AbaServicosTerceirizados.tsx`) tem 4 blocos: Visão Geral, Serviços Gerais, Portaria e Governança / Supervisão (este último é apenas um empty state). **Não existe** bloco de Manipuladores/Merendeiras.
+- A aba **Merenda Escolar** renderiza os 4 blocos finalísticos: Oferta e Adequação (`sec-merenda-oferta`), Estrutura Física (`sec-merenda-estrutura`), Equipamentos (`sec-merenda-equipamentos`) e Condições Sanitárias e Segurança (`sec-merenda-sanitarias`).
+- **Recursos Humanos** deixou de ser renderizado em Merenda; `sec-merenda-rh`, o fetch de `/merenda/recursos-humanos`, os cards de supervisor/total de merendeiras e os gráficos de vínculo/empresas foram removidos de `AbaMerenda.tsx`.
+- A aba **Serviços Terceirizados** (`AbaServicosTerceirizados.tsx`) agora tem 5 blocos: Visão Geral, Serviços Gerais, Portaria, **Manipulador de Alimentos** (`sec-servicos-manipuladores`) e Governança / Supervisão (este último permanece empty state).
 - O bloco **Equipamentos da Merenda** renderiza o estado consolidado como **tabela compacta** (`AbaMerenda.tsx:476–524`) — é o alvo do refinamento visual da Frente B.
 
 ## 4. Frente A — Recursos Humanos da Merenda
 
-### 4.1 Estado atual na aba Merenda
+### 4.1 Estado anterior na aba Merenda
 
-Em `AbaMerenda.tsx`:
+Antes de MER-RH-01, `AbaMerenda.tsx` continha:
 
 - **Estado/fetch:** `rh` e `rhErr` (linhas 66, 70); fetch `apiFetch<MerendaRH>("/v1/admin/analytics/merenda/recursos-humanos", token)` (linha 91); promessa incluída no `Promise.all` (linha 99) e no guard de "nada carregado" (linha 114).
 - **Cálculos derivados:** `totalMerendeiras = round(total_estatutaria + total_terceirizada + total_temporaria)` (linhas 123–124); `vinculoSegments` (linhas 159–165, donut por vínculo); `topEmpresasRows` (linhas 167–170).
@@ -63,15 +65,15 @@ Em `AbaMerenda.tsx`:
   - Donut **"Distribuição por vínculo"** (672–682).
   - `HBarChart` **"Top empresas terceirizadas"** (683–693).
 
-Em `page.tsx`:
+Antes de MER-RH-01, `page.tsx` continha:
 
 - Submenu **"Recursos Humanos"** com `anchor: "sec-merenda-rh"` dentro da aba `merenda` (linha 256).
 
 > **Observação importante (acoplamento de view).** A view `vw_censo_rh_merendeiras` (0010) é **compartilhada**: além de alimentar `/merenda/recursos-humanos`, ela também serve o handler `AdminAnalyticsMerendaOferta` para `oferta_regular`, `qualidade_merenda` e `atende_necessidades` (ver `analytics_infra_merenda_servicos.go:594–602`). Portanto **a view não pode ser removida nem renomeada** ao migrar RH — só muda quem expõe os campos de merendeiras.
 
-### 4.2 Estado atual no backend
+### 4.2 Estado legado no backend
 
-- **Handler:** `AdminAnalyticsMerendaRH` (`analytics_infra_merenda_servicos.go:849`). **Rota:** `/admin/analytics/merenda/recursos-humanos` (`main.go:361`).
+- **Handler legado:** `AdminAnalyticsMerendaRH`. **Rota mantida:** `/admin/analytics/merenda/recursos-humanos`.
 - **View usada:** `vw_censo_rh_merendeiras` (0010).
 - **Payload atual (`MerendaRH`):**
 
@@ -107,9 +109,9 @@ Cruzamento dos campos pedidos no diagnóstico (§5.2 do briefing) com a view `00
 
 A migração já está **documentada como decisão**, mas ainda não como entrega:
 
-- `matriz-abas-e-graficos.md` §2.8 e §5.5 (nota) e §5.6 (nota "Bloco futuro — Manipuladores de Alimentos / Merendeiras").
+- `matriz-abas-e-graficos.md` §2.8 e §5.5 (nota) e §5.6 (bloco entregue "Manipulador de Alimentos").
 - `lacunas-backend-frontend-por-bloco.md` §6.4 (nota final) e linha 63 da tabela de prioridades.
-- `especificacao-entrega-dados-por-grafico.md` §6.6.14 (migração RH → Serviços Terceirizados) e §5.4 (Governança / avaliações), além das linhas 1685 (endpoint futuro `…/manipuladores-alimentos`) e 1722 (passo de rollout).
+- `especificacao-entrega-dados-por-grafico.md` §6.6.14 (migração RH → Serviços Terceirizados entregue) e §5.4 (Governança / avaliações).
 - `diagnostico-merenda-escolar.md` §6.5 e §10 (item 4 — MER-RH-01).
 
 Todos descrevem o estado "decisão tomada, código intacto". Após a implementação, precisam migrar para "entregue".
@@ -266,13 +268,13 @@ Por equipamento (Freezers, Geladeiras, Fogões, Fornos, Bebedouros), uma barra h
 | Frente | Item | Backend | Frontend | Docs | Produto | Observação |
 |---|---|---|---|---|---|---|
 | A | Endpoint `…/servicos-terceirizados/manipuladores-alimentos` | **Novo** handler + rota em `main.go` (Opção C) | — | matriz §5.5/§5.6, lacunas §6.4/§6.5, especificação §6.6.14, diag-merenda §10 | — | Reusa `vw_censo_rh_merendeiras`; nenhuma view nova |
-| A | Manter `/merenda/recursos-humanos` (legado) | Sem mudança | Deixa de consumir | Marcar como legado | — | Depreciação é fase futura |
-| A | Bloco `sec-servicos-manipuladores` | — | **Adicionar** em `AbaServicosTerceirizados.tsx` | — | — | Migra StatCards + donut vínculo + HBar empresas |
-| A | Remover bloco `sec-merenda-rh` | — | **Remover** de `AbaMerenda.tsx` (após bloco em Serviços) | — | — | Estados `rh`/`rhErr`, cálculos, banner |
-| A | Cards "Com Supervisor" e "Total de Merendeiras" no resumo de Oferta | — | **Remover** + ajustar grid | — | **Decidir** (tendência: remover) | Pertencem à frente de serviços |
-| A | Submenu de menu | — | `page.tsx`: remover "Recursos Humanos", adicionar "Manipulador de Alimentos" | — | — | Linhas 256 / 262–265 |
-| A | "Atende à necessidade" + "média por escola" | **Expor** campos da `0010` | Renderizar | — | — | Campos já na view |
-| A | "Avaliação do serviço das merendeiras" | Expor de `vw_censo_servicos_terceirizados` | Renderizar | especificação §5.4 | **Escala de avaliação** | Sugerido fora do PR de migração |
+| A | Manter `/merenda/recursos-humanos` (legado) | **Entregue** | Deixou de consumir | Marcado como legado | — | Depreciação é fase futura |
+| A | Bloco `sec-servicos-manipuladores` | — | **Entregue** em `AbaServicosTerceirizados.tsx` | — | — | KPIs + donut vínculo + donut necessidade + HBar empresas |
+| A | Remover bloco `sec-merenda-rh` | — | **Entregue** em `AbaMerenda.tsx` | — | — | Estados `rh`/`rhErr`, cálculos e banner removidos |
+| A | Cards "Com Supervisor" e "Total de Merendeiras" no resumo de Oferta | — | **Entregue** | — | — | Resumo de Merenda ficou finalístico |
+| A | Submenu de menu | — | **Entregue** | — | — | Removeu RH de Merenda; adicionou Manipulador de Alimentos em Serviços |
+| A | "Atende à necessidade" + "média por escola" | **Entregue** | **Entregue** | — | — | Campos já na view |
+| A | "Avaliação do serviço das merendeiras" | Fora do escopo | Fora do escopo | especificação §5.4 | **Escala/fonte pendente** | Produto futuro |
 | B | `estado_consolidado` em barra empilhada | **Nenhum** (payload já basta) | Componente local em `AbaMerenda.tsx` | matriz §5.5 (linha estado consolidado), especificação §6.6.7 | — | Substitui só a tabela compacta |
 | B | Tabela detalhada `dist_estados` | — | **Manter** | — | — | Detalhamento complementar |
 
@@ -289,7 +291,6 @@ Ordem sugerida: **MER-EQP-REFINE-01 primeiro** (menor risco, fecha a pendência 
 
 ## 8. Fora de escopo
 
-- Implementar qualquer código nesta etapa (este é diagnóstico).
 - Remover o endpoint `/merenda/recursos-humanos` (Opção C mantém; depreciação é fase futura).
 - Criar/alterar migrations ou views (`vw_censo_rh_merendeiras` e `vw_censo_equipamentos_merenda` já bastam).
 - Implementar o bloco **Governança / Supervisão** de Serviços Terceirizados e a **escala oficial de avaliação** (frente própria; só se cruza com a Frente A no item opcional "avaliação do serviço").
@@ -301,7 +302,7 @@ Ordem sugerida: **MER-EQP-REFINE-01 primeiro** (menor risco, fecha a pendência 
 
 As duas frentes estão **tecnicamente desbloqueadas**:
 
-- **Frente A (MER-RH-01)** é uma reorganização conceitual, não uma lacuna de dado. A view `vw_censo_rh_merendeiras` já contém os campos de merendeiras (e ainda os de adequação do quantitativo, hoje não expostos). Recomenda-se a **Opção C** — criar `GET /v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos` reaproveitando a view, manter `/merenda/recursos-humanos` como legado, mover o bloco de `AbaMerenda.tsx` para `AbaServicosTerceirizados.tsx` (com o submenu correspondente), e remover os cards de RH do resumo de Oferta. A "avaliação do serviço" depende de produto e de fonte externa à `0010`, e deve ficar para uma fatia posterior.
+- **Frente A (MER-RH-01)** foi entregue como reorganização conceitual: `GET /v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos` reaproveita `vw_censo_rh_merendeiras`, `/merenda/recursos-humanos` permanece legado, o bloco saiu de `AbaMerenda.tsx` e entrou em `AbaServicosTerceirizados.tsx` com submenu próprio. A "avaliação do serviço" segue fora do escopo por depender de fonte/escala consolidada.
 - **Frente B (MER-EQP-REFINE-01)** é **frontend puro**: `estado_consolidado` já entrega `{ equipamento, estado, escolas, percentual }`, e o pivô `consolidadoPorEquip` já existe em `AbaMerenda.tsx`. Basta um **componente local de barra empilhada** substituindo a tabela compacta, preservando a tabela detalhada.
 
-Recomenda-se **dois PRs separados** (B primeiro, A depois). Nenhuma migration/view nova é necessária em qualquer das frentes. Tarefa somente documental — nenhum código foi alterado.
+Nenhuma migration/view nova foi necessária em qualquer das frentes.

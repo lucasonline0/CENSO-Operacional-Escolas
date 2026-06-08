@@ -1090,7 +1090,7 @@ Manter nº de escolas e total absoluto; decidir o denominador antes de expor o p
 
 ### 6.6 Merenda Escolar — Gráficos mínimos do Data Studio
 
-> **Contexto.** O painel original (Data Studio/Looker Studio) organizava Merenda em cinco blocos: **Oferta e Adequação**, **Estrutura Física**, **Equipamentos**, **Condições Sanitárias e Segurança** e **Recursos Humanos**. A aplicação preserva os quatro primeiros como blocos finalísticos e **reencaminha o quinto (RH) para o menu Serviços Terceirizados** (bloco "Manipuladores de Alimentos / Merendeiras") — ver §6.6.14 e `matriz-abas-e-graficos.md` §2.8/§5.5. Esta seção detalha tecnicamente, no mesmo padrão da Tecnologia (§6.5), os gráficos mínimos do painel original que hoje estão **parciais** (existem como KPI, não como distribuição) ou **ausentes** (bloco inteiro). Esta seção é **somente documental** — não cria endpoint, view, migration ou frontend.
+> **Contexto.** O painel original (Data Studio/Looker Studio) organizava Merenda em cinco blocos: **Oferta e Adequação**, **Estrutura Física**, **Equipamentos**, **Condições Sanitárias e Segurança** e **Recursos Humanos**. A aplicação preserva os quatro primeiros como blocos finalísticos e **reencaminhou o quinto (RH) para o menu Serviços Terceirizados** (bloco "Manipulador de Alimentos") em MER-RH-01 — ver §6.6.14 e `matriz-abas-e-graficos.md` §2.8/§5.5. Nenhuma migration/view nova foi criada.
 >
 > **Dados disponíveis na view.** A view `vw_censo_equipamentos_merenda` (migration `0009`) já contém: `condicoes_cozinha`, `tamanho_cozinha`, `possui_refeitorio`, `refeitorio_adequado`, `possui_balanca`, `bancadas_inox`, `sistema_exaustao`, `despensa_exclusiva`, `deposito_conserva`, `estoque_epi_extintor`, `manutencao_extintores`, `qtd_freezers`, `qtd_geladeiras`, `qtd_fogoes`, `qtd_fornos`, `qtd_bebedouros`, `estado_freezers`, `estado_geladeiras`, `estado_fogoes`, `estado_fornos`, `estado_bebedouros`. A view `vw_censo_rh_merendeiras` (migration `0010`) contém `oferta_regular`, `qualidade_merenda`, `atende_necessidades` e os campos de RH. **Isto não significa que tudo esteja implementado**: vários campos existem na view mas **não são expostos** em endpoint nem renderizados — cada item abaixo indica o que falta. Endpoints/frontend precisam ser diagnosticados antes de implementar (próxima etapa).
 >
@@ -1628,35 +1628,63 @@ Incluir no endpoint/bloco de condições sanitárias.
 
 #### 6.6.14 Migração de Recursos Humanos para Serviços Terceirizados
 
+> **Status: MER-RH-01 entregue.** Recursos Humanos foi removido da aba Merenda, o bloco **Manipulador de Alimentos** foi adicionado em Serviços Terceirizados, o endpoint novo `/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos` foi criado e `/v1/admin/analytics/merenda/recursos-humanos` foi mantido como legado.
+
 **O que o gráfico deve mostrar**  
-Os indicadores de RH de merendeiras — total por vínculo (estatutária/terceirizada/temporária), adequação do quantitativo, avaliação do serviço, média de merendeiras por escola, empresas terceirizadas e supervisão — passam a compor um bloco **"Manipuladores de Alimentos / Merendeiras"** no menu **Serviços Terceirizados**, ao lado de Serviços Gerais e Portaria. **Não é** lacuna técnica de dado: é **reorganização conceitual** decidida pelo produto.
+Os indicadores de RH de merendeiras — total por vínculo (estatutária/terceirizada/temporária), adequação do quantitativo, média de merendeiras por escola, empresas terceirizadas e supervisão — compõem o bloco **"Manipulador de Alimentos"** no menu **Serviços Terceirizados**, ao lado de Serviços Gerais e Portaria. **Não é** lacuna técnica de dado: é **reorganização conceitual** decidida pelo produto. A avaliação do serviço das merendeiras permanece fora do escopo enquanto a fonte/escala não estiver consolidada.
 
 **Como era tratado no Data Studio**  
 Subaba "Recursos Humanos" dentro de Merenda, com total de merendeiras por vínculo, adequação do quantitativo, avaliação do serviço, média por escola, empresas e abrangência, e supervisão do serviço pelas empresas.
 
 **Origem provável no banco**  
-`vw_censo_rh_merendeiras` (já existente): `qtd_merendeiras_estatutaria`, `qtd_merendeiras_terceirizada`, `qtd_merendeiras_temporaria`, `qtd_atende_necessidade_merenda`, `quantitativo_necessario_merenda`, `empresa_terceirizada_merenda`, `possui_supervisor_merenda`. Avaliação do serviço pode vir de campos de avaliação em `vw_censo_servicos_terceirizados` (a confirmar na rodada de Serviços Terceirizados).
+`vw_censo_rh_merendeiras` (já existente): `qtd_merendeiras_estatutaria`, `qtd_merendeiras_terceirizada`, `qtd_merendeiras_temporaria`, `atende_necessidades`, `empresa_terceirizada_merenda`, `possui_supervisor_merenda`. Avaliação do serviço pode vir de campos de avaliação em `vw_censo_servicos_terceirizados` ou outra fonte a confirmar em rodada futura.
 
 **View ou transformação necessária**  
-Nenhuma nova nesta rodada. A view já alimenta o endpoint atual `/merenda/recursos-humanos`. Na rodada de Serviços Terceirizados, decidir se o bloco reaproveita esse endpoint ou ganha um endpoint próprio sob `/servicos-terceirizados/*`.
+Nenhuma nova. A view já alimentava o endpoint legado `/merenda/recursos-humanos` e agora alimenta o endpoint próprio sob `/servicos-terceirizados/*`.
 
 **Endpoint necessário**  
-Nenhum novo agora. `GET /v1/admin/analytics/merenda/recursos-humanos` **permanece ativo e inalterado**. Futuramente, possível `GET /v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos` ou inclusão no endpoint de governança/visão-geral de Serviços Terceirizados.
+Novo endpoint entregue:
+
+```txt
+GET /v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos
+```
+
+Endpoint legado mantido:
+
+```txt
+GET /v1/admin/analytics/merenda/recursos-humanos
+```
 
 **Payload esperado**  
-Reaproveitar o payload `MerendaRH` atual na rodada futura, eventualmente acrescido de avaliação do serviço e adequação do quantitativo.
+Payload novo:
+
+```ts
+{
+  total_estatutaria: number;
+  total_terceirizada: number;
+  total_temporaria: number;
+  total_geral: number;
+  media_por_escola: number;
+  pct_com_supervisor: number;
+  dist_vinculo: Array<{ valor: string; escolas: number; percentual: number }>;
+  dist_atende_necessidade: Array<{ valor: string; escolas: number; percentual: number }>;
+  top_empresas: Array<{ empresa: string; escolas: number }>;
+}
+```
+
+`dist_vinculo` representa composição percentual dos quantitativos somados por vínculo; `dist_atende_necessidade` representa escolas por resposta informada em `atende_necessidades`.
 
 **Frontend necessário**  
-Nenhum agora. O bloco `sec-merenda-rh` em `AbaMerenda.tsx` **permanece**. Na rodada futura, criar o bloco "Manipuladores de Alimentos / Merendeiras" em `AbaServicosTerceirizados.tsx` e então planejar a retirada do bloco RH de `AbaMerenda.tsx`.
+`sec-merenda-rh` foi removido de `AbaMerenda.tsx`. `sec-servicos-manipuladores` foi adicionado em `AbaServicosTerceirizados.tsx`, com KPIs de vínculos/total/média/supervisor, Donut de distribuição por vínculo, Donut de atendimento à necessidade e `HBarChart` de top empresas terceirizadas.
 
 **Dependências de produto/dados**  
-Decisão de produto já registrada (`matriz-abas-e-graficos.md` §2.8). Resta planejar a rodada de Serviços Terceirizados e a escala oficial de avaliação (compartilhada com Governança / Supervisão, §5.4).
+Decisão de produto já executada (`matriz-abas-e-graficos.md` §2.8). Resta apenas definir fonte/escala oficial para eventual avaliação do serviço das merendeiras.
 
 **Tipo de lacuna**  
 Reorganização conceitual / Produto (não é lacuna de dado).
 
 **Próxima ação recomendada**  
-Não remover código nesta rodada. Tratar a migração na rodada própria de Serviços Terceirizados, junto do bloco Governança / Supervisão.
+Não remover o endpoint legado `/merenda/recursos-humanos` sem fase de depreciação. Não tratar avaliação do serviço das merendeiras sem fonte/escala consolidada.
 
 ## 7. Itens fora da rodada PostgreSQL atual
 
@@ -1682,7 +1710,7 @@ A fonte futura deve vir de bases próprias validadas pelas coordenações respon
 | `/v1/admin/analytics/merenda/estrutura-fisica` | Tamanho da cozinha, refeitório adequado, distribuição Sim/Não de refeitório | **Entregue como expansão de `/merenda/oferta` (MER-01A)** | Não criado endpoint próprio; `dist_tamanho_cozinha`, `dist_refeitorio_adequado`, `dist_possui_refeitorio` em `/merenda/oferta` |
 | `/v1/admin/analytics/merenda/condicoes-sanitarias` | Despensa, depósito, itens básicos, EPIs/extintor, manutenção de extintores | **Entregue (MER-01C)** | `dist_*` + `presenca_itens_basicos` sobre `vw_censo_equipamentos_merenda`; renderizado em `sec-merenda-sanitarias` |
 | `/v1/admin/analytics/servicos-terceirizados/governanca` | Supervisão e avaliações | Recomendado | Escala oficial das avaliações |
-| `/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos` | RH de merendeiras migrado de Merenda | Futuro (rodada própria) | Reaproveita `vw_censo_rh_merendeiras` |
+| `/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos` | RH de merendeiras migrado de Merenda | **Entregue (MER-RH-01)** | Reaproveita `vw_censo_rh_merendeiras`; `/merenda/recursos-humanos` legado mantido |
 
 ## 9. Resumo de views/transformações recomendadas
 
@@ -1698,7 +1726,7 @@ A fonte futura deve vir de bases próprias validadas pelas coordenações respon
 | Atende necessidades (Merenda) | Distribuição Sim/Parc./Não | Sim, `vw_censo_rh_merendeiras` | **Entregue (MER-01A)** — `dist_atende_necessidades` (KPI `pct_atende_necessidades` mantido) |
 | Presença/quantidade/criticidade de equipamentos (Merenda) | Presença, faixas, estado consolidado | Sim, `vw_censo_equipamentos_merenda` | Faltam payload e definições de produto (faixas/criticidade) |
 | Condições sanitárias (Merenda) | Distribuições + presença de itens básicos | Sim, `vw_censo_equipamentos_merenda` | **Entregue (MER-01C)** — `/merenda/condicoes-sanitarias`, renderizado em `sec-merenda-sanitarias` |
-| RH merendeiras → Serviços Terceirizados | Reorganização conceitual | Sim, `vw_censo_rh_merendeiras` | Migração de bloco; sem mudança de dado nesta rodada |
+| RH merendeiras → Serviços Terceirizados | Reorganização conceitual | Sim, `vw_censo_rh_merendeiras` | **MER-RH-01 entregue**; avaliação do serviço segue pendente |
 | Governança serviços | Supervisão e avaliação | Parcial | Campos existem, escala a validar |
 
 ## 10. Ordem técnica recomendada
@@ -1717,6 +1745,6 @@ A fonte futura deve vir de bases próprias validadas pelas coordenações respon
 
 5. Implementar backend/frontend de Energia e Climatização.
 
-6. Implementar Merenda conforme Data Studio (§6.6): (a) **entregue (MER-01A)** distribuições de Oferta/Estrutura (atende necessidades, possui refeitório Sim/Não, tamanho da cozinha, refeitório adequado); (b) **entregue (MER-01B)** Equipamentos (presença por tipo, faixas de quantidade, estado consolidado, criticidade); (c) **entregue (MER-01C)** bloco **Condições Sanitárias e Segurança** (endpoint `/merenda/condicoes-sanitarias` + bloco frontend `sec-merenda-sanitarias`). Bloco RH de Merenda mantido intacto nesta rodada.
+6. Implementar Merenda conforme Data Studio (§6.6): (a) **entregue (MER-01A)** distribuições de Oferta/Estrutura (atende necessidades, possui refeitório Sim/Não, tamanho da cozinha, refeitório adequado); (b) **entregue (MER-01B)** Equipamentos (presença por tipo, faixas de quantidade, estado consolidado, criticidade); (c) **entregue (MER-01C)** bloco **Condições Sanitárias e Segurança** (endpoint `/merenda/condicoes-sanitarias` + bloco frontend `sec-merenda-sanitarias`); (d) **entregue (MER-RH-01)** migração de RH para Serviços Terceirizados, mantendo `/merenda/recursos-humanos` como legado.
 
-7. Implementar Serviços Terceirizados / Governança e Supervisão após validação da escala — e, na mesma rodada, planejar o bloco **Manipuladores de Alimentos / Merendeiras** recebendo o RH migrado de Merenda (§6.6.14).
+7. Implementar Serviços Terceirizados / Governança e Supervisão após validação da escala. O bloco **Manipulador de Alimentos** já recebeu o RH migrado de Merenda em MER-RH-01 (§6.6.14); eventual avaliação do serviço das merendeiras depende de fonte/escala consolidada.

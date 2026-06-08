@@ -32,29 +32,29 @@ type EmpresaStat struct {
 // ---- payloads Infraestrutura ---------------------------------------------
 
 type InfraCondicoes struct {
-	PorTipoPredio           []CategoricStat `json:"por_tipo_predio"`
-	PorSituacaoEstrutura    []CategoricStat `json:"por_situacao_estrutura"`
-	PctMuroCerca            float64         `json:"pct_com_muro_ou_cerca"`
-	PctPerimetroFechado     float64         `json:"pct_perimetro_fechado"`
-	TopAmbientes            []AmbienteStat  `json:"top_ambientes"`
-	DistMuroCerca           []CategoricStat `json:"dist_muro_cerca"`
-	DistPerimetroFechado    []CategoricStat `json:"dist_perimetro_fechado"`
-	PctReformaCritica       float64         `json:"pct_reforma_critica"`
-	PctReformaGeralApenas   float64         `json:"pct_reforma_geral"`
-	PctObraParadaApenas     float64         `json:"pct_obra_parada"`
-	PctCoberturaPlena       float64         `json:"pct_cobertura_plena"`
+	PorTipoPredio         []CategoricStat `json:"por_tipo_predio"`
+	PorSituacaoEstrutura  []CategoricStat `json:"por_situacao_estrutura"`
+	PctMuroCerca          float64         `json:"pct_com_muro_ou_cerca"`
+	PctPerimetroFechado   float64         `json:"pct_perimetro_fechado"`
+	TopAmbientes          []AmbienteStat  `json:"top_ambientes"`
+	DistMuroCerca         []CategoricStat `json:"dist_muro_cerca"`
+	DistPerimetroFechado  []CategoricStat `json:"dist_perimetro_fechado"`
+	PctReformaCritica     float64         `json:"pct_reforma_critica"`
+	PctReformaGeralApenas float64         `json:"pct_reforma_geral"`
+	PctObraParadaApenas   float64         `json:"pct_obra_parada"`
+	PctCoberturaPlena     float64         `json:"pct_cobertura_plena"`
 }
 
 type InfraSeguranca struct {
-	PctGuarita              float64         `json:"pct_possui_guarita"`
-	PctControlePortao       float64         `json:"pct_controle_portao"`
-	PctBotaoPanico          float64         `json:"pct_possui_botao_panico"`
-	PctCamerasFuncionais    float64         `json:"pct_cameras_funcionais"`
-	PctPlanoEvacuacao       float64         `json:"pct_plano_evacuacao"`
-	PctPoliticaBullying     float64         `json:"pct_politica_bullying"`
-	DistCameras             []CategoricStat `json:"dist_cameras"`
-	DistIluminacaoExterna   []CategoricStat `json:"dist_iluminacao_externa"`
-	DistControlePortao      []CategoricStat `json:"dist_controle_portao"`
+	PctGuarita            float64         `json:"pct_possui_guarita"`
+	PctControlePortao     float64         `json:"pct_controle_portao"`
+	PctBotaoPanico        float64         `json:"pct_possui_botao_panico"`
+	PctCamerasFuncionais  float64         `json:"pct_cameras_funcionais"`
+	PctPlanoEvacuacao     float64         `json:"pct_plano_evacuacao"`
+	PctPoliticaBullying   float64         `json:"pct_politica_bullying"`
+	DistCameras           []CategoricStat `json:"dist_cameras"`
+	DistIluminacaoExterna []CategoricStat `json:"dist_iluminacao_externa"`
+	DistControlePortao    []CategoricStat `json:"dist_controle_portao"`
 }
 
 type ClimatizacaoSalaRow struct {
@@ -65,10 +65,10 @@ type ClimatizacaoSalaRow struct {
 }
 
 type InfraEnergia struct {
-	DistRedeEletrica       []CategoricStat      `json:"dist_rede_eletrica_atende"`
-	DistEstruturaClimatiz  []CategoricStat      `json:"dist_estrutura_climatizacao"`
-	DistClimatizacaoSalas  []CategoricStat      `json:"dist_climatizacao_salas"`
-	TabelaClimatizacao     []ClimatizacaoSalaRow `json:"tabela_climatizacao"`
+	DistRedeEletrica      []CategoricStat       `json:"dist_rede_eletrica_atende"`
+	DistEstruturaClimatiz []CategoricStat       `json:"dist_estrutura_climatizacao"`
+	DistClimatizacaoSalas []CategoricStat       `json:"dist_climatizacao_salas"`
+	TabelaClimatizacao    []ClimatizacaoSalaRow `json:"tabela_climatizacao"`
 }
 
 // ---- payloads Merenda ----------------------------------------------------
@@ -192,6 +192,18 @@ type ServicosPortaria struct {
 	PctComAgentes         float64       `json:"pct_com_agentes"`
 	MediaAgentesPorEscola float64       `json:"media_agentes_por_escola"`
 	TopEmpresas           []EmpresaStat `json:"top_empresas"`
+}
+
+type ServicosManipuladoresAlimentos struct {
+	TotalEstatutaria      float64         `json:"total_estatutaria"`
+	TotalTerceirizada     float64         `json:"total_terceirizada"`
+	TotalTemporaria       float64         `json:"total_temporaria"`
+	TotalGeral            float64         `json:"total_geral"`
+	MediaPorEscola        float64         `json:"media_por_escola"`
+	PctComSupervisor      float64         `json:"pct_com_supervisor"`
+	DistVinculo           []CategoricStat `json:"dist_vinculo"`
+	DistAtendeNecessidade []CategoricStat `json:"dist_atende_necessidade"`
+	TopEmpresas           []EmpresaStat   `json:"top_empresas"`
 }
 
 // ---- helpers internos ---------------------------------------------------
@@ -1154,6 +1166,123 @@ func (app *application) AdminAnalyticsServicosPortaria(w http.ResponseWriter, r 
 	}
 	if err := rows.Err(); err != nil {
 		app.errorJSON(w, fmt.Errorf("iter empresas_portaria: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: out})
+}
+
+func (app *application) AdminAnalyticsServicosManipuladoresAlimentos(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	db := app.models.Schools.DB
+
+	out := ServicosManipuladoresAlimentos{
+		DistVinculo:           []CategoricStat{},
+		DistAtendeNecessidade: []CategoricStat{},
+		TopEmpresas:           []EmpresaStat{},
+	}
+
+	const filtro = `status = 'completed' AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int AND census_id IS NOT NULL`
+
+	err := db.QueryRowContext(ctx, fmt.Sprintf(`
+		SELECT
+			COALESCE(SUM(qtd_merendeiras_estatutaria),  0)::float8,
+			COALESCE(SUM(qtd_merendeiras_terceirizada), 0)::float8,
+			COALESCE(SUM(qtd_merendeiras_temporaria),   0)::float8,
+			COALESCE(SUM(
+				COALESCE(qtd_merendeiras_estatutaria,  0) +
+				COALESCE(qtd_merendeiras_terceirizada, 0) +
+				COALESCE(qtd_merendeiras_temporaria,   0)
+			), 0)::float8,
+			COALESCE(AVG(
+				COALESCE(qtd_merendeiras_estatutaria,  0) +
+				COALESCE(qtd_merendeiras_terceirizada, 0) +
+				COALESCE(qtd_merendeiras_temporaria,   0)
+			), 0)::float8,
+			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE lower(possui_supervisor_merenda) = 'sim') / NULLIF(COUNT(*), 0), 1), 0)::float8
+		FROM vw_censo_rh_merendeiras
+		WHERE %s
+	`, filtro)).Scan(
+		&out.TotalEstatutaria,
+		&out.TotalTerceirizada,
+		&out.TotalTemporaria,
+		&out.TotalGeral,
+		&out.MediaPorEscola,
+		&out.PctComSupervisor,
+	)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("manipuladores_alimentos_totais: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// dist_vinculo representa a composição percentual dos quantitativos somados
+	// por vínculo, não uma contagem de escolas.
+	if out.TotalGeral > 0 {
+		out.DistVinculo = []CategoricStat{
+			{
+				Valor:      "Estatutária",
+				Escolas:    int(math.Round(out.TotalEstatutaria)),
+				Percentual: round1(100.0 * out.TotalEstatutaria / out.TotalGeral),
+			},
+			{
+				Valor:      "Terceirizada",
+				Escolas:    int(math.Round(out.TotalTerceirizada)),
+				Percentual: round1(100.0 * out.TotalTerceirizada / out.TotalGeral),
+			},
+			{
+				Valor:      "Temporária",
+				Escolas:    int(math.Round(out.TotalTemporaria)),
+				Percentual: round1(100.0 * out.TotalTemporaria / out.TotalGeral),
+			},
+		}
+	}
+
+	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
+		WITH base AS (
+			SELECT school_id, atende_necessidades AS val
+			FROM vw_censo_rh_merendeiras
+			WHERE %s AND atende_necessidades IS NOT NULL
+		),
+		tot AS (SELECT COUNT(DISTINCT school_id)::numeric AS n FROM base)
+		SELECT val,
+			COUNT(DISTINCT school_id) AS escolas,
+			ROUND(100.0 * COUNT(DISTINCT school_id) / NULLIF(tot.n, 0), 1)::float8
+		FROM base CROSS JOIN tot
+		GROUP BY val, tot.n
+		ORDER BY escolas DESC
+	`, filtro))
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("dist_atende_necessidade_manipuladores: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if out.DistAtendeNecessidade, err = app.scanCategoricRows(rows); err != nil {
+		app.errorJSON(w, fmt.Errorf("scan dist_atende_necessidade_manipuladores: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	rows2, err := db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT empresa_terceirizada_merenda AS empresa, COUNT(DISTINCT school_id) AS escolas
+		FROM vw_censo_rh_merendeiras
+		WHERE %s AND empresa_terceirizada_merenda IS NOT NULL
+		GROUP BY empresa
+		ORDER BY escolas DESC
+		LIMIT 10
+	`, filtro))
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("top_empresas_manipuladores: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer rows2.Close()
+	for rows2.Next() {
+		var e EmpresaStat
+		if err := rows2.Scan(&e.Empresa, &e.Escolas); err != nil {
+			app.errorJSON(w, fmt.Errorf("scan empresas_manipuladores: %v", err), http.StatusInternalServerError)
+			return
+		}
+		out.TopEmpresas = append(out.TopEmpresas, e)
+	}
+	if err := rows2.Err(); err != nil {
+		app.errorJSON(w, fmt.Errorf("iter empresas_manipuladores: %v", err), http.StatusInternalServerError)
 		return
 	}
 

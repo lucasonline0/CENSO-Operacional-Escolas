@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import {
   ClipboardCheck, AlertCircle, Loader2, Layers, Users, ShieldCheck,
   Briefcase, Building, UserCheck, Construction, BadgeCheck,
+  ChefHat,
 } from "lucide-react";
 import { apiFetch } from "./shared/api";
 import { C, PORTE_COLORS } from "./shared/constants";
@@ -12,6 +13,7 @@ import { Donut } from "./shared/Donut";
 import { HBarChart } from "./shared/BarChart";
 import type {
   ServicosVisaoGeral, ServicosGerais, ServicosPortaria,
+  ServicosManipuladoresAlimentos,
 } from "./shared/types";
 
 type AbaServicosTerceirizadosProps = {
@@ -41,9 +43,11 @@ export function AbaServicosTerceirizados({
   const [visao,    setVisao]    = useState<ServicosVisaoGeral | null>(null);
   const [sg,       setSg]       = useState<ServicosGerais | null>(null);
   const [portaria, setPortaria] = useState<ServicosPortaria | null>(null);
+  const [manip,    setManip]    = useState<ServicosManipuladoresAlimentos | null>(null);
   const [visaoErr,    setVisaoErr]    = useState("");
   const [sgErr,       setSgErr]       = useState("");
   const [portariaErr, setPortariaErr] = useState("");
+  const [manipErr,    setManipErr]    = useState("");
   const [loading,     setLoading]     = useState(true);
 
   useEffect(() => {
@@ -73,7 +77,13 @@ export function AbaServicosTerceirizados({
       .then((d) => { if (!cancelled) setPortaria(d); })
       .catch(handleErr(setPortariaErr));
 
-    Promise.all([pVisao, pSg, pPortaria]).finally(() => {
+    const pManip = apiFetch<ServicosManipuladoresAlimentos>(
+      "/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos", token,
+    )
+      .then((d) => { if (!cancelled) setManip(d); })
+      .catch(handleErr(setManipErr));
+
+    Promise.all([pVisao, pSg, pPortaria, pManip]).finally(() => {
       if (!cancelled) setLoading(false);
     });
 
@@ -88,8 +98,8 @@ export function AbaServicosTerceirizados({
     );
   }
 
-  if (!visao && !sg && !portaria) {
-    const msg = visaoErr || sgErr || portariaErr || "Não foi possível carregar indicadores.";
+  if (!visao && !sg && !portaria && !manip) {
+    const msg = visaoErr || sgErr || portariaErr || manipErr || "Não foi possível carregar indicadores.";
     return (
       <div className="flex items-start gap-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl px-4 py-3 text-sm">
         <AlertCircle size={16} className="shrink-0 mt-0.5" /> {msg}
@@ -126,6 +136,24 @@ export function AbaServicosTerceirizados({
     label: e.empresa,
     value: e.escolas,
   }));
+  const manipVinculoSegments = (manip?.dist_vinculo ?? [])
+    .filter((s) => s.escolas > 0)
+    .map((s, i) => ({
+      label: s.valor,
+      value: s.escolas,
+      pct: s.percentual,
+      color: PORTE_COLORS[i % PORTE_COLORS.length] ?? "#94A3B8",
+    }));
+  const manipAtendeSegments = (manip?.dist_atende_necessidade ?? []).map((s, i) => ({
+    label: s.valor,
+    value: s.escolas,
+    pct: s.percentual,
+    color: PORTE_COLORS[i % PORTE_COLORS.length] ?? "#94A3B8",
+  }));
+  const topEmpresasManipRows = (manip?.top_empresas ?? []).map((e) => ({
+    label: e.empresa,
+    value: e.escolas,
+  }));
 
   return (
     <div className="space-y-6">
@@ -136,22 +164,28 @@ export function AbaServicosTerceirizados({
       </div>
 
       {/* Banners de erro parcial */}
-      {visaoErr && (sg || portaria) && (
+      {visaoErr && (sg || portaria || manip) && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Dados de visão geral indisponíveis ({visaoErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
-      {sgErr && (visao || portaria) && (
+      {sgErr && (visao || portaria || manip) && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Dados de serviços gerais indisponíveis ({sgErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
-      {portariaErr && (visao || sg) && (
+      {portariaErr && (visao || sg || manip) && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Dados de portaria indisponíveis ({portariaErr}). Exibindo apenas os demais blocos.</span>
+        </div>
+      )}
+      {manipErr && (visao || sg || portaria) && (
+        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+          <AlertCircle size={15} className="shrink-0 mt-0.5" />
+          <span>Dados de manipuladores de alimentos indisponíveis ({manipErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
 
@@ -321,6 +355,107 @@ export function AbaServicosTerceirizados({
         ) : (
           <NoData />
         )}
+      </div>
+
+      {/* ── Manipulador de Alimentos ────────────────────────────── */}
+      <div id="sec-servicos-manipuladores" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+        <ChefHat size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Manipulador de Alimentos</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <p className="text-sm text-slate-500 -mt-2">
+        Merendeiras / manipuladores vinculados ao serviço de alimentação escolar.
+      </p>
+
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <StatCard
+          label="Merendeiras estatutárias"
+          value={Math.round(manip?.total_estatutaria ?? 0).toLocaleString("pt-BR")}
+          Icon={Briefcase}
+          tone="blue"
+          sub="total declarado"
+        />
+        <StatCard
+          label="Merendeiras terceirizadas"
+          value={Math.round(manip?.total_terceirizada ?? 0).toLocaleString("pt-BR")}
+          Icon={Building}
+          tone="amber"
+          sub="total declarado"
+        />
+        <StatCard
+          label="Merendeiras temporárias"
+          value={Math.round(manip?.total_temporaria ?? 0).toLocaleString("pt-BR")}
+          Icon={Users}
+          tone="purple"
+          sub="total declarado"
+        />
+        <StatCard
+          label="Total de manipuladores"
+          value={Math.round(manip?.total_geral ?? 0).toLocaleString("pt-BR")}
+          Icon={ChefHat}
+          tone="green"
+          sub="soma dos vínculos"
+        />
+        <StatCard
+          label="Média por escola"
+          value={fmtMedia(manip?.media_por_escola)}
+          Icon={BadgeCheck}
+          tone="blue"
+          sub="média do total informado"
+        />
+        <StatCard
+          label="Com supervisor"
+          value={fmtPct(manip?.pct_com_supervisor)}
+          Icon={UserCheck}
+          tone="amber"
+          sub="das escolas"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <Users size={16} style={{ color: C.primary }} />
+            Distribuição por vínculo
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Composição percentual da soma dos quantitativos declarados por vínculo.
+          </p>
+          {manipVinculoSegments.length > 0 ? (
+            <Donut segments={manipVinculoSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <ClipboardCheck size={16} style={{ color: C.primary }} />
+            Quantidade atual atende à necessidade?
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Distribuição das escolas com resposta informada.
+          </p>
+          {manipAtendeSegments.length > 0 ? (
+            <Donut segments={manipAtendeSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm lg:col-span-2">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <Building size={16} style={{ color: C.primary }} />
+            Top empresas terceirizadas
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Empresas informadas em campo textual; variações de grafia podem aparecer separadamente.
+          </p>
+          {topEmpresasManipRows.length > 0 ? (
+            <HBarChart rows={topEmpresasManipRows} color={C.primary} labelWidth="9rem" />
+          ) : (
+            <NoData />
+          )}
+        </div>
       </div>
 
       {/* ── Governança / Supervisão ──────────────────────────────── */}

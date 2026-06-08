@@ -279,6 +279,7 @@ export interface ServicosGerais {
   total_temporario: number;
   total_terceirizado: number;
   media_total_por_escola: number;
+  top_empresas: EmpresaStat[];
 }
 
 export interface ServicosPortaria {

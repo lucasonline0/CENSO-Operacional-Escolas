@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	saudeOperacionalNome   = "Índice de Saúde Operacional por escola"
-	saudeOperacionalVersao = "1.0.0"
+	saudeOperacionalNome            = "Índice de Saúde Operacional por escola"
+	saudeOperacionalVersao          = "1.0.0"
+	saudeOperacionalPageSizeDefault = 10
 )
 
 var saudeOperacionalDimensoesHabilitadas = []string{
@@ -29,6 +30,13 @@ var saudeOperacionalDimensoesHabilitadas = []string{
 	"seguranca",
 	"pessoal",
 	"tecnologia",
+}
+
+var saudeOperacionalPageSizes = map[int]bool{
+	10:   true,
+	50:   true,
+	100:  true,
+	1000: true,
 }
 
 type SaudeOperacionalPesos struct {
@@ -710,9 +718,94 @@ func parseSaudeOperacionalYear(raw string, now time.Time) (int, error) {
 	return year, nil
 }
 
+func parseSaudeOperacionalPageSize(raw string) (int, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return saudeOperacionalPageSizeDefault, nil
+	}
+
+	pageSize, err := strconv.Atoi(raw)
+	if err != nil || !saudeOperacionalPageSizes[pageSize] {
+		return 0, fmt.Errorf("page_size inválido: use 10, 50, 100 ou 1000")
+	}
+	return pageSize, nil
+}
+
+func parseSaudeOperacionalDirection(raw string) (string, error) {
+	direction := strings.TrimSpace(raw)
+	if direction == "" {
+		return "desc", nil
+	}
+	if direction != "asc" && direction != "desc" {
+		return "", fmt.Errorf("direction inválido: use asc ou desc")
+	}
+	return direction, nil
+}
+
+func filterSaudeOperacionalEscolas(
+	escolas []SaudeOperacionalEscola,
+	searchQuery string,
+) []SaudeOperacionalEscola {
+	searchQuery = normalizeSaudeSearch(searchQuery)
+	if searchQuery == "" {
+		return append([]SaudeOperacionalEscola(nil), escolas...)
+	}
+
+	filtered := make([]SaudeOperacionalEscola, 0)
+	for _, e := range escolas {
+		inep := ""
+		if e.CodigoINEP != nil {
+			inep = *e.CodigoINEP
+		}
+		if strings.Contains(normalizeSaudeSearch(e.Escola), searchQuery) ||
+			strings.Contains(normalizeSaudeSearch(e.Municipio), searchQuery) ||
+			strings.Contains(normalizeSaudeSearch(e.DRE), searchQuery) ||
+			strings.Contains(strings.ToLower(inep), searchQuery) {
+			filtered = append(filtered, e)
+		}
+	}
+	return filtered
+}
+
+func buildSaudeOperacionalPage(
+	allEscolas []SaudeOperacionalEscola,
+	searchQuery string,
+	sortKey string,
+	direction string,
+	page int,
+	pageSize int,
+) (
+	pageItems []SaudeOperacionalEscola,
+	resumo SaudeOperacionalResumo,
+	totalFiltrado int,
+	totalPages int,
+	currentPage int,
+) {
+	filtered := filterSaudeOperacionalEscolas(allEscolas, searchQuery)
+	sort.SliceStable(filtered, func(i, j int) bool {
+		return compareSaudeEscola(filtered[i], filtered[j], sortKey, direction) < 0
+	})
+
+	resumo = buildSaudeResumo(filtered)
+	totalFiltrado = len(filtered)
+	if totalFiltrado == 0 {
+		return []SaudeOperacionalEscola{}, resumo, 0, 0, 1
+	}
+
+	totalPages = (totalFiltrado + pageSize - 1) / pageSize
+	currentPage = page
+	if currentPage > totalPages {
+		currentPage = totalPages
+	}
+
+	offset := (currentPage - 1) * pageSize
+	end := min(offset+pageSize, totalFiltrado)
+	return filtered[offset:end], resumo, totalFiltrado, totalPages, currentPage
+}
+
 // AdminAnalyticsSaudeOperacionalEscolas retorna escolas com índice de saúde operacional.
 // Parâmetros opcionais: year, page, page_size, search, sort, direction.
-// Sem page_size (ou page_size=0): retorna todas as escolas (compatibilidade).
+// Sem page_size: usa 10 registros por página.
 func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
@@ -722,13 +815,10 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 		return
 	}
 
-	pageSize := 0
-	if raw := strings.TrimSpace(q.Get("page_size")); raw != "" {
-		pageSize, err = strconv.Atoi(raw)
-		if err != nil || pageSize < 1 || pageSize > 1000 {
-			app.errorJSON(w, fmt.Errorf("page_size inválido: deve ser entre 1 e 1000"), http.StatusBadRequest)
-			return
-		}
+	pageSize, err := parseSaudeOperacionalPageSize(q.Get("page_size"))
+	if err != nil {
+		app.errorJSON(w, err, http.StatusBadRequest)
+		return
 	}
 
 	page := 1
@@ -740,7 +830,7 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 		}
 	}
 
-	searchQuery := normalizeSaudeSearch(q.Get("search"))
+	searchQuery := q.Get("search")
 
 	sortKey := strings.TrimSpace(q.Get("sort"))
 	validSortKeys := map[string]bool{
@@ -753,9 +843,10 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 		sortKey = "criticidade"
 	}
 
-	direction := strings.TrimSpace(q.Get("direction"))
-	if direction != "asc" && direction != "desc" {
-		direction = "desc"
+	direction, err := parseSaudeOperacionalDirection(q.Get("direction"))
+	if err != nil {
+		app.errorJSON(w, err, http.StatusBadRequest)
+		return
 	}
 
 	dbRows, err := app.models.Schools.DB.QueryContext(r.Context(), `
@@ -809,53 +900,14 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 		return
 	}
 
-	resumo := buildSaudeResumo(allEscolas)
-
-	filtered := allEscolas
-	if searchQuery != "" {
-		filtered = filtered[:0:0]
-		for _, e := range allEscolas {
-			inep := ""
-			if e.CodigoINEP != nil {
-				inep = *e.CodigoINEP
-			}
-			if strings.Contains(normalizeSaudeSearch(e.Escola), searchQuery) ||
-				strings.Contains(normalizeSaudeSearch(e.Municipio), searchQuery) ||
-				strings.Contains(normalizeSaudeSearch(e.DRE), searchQuery) ||
-				strings.Contains(strings.ToLower(inep), searchQuery) {
-				filtered = append(filtered, e)
-			}
-		}
-	}
-
-	sort.SliceStable(filtered, func(i, j int) bool {
-		return compareSaudeEscola(filtered[i], filtered[j], sortKey, direction) < 0
-	})
-
-	totalFiltrado := len(filtered)
-	totalPages := 1
-	pageSlice := filtered
-
-	if pageSize > 0 {
-		if totalFiltrado > 0 {
-			totalPages = (totalFiltrado + pageSize - 1) / pageSize
-		} else {
-			totalPages = 0
-		}
-		if page > totalPages && totalPages > 0 {
-			page = totalPages
-		}
-		offset := (page - 1) * pageSize
-		end := offset + pageSize
-		if offset >= len(filtered) {
-			pageSlice = []SaudeOperacionalEscola{}
-		} else {
-			if end > len(filtered) {
-				end = len(filtered)
-			}
-			pageSlice = filtered[offset:end]
-		}
-	}
+	pageSlice, resumo, totalFiltrado, totalPages, page := buildSaudeOperacionalPage(
+		allEscolas,
+		searchQuery,
+		sortKey,
+		direction,
+		page,
+		pageSize,
+	)
 
 	out := SaudeOperacionalPayload{
 		TotalEscolas:  len(allEscolas),

@@ -26,6 +26,8 @@ import type {
 } from "./shared/types";
 
 const ENDPOINT_BASE = "/v1/admin/analytics/escolas/saude-operacional";
+// Temporário: o dashboard atual está fixado no ciclo do Censo Escolar 2026.
+const DASHBOARD_REFERENCE_YEAR = 2026;
 
 const PAGE_SIZE_OPTIONS = [10, 50, 100, 1000] as const;
 type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number];
@@ -118,6 +120,7 @@ function buildEndpoint(
   search: string,
 ): string {
   const params = new URLSearchParams({
+    year: String(DASHBOARD_REFERENCE_YEAR),
     sort: sortKey,
     direction: sortDir,
     page: String(page),
@@ -276,12 +279,21 @@ export function AbaSaudeOperacionalEscolas({
     setSearchInput(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
+      if (page !== 1 || value !== serverSearch) setLoading(true);
       setPage(1);
       setServerSearch(value);
     }, 400);
+  }, [page, serverSearch]);
+
+  useEffect(() => () => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
   }, []);
 
   function handleSort(key: SortKey) {
+    setLoading(true);
     if (sortKey === key) {
       setSortDir((current) => current === "asc" ? "desc" : "asc");
     } else {
@@ -292,13 +304,20 @@ export function AbaSaudeOperacionalEscolas({
   }
 
   function handlePageSizeChange(size: PageSizeOption) {
+    if (size === pageSize && page === 1) return;
+    setLoading(true);
     setPageSize(size);
     setPage(1);
   }
 
+  function handlePageChange(nextPage: number) {
+    if (nextPage === page) return;
+    setLoading(true);
+    setPage(nextPage);
+  }
+
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
 
     const url = buildEndpoint(sortKey, sortDir, page, pageSize, serverSearch);
 
@@ -561,20 +580,20 @@ export function AbaSaudeOperacionalEscolas({
               )}
               <button
                 type="button"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
+                onClick={() => handlePageChange(Math.max(1, payload.page - 1))}
+                disabled={payload.page <= 1 || totalPages === 0}
                 className="flex items-center gap-1 rounded border border-slate-200 px-2 py-1 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <ArrowLeft size={13} />
                 Anterior
               </button>
               <span className="px-2 font-medium text-slate-700">
-                {page} / {totalPages || 1}
+                {totalPages === 0 ? "0 de 0" : `${payload.page} / ${totalPages}`}
               </span>
               <button
                 type="button"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
+                onClick={() => handlePageChange(Math.min(totalPages, payload.page + 1))}
+                disabled={totalPages === 0 || payload.page >= totalPages}
                 className="flex items-center gap-1 rounded border border-slate-200 px-2 py-1 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Próxima

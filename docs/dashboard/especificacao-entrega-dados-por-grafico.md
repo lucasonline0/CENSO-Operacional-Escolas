@@ -45,6 +45,151 @@ Antes de implementar, validar se a lacuna continua verdadeira na branch base e r
 - **Porte** deve usar o critério de `vw_censo_enriquecida.porte_escola_nome`, salvo decisão posterior documentada.
 - **Campos multivalorados** devem ser normalizados em formato long antes da agregação sempre que o gráfico contar escolas por valor da lista.
 
+## 4.1 Entrega implementada — Saúde Operacional por escola
+
+### 4.1.1 Identificação
+
+| Item | Implementação |
+|---|---|
+| Grupo no `/admin` | Operacional |
+| Rótulo no menu | Saúde Operacional |
+| Nome oficial | Índice de Saúde Operacional por escola |
+| Endpoint | `GET /v1/admin/analytics/escolas/saude-operacional` |
+| Fonte | PostgreSQL |
+| Backend | `api/cmd/api/analytics_saude_operacional.go` |
+| Frontend | `web/src/components/admin/AbaSaudeOperacionalEscolas.tsx` |
+| Status | Implementada |
+
+O endpoint aceita `?year=AAAA`; na ausência do parâmetro, usa o ano corrente.
+Ele parte de `schools` e retorna **todas as escolas cadastradas**. Apenas um
+censo com `status = 'completed'` no ano de referência alimenta métricas e
+dimensões. Sem censo elegível, a escola continua no payload com status
+`sem_dados`.
+
+### 4.1.2 Payload resumido
+
+```ts
+{
+  total_escolas: number;
+  ano_referencia: number;
+  metodologia: {
+    nome: string;
+    versao: "1.0.0";
+    dimensoes_habilitadas: string[];
+    pesos: {
+      infraestrutura: number;
+      energia: number;
+      merenda: number;
+      seguranca: number;
+      pessoal: number;
+      tecnologia: number;
+      pedagogico: number;
+      governanca: number;
+    };
+  };
+  escolas: Array<{
+    school_id: number;
+    census_id: number | null;
+    codigo_inep: string | null;
+    escola: string;
+    municipio: string;
+    dre: string;
+    zona: string | null;
+    total_alunos: number | null;
+    salas_aula: number | null;
+    alunos_por_sala: number | null;
+    saude: number | null;
+    criticidade: number | null;
+    status: "saudavel" | "atencao" | "critica" | "sem_dados";
+    dimensoes: {
+      infraestrutura: number | null;
+      energia: number | null;
+      merenda: number | null;
+      seguranca: number | null;
+      pessoal: number | null;
+      tecnologia: number | null;
+      pedagogico: null;
+      governanca: null;
+    };
+  }>;
+}
+```
+
+### 4.1.3 Dimensões e metodologia `1.0.0`
+
+Dimensões habilitadas:
+
+- Infraestrutura;
+- Energia;
+- Merenda;
+- Segurança;
+- Pessoal/RH;
+- Tecnologia.
+
+Pedagógico e Governança permanecem `null` na versão `1.0.0`. Elas não recebem
+zero, não participam do denominador da média ponderada e aparecem como `—` na
+tela. Sua ativação exige decisão de fonte, regras próprias, validação e nova
+versão da metodologia.
+
+### 4.1.4 Regras de ausência e status
+
+- `null` não é zero;
+- `0` é valor válido e representa o pior resultado explicitamente mapeado;
+- campo ausente, vazio ou resposta desconhecida não pode ser convertido
+  silenciosamente em zero;
+- `saude = null` implica `criticidade = null` e status `sem_dados`;
+- `saude >= 70` implica `saudavel`;
+- `50 <= saude < 70` implica `atencao`;
+- `saude < 50` implica `critica`.
+
+Auditabilidade de respostas desconhecidas permanece como lacuna futura:
+recomenda-se registrar contagens por campo/mapa sem interromper o endpoint.
+
+### 4.1.5 Comportamento frontend
+
+O componente:
+
+- usa `apiFetch`, `getCached` e `allCached`;
+- faz fetch lazy somente quando a aba é visitada;
+- não adiciona o endpoint ao prefetch global do login;
+- não usa dados fake;
+- não recalcula saúde, criticidade, status, pesos ou metodologia;
+- exibe cards de total, saudáveis, atenção, críticas, sem dados e média de
+  saúde das escolas com nota;
+- oferece busca local por escola, município, DRE e INEP, com normalização de
+  caixa, espaços e acentos;
+- exibe tabela escola a escola com farol, barra de saúde, criticidade e badges
+  das dimensões;
+- renderiza `null` como `—` e preserva zero como `0`/`0,0`;
+- mantém Pedagógico e Governança como `—`.
+
+### 4.1.6 Ordenação
+
+A abertura é por `criticidade` decrescente. Escolas `sem_dados` e valores nulos
+ficam ao final; o desempate local é pelo nome da escola. Os cabeçalhos permitem
+alternar entre ascendente e descendente para campos textuais, métricas e
+dimensões.
+
+No backend, a query atualmente usa `ORDER BY s.nome_escola`. Para garantir
+resultado determinístico antes da ordenação local em casos de escolas
+homônimas, permanece recomendada a inclusão futura de `s.id` como segundo
+critério SQL.
+
+### 4.1.7 Componentes visuais entregues
+
+- cards sintéticos;
+- busca local e contador `Exibindo X de Y escolas`;
+- tabela com rolagem horizontal;
+- farol por status;
+- barra proporcional de saúde;
+- criticidade;
+- badges de Infraestrutura, Energia, Merenda, Segurança, Pessoal e Tecnologia;
+- Pedagógico e Governança como `—`.
+
+Se o universo crescer significativamente, paginação ou virtualização deve ser
+avaliada. Filtros globais e Região de Integração não fazem parte da entrega
+atual.
+
 ## 5. Gráficos pendentes ou parciais — Alta prioridade
 
 ### 5.1 Caracterização da Rede — Organização da Oferta e Funcionamento

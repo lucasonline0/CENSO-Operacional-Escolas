@@ -455,6 +455,16 @@ export interface SaudeOperacionalPayload {
   escolas: SaudeOperacionalEscola[];
 }
 
+// Estado global de filtros do dashboard.
+// Passado para cada aba e repassado como query params para os endpoints analíticos.
+export interface DashboardFilters {
+  ano?: number;
+  regiao_integracao?: string;
+  dre?: string;
+  municipio?: string;
+  zona?: string;
+}
+
 // Filtros globais do dashboard.
 // Payload de GET /v1/admin/analytics/filtros/opcoes.
 export interface FiltrosEscolaItem {

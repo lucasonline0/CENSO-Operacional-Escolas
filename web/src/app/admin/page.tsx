@@ -28,8 +28,9 @@ import { AbaMerenda } from "@/components/admin/AbaMerenda";
 import { AbaServicosTerceirizados } from "@/components/admin/AbaServicosTerceirizados";
 import { AbaGestaoFinanceiraGovernanca } from "@/components/admin/AbaGestaoFinanceiraGovernanca";
 import { AbaSaudeOperacionalEscolas } from "@/components/admin/AbaSaudeOperacionalEscolas";
+import { FiltrosGlobais } from "@/components/admin/FiltrosGlobais";
 import type {
-  CensusRow, CensusPage, DashboardData,
+  CensusRow, CensusPage, DashboardData, DashboardFilters, FiltrosOpcoes,
 } from "@/components/admin/shared/types";
 
 // ─── Login ────────────────────────────────────────────────────────────────────
@@ -366,6 +367,8 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const [censusLimit,    setCensusLimit]    = useState(10);
   const [censusPageNum,  setCensusPageNum]  = useState(1);
   const [mobileNavOpen,  setMobileNavOpen]  = useState(false);
+  const [filters,        setFilters]        = useState<DashboardFilters>({});
+  const [filtrosOpcoes,  setFiltrosOpcoes]  = useState<FiltrosOpcoes | null>(null);
 
   const logout = useCallback(() => { clearToken(); clearApiCache(); onLogout(); }, [onLogout]);
 
@@ -390,6 +393,11 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
   useEffect(() => { loadDb(); }, [loadDb]);
   useEffect(() => { if (tab === "census") loadCensus(); }, [tab, filterStatus, filterDre, censusLimit, censusPageNum, loadCensus]);
+  useEffect(() => {
+    apiFetch<FiltrosOpcoes>("/v1/admin/analytics/filtros/opcoes", token)
+      .then(setFiltrosOpcoes)
+      .catch((e) => { if ((e as Error).message === "UNAUTHORIZED") logout(); });
+  }, [token, logout]);
 
 
   async function handleSync() {
@@ -531,6 +539,12 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 {err}
               </div>
             )}
+
+            <FiltrosGlobais
+              opcoes={filtrosOpcoes}
+              filters={filters}
+              onFiltersChange={setFilters}
+            />
 {/* Renderiza todas as abas já visitadas. Quando volta para uma aba os dados já são carregados*/}
             {visited.has("perfil") && (
               <div style={{ display: tab === "perfil" ? undefined : "none" }}>

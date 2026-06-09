@@ -14,7 +14,20 @@ import { HBarChart, VBarChart } from "./shared/BarChart";
 import type {
   CaracterizacaoPerfilPg, CaracterizacaoDREPg, SheetMetrics,
   CaracterizacaoOfertaFuncionamento, CaracterizacaoInfraEducacionalPg,
+  DashboardFilters,
 } from "./shared/types";
+
+function buildFilterParams(filters?: DashboardFilters): string {
+  if (!filters) return "";
+  const p = new URLSearchParams();
+  if (filters.ano) p.set("year", String(filters.ano));
+  if (filters.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
+  if (filters.dre) p.set("dre", filters.dre);
+  if (filters.municipio) p.set("municipio", filters.municipio);
+  if (filters.zona) p.set("zona", filters.zona);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
 
 const TURNO_COLORS: Record<string, string> = {
   "Manhã": "#F59E0B",
@@ -33,7 +46,7 @@ const FAIXA_COBERTURA_COLORS: Record<string, string> = {
   "Sem essenciais informados": "#94A3B8",
 };
 
-export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth: () => void }) {
+export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string; onUnauth: () => void; filters?: DashboardFilters }) {
   // Fase 2B.1: a aba "Caracterização da Rede" passa a consumir PostgreSQL via
   // /v1/admin/analytics/caracterizacao/perfil e /caracterizacao/dre. Os dados
   // legados de /v1/admin/sheet-metrics continuam carregados em paralelo como
@@ -54,6 +67,11 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setPerfilPg(null); setDrePg(null); setOfertaPg(null); setInfraPg(null); setMetrics(null);
+    setPerfilErr(""); setDreErr(""); setOfertaErr(""); setInfraErr(""); setSheetErr("");
+
+    const qs = buildFilterParams(filters);
 
     const handleErr = (setter: (s: string) => void) => (e: unknown) => {
       const msg = (e as Error).message;
@@ -61,19 +79,19 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
       if (!cancelled) setter(msg);
     };
 
-    const pPerfil = apiFetch<CaracterizacaoPerfilPg>("/v1/admin/analytics/caracterizacao/perfil", token)
+    const pPerfil = apiFetch<CaracterizacaoPerfilPg>(`/v1/admin/analytics/caracterizacao/perfil${qs}`, token)
       .then((d) => { if (!cancelled) setPerfilPg(d); })
       .catch(handleErr(setPerfilErr));
 
-    const pDre = apiFetch<CaracterizacaoDREPg>("/v1/admin/analytics/caracterizacao/dre", token)
+    const pDre = apiFetch<CaracterizacaoDREPg>(`/v1/admin/analytics/caracterizacao/dre${qs}`, token)
       .then((d) => { if (!cancelled) setDrePg(d); })
       .catch(handleErr(setDreErr));
 
-    const pOferta = apiFetch<CaracterizacaoOfertaFuncionamento>("/v1/admin/analytics/caracterizacao/oferta-funcionamento", token)
+    const pOferta = apiFetch<CaracterizacaoOfertaFuncionamento>(`/v1/admin/analytics/caracterizacao/oferta-funcionamento${qs}`, token)
       .then((d) => { if (!cancelled) setOfertaPg(d); })
       .catch(handleErr(setOfertaErr));
 
-    const pInfra = apiFetch<CaracterizacaoInfraEducacionalPg>("/v1/admin/analytics/caracterizacao/infraestrutura-educacional", token)
+    const pInfra = apiFetch<CaracterizacaoInfraEducacionalPg>(`/v1/admin/analytics/caracterizacao/infraestrutura-educacional${qs}`, token)
       .then((d) => { if (!cancelled) setInfraPg(d); })
       .catch(handleErr(setInfraErr));
 
@@ -86,7 +104,7 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
     });
 
     return () => { cancelled = true; };
-  }, [token, onUnauth]);
+  }, [token, onUnauth, filters]);
 
   if (loading) return (
     <div className="flex items-center justify-center py-24 text-slate-400">

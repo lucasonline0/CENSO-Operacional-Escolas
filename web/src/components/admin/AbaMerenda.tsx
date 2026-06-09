@@ -7,19 +7,32 @@ import {
   ChefHat, ClipboardList,
   ShieldCheck, Package, FireExtinguisher,
 } from "lucide-react";
-import { apiFetch, getCached, allCached } from "./shared/api";
+import { apiFetch } from "./shared/api";
 import { C, PORTE_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
 import { HBarChart } from "./shared/BarChart";
 import type {
   MerendaOferta, MerendaEquipamentos, EquipTotais,
-  MerendaCondicoesSanitarias,
+  MerendaCondicoesSanitarias, DashboardFilters,
 } from "./shared/types";
+
+function buildFilterParams(filters?: DashboardFilters): string {
+  if (!filters) return "";
+  const p = new URLSearchParams();
+  if (filters.ano) p.set("year", String(filters.ano));
+  if (filters.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
+  if (filters.dre) p.set("dre", filters.dre);
+  if (filters.municipio) p.set("municipio", filters.municipio);
+  if (filters.zona) p.set("zona", filters.zona);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
 
 type AbaMerendaProps = {
   token: string;
   onUnauth: () => void;
+  filters?: DashboardFilters;
 };
 
 function fmtPct(v: number | null | undefined): string {
@@ -146,27 +159,22 @@ function StackedConservationBar({
   );
 }
 
-export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
-  const [oferta,     setOferta]     = useState<MerendaOferta | null>(
-    () => getCached("/v1/admin/analytics/merenda/oferta"),
-  );
-  const [equip,      setEquip]      = useState<MerendaEquipamentos | null>(
-    () => getCached("/v1/admin/analytics/merenda/equipamentos"),
-  );
-  const [sanit,      setSanit]      = useState<MerendaCondicoesSanitarias | null>(
-    () => getCached("/v1/admin/analytics/merenda/condicoes-sanitarias"),
-  );
+export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
+  const [oferta,     setOferta]     = useState<MerendaOferta | null>(null);
+  const [equip,      setEquip]      = useState<MerendaEquipamentos | null>(null);
+  const [sanit,      setSanit]      = useState<MerendaCondicoesSanitarias | null>(null);
   const [ofertaErr,  setOfertaErr]  = useState("");
   const [equipErr,   setEquipErr]   = useState("");
   const [sanitErr,   setSanitErr]   = useState("");
-  const [loading,    setLoading]    = useState<boolean>(() => !allCached([
-    "/v1/admin/analytics/merenda/oferta",
-    "/v1/admin/analytics/merenda/equipamentos",
-    "/v1/admin/analytics/merenda/condicoes-sanitarias",
-  ]));
+  const [loading,    setLoading]    = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setOferta(null); setEquip(null); setSanit(null);
+    setOfertaErr(""); setEquipErr(""); setSanitErr("");
+
+    const qs = buildFilterParams(filters);
 
     const handleErr = (setter: (s: string) => void) => (e: unknown) => {
       const msg = (e as Error).message;
@@ -174,15 +182,15 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       if (!cancelled) setter(msg);
     };
 
-    const pOferta = apiFetch<MerendaOferta>("/v1/admin/analytics/merenda/oferta", token)
+    const pOferta = apiFetch<MerendaOferta>(`/v1/admin/analytics/merenda/oferta${qs}`, token)
       .then((d) => { if (!cancelled) setOferta(d); })
       .catch(handleErr(setOfertaErr));
 
-    const pEquip = apiFetch<MerendaEquipamentos>("/v1/admin/analytics/merenda/equipamentos", token)
+    const pEquip = apiFetch<MerendaEquipamentos>(`/v1/admin/analytics/merenda/equipamentos${qs}`, token)
       .then((d) => { if (!cancelled) setEquip(d); })
       .catch(handleErr(setEquipErr));
 
-    const pSanit = apiFetch<MerendaCondicoesSanitarias>("/v1/admin/analytics/merenda/condicoes-sanitarias", token)
+    const pSanit = apiFetch<MerendaCondicoesSanitarias>(`/v1/admin/analytics/merenda/condicoes-sanitarias${qs}`, token)
       .then((d) => { if (!cancelled) setSanit(d); })
       .catch(handleErr(setSanitErr));
 
@@ -191,7 +199,7 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
     });
 
     return () => { cancelled = true; };
-  }, [token, onUnauth]);
+  }, [token, onUnauth, filters]);
 
   if (loading) {
     return (

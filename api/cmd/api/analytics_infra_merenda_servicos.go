@@ -243,7 +243,9 @@ func (app *application) AdminAnalyticsInfraCondicoes(w http.ResponseWriter, r *h
 		DistPerimetroFechado: []CategoricStat{},
 	}
 
-	const filtro = `status = 'completed' AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int AND census_id IS NOT NULL`
+	f := parseAnalyticsFilters(r)
+	filtroSQL := f.WhereSQL()
+	filtroArgs := f.Args()
 
 	distQ := func(campo string) ([]CategoricStat, error) {
 		rows, err := db.QueryContext(ctx, fmt.Sprintf(`
@@ -259,7 +261,7 @@ func (app *application) AdminAnalyticsInfraCondicoes(w http.ResponseWriter, r *h
 			FROM base CROSS JOIN tot
 			GROUP BY val, tot.n
 			ORDER BY escolas DESC
-		`, campo, filtro, campo))
+		`, campo, filtroSQL, campo), filtroArgs...)
 		if err != nil {
 			return nil, err
 		}
@@ -282,7 +284,7 @@ func (app *application) AdminAnalyticsInfraCondicoes(w http.ResponseWriter, r *h
 			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE perimetro_fechado IS NOT NULL AND lower(perimetro_fechado) NOT IN ('não', 'nao', 'não possui')) / NULLIF(COUNT(*), 0), 1), 0)::float8
 		FROM vw_censo_infraestrutura_seguranca
 		WHERE %s
-	`, filtro)).Scan(&out.PctMuroCerca, &out.PctPerimetroFechado)
+	`, filtroSQL), filtroArgs...).Scan(&out.PctMuroCerca, &out.PctPerimetroFechado)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("pct_muro: %v", err), http.StatusInternalServerError)
 		return
@@ -295,7 +297,7 @@ func (app *application) AdminAnalyticsInfraCondicoes(w http.ResponseWriter, r *h
 		GROUP BY ambiente
 		ORDER BY escolas DESC
 		LIMIT 10
-	`, filtro))
+	`, filtroSQL), filtroArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("top_ambientes: %v", err), http.StatusInternalServerError)
 		return
@@ -330,20 +332,20 @@ func (app *application) AdminAnalyticsInfraCondicoes(w http.ResponseWriter, r *h
 			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE situacao_estrutura = 'Está em reforma, porém a obra está parada') / NULLIF(COUNT(*), 0), 1), 0)::float8
 		FROM vw_censo_infraestrutura_seguranca
 		WHERE %s
-	`, filtro)).Scan(&out.PctReformaCritica, &out.PctReformaGeralApenas, &out.PctObraParadaApenas)
+	`, filtroSQL), filtroArgs...).Scan(&out.PctReformaCritica, &out.PctReformaGeralApenas, &out.PctObraParadaApenas)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("pct_reforma_critica: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	err = db.QueryRowContext(ctx, coberturaEssenciaisCTE+`
+	err = db.QueryRowContext(ctx, coberturaEssenciaisCTEParam+`
 		SELECT
 			CASE WHEN COUNT(*) > 0
 				 THEN ROUND(100.0 * COUNT(*) FILTER (WHERE qtd_essenciais = 8) / COUNT(*), 2)
 				 ELSE 0
 			END::float8
 		FROM por_escola
-	`).Scan(&out.PctCoberturaPlena)
+	`, f.Args()...).Scan(&out.PctCoberturaPlena)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("pct_cobertura_plena: %v", err), http.StatusInternalServerError)
 		return
@@ -362,7 +364,9 @@ func (app *application) AdminAnalyticsInfraSeguranca(w http.ResponseWriter, r *h
 		DistControlePortao:    []CategoricStat{},
 	}
 
-	const filtro = `status = 'completed' AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int AND census_id IS NOT NULL`
+	f := parseAnalyticsFilters(r)
+	filtroSQL := f.WhereSQL()
+	filtroArgs := f.Args()
 
 	err := db.QueryRowContext(ctx, fmt.Sprintf(`
 		SELECT
@@ -374,7 +378,7 @@ func (app *application) AdminAnalyticsInfraSeguranca(w http.ResponseWriter, r *h
 			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE politica_bullying IS NOT NULL AND lower(politica_bullying) NOT LIKE 'não%%') / NULLIF(COUNT(*), 0), 1), 0)::float8
 		FROM vw_censo_infraestrutura_seguranca
 		WHERE %s
-	`, filtro)).Scan(
+	`, filtroSQL), filtroArgs...).Scan(
 		&out.PctGuarita,
 		&out.PctControlePortao,
 		&out.PctBotaoPanico,
@@ -400,7 +404,7 @@ func (app *application) AdminAnalyticsInfraSeguranca(w http.ResponseWriter, r *h
 		FROM base CROSS JOIN tot
 		GROUP BY val, tot.n
 		ORDER BY CASE val WHEN 'Adequada' THEN 1 WHEN 'Regular' THEN 2 ELSE 3 END
-	`, filtro))
+	`, filtroSQL), filtroArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("dist_iluminacao: %v", err), http.StatusInternalServerError)
 		return
@@ -423,7 +427,7 @@ func (app *application) AdminAnalyticsInfraSeguranca(w http.ResponseWriter, r *h
 		FROM base CROSS JOIN tot
 		GROUP BY val, tot.n
 		ORDER BY escolas DESC
-	`, filtro))
+	`, filtroSQL), filtroArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("dist_cameras: %v", err), http.StatusInternalServerError)
 		return
@@ -446,7 +450,7 @@ func (app *application) AdminAnalyticsInfraSeguranca(w http.ResponseWriter, r *h
 		FROM base CROSS JOIN tot
 		GROUP BY val, tot.n
 		ORDER BY escolas DESC
-	`, filtro))
+	`, filtroSQL), filtroArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("dist_controle_portao: %v", err), http.StatusInternalServerError)
 		return
@@ -470,7 +474,9 @@ func (app *application) AdminAnalyticsInfraEnergia(w http.ResponseWriter, r *htt
 		TabelaClimatizacao:    []ClimatizacaoSalaRow{},
 	}
 
-	const filtro = `status = 'completed' AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int AND census_id IS NOT NULL`
+	f := parseAnalyticsFilters(r)
+	filtroSQL := f.WhereSQL()
+	filtroArgs := f.Args()
 
 	distInfra := func(campo string) ([]CategoricStat, error) {
 		rows, err := db.QueryContext(ctx, fmt.Sprintf(`
@@ -486,7 +492,7 @@ func (app *application) AdminAnalyticsInfraEnergia(w http.ResponseWriter, r *htt
 			FROM base CROSS JOIN tot
 			GROUP BY val, tot.n
 			ORDER BY escolas DESC
-		`, campo, filtro, campo))
+		`, campo, filtroSQL, campo), filtroArgs...)
 		if err != nil {
 			return nil, err
 		}
@@ -516,7 +522,7 @@ func (app *application) AdminAnalyticsInfraEnergia(w http.ResponseWriter, r *htt
 		FROM base CROSS JOIN tot
 		GROUP BY val, tot.n
 		ORDER BY escolas DESC
-	`, filtro))
+	`, filtroSQL), filtroArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("dist_climatizacao_salas: %v", err), http.StatusInternalServerError)
 		return
@@ -543,7 +549,7 @@ func (app *application) AdminAnalyticsInfraEnergia(w http.ResponseWriter, r *htt
 			WHEN 'Não climatizadas'          THEN 3
 			ELSE 4
 		END
-	`, filtro))
+	`, filtroSQL), filtroArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("tabela_climatizacao: %v", err), http.StatusInternalServerError)
 		return
@@ -583,7 +589,9 @@ func (app *application) AdminAnalyticsMerendaOferta(w http.ResponseWriter, r *ht
 		DistRefeitorioAdequado: []CategoricStat{},
 	}
 
-	const filtro = `status = 'completed' AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int AND census_id IS NOT NULL`
+	f := parseAnalyticsFilters(r)
+	filtroSQL := f.WhereSQL()
+	filtroArgs := f.Args()
 
 	distQ := func(view, campo string) ([]CategoricStat, error) {
 		rows, err := db.QueryContext(ctx, fmt.Sprintf(`
@@ -596,7 +604,7 @@ func (app *application) AdminAnalyticsMerendaOferta(w http.ResponseWriter, r *ht
 				ROUND(100.0 * COUNT(DISTINCT school_id) / NULLIF(tot.n, 0), 1)::float8
 			FROM base CROSS JOIN tot
 			GROUP BY val, tot.n ORDER BY 2 DESC
-		`, campo, view, filtro, campo))
+		`, campo, view, filtroSQL, campo), filtroArgs...)
 		if err != nil {
 			return nil, err
 		}
@@ -636,7 +644,7 @@ func (app *application) AdminAnalyticsMerendaOferta(w http.ResponseWriter, r *ht
 	err = db.QueryRowContext(ctx, fmt.Sprintf(`
 		SELECT COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE lower(atende_necessidades) = 'sim') / NULLIF(COUNT(*), 0), 1), 0)::float8
 		FROM vw_censo_rh_merendeiras WHERE %s
-	`, filtro)).Scan(&out.PctAtendeNecessidades)
+	`, filtroSQL), filtroArgs...).Scan(&out.PctAtendeNecessidades)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("pct_atende_necessidades: %v", err), http.StatusInternalServerError)
 		return
@@ -645,7 +653,7 @@ func (app *application) AdminAnalyticsMerendaOferta(w http.ResponseWriter, r *ht
 	err = db.QueryRowContext(ctx, fmt.Sprintf(`
 		SELECT COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE lower(possui_refeitorio) = 'sim') / NULLIF(COUNT(*), 0), 1), 0)::float8
 		FROM vw_censo_equipamentos_merenda WHERE %s
-	`, filtro)).Scan(&out.PctPossuiRefeitorio)
+	`, filtroSQL), filtroArgs...).Scan(&out.PctPossuiRefeitorio)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("pct_merenda: %v", err), http.StatusInternalServerError)
 		return
@@ -667,7 +675,9 @@ func (app *application) AdminAnalyticsMerendaEquipamentos(w http.ResponseWriter,
 		CriticidadePorEquipamento: []CriticidadeEquipamentoStat{},
 	}
 
-	const filtro = `status = 'completed' AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int AND census_id IS NOT NULL`
+	f := parseAnalyticsFilters(r)
+	filtroSQL := f.WhereSQL()
+	filtroArgs := f.Args()
 
 	err := db.QueryRowContext(ctx, fmt.Sprintf(`
 		SELECT
@@ -678,7 +688,7 @@ func (app *application) AdminAnalyticsMerendaEquipamentos(w http.ResponseWriter,
 			COALESCE(SUM(qtd_bebedouros), 0)::float8, COALESCE(AVG(qtd_bebedouros) FILTER (WHERE qtd_bebedouros IS NOT NULL), 0)::float8
 		FROM vw_censo_equipamentos_merenda
 		WHERE %s
-	`, filtro)).Scan(
+	`, filtroSQL), filtroArgs...).Scan(
 		&out.Freezers.Total, &out.Freezers.Media,
 		&out.Geladeiras.Total, &out.Geladeiras.Media,
 		&out.Fogoes.Total, &out.Fogoes.Media,
@@ -704,7 +714,7 @@ func (app *application) AdminAnalyticsMerendaEquipamentos(w http.ResponseWriter,
 		) t
 		GROUP BY equipamento, estado
 		ORDER BY equipamento, escolas DESC
-	`, filtro, filtro, filtro, filtro, filtro))
+	`, filtroSQL, filtroSQL, filtroSQL, filtroSQL, filtroSQL), filtroArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("dist_estados: %v", err), http.StatusInternalServerError)
 		return
@@ -753,7 +763,7 @@ func (app *application) AdminAnalyticsMerendaEquipamentos(w http.ResponseWriter,
 			SELECT 5, 'bebedouros', COUNT(DISTINCT school_id) FILTER (WHERE qtd_bebedouros > 0) FROM base
 		) t CROSS JOIN tot
 		ORDER BY t.ord
-	`, filtro))
+	`, filtroSQL), filtroArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("presenca_por_tipo: %v", err), http.StatusInternalServerError)
 		return
@@ -790,7 +800,7 @@ func (app *application) AdminAnalyticsMerendaEquipamentos(w http.ResponseWriter,
 			COUNT(*) FILTER (WHERE n_tipos >= 3),
 			COUNT(*)
 		FROM base
-	`, filtro)).Scan(&n1, &n2, &n3, &totFaixas)
+	`, filtroSQL), filtroArgs...).Scan(&n1, &n2, &n3, &totFaixas)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("faixas_qtd_tipos: %v", err), http.StatusInternalServerError)
 		return
@@ -825,7 +835,7 @@ func (app *application) AdminAnalyticsMerendaEquipamentos(w http.ResponseWriter,
 		) t
 		GROUP BY equipamento, ord
 		ORDER BY ord
-	`, filtro, filtro, filtro, filtro, filtro))
+	`, filtroSQL, filtroSQL, filtroSQL, filtroSQL, filtroSQL), filtroArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("estado_consolidado: %v", err), http.StatusInternalServerError)
 		return
@@ -865,7 +875,9 @@ func (app *application) AdminAnalyticsMerendaRH(w http.ResponseWriter, r *http.R
 
 	out := MerendaRH{TopEmpresas: []EmpresaStat{}}
 
-	const filtro = `status = 'completed' AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int AND census_id IS NOT NULL`
+	f := parseAnalyticsFilters(r)
+	filtroSQL := f.WhereSQL()
+	filtroArgs := f.Args()
 
 	err := db.QueryRowContext(ctx, fmt.Sprintf(`
 		SELECT
@@ -875,7 +887,7 @@ func (app *application) AdminAnalyticsMerendaRH(w http.ResponseWriter, r *http.R
 			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE lower(possui_supervisor_merenda) = 'sim') / NULLIF(COUNT(*), 0), 1), 0)::float8
 		FROM vw_censo_rh_merendeiras
 		WHERE %s
-	`, filtro)).Scan(
+	`, filtroSQL), filtroArgs...).Scan(
 		&out.TotalEstatutaria,
 		&out.TotalTerceirizada,
 		&out.TotalTemporaria,
@@ -893,7 +905,7 @@ func (app *application) AdminAnalyticsMerendaRH(w http.ResponseWriter, r *http.R
 		GROUP BY empresa
 		ORDER BY escolas DESC
 		LIMIT 10
-	`, filtro))
+	`, filtroSQL), filtroArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("top_empresas_merenda: %v", err), http.StatusInternalServerError)
 		return
@@ -927,7 +939,9 @@ func (app *application) AdminAnalyticsMerendaCondicoesSanitarias(w http.Response
 		DistManutencaoExtintor: []CategoricStat{},
 	}
 
-	const filtro = `status = 'completed' AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int AND census_id IS NOT NULL`
+	f := parseAnalyticsFilters(r)
+	filtroSQL := f.WhereSQL()
+	filtroArgs := f.Args()
 
 	// Distribuições categóricas — denominador = escolas com valor informado no campo.
 	distQ := func(campo string) ([]CategoricStat, error) {
@@ -944,7 +958,7 @@ func (app *application) AdminAnalyticsMerendaCondicoesSanitarias(w http.Response
 			FROM base CROSS JOIN tot
 			GROUP BY val, tot.n
 			ORDER BY escolas DESC
-		`, campo, filtro, campo))
+		`, campo, filtroSQL, campo), filtroArgs...)
 		if err != nil {
 			return nil, err
 		}
@@ -992,7 +1006,7 @@ func (app *application) AdminAnalyticsMerendaCondicoesSanitarias(w http.Response
 			SELECT 3, 'Bancadas de inox',    COUNT(*) FILTER (WHERE %s) FROM base
 		) t CROSS JOIN tot
 		ORDER BY t.ord
-	`, filtro, positivo("despensa_exclusiva"), positivo("sistema_exaustao"), positivo("bancadas_inox")))
+	`, filtroSQL, positivo("despensa_exclusiva"), positivo("sistema_exaustao"), positivo("bancadas_inox")), filtroArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("presenca_itens_basicos: %v", err), http.StatusInternalServerError)
 		return
@@ -1027,7 +1041,9 @@ func (app *application) AdminAnalyticsServicosVisaoGeral(w http.ResponseWriter, 
 		PorQuantidadeAreas: []CategoricStat{},
 	}
 
-	const filtro = `status = 'completed' AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int AND census_id IS NOT NULL`
+	f := parseAnalyticsFilters(r)
+	filtroSQL := f.WhereSQL()
+	filtroArgs := f.Args()
 
 	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
 		WITH base AS (
@@ -1043,7 +1059,7 @@ func (app *application) AdminAnalyticsServicosVisaoGeral(w http.ResponseWriter, 
 			SELECT 'Serviços Gerais',          COUNT(DISTINCT school_id)             FROM vw_censo_servicos_terceirizados WHERE %s AND empresa_terceirizada_sg       IS NOT NULL
 		) t CROSS JOIN base
 		ORDER BY escolas DESC
-	`, filtro, filtro, filtro, filtro))
+	`, filtroSQL, filtroSQL, filtroSQL, filtroSQL), filtroArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("por_area: %v", err), http.StatusInternalServerError)
 		return
@@ -1077,7 +1093,7 @@ func (app *application) AdminAnalyticsServicosVisaoGeral(w http.ResponseWriter, 
 		FROM areas CROSS JOIN tot
 		GROUP BY qtd, tot.n
 		ORDER BY qtd
-	`, filtro))
+	`, filtroSQL), filtroArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("por_qtd_areas: %v", err), http.StatusInternalServerError)
 		return
@@ -1096,7 +1112,9 @@ func (app *application) AdminAnalyticsServicosGerais(w http.ResponseWriter, r *h
 
 	out := ServicosGerais{TopEmpresas: []EmpresaStat{}}
 
-	const filtro = `status = 'completed' AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int AND census_id IS NOT NULL`
+	f := parseAnalyticsFilters(r)
+	filtroSQL := f.WhereSQL()
+	filtroArgs := f.Args()
 
 	err := db.QueryRowContext(ctx, fmt.Sprintf(`
 		SELECT
@@ -1110,7 +1128,7 @@ func (app *application) AdminAnalyticsServicosGerais(w http.ResponseWriter, r *h
 			), 0)::float8
 		FROM vw_censo_rh_servicos_gerais
 		WHERE %s
-	`, filtro)).Scan(
+	`, filtroSQL), filtroArgs...).Scan(
 		&out.TotalEfetivo,
 		&out.TotalTemporario,
 		&out.TotalTerceirizado,
@@ -1130,7 +1148,7 @@ func (app *application) AdminAnalyticsServicosGerais(w http.ResponseWriter, r *h
 		GROUP BY empresa_terceirizada_sg
 		ORDER BY escolas DESC
 		LIMIT 10
-	`, filtro))
+	`, filtroSQL), filtroArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("top_empresas_servicos_gerais: %v", err), http.StatusInternalServerError)
 		return
@@ -1158,7 +1176,9 @@ func (app *application) AdminAnalyticsServicosPortaria(w http.ResponseWriter, r 
 
 	out := ServicosPortaria{TopEmpresas: []EmpresaStat{}}
 
-	const filtro = `status = 'completed' AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int AND census_id IS NOT NULL`
+	f := parseAnalyticsFilters(r)
+	filtroSQL := f.WhereSQL()
+	filtroArgs := f.Args()
 
 	err := db.QueryRowContext(ctx, fmt.Sprintf(`
 		SELECT
@@ -1166,7 +1186,7 @@ func (app *application) AdminAnalyticsServicosPortaria(w http.ResponseWriter, r 
 			COALESCE(AVG(qtd_agentes_portaria) FILTER (WHERE qtd_agentes_portaria IS NOT NULL), 0)::float8
 		FROM vw_censo_servicos_terceirizados
 		WHERE %s
-	`, filtro)).Scan(&out.PctComAgentes, &out.MediaAgentesPorEscola)
+	`, filtroSQL), filtroArgs...).Scan(&out.PctComAgentes, &out.MediaAgentesPorEscola)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("portaria_pcts: %v", err), http.StatusInternalServerError)
 		return
@@ -1179,7 +1199,7 @@ func (app *application) AdminAnalyticsServicosPortaria(w http.ResponseWriter, r 
 		GROUP BY empresa
 		ORDER BY escolas DESC
 		LIMIT 10
-	`, filtro))
+	`, filtroSQL), filtroArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("top_empresas_portaria: %v", err), http.StatusInternalServerError)
 		return
@@ -1211,7 +1231,9 @@ func (app *application) AdminAnalyticsServicosManipuladoresAlimentos(w http.Resp
 		TopEmpresas:           []EmpresaStat{},
 	}
 
-	const filtro = `status = 'completed' AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int AND census_id IS NOT NULL`
+	f := parseAnalyticsFilters(r)
+	filtroSQL := f.WhereSQL()
+	filtroArgs := f.Args()
 
 	err := db.QueryRowContext(ctx, fmt.Sprintf(`
 		SELECT
@@ -1231,7 +1253,7 @@ func (app *application) AdminAnalyticsServicosManipuladoresAlimentos(w http.Resp
 			COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE lower(possui_supervisor_merenda) = 'sim') / NULLIF(COUNT(*), 0), 1), 0)::float8
 		FROM vw_censo_rh_merendeiras
 		WHERE %s
-	`, filtro)).Scan(
+	`, filtroSQL), filtroArgs...).Scan(
 		&out.TotalEstatutaria,
 		&out.TotalTerceirizada,
 		&out.TotalTemporaria,
@@ -1279,7 +1301,7 @@ func (app *application) AdminAnalyticsServicosManipuladoresAlimentos(w http.Resp
 		FROM base CROSS JOIN tot
 		GROUP BY val, tot.n
 		ORDER BY escolas DESC
-	`, filtro))
+	`, filtroSQL), filtroArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("dist_atende_necessidade_manipuladores: %v", err), http.StatusInternalServerError)
 		return
@@ -1296,7 +1318,7 @@ func (app *application) AdminAnalyticsServicosManipuladoresAlimentos(w http.Resp
 		GROUP BY empresa
 		ORDER BY escolas DESC
 		LIMIT 10
-	`, filtro))
+	`, filtroSQL), filtroArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("top_empresas_manipuladores: %v", err), http.StatusInternalServerError)
 		return

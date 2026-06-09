@@ -4,7 +4,54 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
+	"time"
 )
+
+// AnalyticsFilters holds the parsed query-string filters common to all
+// analytical endpoints. Default year = current year; string filters default
+// to "" (= no filter applied in WhereSQL).
+type AnalyticsFilters struct {
+	Year             int
+	DRE              string
+	Municipio        string
+	Zona             string
+	RegiaoIntegracao string
+}
+
+func parseAnalyticsFilters(r *http.Request) AnalyticsFilters {
+	qs := r.URL.Query()
+	f := AnalyticsFilters{
+		Year:             time.Now().Year(),
+		DRE:              qs.Get("dre"),
+		Municipio:        qs.Get("municipio"),
+		Zona:             qs.Get("zona"),
+		RegiaoIntegracao: qs.Get("regiao_integracao"),
+	}
+	if y, err := strconv.Atoi(qs.Get("year")); err == nil && y > 0 {
+		f.Year = y
+	}
+	return f
+}
+
+// WhereSQL returns a parameterized WHERE fragment (no table alias prefix).
+// $1=year, $2=dre, $3=municipio, $4=zona, $5=regiao_integracao.
+// Empty string params disable the corresponding filter.
+// Pair with Args() to get the matching positional arguments.
+func (f AnalyticsFilters) WhereSQL() string {
+	return `status = 'completed'
+      AND year = $1
+      AND census_id IS NOT NULL
+      AND ($2 = '' OR dre = $2)
+      AND ($3 = '' OR municipio = $3)
+      AND ($4 = '' OR zona = $4)
+      AND ($5 = '' OR municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))`
+}
+
+// Args returns the five positional arguments that match WhereSQL in order.
+func (f AnalyticsFilters) Args() []any {
+	return []any{f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao}
+}
 
 func queryStringSlice(app *application, ctx context.Context, query string, args ...any) ([]string, error) {
 	rows, err := app.models.Schools.DB.QueryContext(ctx, query, args...)

@@ -6,19 +6,32 @@ import {
   Briefcase, Building, UserCheck, Construction, BadgeCheck,
   ChefHat,
 } from "lucide-react";
-import { apiFetch, getCached, allCached } from "./shared/api";
+import { apiFetch } from "./shared/api";
 import { C, PORTE_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
 import { HBarChart } from "./shared/BarChart";
 import type {
   ServicosVisaoGeral, ServicosGerais, ServicosPortaria,
-  ServicosManipuladoresAlimentos,
+  ServicosManipuladoresAlimentos, DashboardFilters,
 } from "./shared/types";
+
+function buildFilterParams(filters?: DashboardFilters): string {
+  if (!filters) return "";
+  const p = new URLSearchParams();
+  if (filters.ano) p.set("year", String(filters.ano));
+  if (filters.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
+  if (filters.dre) p.set("dre", filters.dre);
+  if (filters.municipio) p.set("municipio", filters.municipio);
+  if (filters.zona) p.set("zona", filters.zona);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
 
 type AbaServicosTerceirizadosProps = {
   token: string;
   onUnauth: () => void;
+  filters?: DashboardFilters;
 };
 
 function fmtPct(v: number | null | undefined): string {
@@ -38,33 +51,25 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
 }
 
 export function AbaServicosTerceirizados({
-  token, onUnauth,
+  token, onUnauth, filters,
 }: AbaServicosTerceirizadosProps) {
-  const [visao,    setVisao]    = useState<ServicosVisaoGeral | null>(
-    () => getCached("/v1/admin/analytics/servicos-terceirizados/visao-geral"),
-  );
-  const [sg,       setSg]       = useState<ServicosGerais | null>(
-    () => getCached("/v1/admin/analytics/servicos-terceirizados/servicos-gerais"),
-  );
-  const [portaria, setPortaria] = useState<ServicosPortaria | null>(
-    () => getCached("/v1/admin/analytics/servicos-terceirizados/portaria"),
-  );
-  const [manip,    setManip]    = useState<ServicosManipuladoresAlimentos | null>(
-    () => getCached("/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos"),
-  );
+  const [visao,    setVisao]    = useState<ServicosVisaoGeral | null>(null);
+  const [sg,       setSg]       = useState<ServicosGerais | null>(null);
+  const [portaria, setPortaria] = useState<ServicosPortaria | null>(null);
+  const [manip,    setManip]    = useState<ServicosManipuladoresAlimentos | null>(null);
   const [visaoErr,    setVisaoErr]    = useState("");
   const [sgErr,       setSgErr]       = useState("");
   const [portariaErr, setPortariaErr] = useState("");
   const [manipErr,    setManipErr]    = useState("");
-  const [loading,     setLoading]     = useState<boolean>(() => !allCached([
-    "/v1/admin/analytics/servicos-terceirizados/visao-geral",
-    "/v1/admin/analytics/servicos-terceirizados/servicos-gerais",
-    "/v1/admin/analytics/servicos-terceirizados/portaria",
-    "/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos",
-  ]));
+  const [loading,     setLoading]     = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setVisao(null); setSg(null); setPortaria(null); setManip(null);
+    setVisaoErr(""); setSgErr(""); setPortariaErr(""); setManipErr("");
+
+    const qs = buildFilterParams(filters);
 
     const handleErr = (setter: (s: string) => void) => (e: unknown) => {
       const msg = (e as Error).message;
@@ -73,25 +78,25 @@ export function AbaServicosTerceirizados({
     };
 
     const pVisao = apiFetch<ServicosVisaoGeral>(
-      "/v1/admin/analytics/servicos-terceirizados/visao-geral", token,
+      `/v1/admin/analytics/servicos-terceirizados/visao-geral${qs}`, token,
     )
       .then((d) => { if (!cancelled) setVisao(d); })
       .catch(handleErr(setVisaoErr));
 
     const pSg = apiFetch<ServicosGerais>(
-      "/v1/admin/analytics/servicos-terceirizados/servicos-gerais", token,
+      `/v1/admin/analytics/servicos-terceirizados/servicos-gerais${qs}`, token,
     )
       .then((d) => { if (!cancelled) setSg(d); })
       .catch(handleErr(setSgErr));
 
     const pPortaria = apiFetch<ServicosPortaria>(
-      "/v1/admin/analytics/servicos-terceirizados/portaria", token,
+      `/v1/admin/analytics/servicos-terceirizados/portaria${qs}`, token,
     )
       .then((d) => { if (!cancelled) setPortaria(d); })
       .catch(handleErr(setPortariaErr));
 
     const pManip = apiFetch<ServicosManipuladoresAlimentos>(
-      "/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos", token,
+      `/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos${qs}`, token,
     )
       .then((d) => { if (!cancelled) setManip(d); })
       .catch(handleErr(setManipErr));
@@ -101,7 +106,7 @@ export function AbaServicosTerceirizados({
     });
 
     return () => { cancelled = true; };
-  }, [token, onUnauth]);
+  }, [token, onUnauth, filters]);
 
   if (loading) {
     return (

@@ -548,32 +548,32 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 {/* Renderiza todas as abas já visitadas. Quando volta para uma aba os dados já são carregados*/}
             {visited.has("perfil") && (
               <div style={{ display: tab === "perfil" ? undefined : "none" }}>
-                <AbaCaracterizacao token={token} onUnauth={logout} />
+                <AbaCaracterizacao token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("pessoal") && (
               <div style={{ display: tab === "pessoal" ? undefined : "none" }}>
-                <AbaPessoalGestao token={token} onUnauth={logout} />
+                <AbaPessoalGestao token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("tecnologia") && (
               <div style={{ display: tab === "tecnologia" ? undefined : "none" }}>
-                <AbaTecnologia token={token} onUnauth={logout} />
+                <AbaTecnologia token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("infraestrutura") && (
               <div style={{ display: tab === "infraestrutura" ? undefined : "none" }}>
-                <AbaInfraestruturaSeguranca token={token} onUnauth={logout} />
+                <AbaInfraestruturaSeguranca token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("merenda") && (
               <div style={{ display: tab === "merenda" ? undefined : "none" }}>
-                <AbaMerenda token={token} onUnauth={logout} />
+                <AbaMerenda token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("servicos") && (
               <div style={{ display: tab === "servicos" ? undefined : "none" }}>
-                <AbaServicosTerceirizados token={token} onUnauth={logout} />
+                <AbaServicosTerceirizados token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("alunos") && (

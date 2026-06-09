@@ -435,9 +435,22 @@ export interface SaudeOperacionalEscola {
   dimensoes: SaudeOperacionalDimensoes;
 }
 
+export interface SaudeOperacionalResumo {
+  saudaveis: number;
+  atencao: number;
+  criticas: number;
+  sem_dados: number;
+  saude_media: number | null;
+}
+
 export interface SaudeOperacionalPayload {
   total_escolas: number;
+  total_filtrado: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
   ano_referencia: number;
   metodologia: SaudeOperacionalMetodologia;
+  resumo: SaudeOperacionalResumo;
   escolas: SaudeOperacionalEscola[];
 }

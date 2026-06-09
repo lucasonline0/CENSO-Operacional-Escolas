@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   AlertCircle,
   ArrowDown,
+  ArrowLeft,
+  ArrowRight,
   ArrowUp,
   ArrowUpDown,
   Building2,
@@ -15,7 +17,7 @@ import {
   Loader2,
   Search,
 } from "lucide-react";
-import { apiFetch, allCached, getCached, sanitize } from "./shared/api";
+import { apiFetch, sanitize } from "./shared/api";
 import { C } from "./shared/constants";
 import type {
   SaudeOperacionalEscola,
@@ -23,7 +25,10 @@ import type {
   SaudeOperacionalStatus,
 } from "./shared/types";
 
-const ENDPOINT = "/v1/admin/analytics/escolas/saude-operacional";
+const ENDPOINT_BASE = "/v1/admin/analytics/escolas/saude-operacional";
+
+const PAGE_SIZE_OPTIONS = [10, 50, 100, 1000] as const;
+type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number];
 
 type SortDirection = "asc" | "desc";
 type SortKey =
@@ -92,15 +97,6 @@ function statusLabel(status: SaudeOperacionalStatus): string {
   return labels[status];
 }
 
-function normalizeSearch(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase("pt-BR")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 function fmtInt(value: number | null): string {
   if (value === null || Number.isNaN(value)) return "—";
   return value.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
@@ -114,49 +110,21 @@ function fmtDecimal(value: number | null): string {
   });
 }
 
-function sortValue(
-  escola: SaudeOperacionalEscola,
-  key: SortKey,
-): string | number | null {
-  if (key in escola.dimensoes) {
-    return escola.dimensoes[key as keyof SaudeOperacionalEscola["dimensoes"]];
-  }
-  return escola[key as keyof Pick<
-    SaudeOperacionalEscola,
-    "escola" | "municipio" | "dre" | "zona" | "total_alunos"
-      | "alunos_por_sala" | "saude" | "criticidade"
-  >];
-}
-
-function compareSchools(
-  a: SaudeOperacionalEscola,
-  b: SaudeOperacionalEscola,
-  key: SortKey,
-  direction: SortDirection,
-): number {
-  const aSemDados = a.status === "sem_dados";
-  const bSemDados = b.status === "sem_dados";
-  if (aSemDados !== bSemDados) return aSemDados ? 1 : -1;
-
-  const aValue = sortValue(a, key);
-  const bValue = sortValue(b, key);
-  const aNull = aValue === null || (typeof aValue === "number" && Number.isNaN(aValue));
-  const bNull = bValue === null || (typeof bValue === "number" && Number.isNaN(bValue));
-
-  if (aNull !== bNull) return aNull ? 1 : -1;
-
-  let comparison = 0;
-  if (typeof aValue === "string" && typeof bValue === "string") {
-    comparison = aValue.localeCompare(bValue, "pt-BR", {
-      sensitivity: "base",
-      numeric: true,
-    });
-  } else if (typeof aValue === "number" && typeof bValue === "number") {
-    comparison = aValue - bValue;
-  }
-
-  if (comparison !== 0) return direction === "asc" ? comparison : -comparison;
-  return a.escola.localeCompare(b.escola, "pt-BR", { sensitivity: "base" });
+function buildEndpoint(
+  sortKey: SortKey,
+  sortDir: SortDirection,
+  page: number,
+  pageSize: PageSizeOption,
+  search: string,
+): string {
+  const params = new URLSearchParams({
+    sort: sortKey,
+    direction: sortDir,
+    page: String(page),
+    page_size: String(pageSize),
+  });
+  if (search.trim()) params.set("search", search.trim());
+  return `${ENDPOINT_BASE}?${params.toString()}`;
 }
 
 function SummaryCard({
@@ -291,21 +259,55 @@ export function AbaSaudeOperacionalEscolas({
   token: string;
   onUnauth: () => void;
 }) {
-  const [payload, setPayload] = useState<SaudeOperacionalPayload | null>(
-    () => getCached<SaudeOperacionalPayload>(ENDPOINT),
-  );
-  const [loading, setLoading] = useState(() => !allCached([ENDPOINT]));
+  const [payload, setPayload] = useState<SaudeOperacionalPayload | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
+
   const [sortKey, setSortKey] = useState<SortKey>("criticidade");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [sortDir, setSortDir] = useState<SortDirection>("desc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSizeOption>(10);
+  const [searchInput, setSearchInput] = useState("");
+  const [serverSearch, setServerSearch] = useState("");
+
+  // Debounce: aguarda 400ms após o usuário parar de digitar antes de buscar.
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchInput(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setPage(1);
+      setServerSearch(value);
+    }, 400);
+  }, []);
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((current) => current === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+    setPage(1);
+  }
+
+  function handlePageSizeChange(size: PageSizeOption) {
+    setPageSize(size);
+    setPage(1);
+  }
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
 
-    apiFetch<SaudeOperacionalPayload>(ENDPOINT, token)
+    const url = buildEndpoint(sortKey, sortDir, page, pageSize, serverSearch);
+
+    apiFetch<SaudeOperacionalPayload>(url, token)
       .then((data) => {
-        if (!cancelled) setPayload(data);
+        if (!cancelled) {
+          setPayload(data);
+          setError("");
+        }
       })
       .catch((requestError: unknown) => {
         const message = (requestError as Error).message;
@@ -322,53 +324,7 @@ export function AbaSaudeOperacionalEscolas({
     return () => {
       cancelled = true;
     };
-  }, [token, onUnauth]);
-
-  const summary = useMemo(() => {
-    const escolas = payload?.escolas ?? [];
-    const notas = escolas
-      .map((escola) => escola.saude)
-      .filter((nota): nota is number => nota !== null && !Number.isNaN(nota));
-
-    return {
-      saudaveis: escolas.filter((escola) => escola.status === "saudavel").length,
-      atencao: escolas.filter((escola) => escola.status === "atencao").length,
-      criticas: escolas.filter((escola) => escola.status === "critica").length,
-      semDados: escolas.filter((escola) => escola.status === "sem_dados").length,
-      media: notas.length > 0
-        ? notas.reduce((total, nota) => total + nota, 0) / notas.length
-        : null,
-    };
-  }, [payload]);
-
-  const visibleSchools = useMemo(() => {
-    const query = normalizeSearch(search);
-    const escolas = (payload?.escolas ?? []).filter((escola) => {
-      if (!query) return true;
-      return [
-        escola.escola,
-        escola.municipio,
-        escola.dre,
-        escola.codigo_inep ?? "",
-      ].some((value) => normalizeSearch(value).includes(query));
-    });
-
-    return [...escolas].sort((a, b) => compareSchools(
-      a,
-      b,
-      sortKey,
-      sortDirection,
-    ));
-  }, [payload, search, sortDirection, sortKey]);
-
-  function handleSort(key: SortKey) {
-    if (sortKey === key) {
-      setSortDirection((current) => current === "asc" ? "desc" : "asc");
-      return;
-    }
-    setSortKey(key);
-    setSortDirection("asc");
-  }
+  }, [token, onUnauth, sortKey, sortDir, page, pageSize, serverSearch]);
 
   if (loading && payload === null) {
     return (
@@ -387,6 +343,14 @@ export function AbaSaudeOperacionalEscolas({
       </div>
     );
   }
+
+  const { resumo } = payload;
+  const totalPages = payload.total_pages;
+
+  const pageStart = payload.escolas.length > 0
+    ? (payload.page - 1) * payload.page_size + 1
+    : 0;
+  const pageEnd = pageStart > 0 ? pageStart + payload.escolas.length - 1 : 0;
 
   return (
     <div className="space-y-6">
@@ -424,31 +388,31 @@ export function AbaSaudeOperacionalEscolas({
         />
         <SummaryCard
           label="Saudáveis"
-          value={summary.saudaveis}
+          value={resumo.saudaveis}
           Icon={CircleCheck}
           tone="green"
         />
         <SummaryCard
           label="Em atenção"
-          value={summary.atencao}
+          value={resumo.atencao}
           Icon={CircleAlert}
           tone="amber"
         />
         <SummaryCard
           label="Críticas"
-          value={summary.criticas}
+          value={resumo.criticas}
           Icon={AlertCircle}
           tone="rose"
         />
         <SummaryCard
           label="Sem dados"
-          value={summary.semDados}
+          value={resumo.sem_dados}
           Icon={CircleHelp}
           tone="slate"
         />
         <SummaryCard
           label="Média de saúde"
-          value={fmtDecimal(summary.media)}
+          value={fmtDecimal(resumo.saude_media)}
           Icon={Activity}
           tone="purple"
           sub="Escolas com nota"
@@ -460,19 +424,37 @@ export function AbaSaudeOperacionalEscolas({
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="search"
-            value={search}
-            onChange={(event) => setSearch(sanitize(event.target.value).slice(0, 150))}
+            value={searchInput}
+            onChange={(event) => handleSearchChange(sanitize(event.target.value).slice(0, 150))}
             placeholder="Buscar por escola, município, DRE ou INEP…"
             className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
         </div>
         <p className="whitespace-nowrap text-xs text-slate-500">
-          Exibindo <strong className="text-slate-700">{visibleSchools.length.toLocaleString("pt-BR")}</strong>
-          {" "}de <strong className="text-slate-700">{payload.escolas.length.toLocaleString("pt-BR")}</strong> escolas
+          {serverSearch
+            ? (
+              <>
+                <strong className="text-slate-700">{payload.total_filtrado.toLocaleString("pt-BR")}</strong>
+                {" "}encontradas de{" "}
+                <strong className="text-slate-700">{payload.total_escolas.toLocaleString("pt-BR")}</strong> escolas
+              </>
+            )
+            : (
+              <>
+                <strong className="text-slate-700">{payload.total_escolas.toLocaleString("pt-BR")}</strong> escolas no total
+              </>
+            )}
         </p>
       </div>
 
-      {payload.escolas.length === 0 ? (
+      {loading && (
+        <div className="flex items-center gap-2 text-xs text-slate-400">
+          <Loader2 className="animate-spin" size={14} style={{ color: C.primary }} />
+          Atualizando…
+        </div>
+      )}
+
+      {payload.total_escolas === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center shadow-sm">
           <CircleHelp size={28} className="mx-auto mb-3 text-slate-300" />
           <p className="text-sm font-medium text-slate-600">Nenhuma escola disponível.</p>
@@ -489,26 +471,26 @@ export function AbaSaudeOperacionalEscolas({
                   <th scope="col" className="w-16 px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide">
                     Farol
                   </th>
-                  <SortHeader label="Escola" sortKey="escola" activeKey={sortKey} direction={sortDirection} onSort={handleSort} className="min-w-64" />
-                  <SortHeader label="Município" sortKey="municipio" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                  <SortHeader label="DRE" sortKey="dre" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                  <SortHeader label="Zona" sortKey="zona" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                  <SortHeader label="Alunos" sortKey="total_alunos" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                  <SortHeader label="Aln/sala" sortKey="alunos_por_sala" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                  <SortHeader label="Saúde" sortKey="saude" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                  <SortHeader label="Criticidade" sortKey="criticidade" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                  <SortHeader label="Infra" sortKey="infraestrutura" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                  <SortHeader label="Energia" sortKey="energia" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                  <SortHeader label="Merenda" sortKey="merenda" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                  <SortHeader label="Segur." sortKey="seguranca" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                  <SortHeader label="Pessoal" sortKey="pessoal" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                  <SortHeader label="Tec." sortKey="tecnologia" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                  <SortHeader label="Pedag." sortKey="pedagogico" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                  <SortHeader label="Gov." sortKey="governanca" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
+                  <SortHeader label="Escola" sortKey="escola" activeKey={sortKey} direction={sortDir} onSort={handleSort} className="min-w-64" />
+                  <SortHeader label="Município" sortKey="municipio" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortHeader label="DRE" sortKey="dre" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortHeader label="Zona" sortKey="zona" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortHeader label="Alunos" sortKey="total_alunos" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortHeader label="Aln/sala" sortKey="alunos_por_sala" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortHeader label="Saúde" sortKey="saude" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortHeader label="Criticidade" sortKey="criticidade" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortHeader label="Infra" sortKey="infraestrutura" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortHeader label="Energia" sortKey="energia" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortHeader label="Merenda" sortKey="merenda" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortHeader label="Segur." sortKey="seguranca" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortHeader label="Pessoal" sortKey="pessoal" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortHeader label="Tec." sortKey="tecnologia" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortHeader label="Pedag." sortKey="pedagogico" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  <SortHeader label="Gov." sortKey="governanca" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {visibleSchools.map((escola) => (
+                {payload.escolas.map((escola: SaudeOperacionalEscola) => (
                   <tr key={escola.school_id} className="hover:bg-slate-50/80">
                     <td className="w-16 px-3 py-3 text-center">
                       <StatusBadge status={escola.status} />
@@ -539,13 +521,67 @@ export function AbaSaudeOperacionalEscolas({
               </tbody>
             </table>
           </div>
-          {visibleSchools.length === 0 && (
+
+          {payload.escolas.length === 0 && (
             <div className="border-t border-slate-100 px-6 py-12 text-center">
               <Search size={24} className="mx-auto mb-2 text-slate-300" />
               <p className="text-sm font-medium text-slate-600">Nenhuma escola encontrada.</p>
               <p className="mt-1 text-xs text-slate-400">Tente outro termo de busca.</p>
             </div>
           )}
+
+          <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 sm:flex-row">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <span>Linhas por página:</span>
+              <div className="flex gap-1">
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => handlePageSizeChange(size)}
+                    className={`rounded px-2 py-1 font-medium transition-colors ${
+                      pageSize === size
+                        ? "text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                    style={pageSize === size ? { background: C.primary } : undefined}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 text-xs text-slate-500">
+              {pageStart > 0 && (
+                <span className="mr-2">
+                  {pageStart.toLocaleString("pt-BR")}–{pageEnd.toLocaleString("pt-BR")} de{" "}
+                  <strong className="text-slate-700">{payload.total_filtrado.toLocaleString("pt-BR")}</strong>
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="flex items-center gap-1 rounded border border-slate-200 px-2 py-1 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ArrowLeft size={13} />
+                Anterior
+              </button>
+              <span className="px-2 font-medium text-slate-700">
+                {page} / {totalPages || 1}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="flex items-center gap-1 rounded border border-slate-200 px-2 py-1 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Próxima
+                <ArrowRight size={13} />
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

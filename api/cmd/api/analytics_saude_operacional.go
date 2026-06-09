@@ -7,9 +7,14 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 )
 
 const (
@@ -72,10 +77,23 @@ type SaudeOperacionalEscola struct {
 	Dimensoes     SaudeOperacionalDimensoes `json:"dimensoes"`
 }
 
+type SaudeOperacionalResumo struct {
+	Saudaveis  int      `json:"saudaveis"`
+	Atencao    int      `json:"atencao"`
+	Criticas   int      `json:"criticas"`
+	SemDados   int      `json:"sem_dados"`
+	SaudeMedia *float64 `json:"saude_media"`
+}
+
 type SaudeOperacionalPayload struct {
 	TotalEscolas  int                         `json:"total_escolas"`
+	TotalFiltrado int                         `json:"total_filtrado"`
+	Page          int                         `json:"page"`
+	PageSize      int                         `json:"page_size"`
+	TotalPages    int                         `json:"total_pages"`
 	AnoReferencia int                         `json:"ano_referencia"`
 	Metodologia   SaudeOperacionalMetodologia `json:"metodologia"`
+	Resumo        SaudeOperacionalResumo      `json:"resumo"`
 	Escolas       []SaudeOperacionalEscola    `json:"escolas"`
 }
 
@@ -540,6 +558,143 @@ func buildSaudeOperacionalEscola(row saudeOperacionalDBRow) (SaudeOperacionalEsc
 	return out, nil
 }
 
+func normalizeSaudeSearch(s string) string {
+	t := transform.Chain(norm.NFD, transform.RemoveFunc(func(r rune) bool {
+		return unicode.Is(unicode.Mn, r)
+	}), norm.NFC)
+	result, _, _ := transform.String(t, strings.ToLower(strings.TrimSpace(s)))
+	return result
+}
+
+func getSaudeEscolaValue(e SaudeOperacionalEscola, key string) (numVal *float64, strVal *string, isNum bool) {
+	switch key {
+	case "escola":
+		return nil, &e.Escola, false
+	case "municipio":
+		return nil, &e.Municipio, false
+	case "dre":
+		return nil, &e.DRE, false
+	case "zona":
+		return nil, e.Zona, false
+	case "total_alunos":
+		if e.TotalAlunos != nil {
+			f := float64(*e.TotalAlunos)
+			return &f, nil, true
+		}
+		return nil, nil, true
+	case "alunos_por_sala":
+		return e.AlunosPorSala, nil, true
+	case "saude":
+		return e.Saude, nil, true
+	case "criticidade":
+		return e.Criticidade, nil, true
+	case "infraestrutura":
+		return e.Dimensoes.Infraestrutura, nil, true
+	case "energia":
+		return e.Dimensoes.Energia, nil, true
+	case "merenda":
+		return e.Dimensoes.Merenda, nil, true
+	case "seguranca":
+		return e.Dimensoes.Seguranca, nil, true
+	case "pessoal":
+		return e.Dimensoes.Pessoal, nil, true
+	case "tecnologia":
+		return e.Dimensoes.Tecnologia, nil, true
+	case "pedagogico":
+		return e.Dimensoes.Pedagogico, nil, true
+	case "governanca":
+		return e.Dimensoes.Governanca, nil, true
+	default:
+		return e.Criticidade, nil, true
+	}
+}
+
+func compareSaudeEscola(a, b SaudeOperacionalEscola, key, direction string) int {
+	// sem_dados sempre vai para o final, independente da direção.
+	aSemDados := a.Status == "sem_dados"
+	bSemDados := b.Status == "sem_dados"
+	if aSemDados != bSemDados {
+		if aSemDados {
+			return 1
+		}
+		return -1
+	}
+
+	aNum, aStr, isNum := getSaudeEscolaValue(a, key)
+	bNum, bStr, _ := getSaudeEscolaValue(b, key)
+
+	var cmp int
+	if isNum {
+		aNull := aNum == nil
+		bNull := bNum == nil
+		if aNull != bNull {
+			if aNull {
+				return 1
+			}
+			return -1
+		}
+		if !aNull {
+			if *aNum < *bNum {
+				cmp = -1
+			} else if *aNum > *bNum {
+				cmp = 1
+			}
+		}
+	} else {
+		aNull := aStr == nil
+		bNull := bStr == nil
+		if aNull != bNull {
+			if aNull {
+				return 1
+			}
+			return -1
+		}
+		if !aNull {
+			cmp = strings.Compare(normalizeSaudeSearch(*aStr), normalizeSaudeSearch(*bStr))
+		}
+	}
+
+	if cmp != 0 {
+		if direction == "desc" {
+			return -cmp
+		}
+		return cmp
+	}
+
+	// Desempate: nome da escola, depois school_id.
+	if cmpNome := strings.Compare(normalizeSaudeSearch(a.Escola), normalizeSaudeSearch(b.Escola)); cmpNome != 0 {
+		return cmpNome
+	}
+	return a.SchoolID - b.SchoolID
+}
+
+func buildSaudeResumo(escolas []SaudeOperacionalEscola) SaudeOperacionalResumo {
+	var resumo SaudeOperacionalResumo
+	var sumSaude float64
+	var countSaude int
+	for _, e := range escolas {
+		switch e.Status {
+		case "saudavel":
+			resumo.Saudaveis++
+		case "atencao":
+			resumo.Atencao++
+		case "critica":
+			resumo.Criticas++
+		default:
+			resumo.SemDados++
+		}
+		if e.Saude != nil {
+			sumSaude += *e.Saude
+			countSaude++
+		}
+	}
+	if countSaude > 0 {
+		media := round1(sumSaude / float64(countSaude))
+		resumo.SaudeMedia = &media
+	}
+	return resumo
+}
+
 func parseSaudeOperacionalYear(raw string, now time.Time) (int, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -555,16 +710,55 @@ func parseSaudeOperacionalYear(raw string, now time.Time) (int, error) {
 	return year, nil
 }
 
-// AdminAnalyticsSaudeOperacionalEscolas retorna todas as escolas cadastradas.
-// Somente censos completed do ano solicitado alimentam métricas e dimensões.
+// AdminAnalyticsSaudeOperacionalEscolas retorna escolas com índice de saúde operacional.
+// Parâmetros opcionais: year, page, page_size, search, sort, direction.
+// Sem page_size (ou page_size=0): retorna todas as escolas (compatibilidade).
 func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWriter, r *http.Request) {
-	year, err := parseSaudeOperacionalYear(r.URL.Query().Get("year"), time.Now())
+	q := r.URL.Query()
+
+	year, err := parseSaudeOperacionalYear(q.Get("year"), time.Now())
 	if err != nil {
 		app.errorJSON(w, err, http.StatusBadRequest)
 		return
 	}
 
-	rows, err := app.models.Schools.DB.QueryContext(r.Context(), `
+	pageSize := 0
+	if raw := strings.TrimSpace(q.Get("page_size")); raw != "" {
+		pageSize, err = strconv.Atoi(raw)
+		if err != nil || pageSize < 1 || pageSize > 1000 {
+			app.errorJSON(w, fmt.Errorf("page_size inválido: deve ser entre 1 e 1000"), http.StatusBadRequest)
+			return
+		}
+	}
+
+	page := 1
+	if raw := strings.TrimSpace(q.Get("page")); raw != "" {
+		page, err = strconv.Atoi(raw)
+		if err != nil || page < 1 {
+			app.errorJSON(w, fmt.Errorf("page inválido: deve ser >= 1"), http.StatusBadRequest)
+			return
+		}
+	}
+
+	searchQuery := normalizeSaudeSearch(q.Get("search"))
+
+	sortKey := strings.TrimSpace(q.Get("sort"))
+	validSortKeys := map[string]bool{
+		"escola": true, "municipio": true, "dre": true, "zona": true,
+		"total_alunos": true, "alunos_por_sala": true, "saude": true, "criticidade": true,
+		"infraestrutura": true, "energia": true, "merenda": true, "seguranca": true,
+		"pessoal": true, "tecnologia": true, "pedagogico": true, "governanca": true,
+	}
+	if !validSortKeys[sortKey] {
+		sortKey = "criticidade"
+	}
+
+	direction := strings.TrimSpace(q.Get("direction"))
+	if direction != "asc" && direction != "desc" {
+		direction = "desc"
+	}
+
+	dbRows, err := app.models.Schools.DB.QueryContext(r.Context(), `
 		SELECT
 			s.id,
 			s.codigo_inep,
@@ -585,17 +779,12 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 		app.errorJSON(w, fmt.Errorf("consultar saúde operacional das escolas: %v", err), http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
+	defer dbRows.Close()
 
-	out := SaudeOperacionalPayload{
-		AnoReferencia: year,
-		Metodologia:   saudeOperacionalMetodologiaPayload(),
-		Escolas:       []SaudeOperacionalEscola{},
-	}
-
-	for rows.Next() {
+	allEscolas := make([]SaudeOperacionalEscola, 0)
+	for dbRows.Next() {
 		var row saudeOperacionalDBRow
-		if err := rows.Scan(
+		if err := dbRows.Scan(
 			&row.SchoolID,
 			&row.CodigoINEP,
 			&row.Escola,
@@ -608,19 +797,80 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 			app.errorJSON(w, fmt.Errorf("ler escola da saúde operacional: %v", err), http.StatusInternalServerError)
 			return
 		}
-
 		escola, err := buildSaudeOperacionalEscola(row)
 		if err != nil {
 			app.errorJSON(w, err, http.StatusInternalServerError)
 			return
 		}
-		out.Escolas = append(out.Escolas, escola)
+		allEscolas = append(allEscolas, escola)
 	}
-	if err := rows.Err(); err != nil {
+	if err := dbRows.Err(); err != nil {
 		app.errorJSON(w, fmt.Errorf("iterar escolas da saúde operacional: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	out.TotalEscolas = len(out.Escolas)
+	resumo := buildSaudeResumo(allEscolas)
+
+	filtered := allEscolas
+	if searchQuery != "" {
+		filtered = filtered[:0:0]
+		for _, e := range allEscolas {
+			inep := ""
+			if e.CodigoINEP != nil {
+				inep = *e.CodigoINEP
+			}
+			if strings.Contains(normalizeSaudeSearch(e.Escola), searchQuery) ||
+				strings.Contains(normalizeSaudeSearch(e.Municipio), searchQuery) ||
+				strings.Contains(normalizeSaudeSearch(e.DRE), searchQuery) ||
+				strings.Contains(strings.ToLower(inep), searchQuery) {
+				filtered = append(filtered, e)
+			}
+		}
+	}
+
+	sort.SliceStable(filtered, func(i, j int) bool {
+		return compareSaudeEscola(filtered[i], filtered[j], sortKey, direction) < 0
+	})
+
+	totalFiltrado := len(filtered)
+	totalPages := 1
+	pageSlice := filtered
+
+	if pageSize > 0 {
+		if totalFiltrado > 0 {
+			totalPages = (totalFiltrado + pageSize - 1) / pageSize
+		} else {
+			totalPages = 0
+		}
+		if page > totalPages && totalPages > 0 {
+			page = totalPages
+		}
+		offset := (page - 1) * pageSize
+		end := offset + pageSize
+		if offset >= len(filtered) {
+			pageSlice = []SaudeOperacionalEscola{}
+		} else {
+			if end > len(filtered) {
+				end = len(filtered)
+			}
+			pageSlice = filtered[offset:end]
+		}
+	}
+
+	out := SaudeOperacionalPayload{
+		TotalEscolas:  len(allEscolas),
+		TotalFiltrado: totalFiltrado,
+		Page:          page,
+		PageSize:      pageSize,
+		TotalPages:    totalPages,
+		AnoReferencia: year,
+		Metodologia:   saudeOperacionalMetodologiaPayload(),
+		Resumo:        resumo,
+		Escolas:       pageSlice,
+	}
+	if out.Escolas == nil {
+		out.Escolas = []SaudeOperacionalEscola{}
+	}
+
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: out})
 }

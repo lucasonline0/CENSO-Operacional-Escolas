@@ -380,3 +380,64 @@ export interface CaracterizacaoOfertaFuncionamento {
   turnos:                 LabelEscolasStat[];
   media_turnos_por_porte: MediaTurnosPorPorteStat[];
 }
+
+// Índice de Saúde Operacional por escola.
+// Payload de /v1/admin/analytics/escolas/saude-operacional.
+export type SaudeOperacionalStatus =
+  | "saudavel"
+  | "atencao"
+  | "critica"
+  | "sem_dados";
+
+export interface SaudeOperacionalPesos {
+  infraestrutura: number;
+  energia: number;
+  merenda: number;
+  seguranca: number;
+  pessoal: number;
+  tecnologia: number;
+  pedagogico: number;
+  governanca: number;
+}
+
+export interface SaudeOperacionalMetodologia {
+  nome: string;
+  versao: string;
+  dimensoes_habilitadas: string[];
+  pesos: SaudeOperacionalPesos;
+}
+
+export interface SaudeOperacionalDimensoes {
+  infraestrutura: number | null;
+  energia: number | null;
+  merenda: number | null;
+  seguranca: number | null;
+  pessoal: number | null;
+  tecnologia: number | null;
+  pedagogico: number | null;
+  governanca: number | null;
+}
+
+export interface SaudeOperacionalEscola {
+  school_id: number;
+  census_id: number | null;
+  codigo_inep: string | null;
+  escola: string;
+  municipio: string;
+  dre: string;
+  zona: string | null;
+  total_alunos: number | null;
+  salas_aula: number | null;
+  alunos_por_sala: number | null;
+  saude: number | null;
+  criticidade: number | null;
+  status: SaudeOperacionalStatus;
+  dimensoes: SaudeOperacionalDimensoes;
+}
+
+export interface SaudeOperacionalPayload {
+  total_escolas: number;
+  ano_referencia: number;
+  metodologia: SaudeOperacionalMetodologia;
+  escolas: SaudeOperacionalEscola[];
+}

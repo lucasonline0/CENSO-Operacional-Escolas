@@ -33,7 +33,7 @@ const FAIXA_COBERTURA_COLORS: Record<string, string> = {
   "Sem essenciais informados": "#94A3B8",
 };
 
-export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth: () => void }) {
+export function AbaCaracterizacao({ token, onUnauth, presentationMode = false }: { token: string; onUnauth: () => void; presentationMode?: boolean }) {
   // Fase 2B.1: a aba "Caracterização da Rede" passa a consumir PostgreSQL via
   // /v1/admin/analytics/caracterizacao/perfil e /caracterizacao/dre. Os dados
   // legados de /v1/admin/sheet-metrics continuam carregados em paralelo como
@@ -217,55 +217,58 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
       )}
 
       {/* ── Dimensão e Perfil da Rede ─────────────────────────── */}
-      <div id="sec-perfil-dimensao" className="animate-fade-in-up">
-        <div className="flex items-center gap-3 mb-4">
-          <Building2 size={18} style={{ color: C.primary }} />
-          <h2 className="font-semibold text-slate-800 text-base">Dimensão e Perfil da Rede</h2>
-          <div className="flex-1 h-px bg-slate-200" />
+      <div className={presentationMode ? "space-y-2" : "space-y-6"}>
+        <div id="sec-perfil-dimensao" className="animate-fade-in-up">
+          <div className={`flex items-center gap-3 ${presentationMode ? "mb-2" : "mb-4"}`}>
+            <Building2 size={18} style={{ color: C.primary }} />
+            <h2 className="font-semibold text-slate-800 text-base">Dimensão e Perfil da Rede</h2>
+            <div className="flex-1 h-px bg-slate-200" />
+          </div>
+
+          <div className={`grid grid-cols-2 lg:grid-cols-4 ${presentationMode ? "gap-2" : "gap-4"}`}>
+            <StatCard label="Total de Escolas" value={totalEscolas} Icon={Building2} tone="blue" sub="Censos concluídos" compact={presentationMode} />
+            <StatCard label="Total de Alunos" value={totalAlunos} Icon={Users} tone="green" compact={presentationMode} />
+            <StatCard label="Média por Escola" value={mediaAlunos} Icon={TrendingUp} tone="amber" sub="alunos/escola" compact={presentationMode} />
+            <StatCard label="Alunos PcD" value={totalAlunosPcd} Icon={GraduationCap} tone="purple" compact={presentationMode} />
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Total de Escolas" value={totalEscolas} Icon={Building2} tone="blue" sub="Censos concluídos" />
-          <StatCard label="Total de Alunos" value={totalAlunos} Icon={Users} tone="green" />
-          <StatCard label="Média por Escola" value={mediaAlunos} Icon={TrendingUp} tone="amber" sub="alunos/escola" />
-          <StatCard label="Alunos PcD" value={totalAlunosPcd} Icon={GraduationCap} tone="purple" />
+        {/* Linha de donuts — Distribuição por Porte e por Zona */}
+        <div className={`grid grid-cols-1 lg:grid-cols-2 ${presentationMode ? "gap-3" : "gap-5"} animate-fade-in-up [animation-delay:150ms]`}>
+          <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm ${presentationMode ? "p-3" : "p-6"}`}>
+            <h3 className={`font-semibold text-slate-800 text-sm flex items-center gap-2 ${presentationMode ? "mb-2" : "mb-5"}`}>
+              <BarChart2 size={16} style={{ color: C.primary }} />
+              Distribuição de Escolas por Porte
+            </h3>
+            <PieChart segments={porteDonut} />
+          </div>
+          <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm ${presentationMode ? "p-3" : "p-6"}`}>
+            <h3 className={`font-semibold text-slate-800 text-sm flex items-center gap-2 ${presentationMode ? "mb-2" : "mb-5"}`}>
+              <MapPinned size={16} style={{ color: C.primary }} />
+              Distribuição de Escolas por Zona
+            </h3>
+            <PieChart segments={zonaDonut} />
+          </div>
         </div>
-      </div>
 
-      {/* Linha de donuts — Distribuição por Porte e por Zona */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fade-in-up [animation-delay:150ms]">
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <BarChart2 size={16} style={{ color: C.primary }} />
-            Distribuição de Escolas por Porte
-          </h3>
-          <PieChart segments={porteDonut} />
+        {/* Distribuição de Matrículas por Porte + DRE bar */}
+        <div className={presentationMode ? "grid grid-cols-2 gap-3" : "space-y-5"}>
+          <div className={`ca-hbar-pair bg-white rounded-2xl border border-slate-200 shadow-sm animate-fade-in-up [animation-delay:300ms] ${presentationMode ? "p-3" : "p-6"}`}>
+            <h3 className={`font-semibold text-slate-800 text-sm flex items-center gap-2 ${presentationMode ? "mb-2" : "mb-5"}`}>
+              <Users size={16} style={{ color: C.primary }} />
+              Distribuição de Matrículas por Porte
+            </h3>
+            <HBarChart rows={matriculasBar} color={C.primary} />
+          </div>
+
+          <div className={`ca-hbar-pair bg-white rounded-2xl border border-slate-200 shadow-sm animate-fade-in-up [animation-delay:450ms] ${presentationMode ? "p-3" : "p-6"}`}>
+            <h3 className={`font-semibold text-slate-800 text-sm flex items-center gap-2 ${presentationMode ? "mb-2" : "mb-5"}`}>
+              <MapPinned size={16} style={{ color: C.primary }} />
+              Escolas Concluídas por DRE (Top 15)
+            </h3>
+            <HBarChart rows={dreBar} color="#2563EB" />
+          </div>
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <MapPinned size={16} style={{ color: C.primary }} />
-            Distribuição de Escolas por Zona
-          </h3>
-          <PieChart segments={zonaDonut} />
-        </div>
-      </div>
-
-      {/* Distribuição de Matrículas por Porte — bar chart */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm animate-fade-in-up [animation-delay:300ms]">
-        <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-          <Users size={16} style={{ color: C.primary }} />
-          Distribuição de Matrículas por Porte
-        </h3>
-        <HBarChart rows={matriculasBar} color={C.primary} />
-      </div>
-
-      {/* DRE bar */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm animate-fade-in-up [animation-delay:450ms]">
-        <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-          <MapPinned size={16} style={{ color: C.primary }} />
-          Escolas Concluídas por DRE (Top 15)
-        </h3>
-        <HBarChart rows={dreBar} color="#2563EB" />
       </div>
 
       {/* ── Organização da Oferta e Funcionamento ─────────────── */}

@@ -7,8 +7,7 @@ import {
   BarChart2, UsersRound, MonitorSmartphone, ShieldCheck, Utensils,
   ClipboardCheck, Activity, Landmark, LayoutDashboard, Database, MapPinned,
   Menu, X, ChevronDown, HeartPulse,
-  Sun,
-  Moon,
+  Sun, Moon, MonitorPlay,
 } from "lucide-react";
 
 import "./admin.css";
@@ -30,6 +29,7 @@ import { AbaMerenda } from "@/components/admin/AbaMerenda";
 import { AbaServicosTerceirizados } from "@/components/admin/AbaServicosTerceirizados";
 import { AbaGestaoFinanceiraGovernanca } from "@/components/admin/AbaGestaoFinanceiraGovernanca";
 import { AbaSaudeOperacionalEscolas } from "@/components/admin/AbaSaudeOperacionalEscolas";
+import { PresentationMode } from "@/components/admin/PresentationMode";
 import type {
   CensusRow, CensusPage, DashboardData,
 } from "@/components/admin/shared/types";
@@ -425,6 +425,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     }
     return false;
   });
+  const [presentationMode, setPresentationMode] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("censo_admin_theme", dark ? "dark" : "light");
@@ -530,15 +531,19 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                   ? <Loader2 size={16} className="animate-spin" />
                   : <CloudUpload size={16} />}
               </button>
+              <button className="ca-icon-btn" title="Mudar tema" onClick={() => setDark(!dark)}>
+                {dark ? <Sun size={16} /> : <Moon size={16} />}
+              </button>
+              <button
+                className="ca-pres-launch-btn hidden md:flex"
+                title="Modo Apresentação"
+                onClick={() => setPresentationMode(true)}
+              >
+                <MonitorPlay size={15} />
+                <span>Modo Apresentação</span>
+              </button>
               <button className="ca-icon-btn" title="Sair" onClick={logout}>
                 <LogOut size={16} />
-              </button>
-              <button className="ca-icon-btn" title="Mudar tema" onClick={() => setDark(!dark)}>
-                {
-                  dark
-                    ? <Sun size={16} />
-                    : <Moon size={16} />
-                }
               </button>
             </div>
           </div>
@@ -644,6 +649,14 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
       {viewId !== null && (
         <JsonModal censusId={viewId} token={token} onClose={() => setViewId(null)} />
+      )}
+
+      {presentationMode && (
+        <PresentationMode
+          token={token}
+          onUnauth={logout}
+          onClose={() => setPresentationMode(false)}
+        />
       )}
     </div>
   );

@@ -34,8 +34,8 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
 }
 
 export function AbaInfraestruturaSeguranca({
-  token, onUnauth,
-}: AbaInfraestruturaSegurancaProps) {
+  token, onUnauth, presentationMode = false,
+}: AbaInfraestruturaSegurancaProps & { presentationMode?: boolean }) {
   const [condicoes, setCondicoes] = useState<InfraCondicoes | null>(
     () => getCached("/v1/admin/analytics/infraestrutura/condicoes"),
   );
@@ -146,86 +146,92 @@ export function AbaInfraestruturaSeguranca({
       )}
 
       {/* ── Condições Estruturais e Ambientes ────────────────────── */}
-      <div className="flex items-center gap-3 animate-fade-in-up">
-        <Layers size={18} style={{ color: C.primary }} />
-        <h2 className="font-semibold text-slate-800 text-base">Condições Estruturais e Ambientes</h2>
-        <div className="flex-1 h-px bg-slate-200" />
-      </div>
+      <div id="sec-infra-condicoes" className={presentationMode ? "space-y-2" : "space-y-6"}>
+        <div className="flex items-center gap-3 animate-fade-in-up">
+          <Layers size={18} style={{ color: C.primary }} />
+          <h2 className="font-semibold text-slate-800 text-base">Condições Estruturais e Ambientes</h2>
+          <div className="flex-1 h-px bg-slate-200" />
+        </div>
 
-      {condicoes && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fade-in-up [animation-delay:150ms]">
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-slate-300 transition-all duration-300 group cursor-default animate-fade-in-up">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs text-slate-500 font-medium uppercase tracking-wide group-hover:text-slate-700 transition-colors">Reforma Crítica</p>
-                <p className="text-3xl font-bold text-slate-900 mt-2 tabular-nums group-hover:scale-105 origin-left transition-transform">
-                  {fmtPct(condicoes.pct_reforma_critica)}
-                </p>
-                <p className="text-xs text-slate-400 mt-1">das escolas necessitam de reforma geral ou estão com a obra parada</p>
-                <p className="text-xs text-slate-400 mt-2">
-                  Reforma geral: {fmtPct(condicoes.pct_reforma_geral)} · Obra parada: {fmtPct(condicoes.pct_obra_parada)}
-                </p>
+        {condicoes && (
+          <div className={`grid grid-cols-1 lg:grid-cols-2 ${presentationMode ? "gap-3" : "gap-5"} animate-fade-in-up [animation-delay:150ms]`}>
+            <div className={`bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-slate-300 transition-all duration-300 group cursor-default animate-fade-in-up ${presentationMode ? "p-3" : "p-5"}`}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs text-slate-500 font-medium uppercase tracking-wide group-hover:text-slate-700 transition-colors">Reforma Crítica</p>
+                  <p className={`font-bold text-slate-900 tabular-nums group-hover:scale-105 origin-left transition-transform ${presentationMode ? "text-xl mt-1" : "text-3xl mt-2"}`}>
+                    {fmtPct(condicoes.pct_reforma_critica)}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">das escolas necessitam de reforma geral ou estão com a obra parada</p>
+                  {!presentationMode && (
+                    <p className="text-xs text-slate-400 mt-2">
+                      Reforma geral: {fmtPct(condicoes.pct_reforma_geral)} · Obra parada: {fmtPct(condicoes.pct_obra_parada)}
+                    </p>
+                  )}
+                </div>
+                <div className={`rounded-xl flex items-center justify-center bg-amber-50 text-amber-700 ring-1 ring-amber-100 shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-transform ${presentationMode ? "w-8 h-8" : "w-11 h-11"}`}>
+                  <Wrench size={presentationMode ? 16 : 21} strokeWidth={2} />
+                </div>
               </div>
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-50 text-amber-700 ring-1 ring-amber-100 shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-transform">
-                <Wrench size={21} strokeWidth={2} />
+            </div>
+            <div className={`bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-slate-300 transition-all duration-300 group cursor-default animate-fade-in-up ${presentationMode ? "p-3" : "p-5"}`}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs text-slate-500 font-medium uppercase tracking-wide group-hover:text-slate-700 transition-colors">Cobertura Plena de Ambientes</p>
+                  <p className={`font-bold text-slate-900 tabular-nums group-hover:scale-105 origin-left transition-transform ${presentationMode ? "text-xl mt-1" : "text-3xl mt-2"}`}>
+                    {fmtPct(condicoes.pct_cobertura_plena)}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">das escolas possuem todos os 8 ambientes essenciais</p>
+                  {!presentationMode && (
+                    <p className="text-xs text-slate-400 mt-2">
+                      Biblioteca · Lab. Ciências · Lab. Informática · Quadra · Refeitório · Cozinha · Sala dos Professores · SAEE
+                    </p>
+                  )}
+                </div>
+                <div className={`rounded-xl flex items-center justify-center bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-transform ${presentationMode ? "w-8 h-8" : "w-11 h-11"}`}>
+                  <Building2 size={presentationMode ? 16 : 21} strokeWidth={2} />
+                </div>
               </div>
             </div>
           </div>
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-slate-300 transition-all duration-300 group cursor-default animate-fade-in-up">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs text-slate-500 font-medium uppercase tracking-wide group-hover:text-slate-700 transition-colors">Cobertura Plena de Ambientes</p>
-                <p className="text-3xl font-bold text-slate-900 mt-2 tabular-nums group-hover:scale-105 origin-left transition-transform">
-                  {fmtPct(condicoes.pct_cobertura_plena)}
-                </p>
-                <p className="text-xs text-slate-400 mt-1">das escolas possuem todos os 8 ambientes essenciais</p>
-                <p className="text-xs text-slate-400 mt-2">
-                  Biblioteca · Lab. Ciências · Lab. Informática · Quadra · Refeitório · Cozinha · Sala dos Professores · SAEE
-                </p>
-              </div>
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-transform">
-                <Building2 size={21} strokeWidth={2} />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div id="sec-infra-condicoes" className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fade-in-up [animation-delay:300ms]">
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <Layers size={16} style={{ color: C.primary }} />
-            Situação da Estrutura
-          </h3>
-          {situacaoSegments.length > 0 ? (
-            <Donut segments={situacaoSegments} />
-          ) : (
-            <NoData />
-          )}
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <Building2 size={16} style={{ color: C.primary }} />
-            Distribuição por Tipo de Prédio
-          </h3>
-          {tipoPredioSegments.length > 0 ? (
-            <Donut segments={tipoPredioSegments} />
-          ) : (
-            <NoData />
-          )}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-        <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-          <MapPinned size={16} style={{ color: C.primary }} />
-          Ambientes mais presentes (Top 10)
-        </h3>
-        {ambientesRows.length > 0 ? (
-          <HBarChart rows={ambientesRows} color={C.primary} />
-        ) : (
-          <NoData />
         )}
+
+        <div className={`grid grid-cols-1 lg:grid-cols-2 ${presentationMode ? "gap-3" : "gap-5"} animate-fade-in-up [animation-delay:300ms]`}>
+          <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm ${presentationMode ? "p-3" : "p-6"}`}>
+            <h3 className={`font-semibold text-slate-800 text-sm flex items-center gap-2 ${presentationMode ? "mb-2" : "mb-5"}`}>
+              <Layers size={16} style={{ color: C.primary }} />
+              Situação da Estrutura
+            </h3>
+            {situacaoSegments.length > 0 ? (
+              <Donut segments={situacaoSegments} />
+            ) : (
+              <NoData />
+            )}
+          </div>
+          <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm ${presentationMode ? "p-3" : "p-6"}`}>
+            <h3 className={`font-semibold text-slate-800 text-sm flex items-center gap-2 ${presentationMode ? "mb-2" : "mb-5"}`}>
+              <Building2 size={16} style={{ color: C.primary }} />
+              Distribuição por Tipo de Prédio
+            </h3>
+            {tipoPredioSegments.length > 0 ? (
+              <Donut segments={tipoPredioSegments} />
+            ) : (
+              <NoData />
+            )}
+          </div>
+        </div>
+
+        <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm ${presentationMode ? "p-3" : "p-6"}`}>
+          <h3 className={`font-semibold text-slate-800 text-sm flex items-center gap-2 ${presentationMode ? "mb-2" : "mb-5"}`}>
+            <MapPinned size={16} style={{ color: C.primary }} />
+            Ambientes mais presentes (Top 10)
+          </h3>
+          {ambientesRows.length > 0 ? (
+            <HBarChart rows={ambientesRows} color={C.primary} />
+          ) : (
+            <NoData />
+          )}
+        </div>
       </div>
 
       {/* ── Energia, Climatização e Capacidade Elétrica ── */}

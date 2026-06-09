@@ -255,9 +255,11 @@ function SortHeader({
 export function AbaSaudeOperacionalEscolas({
   token,
   onUnauth,
+  presentationMode = false,
 }: {
   token: string;
   onUnauth: () => void;
+  presentationMode?: boolean;
 }) {
   const [payload, setPayload] = useState<SaudeOperacionalPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -419,7 +421,7 @@ export function AbaSaudeOperacionalEscolas({
         />
       </div>
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      {!presentationMode && <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full sm:max-w-md">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -445,7 +447,7 @@ export function AbaSaudeOperacionalEscolas({
               </>
             )}
         </p>
-      </div>
+      </div>}
 
       {loading && (
         <div className="flex items-center gap-2 text-xs text-slate-400">

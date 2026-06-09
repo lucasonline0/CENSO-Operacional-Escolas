@@ -19,6 +19,7 @@ import type {
 type AbaServicosTerceirizadosProps = {
   token: string;
   onUnauth: () => void;
+  presentationMode?: boolean;
 };
 
 function fmtPct(v: number | null | undefined): string {
@@ -38,7 +39,7 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
 }
 
 export function AbaServicosTerceirizados({
-  token, onUnauth,
+  token, onUnauth, presentationMode = false,
 }: AbaServicosTerceirizadosProps) {
   const [visao,    setVisao]    = useState<ServicosVisaoGeral | null>(
     () => getCached("/v1/admin/analytics/servicos-terceirizados/visao-geral"),
@@ -375,7 +376,7 @@ export function AbaServicosTerceirizados({
         />
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+      <div className={`bg-white rounded-2xl border border-slate-200 p-6 shadow-sm${presentationMode ? " min-h-96" : ""}`}>
         <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
           <Building size={16} style={{ color: C.primary }} />
           Top empresas terceirizadas — Agentes de Portaria

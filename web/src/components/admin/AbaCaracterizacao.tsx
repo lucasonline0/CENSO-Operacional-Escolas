@@ -156,10 +156,6 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
   const useDrePg = drePg !== null;
   const safePorDreSheet = metrics?.por_dre ?? [];
 
-  const dreBar = useDrePg
-    ? drePg!.top_dres.slice(0, 15).map((d) => ({ label: d.dre, value: d.escolas }))
-    : safePorDreSheet.slice(0, 15).map((d) => ({ label: d.dre, value: d.escolas }));
-
   type DreRow = { dre: string; escolas: number; alunos: number; salas: number; media: number };
   const dreTable: DreRow[] = useDrePg
     ? drePg!.detalhamento.map((d) => ({
@@ -257,15 +253,6 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
           Distribuição de Matrículas por Porte
         </h3>
         <HBarChart rows={matriculasBar} color={C.primary} />
-      </div>
-
-      {/* DRE bar */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm animate-fade-in-up [animation-delay:450ms]">
-        <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-          <MapPinned size={16} style={{ color: C.primary }} />
-          Escolas Concluídas por DRE (Top 15)
-        </h3>
-        <HBarChart rows={dreBar} color="#2563EB" />
       </div>
 
       {/* ── Organização da Oferta e Funcionamento ─────────────── */}

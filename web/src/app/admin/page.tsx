@@ -6,7 +6,7 @@ import {
   AlertCircle, Loader2, PanelLeftClose, Eye, EyeOff, ArrowRight,
   BarChart2, UsersRound, MonitorSmartphone, ShieldCheck, Utensils,
   ClipboardCheck, Activity, Landmark, LayoutDashboard, Database, MapPinned,
-  Menu, X, ChevronDown,
+  Menu, X, ChevronDown, HeartPulse,
 } from "lucide-react";
 
 import "./admin.css";
@@ -27,6 +27,7 @@ import { AbaInfraestruturaSeguranca } from "@/components/admin/AbaInfraestrutura
 import { AbaMerenda } from "@/components/admin/AbaMerenda";
 import { AbaServicosTerceirizados } from "@/components/admin/AbaServicosTerceirizados";
 import { AbaGestaoFinanceiraGovernanca } from "@/components/admin/AbaGestaoFinanceiraGovernanca";
+import { AbaSaudeOperacionalEscolas } from "@/components/admin/AbaSaudeOperacionalEscolas";
 import type {
   CensusRow, CensusPage, DashboardData,
 } from "@/components/admin/shared/types";
@@ -187,6 +188,7 @@ type Tab =
   | "alunos"
   | "governanca"
   | "operacional"
+  | "saude"
   | "census"
   | "dre";
 
@@ -200,6 +202,7 @@ const PAGE_META: Record<Tab, { title: string }> = {
   alunos:         { title: "Perfil dos Alunos e Resultados" },
   governanca:     { title: "Gestão Financeira e Governança" },
   operacional:    { title: "Operacional"                    },
+  saude:          { title: "Índice de Saúde Operacional por escola" },
   census:         { title: "Todos os Censos"                },
   dre:            { title: "Por DRE"                        },
 };
@@ -271,6 +274,7 @@ const NAV_INDICATORS: NavItem[] = [
 
 const NAV_OPERACIONAL: NavItem[] = [
   { id: "operacional", label: "Operacional",    Icon: LayoutDashboard },
+  { id: "saude",       label: "Saúde Operacional", Icon: HeartPulse    },
   { id: "census",      label: "Todos os Censos",Icon: Database        },
   { id: "dre",         label: "Por DRE",         Icon: MapPinned      },
 ];
@@ -566,6 +570,11 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             {visited.has("governanca") && (
               <div style={{ display: tab === "governanca" ? undefined : "none" }}>
                 <AbaGestaoFinanceiraGovernanca />
+              </div>
+            )}
+            {visited.has("saude") && (
+              <div style={{ display: tab === "saude" ? undefined : "none" }}>
+                <AbaSaudeOperacionalEscolas token={token} onUnauth={logout} />
               </div>
             )}
 

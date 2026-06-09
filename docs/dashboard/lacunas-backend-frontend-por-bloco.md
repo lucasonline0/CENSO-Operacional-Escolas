@@ -36,28 +36,22 @@ Frontend:
 - `web/src/components/admin/AbaServicosTerceirizados.tsx`
 - `web/src/components/admin/AbaPerfilAlunos.tsx`
 - `web/src/components/admin/AbaGestaoFinanceiraGovernanca.tsx`
-- `web/src/components/admin/AbaSaudeOperacionalEscolas.tsx`
 - `web/src/components/admin/shared/types.ts`
 
 Backend e banco:
 
 - `api/cmd/api/main.go`
-- `api/cmd/api/analytics_saude_operacional.go`
 - `api/cmd/api/analytics.go`
 - `api/cmd/api/analytics_pessoal_tecnologia.go`
 - `api/cmd/api/analytics_infra_merenda_servicos.go`
 - `infra/migrations/0001_vw_censo_base.sql` a `infra/migrations/0013_performance_indexes.sql`
 
-Observação metodológica: a auditoria foi feita por leitura estática do código e
-das migrations. Para Saúde Operacional, o backend foi conferido em `develop` e
-o frontend na entrega `feat/frontend-saude-operacional-escolas`. Não houve
-execução dos endpoints contra banco local/homologação nesta rodada.
+Observação metodológica: a auditoria foi feita por leitura estática do código e das migrations. Não houve execução dos endpoints contra banco local/homologação nesta rodada.
 
 ## 3. Resumo executivo
 
 | Prioridade | Aba | Bloco | Lacuna principal | Tipo | Próxima ação |
 |---|---|---|---|---|---|
-| Entregue | Saúde Operacional | Índice de Saúde Operacional por escola | Backend e frontend implementados: endpoint protegido, metodologia `1.0.0`, cards, busca local e tabela escola a escola. | Backend + Frontend | Manter; tratar as lacunas futuras de auditabilidade, filtros e escala apenas em PRs próprios. |
 | Alta | Caracterização da Rede | Organização da Oferta e Funcionamento | Menu/anchor existem, mas o bloco está vazio e `/caracterizacao/perfil` não entrega etapas, modalidades ou turnos. | Backend + Frontend | Criar recorte analítico recomendado `GET /v1/admin/analytics/caracterizacao/oferta-funcionamento` e renderizar o bloco. |
 | ~~Alta~~ Entregue (1ª versão) | Caracterização da Rede | Infraestrutura Educacional | Endpoint `GET /v1/admin/analytics/caracterizacao/infraestrutura-educacional` entregue, consumindo `vw_censo_ambientes` + `vw_censo_enriquecida`. Lista oficial inicial de essenciais definida (CAR-INFRA-01). Bloco renderizado em `AbaCaracterizacao.tsx`. | — | Entregue. Refino futuro: revisar lista de essenciais com a área de produto. |
 | Alta | Infraestrutura e Segurança | Energia, Climatização e Capacidade Elétrica | Bloco existe como empty state; campos existem em views, mas não são expostos nos endpoints nem renderizados. | Backend + Frontend | Expandir endpoint ou criar endpoint dedicado e substituir empty state por KPIs/gráficos. |
@@ -93,41 +87,6 @@ Status:
 - Vazio: anchor/bloco existe sem conteúdo analítico.
 - Planejado: previsto pela matriz, sem implementação nesta rodada.
 - Fora de escopo: não pertence à rodada analítica PostgreSQL do formulário.
-
-## 4.1 Saúde Operacional por escola — implementada
-
-**Status:** entregue no backend e no frontend.
-
-| Camada | Entrega |
-|---|---|
-| Menu | Item **Saúde Operacional** no grupo Operacional, entre Operacional e Todos os Censos |
-| Nome oficial | **Índice de Saúde Operacional por escola** |
-| Backend | `GET /v1/admin/analytics/escolas/saude-operacional` protegido por JWT |
-| Fonte | PostgreSQL: todas as escolas cadastradas, com `census_responses` concluído do ano de referência quando disponível |
-| Metodologia | Versão `1.0.0`; seis dimensões habilitadas |
-| Frontend | `AbaSaudeOperacionalEscolas.tsx`, com fetch lazy, cache da API, cards, busca e tabela ordenável |
-| Apresentação | Farol, saúde com barra, criticidade e badges de dimensão |
-
-Regras entregues:
-
-- o endpoint retorna todas as escolas cadastradas;
-- escola sem censo concluído do ano aparece como `sem_dados`;
-- `null` representa ausência de informação e não é convertido em zero;
-- `0` é uma nota válida e permanece visível;
-- Pedagógico e Governança permanecem `null` na metodologia `1.0.0`;
-- o frontend não recalcula saúde, criticidade, status, pesos ou metodologia;
-- não há dados fake;
-- o endpoint não foi incluído no prefetch global do login.
-
-Lacunas futuras, não bloqueantes para a entrega atual:
-
-1. **Auditabilidade de valores desconhecidos:** expor ou registrar contagens de respostas não reconhecidas pelos mapas categóricos, sem convertê-las silenciosamente em zero.
-2. **Ordenação SQL determinística:** acrescentar `s.id` como desempate ao `ORDER BY s.nome_escola` para escolas homônimas.
-3. **Filtros globais:** a tela ainda não participa de um contrato global de filtros por ano, DRE, município, zona ou porte.
-4. **Região de Integração:** não há campo/filtro correspondente no payload ou na UI.
-5. **Pedagógico:** ativação futura depende de fonte oficial, regras de aplicabilidade e nova versão metodológica.
-6. **Governança:** ativação futura depende de fonte oficial e nova versão metodológica.
-7. **Escala da tabela:** avaliar paginação ou virtualização se o universo crescer a ponto de afetar renderização e interação.
 
 ## 5. B1 — Caracterização da Rede
 
@@ -260,7 +219,6 @@ Diagnóstico B2 — Merenda (atualizado): os quatro blocos finalísticos da matr
 | Serviços Gerais | Terceirizados | Menu e anchor OK | KPI renderizado | `/servicos-terceirizados/servicos-gerais` entrega `total_terceirizado` | `qtd_servicos_gerais_terceirizado` | Sem lacuna | Manter | — |
 | Serviços Gerais | Média total por escola | Menu e anchor OK | KPI renderizado | `/servicos-terceirizados/servicos-gerais` entrega `media_total_por_escola` | `vw_censo_rh_servicos_gerais` | Sem lacuna | Manter | — |
 | Serviços Gerais | Distribuição por vínculo | Menu e anchor OK | Donut renderizado | `/servicos-terceirizados/servicos-gerais` suporta | `vw_censo_rh_servicos_gerais` | Sem lacuna | Manter | — |
-| Serviços Gerais | Top empresas terceirizadas | Menu e anchor OK | HBar renderizada | `/servicos-terceirizados/servicos-gerais` entrega `top_empresas` | `vw_censo_servicos_terceirizados.empresa_terceirizada_sg` | Entregue (SERV-GERAIS-EMP-01) | Manter; validar grafias na homologação | — |
 | Portaria | Escolas com agentes de portaria | Menu e `sec-servicos-portaria` OK | KPI renderizado | `/servicos-terceirizados/portaria` entrega `pct_com_agentes` | `vw_censo_servicos_terceirizados.qtd_agentes_portaria` | Sem lacuna | Manter | — |
 | Portaria | Média de agentes por escola | Menu e anchor OK | KPI renderizado | `/servicos-terceirizados/portaria` entrega `media_agentes_por_escola` | `qtd_agentes_portaria` | Sem lacuna | Manter | — |
 | Portaria | Top empresas de portaria | Menu e anchor OK | Barra renderizada | `/servicos-terceirizados/portaria` entrega `top_empresas` | `empresa_terceirizada_portaria` | Sem lacuna | Manter | — |

@@ -364,7 +364,6 @@ func (app *application) routes() http.Handler {
 			protected.Get("/admin/analytics/servicos-terceirizados/servicos-gerais", app.AdminAnalyticsServicosGerais)
 			protected.Get("/admin/analytics/servicos-terceirizados/portaria", app.AdminAnalyticsServicosPortaria)
 			protected.Get("/admin/analytics/servicos-terceirizados/manipuladores-alimentos", app.AdminAnalyticsServicosManipuladoresAlimentos)
-			protected.Get("/admin/analytics/escolas/saude-operacional", app.AdminAnalyticsSaudeOperacionalEscolas)
 		})
 	})
 

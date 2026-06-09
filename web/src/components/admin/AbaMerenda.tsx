@@ -566,12 +566,12 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
                 <tbody>
                   {equipOrder.flatMap((eq) =>
                     (estadosPorEquip[eq] ?? []).map((row, idx) => (
-                      <tr key={`${eq}-${row.estado}`} className="border-b border-slate-100 last:border-0">
-                        <td className="py-2 pr-4 text-slate-700">
+                      <tr key={`${eq}-${row.estado}`} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors group">
+                        <td className="py-2 pr-4 text-slate-700 font-medium group-hover:text-blue-700 transition-colors">
                           {idx === 0 ? (equipLabels[eq] ?? eq) : ""}
                         </td>
-                        <td className="py-2 pr-4 text-slate-600">{row.estado}</td>
-                        <td className="py-2 text-right tabular-nums text-slate-800 font-semibold">
+                        <td className="py-2 pr-4 text-slate-600 group-hover:text-slate-900 transition-colors">{row.estado}</td>
+                        <td className="py-2 text-right tabular-nums text-slate-800 font-semibold group-hover:text-blue-900 transition-colors">
                           {row.escolas.toLocaleString("pt-BR")}
                         </td>
                       </tr>

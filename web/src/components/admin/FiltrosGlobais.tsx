@@ -77,64 +77,24 @@ export function FiltrosGlobais({
 
   return (
     <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-      <div className="flex flex-wrap items-end gap-3">
-        {/* Label */}
-        <div className="flex items-center gap-1.5 self-end pb-1.5">
-          <Filter size={14} style={{ color: C.primary }} />
-          <span className="text-xs font-semibold text-slate-600">
-            Filtros
+
+      {/* Linha superior: label + badge + botão limpar */}
+      <div className="flex items-center gap-2 mb-2.5">
+        <Filter size={14} style={{ color: C.primary }} />
+        <span className="text-xs font-semibold text-slate-600">Filtros</span>
+        {activeCount > 0 && (
+          <span
+            className="flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold text-white"
+            style={{ background: C.primary }}
+          >
+            {activeCount}
           </span>
-          {activeCount > 0 && (
-            <span
-              className="flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold text-white"
-              style={{ background: C.primary }}
-            >
-              {activeCount}
-            </span>
-          )}
-        </div>
-
-        <FilterSelect
-          label="Ano de referência"
-          value={filters.ano}
-          options={opcoes?.anos ?? []}
-          onChange={(v) => set("ano", v)}
-        />
-
-        <FilterSelect
-          label="Região de Integração"
-          value={filters.regiao_integracao}
-          options={opcoes?.regioes_integracao ?? []}
-          onChange={(v) => set("regiao_integracao", v)}
-        />
-
-        <FilterSelect
-          label="DRE"
-          value={filters.dre}
-          options={opcoes?.dres ?? []}
-          onChange={(v) => set("dre", v)}
-        />
-
-        <FilterSelect
-          label="Município"
-          value={filters.municipio}
-          options={opcoes?.municipios ?? []}
-          onChange={(v) => set("municipio", v)}
-        />
-
-        <FilterSelect
-          label="Zona"
-          value={filters.zona}
-          options={opcoes?.zonas ?? []}
-          onChange={(v) => set("zona", v)}
-        />
-
+        )}
         {activeCount > 0 && (
           <button
             type="button"
             onClick={clear}
-            className="flex items-center gap-1 self-end rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-            style={{ marginBottom: 0 }}
+            className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
           >
             <X size={12} />
             Limpar filtros
@@ -142,6 +102,41 @@ export function FiltrosGlobais({
         )}
       </div>
 
+      {/* Linha inferior: selects */}
+      <div className="flex flex-wrap items-end gap-3">
+        <FilterSelect
+          label="Ano de referência"
+          value={filters.ano}
+          options={opcoes?.anos ?? []}
+          onChange={(v) => set("ano", v)}
+        />
+        <FilterSelect
+          label="Região de Integração"
+          value={filters.regiao_integracao}
+          options={opcoes?.regioes_integracao ?? []}
+          onChange={(v) => set("regiao_integracao", v)}
+        />
+        <FilterSelect
+          label="DRE"
+          value={filters.dre}
+          options={opcoes?.dres ?? []}
+          onChange={(v) => set("dre", v)}
+        />
+        <FilterSelect
+          label="Município"
+          value={filters.municipio}
+          options={opcoes?.municipios ?? []}
+          onChange={(v) => set("municipio", v)}
+        />
+        <FilterSelect
+          label="Zona"
+          value={filters.zona}
+          options={opcoes?.zonas ?? []}
+          onChange={(v) => set("zona", v)}
+        />
+      </div>
+
+      {/* Tags dos filtros ativos */}
       {activeCount > 0 && (
         <div className="mt-2.5 flex flex-wrap gap-1.5">
           {filters.ano && (

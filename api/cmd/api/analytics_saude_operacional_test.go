@@ -3,9 +3,11 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -509,6 +511,180 @@ func TestSaudeOperacionalYearParsing(t *testing.T) {
 		if _, err := parseSaudeOperacionalYear(invalid, now); err == nil {
 			t.Fatalf("parseSaudeOperacionalYear(%q) succeeded; want error", invalid)
 		}
+	}
+}
+
+func TestSaudeOperacionalPageSizeParsing(t *testing.T) {
+	pageSize, err := parseSaudeOperacionalPageSize("")
+	if err != nil || pageSize != 10 {
+		t.Fatalf("default page_size = %d, err=%v; want 10", pageSize, err)
+	}
+
+	for _, valid := range []int{10, 50, 100, 1000} {
+		t.Run(fmt.Sprintf("valid_%d", valid), func(t *testing.T) {
+			got, err := parseSaudeOperacionalPageSize(strconv.Itoa(valid))
+			if err != nil || got != valid {
+				t.Fatalf("page_size = %d, err=%v; want %d", got, err, valid)
+			}
+		})
+	}
+
+	for _, invalid := range []string{"0", "1", "25", "999", "1001", "invalid"} {
+		t.Run("invalid_"+invalid, func(t *testing.T) {
+			if _, err := parseSaudeOperacionalPageSize(invalid); err == nil {
+				t.Fatalf("parseSaudeOperacionalPageSize(%q) succeeded; want error", invalid)
+			}
+		})
+	}
+}
+
+func TestSaudeOperacionalDirectionParsing(t *testing.T) {
+	direction, err := parseSaudeOperacionalDirection("")
+	if err != nil || direction != "desc" {
+		t.Fatalf("default direction = %q, err=%v; want desc", direction, err)
+	}
+
+	for _, valid := range []string{"asc", "desc"} {
+		got, err := parseSaudeOperacionalDirection(valid)
+		if err != nil || got != valid {
+			t.Fatalf("direction = %q, err=%v; want %q", got, err, valid)
+		}
+	}
+
+	for _, invalid := range []string{"ASC", "descending", "invalid"} {
+		if _, err := parseSaudeOperacionalDirection(invalid); err == nil {
+			t.Fatalf("parseSaudeOperacionalDirection(%q) succeeded; want error", invalid)
+		}
+	}
+}
+
+func TestSaudeOperacionalInvalidPaginationHandler(t *testing.T) {
+	tests := []string{
+		"/v1/admin/analytics/escolas/saude-operacional?page_size=25",
+		"/v1/admin/analytics/escolas/saude-operacional?direction=sideways",
+	}
+
+	for _, target := range tests {
+		t.Run(target, func(t *testing.T) {
+			app := &application{}
+			request := httptest.NewRequest(http.MethodGet, target, nil)
+			recorder := httptest.NewRecorder()
+
+			app.AdminAnalyticsSaudeOperacionalEscolas(recorder, request)
+
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d; want %d; body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+			}
+			var response jsonResponse
+			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+				t.Fatal(err)
+			}
+			if !response.Error {
+				t.Fatalf("error = false; want true; body=%s", recorder.Body.String())
+			}
+		})
+	}
+}
+
+func TestSaudeOperacionalFilteredSummaryAndPagination(t *testing.T) {
+	allEscolas := make([]SaudeOperacionalEscola, 0, 13)
+	for i := 1; i <= 11; i++ {
+		criticidade := float64(i)
+		saude := 100 - criticidade
+		status := "saudavel"
+		if i > 5 && i <= 8 {
+			status = "atencao"
+		} else if i > 8 {
+			status = "critica"
+		}
+		allEscolas = append(allEscolas, SaudeOperacionalEscola{
+			SchoolID:    i,
+			Escola:      fmt.Sprintf("Escola %02d", i),
+			Municipio:   "Castanhal",
+			Saude:       &saude,
+			Criticidade: &criticidade,
+			Status:      status,
+		})
+	}
+	allEscolas = append(allEscolas,
+		SaudeOperacionalEscola{
+			SchoolID:  12,
+			Escola:    "Escola sem dados",
+			Municipio: "Castanhal",
+			Status:    "sem_dados",
+		},
+		SaudeOperacionalEscola{
+			SchoolID:    13,
+			Escola:      "Escola fora da busca",
+			Municipio:   "Belém",
+			Saude:       floatPointerForTest(0),
+			Criticidade: floatPointerForTest(100),
+			Status:      "critica",
+		},
+	)
+
+	pageItems, resumo, totalFiltrado, totalPages, currentPage := buildSaudeOperacionalPage(
+		allEscolas,
+		"CASTANHAL",
+		"criticidade",
+		"desc",
+		2,
+		10,
+	)
+
+	if totalFiltrado != 12 {
+		t.Fatalf("total_filtrado = %d; want 12", totalFiltrado)
+	}
+	if totalPages != 2 || currentPage != 2 {
+		t.Fatalf("pagination = page %d of %d; want page 2 of 2", currentPage, totalPages)
+	}
+	if len(pageItems) != 2 {
+		t.Fatalf("page items = %d; want 2", len(pageItems))
+	}
+	if pageItems[0].SchoolID != 1 || pageItems[1].Status != "sem_dados" {
+		t.Fatalf("page order = %+v; want lowest criticidade followed by sem_dados", pageItems)
+	}
+	if resumo.Saudaveis != 5 || resumo.Atencao != 3 || resumo.Criticas != 3 || resumo.SemDados != 1 {
+		t.Fatalf("filtered resumo = %+v; want 5/3/3/1", resumo)
+	}
+	if resumo.SaudeMedia == nil || *resumo.SaudeMedia != 94 {
+		t.Fatalf("filtered saude_media = %v; want 94", resumo.SaudeMedia)
+	}
+}
+
+func TestSaudeOperacionalZeroIsNotNullAndSemDadosSortsLast(t *testing.T) {
+	escolas := []SaudeOperacionalEscola{
+		{
+			SchoolID:    1,
+			Escola:      "Zero válido",
+			Saude:       floatPointerForTest(0),
+			Criticidade: floatPointerForTest(100),
+			Status:      "critica",
+		},
+		{
+			SchoolID: 2,
+			Escola:   "Sem dados",
+			Status:   "sem_dados",
+		},
+	}
+
+	pageItems, resumo, totalFiltrado, _, _ := buildSaudeOperacionalPage(
+		escolas,
+		"",
+		"saude",
+		"asc",
+		1,
+		10,
+	)
+
+	if totalFiltrado != 2 || len(pageItems) != 2 {
+		t.Fatalf("items = %d, total = %d; want 2", len(pageItems), totalFiltrado)
+	}
+	if pageItems[0].SchoolID != 1 || pageItems[1].Status != "sem_dados" {
+		t.Fatalf("order = %+v; want zero before sem_dados", pageItems)
+	}
+	if resumo.SaudeMedia == nil || *resumo.SaudeMedia != 0 {
+		t.Fatalf("saude_media = %v; want legitimate zero", resumo.SaudeMedia)
 	}
 }
 

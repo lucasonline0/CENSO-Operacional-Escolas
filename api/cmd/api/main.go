@@ -366,6 +366,9 @@ func (app *application) routes() http.Handler {
 			protected.Get("/admin/analytics/servicos-terceirizados/manipuladores-alimentos", app.AdminAnalyticsServicosManipuladoresAlimentos)
 			protected.Get("/admin/analytics/escolas/saude-operacional", app.AdminAnalyticsSaudeOperacionalEscolas)
 
+			// Andamento do preenchimento do censo por DRE.
+			protected.Get("/admin/analytics/preenchimento/dre", app.AdminAnalyticsPreenchimentoDre)
+
 			// Filtros globais do dashboard.
 			protected.Get("/admin/analytics/filtros/opcoes", app.AdminAnalyticsFiltrosOpcoes)
 		})

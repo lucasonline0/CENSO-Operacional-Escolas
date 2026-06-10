@@ -230,7 +230,8 @@
 }
 
 .censo-admin.dark .ca-partners-strip img {
-  filter: brightness(0.8) contrast(1.1);
+  filter: none;
+  opacity: 1;
 }
 
 .censo-admin *, .censo-admin *::before, .censo-admin *::after {

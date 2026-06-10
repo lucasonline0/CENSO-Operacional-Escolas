@@ -656,7 +656,10 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
           {/* Partners footer */}
           <footer className="ca-partners-strip">
-            <img src="/parceiros.png" alt="FADEP · Secretaria de Educação · Governo do Pará" />
+            <img
+              src={dark ? "/logo-horizontal-letter-white.png" : "/parceiros.png"}
+              alt="FADEP · Secretaria de Educação · Governo do Pará"
+            />
           </footer>
         </main>
 

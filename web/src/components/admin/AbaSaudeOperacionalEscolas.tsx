@@ -151,18 +151,18 @@ function SummaryCard({
   sub?: string;
 }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-slate-300 transition-all duration-300 group cursor-default animate-fade-in-up">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wide">
+          <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wide group-hover:text-slate-700 transition-colors">
             {label}
           </p>
-          <p className="text-2xl font-bold text-slate-900 mt-2 tabular-nums">
+          <p className="text-2xl font-bold text-slate-900 mt-2 tabular-nums group-hover:scale-105 origin-left transition-transform">
             {typeof value === "number" ? value.toLocaleString("pt-BR") : value}
           </p>
-          {sub && <p className="text-[11px] text-slate-400 mt-1">{sub}</p>}
+          {sub && <p className="text-[11px] text-slate-400 mt-1 group-hover:text-slate-500 transition-colors">{sub}</p>}
         </div>
-        <div className={`w-10 h-10 rounded-xl flex shrink-0 items-center justify-center ring-1 ${SUMMARY_TONES[tone]}`}>
+        <div className={`w-10 h-10 rounded-xl flex shrink-0 items-center justify-center ring-1 group-hover:scale-110 group-hover:rotate-3 transition-transform ${SUMMARY_TONES[tone]}`}>
           <Icon size={19} strokeWidth={2} />
         </div>
       </div>

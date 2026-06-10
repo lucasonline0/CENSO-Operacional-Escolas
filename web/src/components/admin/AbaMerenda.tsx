@@ -22,6 +22,7 @@ type AbaMerendaProps = {
   onUnauth: () => void;
   presentationMode?: boolean;
   activeAnchor?: string;
+  onLoadComplete?: () => void;
 };
 
 function fmtPct(v: number | null | undefined): string {
@@ -151,7 +152,7 @@ function StackedConservationBar({
 }
 
 export function AbaMerenda({
-  token, onUnauth, presentationMode = false, activeAnchor
+  token, onUnauth, presentationMode = false, activeAnchor, onLoadComplete
 }: AbaMerendaProps) {
   const [oferta,     setOferta]     = useState<MerendaOferta | null>(
     () => getCached("/v1/admin/analytics/merenda/oferta"),
@@ -193,11 +194,14 @@ export function AbaMerenda({
       .catch(handleErr(setSanitErr));
 
     Promise.all([pOferta, pEquip, pSanit]).finally(() => {
-      if (!cancelled) setLoading(false);
+      if (!cancelled) {
+        setLoading(false);
+        onLoadComplete?.();
+      }
     });
 
     return () => { cancelled = true; };
-  }, [token, onUnauth]);
+  }, [token, onUnauth, onLoadComplete]);
 
   if (loading) {
     return (

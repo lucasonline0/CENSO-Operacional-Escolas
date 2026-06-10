@@ -30,8 +30,9 @@ import { AbaMerenda } from "@/components/admin/AbaMerenda";
 import { AbaServicosTerceirizados } from "@/components/admin/AbaServicosTerceirizados";
 import { AbaGestaoFinanceiraGovernanca } from "@/components/admin/AbaGestaoFinanceiraGovernanca";
 import { AbaSaudeOperacionalEscolas } from "@/components/admin/AbaSaudeOperacionalEscolas";
+import { FiltrosGlobais } from "@/components/admin/FiltrosGlobais";
 import type {
-  CensusRow, CensusPage, DashboardData,
+  CensusRow, CensusPage, DashboardData, DashboardFilters, FiltrosOpcoes,
 } from "@/components/admin/shared/types";
 
 // ─── Login ────────────────────────────────────────────────────────────────────
@@ -353,21 +354,23 @@ function NavGroup({
 }
 
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
-  const [dbData, setDbData] = useState<DashboardData | null>(null);
-  const [censusPage, setCensusPage] = useState<CensusPage | null>(null);
-  const [tab, setTab] = useState<Tab>("perfil");
-  const [filterStatus, setFilterStatus] = useState("");
-  const [filterDre, setFilterDre] = useState("");
-  const [search, setSearch] = useState("");
-  const [err, setErr] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [viewId, setViewId] = useState<number | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
-  const [visited, setVisited] = useState<Set<Tab>>(() => new Set<Tab>(["perfil"]));
-  const [censusLimit, setCensusLimit] = useState(10);
-  const [censusPageNum, setCensusPageNum] = useState(1);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [dbData,         setDbData]         = useState<DashboardData | null>(null);
+  const [censusPage,     setCensusPage]     = useState<CensusPage | null>(null);
+  const [tab,            setTab]            = useState<Tab>("perfil");
+  const [filterStatus,   setFilterStatus]   = useState("");
+  const [filterDre,      setFilterDre]      = useState("");
+  const [search,         setSearch]         = useState("");
+  const [err,            setErr]            = useState("");
+  const [loading,        setLoading]        = useState(true);
+  const [syncing,        setSyncing]        = useState(false);
+  const [viewId,         setViewId]         = useState<number | null>(null);
+  const [collapsed,      setCollapsed]      = useState(false);
+  const [visited,        setVisited]        = useState<Set<Tab>>(() => new Set<Tab>(["perfil"]));
+  const [censusLimit,    setCensusLimit]    = useState(10);
+  const [censusPageNum,  setCensusPageNum]  = useState(1);
+  const [mobileNavOpen,  setMobileNavOpen]  = useState(false);
+  const [filters,        setFilters]        = useState<DashboardFilters>({});
+  const [filtrosOpcoes,  setFiltrosOpcoes]  = useState<FiltrosOpcoes | null>(null);
 
   const logout = useCallback(() => { clearToken(); clearApiCache(); onLogout(); }, [onLogout]);
 
@@ -392,6 +395,11 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
   useEffect(() => { loadDb(); }, [loadDb]);
   useEffect(() => { if (tab === "census") loadCensus(); }, [tab, filterStatus, filterDre, censusLimit, censusPageNum, loadCensus]);
+  useEffect(() => {
+    apiFetch<FiltrosOpcoes>("/v1/admin/analytics/filtros/opcoes", token)
+      .then(setFiltrosOpcoes)
+      .catch((e) => { if ((e as Error).message === "UNAUTHORIZED") logout(); });
+  }, [token, logout]);
 
 
   async function handleSync() {
@@ -551,35 +559,41 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 {err}
               </div>
             )}
+
+            <FiltrosGlobais
+              opcoes={filtrosOpcoes}
+              filters={filters}
+              onFiltersChange={setFilters}
+            />
             {/* Renderiza todas as abas já visitadas. Quando volta para uma aba os dados já são carregados*/}
             {visited.has("perfil") && (
               <div style={{ display: tab === "perfil" ? undefined : "none" }}>
-                <AbaCaracterizacao token={token} onUnauth={logout} />
+                <AbaCaracterizacao token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("pessoal") && (
               <div style={{ display: tab === "pessoal" ? undefined : "none" }}>
-                <AbaPessoalGestao token={token} onUnauth={logout} />
+                <AbaPessoalGestao token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("tecnologia") && (
               <div style={{ display: tab === "tecnologia" ? undefined : "none" }}>
-                <AbaTecnologia token={token} onUnauth={logout} />
+                <AbaTecnologia token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("infraestrutura") && (
               <div style={{ display: tab === "infraestrutura" ? undefined : "none" }}>
-                <AbaInfraestruturaSeguranca token={token} onUnauth={logout} />
+                <AbaInfraestruturaSeguranca token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("merenda") && (
               <div style={{ display: tab === "merenda" ? undefined : "none" }}>
-                <AbaMerenda token={token} onUnauth={logout} />
+                <AbaMerenda token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("servicos") && (
               <div style={{ display: tab === "servicos" ? undefined : "none" }}>
-                <AbaServicosTerceirizados token={token} onUnauth={logout} />
+                <AbaServicosTerceirizados token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("alunos") && (
@@ -594,7 +608,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             )}
             {visited.has("saude") && (
               <div style={{ display: tab === "saude" ? undefined : "none" }}>
-                <AbaSaudeOperacionalEscolas token={token} onUnauth={logout} />
+                <AbaSaudeOperacionalEscolas token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
 

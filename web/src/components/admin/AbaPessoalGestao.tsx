@@ -5,18 +5,31 @@ import {
   UsersRound, AlertCircle, Loader2, GraduationCap, BookOpen,
   Briefcase, UserCheck, Users, ClipboardList, MapPinned, Layers,
 } from "lucide-react";
-import { apiFetch, getCached, allCached } from "./shared/api";
+import { apiFetch } from "./shared/api";
 import { C } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
 import { HBarChart } from "./shared/BarChart";
 import type {
-  PessoalEstrutura, PessoalCoordenacao, QuadroPessoal,
+  PessoalEstrutura, PessoalCoordenacao, QuadroPessoal, DashboardFilters,
 } from "./shared/types";
+
+function buildFilterParams(filters?: DashboardFilters): string {
+  if (!filters) return "";
+  const p = new URLSearchParams();
+  if (filters.ano) p.set("year", String(filters.ano));
+  if (filters.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
+  if (filters.dre) p.set("dre", filters.dre);
+  if (filters.municipio) p.set("municipio", filters.municipio);
+  if (filters.zona) p.set("zona", filters.zona);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
 
 type AbaPessoalGestaoProps = {
   token: string;
   onUnauth: () => void;
+  filters?: DashboardFilters;
 };
 
 function fmtMedia(v: number | null | undefined): string {
@@ -36,28 +49,23 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
 }
 
 export function AbaPessoalGestao({
-  token, onUnauth,
+  token, onUnauth, filters,
 }: AbaPessoalGestaoProps) {
-  const [estrutura,   setEstrutura]   = useState<PessoalEstrutura | null>(
-    () => getCached("/v1/admin/analytics/pessoal-gestao/estrutura"),
-  );
-  const [coordenacao, setCoordenacao] = useState<PessoalCoordenacao | null>(
-    () => getCached("/v1/admin/analytics/pessoal-gestao/coordenacao"),
-  );
-  const [quadro,      setQuadro]      = useState<QuadroPessoal | null>(
-    () => getCached("/v1/admin/analytics/pessoal-gestao/quadro-pessoal"),
-  );
+  const [estrutura,   setEstrutura]   = useState<PessoalEstrutura | null>(null);
+  const [coordenacao, setCoordenacao] = useState<PessoalCoordenacao | null>(null);
+  const [quadro,      setQuadro]      = useState<QuadroPessoal | null>(null);
   const [estruturaErr,   setEstruturaErr]   = useState("");
   const [coordenacaoErr, setCoordenacaoErr] = useState("");
   const [quadroErr,      setQuadroErr]      = useState("");
-  const [loading,        setLoading]        = useState<boolean>(() => !allCached([
-    "/v1/admin/analytics/pessoal-gestao/estrutura",
-    "/v1/admin/analytics/pessoal-gestao/coordenacao",
-    "/v1/admin/analytics/pessoal-gestao/quadro-pessoal",
-  ]));
+  const [loading,        setLoading]        = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setEstrutura(null); setCoordenacao(null); setQuadro(null);
+    setEstruturaErr(""); setCoordenacaoErr(""); setQuadroErr("");
+
+    const qs = buildFilterParams(filters);
 
     const handleErr = (setter: (s: string) => void) => (e: unknown) => {
       const msg = (e as Error).message;
@@ -66,19 +74,19 @@ export function AbaPessoalGestao({
     };
 
     const pEstrutura = apiFetch<PessoalEstrutura>(
-      "/v1/admin/analytics/pessoal-gestao/estrutura", token,
+      `/v1/admin/analytics/pessoal-gestao/estrutura${qs}`, token,
     )
       .then((d) => { if (!cancelled) setEstrutura(d); })
       .catch(handleErr(setEstruturaErr));
 
     const pCoord = apiFetch<PessoalCoordenacao>(
-      "/v1/admin/analytics/pessoal-gestao/coordenacao", token,
+      `/v1/admin/analytics/pessoal-gestao/coordenacao${qs}`, token,
     )
       .then((d) => { if (!cancelled) setCoordenacao(d); })
       .catch(handleErr(setCoordenacaoErr));
 
     const pQuadro = apiFetch<QuadroPessoal>(
-      "/v1/admin/analytics/pessoal-gestao/quadro-pessoal", token,
+      `/v1/admin/analytics/pessoal-gestao/quadro-pessoal${qs}`, token,
     )
       .then((d) => { if (!cancelled) setQuadro(d); })
       .catch(handleErr(setQuadroErr));
@@ -88,7 +96,7 @@ export function AbaPessoalGestao({
     });
 
     return () => { cancelled = true; };
-  }, [token, onUnauth]);
+  }, [token, onUnauth, filters]);
 
   if (loading) {
     return (

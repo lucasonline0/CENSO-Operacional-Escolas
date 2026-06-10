@@ -37,6 +37,7 @@ func (app *application) AdminAnalyticsPessoalEstrutura(w http.ResponseWriter, r 
 	municipio := qs.Get("municipio")
 	zona := qs.Get("zona")
 	porte := qs.Get("porte_escola")
+	regiaoIntegracao := qs.Get("regiao_integracao")
 
 	// Ano corrente como fallback
 	year := time.Now().Year()
@@ -61,6 +62,7 @@ func (app *application) AdminAnalyticsPessoalEstrutura(w http.ResponseWriter, r 
 		  AND ($3 = '' OR v.municipio = $3)
 		  AND ($4 = '' OR v.zona = $4)
 		  AND ($5 = '' OR e.porte_escola_nome = $5)
+		  AND ($6 = '' OR v.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $6))
 	`
 
 	// 1) Composição da Gestão (% de Sim por cargo)
@@ -79,7 +81,7 @@ func (app *application) AdminAnalyticsPessoalEstrutura(w http.ResponseWriter, r 
 		FROM base CROSS JOIN tot_escolas
 		GROUP BY cargo, ordem, tot_escolas.n
 		ORDER BY ordem
-	`, baseQuery), year, dre, municipio, zona, porte)
+	`, baseQuery), year, dre, municipio, zona, porte, regiaoIntegracao)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("composicao_gestao: %v", err), http.StatusInternalServerError)
 		return
@@ -98,7 +100,7 @@ func (app *application) AdminAnalyticsPessoalEstrutura(w http.ResponseWriter, r 
 	// 2) Total de Coordenadores Pedagógicos (Soma quantitativa)
 	// Como a view 003 é format Long, buscamos o quantitativo diretamente no JSON via vw_censo_base
 	err = db.QueryRowContext(ctx, `
-		SELECT 
+		SELECT
 			COALESCE(SUM(
 				CASE WHEN cr.data->>'qtd_coord_pedagogico' ~ '^-?[0-9]+(\.[0-9]+)?$'
 					 THEN (cr.data->>'qtd_coord_pedagogico')::numeric
@@ -114,7 +116,8 @@ func (app *application) AdminAnalyticsPessoalEstrutura(w http.ResponseWriter, r 
 		  AND ($3 = '' OR b.municipio = $3)
 		  AND ($4 = '' OR b.zona = $4)
 		  AND ($5 = '' OR e.porte_escola_nome = $5)
-	`, year, dre, municipio, zona, porte).Scan(&out.TotalCoordenadoresPedagog)
+		  AND ($6 = '' OR b.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $6))
+	`, year, dre, municipio, zona, porte, regiaoIntegracao).Scan(&out.TotalCoordenadoresPedagog)
 
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("total_coordenadores: %v", err), http.StatusInternalServerError)
@@ -137,6 +140,7 @@ func (app *application) AdminAnalyticsPessoalCoordenacao(w http.ResponseWriter, 
 	municipio := qs.Get("municipio")
 	zona := qs.Get("zona")
 	porte := qs.Get("porte_escola")
+	regiaoIntegracao := qs.Get("regiao_integracao")
 
 	// Ano corrente como fallback
 	year := time.Now().Year()
@@ -160,6 +164,7 @@ func (app *application) AdminAnalyticsPessoalCoordenacao(w http.ResponseWriter, 
 		  AND ($3 = '' OR v.municipio = $3)
 		  AND ($4 = '' OR v.zona = $4)
 		  AND ($5 = '' OR e.porte_escola_nome = $5)
+		  AND ($6 = '' OR v.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $6))
 	`
 
 	// 1) Distribuição por Área (% de Sim por área)
@@ -178,7 +183,7 @@ func (app *application) AdminAnalyticsPessoalCoordenacao(w http.ResponseWriter, 
 		FROM base CROSS JOIN tot_escolas
 		GROUP BY area, ordem, tot_escolas.n
 		ORDER BY ordem
-	`, baseQuery), year, dre, municipio, zona, porte)
+	`, baseQuery), year, dre, municipio, zona, porte, regiaoIntegracao)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("por_area: %v", err), http.StatusInternalServerError)
 		return
@@ -203,7 +208,7 @@ func (app *application) AdminAnalyticsPessoalCoordenacao(w http.ResponseWriter, 
 		)
 		SELECT COALESCE(ROUND(AVG(qtd_areas), 2), 0)::float8
 		FROM base
-	`, baseQuery), year, dre, municipio, zona, porte).Scan(&out.CoberturaMedia)
+	`, baseQuery), year, dre, municipio, zona, porte, regiaoIntegracao).Scan(&out.CoberturaMedia)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("cobertura_media: %v", err), http.StatusInternalServerError)
 		return
@@ -252,6 +257,7 @@ func (app *application) AdminAnalyticsPessoalQuadro(w http.ResponseWriter, r *ht
 	municipio := qs.Get("municipio")
 	zona := qs.Get("zona")
 	porte := qs.Get("porte_escola")
+	regiaoIntegracao := qs.Get("regiao_integracao")
 
 	year := time.Now().Year()
 	if yearStr != "" {
@@ -271,6 +277,7 @@ func (app *application) AdminAnalyticsPessoalQuadro(w http.ResponseWriter, r *ht
 		  AND ($3 = '' OR v.municipio = $3)
 		  AND ($4 = '' OR v.zona = $4)
 		  AND ($5 = '' OR e.porte_escola_nome = $5)
+		  AND ($6 = '' OR v.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $6))
 	`
 
 	// 1) Totais e médias globais
@@ -285,7 +292,7 @@ func (app *application) AdminAnalyticsPessoalQuadro(w http.ResponseWriter, r *ht
 			COALESCE(ROUND(AVG(qtd_servidores_administrativos), 2), 0)::float8,
 			COALESCE(ROUND(AVG(qtd_professor_readaptado), 2), 0)::float8
 		%s
-	`, baseWhere), year, dre, municipio, zona, porte).Scan(
+	`, baseWhere), year, dre, municipio, zona, porte, regiaoIntegracao).Scan(
 		&out.TotalEfetivos,
 		&out.TotalTemporarios,
 		&out.TotalAdministrativos,
@@ -311,7 +318,7 @@ func (app *application) AdminAnalyticsPessoalQuadro(w http.ResponseWriter, r *ht
 		GROUP BY v.dre
 		ORDER BY SUM(total_professores) DESC
 		LIMIT 20
-	`, baseWhere), year, dre, municipio, zona, porte)
+	`, baseWhere), year, dre, municipio, zona, porte, regiaoIntegracao)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("quadro_pessoal por_dre: %v", err), http.StatusInternalServerError)
 		return
@@ -381,6 +388,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 	municipio := qs.Get("municipio")
 	zona := qs.Get("zona")
 	porte := qs.Get("porte_escola")
+	regiaoIntegracao := qs.Get("regiao_integracao")
 
 	year := time.Now().Year()
 	if yearStr != "" {
@@ -406,6 +414,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 		  AND ($3 = '' OR v.municipio = $3)
 		  AND ($4 = '' OR v.zona = $4)
 		  AND ($5 = '' OR e.porte_escola_nome = $5)
+		  AND ($6 = '' OR v.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $6))
 	`
 
 	// 1) Totais de internet e equipamentos (inclui total absoluto de inoperantes)
@@ -423,7 +432,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 			COALESCE(SUM(qtd_computadores_inoperantes), 0)::float8,
 			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE computadores_atendem = 'Sim') / NULLIF(MAX(tot.n), 0), 1), 0)::float8
 		FROM base CROSS JOIN tot
-	`, baseWhere), year, dre, municipio, zona, porte).Scan(
+	`, baseWhere), year, dre, municipio, zona, porte, regiaoIntegracao).Scan(
 		&out.EscolasComInternet,
 		&out.PercentualInternet,
 		&out.TotalDesktopsAdm,
@@ -454,7 +463,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 				COUNT(DISTINCT school_id) FILTER (WHERE NOT internet_disponivel)::int,
 				COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE NOT internet_disponivel) / NULLIF(MAX(tot.n), 0), 1), 0)::float8
 			FROM base CROSS JOIN tot
-		`, baseWhere), year, dre, municipio, zona, porte).Scan(&simEsc, &simPct, &naoEsc, &naoPct); e != nil {
+		`, baseWhere), year, dre, municipio, zona, porte, regiaoIntegracao).Scan(&simEsc, &simPct, &naoEsc, &naoPct); e != nil {
 			app.errorJSON(w, fmt.Errorf("disponibilidade_internet: %v", e), http.StatusInternalServerError)
 			return
 		}
@@ -480,7 +489,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 				COALESCE(ROUND(AVG(COALESCE(qtd_desktop_adm, 0)), 2), 0)::float8,
 				COALESCE(ROUND(AVG(COALESCE(qtd_notebooks, 0)), 2), 0)::float8
 			FROM base
-		`, baseWhere), year, dre, municipio, zona, porte).Scan(&medChromebooks, &medDesktopAlunos, &medDesktopAdm, &medNotebooks); e != nil {
+		`, baseWhere), year, dre, municipio, zona, porte, regiaoIntegracao).Scan(&medChromebooks, &medDesktopAlunos, &medDesktopAdm, &medNotebooks); e != nil {
 			app.errorJSON(w, fmt.Errorf("media_equipamentos: %v", e), http.StatusInternalServerError)
 			return
 		}
@@ -505,7 +514,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 			WHERE %s IS NOT NULL
 			GROUP BY %s, tot.n
 			ORDER BY escolas DESC
-		`, baseWhere, campo, campo, campo), year, dre, municipio, zona, porte)
+		`, baseWhere, campo, campo, campo), year, dre, municipio, zona, porte, regiaoIntegracao)
 		if err != nil {
 			return nil, err
 		}
@@ -550,7 +559,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 			FROM base CROSS JOIN tot
 			GROUP BY COALESCE(computadores_atendem, 'Não informado'), tot.n
 			ORDER BY escolas DESC
-		`, baseWhere), year, dre, municipio, zona, porte)
+		`, baseWhere), year, dre, municipio, zona, porte, regiaoIntegracao)
 		if err != nil {
 			app.errorJSON(w, fmt.Errorf("computadores_atendem_demanda: %v", err), http.StatusInternalServerError)
 			return
@@ -582,6 +591,7 @@ func (app *application) AdminAnalyticsTecnologiaUso(w http.ResponseWriter, r *ht
 	municipio := qs.Get("municipio")
 	zona := qs.Get("zona")
 	porte := qs.Get("porte_escola")
+	regiaoIntegracao := qs.Get("regiao_integracao")
 
 	year := time.Now().Year()
 	if yearStr != "" {
@@ -604,6 +614,7 @@ func (app *application) AdminAnalyticsTecnologiaUso(w http.ResponseWriter, r *ht
 		  AND ($3 = '' OR v.municipio = $3)
 		  AND ($4 = '' OR v.zona = $4)
 		  AND ($5 = '' OR e.porte_escola_nome = $5)
+		  AND ($6 = '' OR v.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $6))
 	`
 
 	// 1) KPIs de projetor/lousa e média de projetores por escola.
@@ -620,7 +631,7 @@ func (app *application) AdminAnalyticsTecnologiaUso(w http.ResponseWriter, r *ht
 			COUNT(DISTINCT school_id) FILTER (WHERE possui_lousa_digital)::bigint,
 			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE possui_lousa_digital) / NULLIF(MAX(tot.n), 0), 1), 0)::float8
 		FROM base CROSS JOIN tot
-	`, baseWhere), year, dre, municipio, zona, porte).Scan(
+	`, baseWhere), year, dre, municipio, zona, porte, regiaoIntegracao).Scan(
 		&out.EscolasComProjetor,
 		&out.PercentualComProjetor,
 		&out.TotalProjetores,
@@ -647,7 +658,7 @@ func (app *application) AdminAnalyticsTecnologiaUso(w http.ResponseWriter, r *ht
 				COUNT(DISTINCT school_id) FILTER (WHERE NOT %s)::int,
 				COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE NOT %s) / NULLIF(MAX(tot.n), 0), 1), 0)::float8
 			FROM base CROSS JOIN tot
-		`, baseWhere, campo, campo, campo, campo), year, dre, municipio, zona, porte).Scan(&simEsc, &simPct, &naoEsc, &naoPct); e != nil {
+		`, baseWhere, campo, campo, campo, campo), year, dre, municipio, zona, porte, regiaoIntegracao).Scan(&simEsc, &simPct, &naoEsc, &naoPct); e != nil {
 			return nil, e
 		}
 		return []CategoricStat{

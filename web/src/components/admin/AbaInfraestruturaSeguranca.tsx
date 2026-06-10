@@ -6,18 +6,31 @@ import {
   Camera, DoorClosed, Lightbulb, Siren, MapPinned, Layers, Home,
   Sparkles, BellRing, Zap, Wrench,
 } from "lucide-react";
-import { apiFetch, getCached, allCached } from "./shared/api";
+import { apiFetch } from "./shared/api";
 import { C, PORTE_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
 import { HBarChart } from "./shared/BarChart";
 import type {
-  InfraCondicoes, InfraSeguranca, InfraEnergia,
+  InfraCondicoes, InfraSeguranca, InfraEnergia, DashboardFilters,
 } from "./shared/types";
+
+function buildFilterParams(filters?: DashboardFilters): string {
+  if (!filters) return "";
+  const p = new URLSearchParams();
+  if (filters.ano) p.set("year", String(filters.ano));
+  if (filters.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
+  if (filters.dre) p.set("dre", filters.dre);
+  if (filters.municipio) p.set("municipio", filters.municipio);
+  if (filters.zona) p.set("zona", filters.zona);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
 
 type AbaInfraestruturaSegurancaProps = {
   token: string;
   onUnauth: () => void;
+  filters?: DashboardFilters;
 };
 
 // Formata percentual vindo do backend (float entre 0 e 100) como "xx,x%".
@@ -34,27 +47,22 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
 }
 
 export function AbaInfraestruturaSeguranca({
-  token, onUnauth,
+  token, onUnauth, filters,
 }: AbaInfraestruturaSegurancaProps) {
-  const [condicoes, setCondicoes] = useState<InfraCondicoes | null>(
-    () => getCached("/v1/admin/analytics/infraestrutura/condicoes"),
-  );
-  const [seguranca, setSeguranca] = useState<InfraSeguranca | null>(
-    () => getCached("/v1/admin/analytics/infraestrutura/seguranca"),
-  );
-  const [energia,   setEnergia]   = useState<InfraEnergia | null>(
-    () => getCached("/v1/admin/analytics/infraestrutura/energia"),
-  );
+  const [condicoes, setCondicoes] = useState<InfraCondicoes | null>(null);
+  const [seguranca, setSeguranca] = useState<InfraSeguranca | null>(null);
+  const [energia,   setEnergia]   = useState<InfraEnergia | null>(null);
   const [condErr,   setCondErr]   = useState("");
   const [segErr,    setSegErr]    = useState("");
-  const [loading,   setLoading]   = useState<boolean>(() => !allCached([
-    "/v1/admin/analytics/infraestrutura/condicoes",
-    "/v1/admin/analytics/infraestrutura/seguranca",
-    "/v1/admin/analytics/infraestrutura/energia",
-  ]));
+  const [loading,   setLoading]   = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setCondicoes(null); setSeguranca(null); setEnergia(null);
+    setCondErr(""); setSegErr("");
+
+    const qs = buildFilterParams(filters);
 
     const handleErr = (setter: (s: string) => void) => (e: unknown) => {
       const msg = (e as Error).message;
@@ -62,15 +70,15 @@ export function AbaInfraestruturaSeguranca({
       if (!cancelled) setter(msg);
     };
 
-    const pCond = apiFetch<InfraCondicoes>("/v1/admin/analytics/infraestrutura/condicoes", token)
+    const pCond = apiFetch<InfraCondicoes>(`/v1/admin/analytics/infraestrutura/condicoes${qs}`, token)
       .then((d) => { if (!cancelled) setCondicoes(d); })
       .catch(handleErr(setCondErr));
 
-    const pSeg = apiFetch<InfraSeguranca>("/v1/admin/analytics/infraestrutura/seguranca", token)
+    const pSeg = apiFetch<InfraSeguranca>(`/v1/admin/analytics/infraestrutura/seguranca${qs}`, token)
       .then((d) => { if (!cancelled) setSeguranca(d); })
       .catch(handleErr(setSegErr));
 
-    const pEnergia = apiFetch<InfraEnergia>("/v1/admin/analytics/infraestrutura/energia", token)
+    const pEnergia = apiFetch<InfraEnergia>(`/v1/admin/analytics/infraestrutura/energia${qs}`, token)
       .then((d) => { if (!cancelled) setEnergia(d); })
       .catch((e: unknown) => {
         const msg = (e as Error).message;
@@ -82,7 +90,7 @@ export function AbaInfraestruturaSeguranca({
     });
 
     return () => { cancelled = true; };
-  }, [token, onUnauth]);
+  }, [token, onUnauth, filters]);
 
   if (loading) {
     return (

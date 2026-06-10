@@ -23,6 +23,7 @@ import type {
   SaudeOperacionalEscola,
   SaudeOperacionalPayload,
   SaudeOperacionalStatus,
+  DashboardFilters,
 } from "./shared/types";
 
 const ENDPOINT_BASE = "/v1/admin/analytics/escolas/saude-operacional";
@@ -118,15 +119,20 @@ function buildEndpoint(
   page: number,
   pageSize: PageSizeOption,
   search: string,
+  filters?: DashboardFilters,
 ): string {
   const params = new URLSearchParams({
-    year: String(DASHBOARD_REFERENCE_YEAR),
+    year: String(filters?.ano ?? DASHBOARD_REFERENCE_YEAR),
     sort: sortKey,
     direction: sortDir,
     page: String(page),
     page_size: String(pageSize),
   });
   if (search.trim()) params.set("search", search.trim());
+  if (filters?.dre)               params.set("dre", filters.dre);
+  if (filters?.municipio)         params.set("municipio", filters.municipio);
+  if (filters?.zona)              params.set("zona", filters.zona);
+  if (filters?.regiao_integracao) params.set("regiao_integracao", filters.regiao_integracao);
   return `${ENDPOINT_BASE}?${params.toString()}`;
 }
 
@@ -258,9 +264,11 @@ function SortHeader({
 export function AbaSaudeOperacionalEscolas({
   token,
   onUnauth,
+  filters,
 }: {
   token: string;
   onUnauth: () => void;
+  filters?: DashboardFilters;
 }) {
   const [payload, setPayload] = useState<SaudeOperacionalPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -292,6 +300,11 @@ export function AbaSaudeOperacionalEscolas({
     }
   }, []);
 
+  // Quando os filtros globais mudam, volta para a primeira página
+  useEffect(() => {
+    setPage(1);
+  }, [filters]);
+
   function handleSort(key: SortKey) {
     setLoading(true);
     if (sortKey === key) {
@@ -319,7 +332,7 @@ export function AbaSaudeOperacionalEscolas({
   useEffect(() => {
     let cancelled = false;
 
-    const url = buildEndpoint(sortKey, sortDir, page, pageSize, serverSearch);
+    const url = buildEndpoint(sortKey, sortDir, page, pageSize, serverSearch, filters);
 
     apiFetch<SaudeOperacionalPayload>(url, token)
       .then((data) => {
@@ -343,7 +356,7 @@ export function AbaSaudeOperacionalEscolas({
     return () => {
       cancelled = true;
     };
-  }, [token, onUnauth, sortKey, sortDir, page, pageSize, serverSearch]);
+  }, [token, onUnauth, sortKey, sortDir, page, pageSize, serverSearch, filters]);
 
   if (loading && payload === null) {
     return (

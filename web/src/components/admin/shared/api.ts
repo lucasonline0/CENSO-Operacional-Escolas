@@ -79,6 +79,7 @@ const DASHBOARD_ENDPOINTS = [
   "/v1/admin/analytics/servicos-terceirizados/portaria",
   "/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos",
   "/v1/admin/indicadores-metrics",
+  "/v1/admin/analytics/filtros/opcoes",
 ];
 
 export async function prefetchDashboard(token: string): Promise<void> {

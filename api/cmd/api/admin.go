@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -388,56 +389,181 @@ func (app *application) AdminDashboard(w http.ResponseWriter, r *http.Request) {
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: s})
 }
 
-type CensusPageResponse struct {
-	Rows  []CensusRow `json:"rows"`
-	Total int         `json:"total"`
-	Page  int         `json:"page"`
-	Limit int         `json:"limit"`
+// CensusSummary resume o recorte global da tela "Registros do Censo". Os cards
+// da aba usam estes números: respeitam os filtros globais (year, dre, municipio,
+// zona, regiao_integracao) mas NÃO os filtros locais da listagem (status, search,
+// page, limit) — status e busca refinam apenas a tabela.
+type CensusSummary struct {
+	TotalSchools      int `json:"total_schools"`
+	CompletedCensuses int `json:"completed_censuses"`
+	DraftCensuses     int `json:"draft_censuses"`
+	PendingSync       int `json:"pending_sync"`
 }
 
-// AdminGetCensus returns paginated census entries with optional status/DRE filters.
-// Query params: status, dre, limit (default 10), page (default 1).
+type CensusPageResponse struct {
+	Rows    []CensusRow   `json:"rows"`
+	Total   int           `json:"total"`
+	Page    int           `json:"page"`
+	Limit   int           `json:"limit"`
+	Summary CensusSummary `json:"summary"`
+}
+
+// censusListAllowedLimits são os tamanhos de página aceitos por /v1/admin/census.
+// Valores fora deste conjunto caem no default (10).
+var censusListAllowedLimits = map[int]bool{10: true, 50: true, 100: true, 1000: true}
+
+// censusListParams reúne os parâmetros de /v1/admin/census: filtros globais do
+// dashboard (Year, DRE, Municipio, Zona, RegiaoIntegracao), filtros locais da
+// aba (Status, Search) e paginação. String vazia e Year=0 significam "filtro
+// desativado" — o endpoint nunca assume ano corrente como default, preservando
+// o comportamento operacional anterior (sem filtro de ano = todos os anos).
+type censusListParams struct {
+	Status           string
+	Year             int
+	DRE              string
+	Municipio        string
+	Zona             string
+	RegiaoIntegracao string
+	Search           string
+	Limit            int
+	Page             int
+}
+
+// parseCensusListParams lê a query string com defaults tolerantes: year ausente
+// ou inválido não filtra, limit fora de {10, 50, 100, 1000} vira 10 e page
+// ausente ou inválida vira 1. Espaços em branco equivalem a filtro desativado.
+func parseCensusListParams(q url.Values) censusListParams {
+	p := censusListParams{
+		Status:           strings.TrimSpace(q.Get("status")),
+		DRE:              strings.TrimSpace(q.Get("dre")),
+		Municipio:        strings.TrimSpace(q.Get("municipio")),
+		Zona:             strings.TrimSpace(q.Get("zona")),
+		RegiaoIntegracao: strings.TrimSpace(q.Get("regiao_integracao")),
+		Search:           strings.TrimSpace(q.Get("search")),
+		Limit:            10,
+		Page:             1,
+	}
+	if v, err := strconv.Atoi(strings.TrimSpace(q.Get("year"))); err == nil && v > 0 {
+		p.Year = v
+	}
+	if v, err := strconv.Atoi(strings.TrimSpace(q.Get("limit"))); err == nil && censusListAllowedLimits[v] {
+		p.Limit = v
+	}
+	if v, err := strconv.Atoi(strings.TrimSpace(q.Get("page"))); err == nil && v > 0 {
+		p.Page = v
+	}
+	return p
+}
+
+// censusListWhereSQL é a cláusula de filtros compartilhada entre o COUNT(*) e a
+// listagem de /v1/admin/census — uma única fonte evita divergência entre total
+// paginado e linhas exibidas. Todos os filtros combinam por AND; UPPER(TRIM())
+// tolera caixa e espaços, espelhando o padrão da Saúde Operacional. A Região de
+// Integração casa schools.municipio contra reg_integracao (mesma ressalva de
+// grafia documentada em saudeOperacionalSelectSQL). A busca textual ($7) roda
+// no banco, sobre escola, INEP, município, DRE, status e ano.
+// Argumentos: $1=status, $2=year, $3=dre, $4=municipio, $5=zona,
+// $6=regiao_integracao, $7=search.
+const censusListWhereSQL = `
+	WHERE ($1 = '' OR cr.status = $1)
+	  AND ($2 = 0 OR cr.year = $2)
+	  AND ($3 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($3)))
+	  AND ($4 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($4)))
+	  AND ($5 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($5)))
+	  AND ($6 = '' OR UPPER(TRIM(s.municipio)) IN (
+	        SELECT UPPER(TRIM(municipio))
+	        FROM reg_integracao
+	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($6))
+	      ))
+	  AND ($7 = ''
+	       OR s.nome_escola ILIKE '%' || $7 || '%'
+	       OR s.codigo_inep ILIKE '%' || $7 || '%'
+	       OR s.municipio ILIKE '%' || $7 || '%'
+	       OR s.dre ILIKE '%' || $7 || '%'
+	       OR cr.status ILIKE '%' || $7 || '%'
+	       OR cr.year::text ILIKE '%' || $7 || '%')`
+
+const censusListCountSQL = `
+	SELECT COUNT(*)
+	FROM census_responses cr
+	JOIN schools s ON s.id = cr.school_id` + censusListWhereSQL
+
+const censusListSelectSQL = `
+	SELECT
+		cr.id, cr.school_id, s.nome_escola, s.codigo_inep, s.municipio, s.dre,
+		cr.year, cr.status, cr.updated_at,
+		(cr.sheet_synced_at IS NOT NULL)
+	FROM census_responses cr
+	JOIN schools s ON s.id = cr.school_id` + censusListWhereSQL + `
+	ORDER BY cr.updated_at DESC
+	LIMIT $8 OFFSET $9`
+
+// whereArgs devolve os argumentos posicionais de censusListWhereSQL na ordem
+// $1=status, $2=year, $3=dre, $4=municipio, $5=zona, $6=regiao_integracao,
+// $7=search.
+func (p censusListParams) whereArgs() []any {
+	return []any{p.Status, p.Year, p.DRE, p.Municipio, p.Zona, p.RegiaoIntegracao, p.Search}
+}
+
+// censusSummarySQL calcula o resumo dos cards da aba. Aplica somente os filtros
+// globais ($1=year, $2=dre, $3=municipio, $4=zona, $5=regiao_integracao) —
+// status e search ficam de fora de propósito (ver CensusSummary).
+// total_schools conta escolas cadastradas no recorte (sem JOIN com censo e sem
+// filtro de ano: o cadastro de escolas não é versionado por ano); os demais
+// contadores contam respostas de censo dentro do recorte e do ano informado.
+const censusSummarySQL = `
+	SELECT
+		(SELECT COUNT(*)
+		 FROM schools s
+		 WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+		   AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
+		   AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
+		   AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
+		         SELECT UPPER(TRIM(municipio))
+		         FROM reg_integracao
+		         WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
+		       ))),
+		COUNT(*) FILTER (WHERE cr.status = 'completed'),
+		COUNT(*) FILTER (WHERE cr.status = 'draft'),
+		COUNT(*) FILTER (WHERE cr.status = 'completed' AND cr.sheet_synced_at IS NULL)
+	FROM census_responses cr
+	JOIN schools s ON s.id = cr.school_id
+	WHERE ($1 = 0 OR cr.year = $1)
+	  AND ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
+	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
+	  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
+	        SELECT UPPER(TRIM(municipio))
+	        FROM reg_integracao
+	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
+	      ))`
+
+// summaryArgs devolve os argumentos posicionais de censusSummarySQL na ordem
+// $1=year, $2=dre, $3=municipio, $4=zona, $5=regiao_integracao.
+func (p censusListParams) summaryArgs() []any {
+	return []any{p.Year, p.DRE, p.Municipio, p.Zona, p.RegiaoIntegracao}
+}
+
+// AdminGetCensus returns paginated census entries for the "Registros do Censo"
+// screen. Filtros globais do dashboard: year, dre, municipio, zona,
+// regiao_integracao. Filtros locais: status, search. Paginação: limit
+// (10/50/100/1000, default 10), page (default 1). O payload inclui um resumo
+// (summary) que respeita apenas os filtros globais.
 func (app *application) AdminGetCensus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	db := app.models.Schools.DB
 
-	statusFilter := r.URL.Query().Get("status")
-	dreFilter    := r.URL.Query().Get("dre")
-
-	limit := 10
-	page  := 1
-	if v, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && v > 0 {
-		limit = v
-	}
-	if v, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && v > 0 {
-		page = v
-	}
-	offset := (page - 1) * limit
+	p := parseCensusListParams(r.URL.Query())
+	whereArgs := p.whereArgs()
+	offset := (p.Page - 1) * p.Limit
 
 	var total int
-	if err := db.QueryRowContext(ctx, `
-		SELECT COUNT(*)
-		FROM census_responses cr
-		JOIN schools s ON s.id = cr.school_id
-		WHERE ($1 = '' OR cr.status = $1)
-		  AND ($2 = '' OR s.dre = $2)`,
-		statusFilter, dreFilter).Scan(&total); err != nil {
+	if err := db.QueryRowContext(ctx, censusListCountSQL, whereArgs...).Scan(&total); err != nil {
 		app.errorJSON(w, fmt.Errorf("erro ao contar censos"), http.StatusInternalServerError)
 		return
 	}
 
-	rows, err := db.QueryContext(ctx, `
-		SELECT
-			cr.id, cr.school_id, s.nome_escola, s.codigo_inep, s.municipio, s.dre,
-			cr.year, cr.status, cr.updated_at,
-			(cr.sheet_synced_at IS NOT NULL)
-		FROM census_responses cr
-		JOIN schools s ON s.id = cr.school_id
-		WHERE ($1 = '' OR cr.status = $1)
-		  AND ($2 = '' OR s.dre = $2)
-		ORDER BY cr.updated_at DESC
-		LIMIT $3 OFFSET $4`,
-		statusFilter, dreFilter, limit, offset)
+	rows, err := db.QueryContext(ctx, censusListSelectSQL, append(whereArgs, p.Limit, offset)...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro ao listar censos"), http.StatusInternalServerError)
 		return
@@ -458,8 +584,16 @@ func (app *application) AdminGetCensus(w http.ResponseWriter, r *http.Request) {
 		results = []CensusRow{}
 	}
 
+	var summary CensusSummary
+	if err := db.QueryRowContext(ctx, censusSummarySQL, p.summaryArgs()...).Scan(
+		&summary.TotalSchools, &summary.CompletedCensuses,
+		&summary.DraftCensuses, &summary.PendingSync); err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao resumir censos"), http.StatusInternalServerError)
+		return
+	}
+
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: CensusPageResponse{
-		Rows: results, Total: total, Page: page, Limit: limit,
+		Rows: results, Total: total, Page: p.Page, Limit: p.Limit, Summary: summary,
 	}})
 }
 

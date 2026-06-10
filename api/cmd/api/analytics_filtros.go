@@ -89,9 +89,11 @@ type FiltrosOpcoes struct {
 }
 
 // AdminAnalyticsFiltrosOpcoes retorna as listas para popular os selects
-// dos filtros globais do dashboard.
+// dos filtros globais do dashboard. Aceita os mesmos query params dos filtros
+// analíticos e aplica cascata: cada lista é filtrada pelos demais filtros ativos.
 func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	f := parseAnalyticsFilters(r)
 
 	anos, err := queryStringSlice(app, ctx, `
 		SELECT DISTINCT year::text
@@ -111,42 +113,59 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 		}
 	}
 
+	// Regiões: filtradas por dre, municipio, zona (não pela própria regiao)
 	regioes, err := queryStringSlice(app, ctx, `
-		SELECT DISTINCT regiao_de_integracao
-		FROM reg_integracao
-		ORDER BY regiao_de_integracao
-	`)
+		SELECT DISTINCT r.regiao_de_integracao
+		FROM reg_integracao r
+		JOIN schools s ON s.municipio = r.municipio
+		WHERE ($1 = '' OR s.dre = $1)
+		  AND ($2 = '' OR s.municipio = $2)
+		  AND ($3 = '' OR s.zona = $3)
+		ORDER BY 1
+	`, f.DRE, f.Municipio, f.Zona)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("regioes_integracao: %w", err), http.StatusInternalServerError)
 		return
 	}
 
+	// DREs: filtradas por municipio, zona, regiao (não pela própria dre)
 	dres, err := queryStringSlice(app, ctx, `
-		SELECT DISTINCT COALESCE(NULLIF(TRIM(dre), ''), 'Não informado') AS dre
-		FROM schools
+		SELECT DISTINCT COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado') AS dre
+		FROM schools s
+		WHERE ($1 = '' OR s.municipio = $1)
+		  AND ($2 = '' OR s.zona = $2)
+		  AND ($3 = '' OR s.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $3))
 		ORDER BY 1
-	`)
+	`, f.Municipio, f.Zona, f.RegiaoIntegracao)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("dres: %w", err), http.StatusInternalServerError)
 		return
 	}
 
+	// Municípios: filtrados por dre, zona, regiao (não pelo próprio municipio)
 	municipios, err := queryStringSlice(app, ctx, `
-		SELECT DISTINCT COALESCE(NULLIF(TRIM(municipio), ''), 'Não informado') AS municipio
-		FROM schools
+		SELECT DISTINCT COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado') AS municipio
+		FROM schools s
+		WHERE ($1 = '' OR s.dre = $1)
+		  AND ($2 = '' OR s.zona = $2)
+		  AND ($3 = '' OR s.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $3))
 		ORDER BY 1
-	`)
+	`, f.DRE, f.Zona, f.RegiaoIntegracao)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("municipios: %w", err), http.StatusInternalServerError)
 		return
 	}
 
+	// Zonas: filtradas por dre, municipio, regiao (não pela própria zona)
 	zonas, err := queryStringSlice(app, ctx, `
-		SELECT DISTINCT zona
-		FROM schools
-		WHERE zona IS NOT NULL AND TRIM(zona) <> ''
-		ORDER BY zona
-	`)
+		SELECT DISTINCT s.zona
+		FROM schools s
+		WHERE s.zona IS NOT NULL AND TRIM(s.zona) <> ''
+		  AND ($1 = '' OR s.dre = $1)
+		  AND ($2 = '' OR s.municipio = $2)
+		  AND ($3 = '' OR s.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $3))
+		ORDER BY 1
+	`, f.DRE, f.Municipio, f.RegiaoIntegracao)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("zonas: %w", err), http.StatusInternalServerError)
 		return

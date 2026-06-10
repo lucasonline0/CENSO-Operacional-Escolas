@@ -7,7 +7,9 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -685,6 +687,242 @@ func TestSaudeOperacionalZeroIsNotNullAndSemDadosSortsLast(t *testing.T) {
 	}
 	if resumo.SaudeMedia == nil || *resumo.SaudeMedia != 0 {
 		t.Fatalf("saude_media = %v; want legitimate zero", resumo.SaudeMedia)
+	}
+}
+
+// --- Filtros globais (dre, municipio, zona, regiao_integracao) ---
+
+// TestSaudeOperacionalParseFilters cobre a leitura dos filtros globais da query
+// string: valores são lidos, espaços removidos e ausência vira string vazia.
+func TestSaudeOperacionalParseFilters(t *testing.T) {
+	t.Run("todos preenchidos", func(t *testing.T) {
+		q := url.Values{
+			"dre":               {"CASTANHAL"},
+			"municipio":         {"BELEM"},
+			"zona":              {"Urbana"},
+			"regiao_integracao": {"GUAJARA"},
+		}
+		got := parseSaudeOperacionalFilters(q)
+		want := saudeOperacionalFilters{
+			DRE:              "CASTANHAL",
+			Municipio:        "BELEM",
+			Zona:             "Urbana",
+			RegiaoIntegracao: "GUAJARA",
+		}
+		if got != want {
+			t.Fatalf("parseSaudeOperacionalFilters = %+v; want %+v", got, want)
+		}
+	})
+
+	t.Run("ausentes viram vazio", func(t *testing.T) {
+		got := parseSaudeOperacionalFilters(url.Values{})
+		if got != (saudeOperacionalFilters{}) {
+			t.Fatalf("parseSaudeOperacionalFilters(empty) = %+v; want zero value", got)
+		}
+	})
+
+	t.Run("espacos sao removidos (filtro desativado)", func(t *testing.T) {
+		q := url.Values{
+			"dre":               {"  "},
+			"municipio":         {"  Castanhal  "},
+			"zona":              {""},
+			"regiao_integracao": {"\t"},
+		}
+		got := parseSaudeOperacionalFilters(q)
+		want := saudeOperacionalFilters{Municipio: "Castanhal"}
+		if got != want {
+			t.Fatalf("parseSaudeOperacionalFilters(spaces) = %+v; want %+v", got, want)
+		}
+	})
+}
+
+// TestSaudeOperacionalBuildQueryArgs garante que cada filtro global é
+// posicionado no argumento correto ($1=year, $2=dre, $3=municipio, $4=zona,
+// $5=regiao_integracao). Como a filtragem ocorre em SQL sobre schools s, a
+// presença do valor no argumento correto comprova que o filtro reduz o
+// universo carregado (que alimenta total_escolas, resumo e paginação).
+func TestSaudeOperacionalBuildQueryArgs(t *testing.T) {
+	tests := []struct {
+		name    string
+		year    int
+		filters saudeOperacionalFilters
+		want    []any
+	}{
+		{
+			name: "sem filtros",
+			year: 2026,
+			want: []any{2026, "", "", "", ""},
+		},
+		{
+			name:    "dre filtra o universo",
+			year:    2026,
+			filters: saudeOperacionalFilters{DRE: "CASTANHAL"},
+			want:    []any{2026, "CASTANHAL", "", "", ""},
+		},
+		{
+			name:    "municipio filtra o universo",
+			year:    2026,
+			filters: saudeOperacionalFilters{Municipio: "BELEM"},
+			want:    []any{2026, "", "BELEM", "", ""},
+		},
+		{
+			name:    "zona filtra o universo",
+			year:    2026,
+			filters: saudeOperacionalFilters{Zona: "Urbana"},
+			want:    []any{2026, "", "", "Urbana", ""},
+		},
+		{
+			name:    "regiao_integracao filtra o universo",
+			year:    2026,
+			filters: saudeOperacionalFilters{RegiaoIntegracao: "GUAJARA"},
+			want:    []any{2026, "", "", "", "GUAJARA"},
+		},
+		{
+			name: "multiplos filtros combinados por AND",
+			year: 2025,
+			filters: saudeOperacionalFilters{
+				DRE:              "BELEM",
+				Municipio:        "BELEM",
+				Zona:             "Urbana",
+				RegiaoIntegracao: "GUAJARA",
+			},
+			want: []any{2025, "BELEM", "BELEM", "Urbana", "GUAJARA"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query, args := buildSaudeOperacionalQuery(tt.year, tt.filters)
+			if len(args) != len(tt.want) {
+				t.Fatalf("args = %v; want %v", args, tt.want)
+			}
+			for i := range tt.want {
+				if args[i] != tt.want[i] {
+					t.Fatalf("args[%d] = %v; want %v (args=%v)", i, args[i], tt.want[i], args)
+				}
+			}
+			if query != saudeOperacionalSelectSQL {
+				t.Fatalf("query difere de saudeOperacionalSelectSQL")
+			}
+		})
+	}
+}
+
+// TestSaudeOperacionalQueryShape valida que a query preserva o LEFT JOIN
+// (escolas sem censo continuam no resultado), aplica os filtros sobre schools s
+// e combina-os por AND. A Região de Integração usa subconsulta em reg_integracao.
+func TestSaudeOperacionalQueryShape(t *testing.T) {
+	query := saudeOperacionalSelectSQL
+
+	mustContain := []string{
+		"FROM schools s",
+		"LEFT JOIN census_responses cr",
+		"AND cr.year = $1",
+		"AND cr.status = 'completed'",
+		"($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))",
+		"($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))",
+		"($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))",
+		"FROM reg_integracao",
+		"UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))",
+	}
+	for _, fragment := range mustContain {
+		if !strings.Contains(query, fragment) {
+			t.Fatalf("query não contém %q", fragment)
+		}
+	}
+
+	// LEFT JOIN não pode ter virado INNER JOIN nem ganhado filtro de census_id.
+	if strings.Contains(query, "INNER JOIN") {
+		t.Fatalf("query usa INNER JOIN; o LEFT JOIN deve ser preservado")
+	}
+	if strings.Contains(query, "census_id IS NOT NULL") {
+		t.Fatalf("query exige census_id IS NOT NULL; escolas sem censo seriam excluídas")
+	}
+
+	// Os quatro filtros globais devem estar todos sob a mesma cláusula WHERE,
+	// portanto combinados por AND.
+	if strings.Count(query, " AND ($") < 3 {
+		t.Fatalf("filtros globais não parecem combinados por AND: %s", query)
+	}
+}
+
+// TestSaudeOperacionalEmptyRecorte cobre o recorte global que não retorna
+// nenhuma escola: o payload deve ser válido (sem erro 500), com totais zerados,
+// resumo zerado, saude_media nula e lista vazia.
+func TestSaudeOperacionalEmptyRecorte(t *testing.T) {
+	pageItems, resumo, totalFiltrado, totalPages, currentPage := buildSaudeOperacionalPage(
+		[]SaudeOperacionalEscola{},
+		"",
+		"criticidade",
+		"desc",
+		1,
+		10,
+	)
+
+	if len(pageItems) != 0 {
+		t.Fatalf("page items = %d; want 0", len(pageItems))
+	}
+	if totalFiltrado != 0 || totalPages != 0 {
+		t.Fatalf("total_filtrado = %d, total_pages = %d; want 0/0", totalFiltrado, totalPages)
+	}
+	if currentPage != 1 {
+		t.Fatalf("current_page = %d; want 1", currentPage)
+	}
+	if resumo.Saudaveis != 0 || resumo.Atencao != 0 || resumo.Criticas != 0 || resumo.SemDados != 0 {
+		t.Fatalf("resumo = %+v; want todos zero", resumo)
+	}
+	if resumo.SaudeMedia != nil {
+		t.Fatalf("saude_media = %v; want nil", *resumo.SaudeMedia)
+	}
+}
+
+// TestSaudeOperacionalRecorteResumoEPaginacao demonstra que, dado um universo já
+// recortado pelos filtros globais (entrada de buildSaudeOperacionalPage), o
+// resumo é calculado sobre recorte + busca e antes da paginação, e que escolas
+// sem censo concluído permanecem como sem_dados dentro do recorte.
+func TestSaudeOperacionalRecorteResumoEPaginacao(t *testing.T) {
+	// Universo já filtrado por dre=CASTANHAL: 1 saudável, 1 atenção, 1 crítica
+	// e 1 pendente de censo (sem_dados). Paginamos em páginas de 2.
+	universo := []SaudeOperacionalEscola{
+		{SchoolID: 1, Escola: "Escola Alfa", DRE: "CASTANHAL", Saude: floatPointerForTest(80), Criticidade: floatPointerForTest(20), Status: "saudavel"},
+		{SchoolID: 2, Escola: "Escola Beta", DRE: "CASTANHAL", Saude: floatPointerForTest(60), Criticidade: floatPointerForTest(40), Status: "atencao"},
+		{SchoolID: 3, Escola: "Escola Gama", DRE: "CASTANHAL", Saude: floatPointerForTest(40), Criticidade: floatPointerForTest(60), Status: "critica"},
+		{SchoolID: 4, Escola: "Escola Delta", DRE: "CASTANHAL", Status: "sem_dados"},
+	}
+
+	pageItems, resumo, totalFiltrado, totalPages, currentPage := buildSaudeOperacionalPage(
+		universo,
+		"",
+		"criticidade",
+		"desc",
+		1,
+		2,
+	)
+
+	if totalFiltrado != 4 {
+		t.Fatalf("total_filtrado = %d; want 4 (todo o recorte)", totalFiltrado)
+	}
+	if resumo.Saudaveis != 1 || resumo.Atencao != 1 || resumo.Criticas != 1 || resumo.SemDados != 1 {
+		t.Fatalf("resumo = %+v; want 1/1/1/1 calculado sobre o recorte inteiro", resumo)
+	}
+	if resumo.SaudeMedia == nil || *resumo.SaudeMedia != 60 {
+		t.Fatalf("saude_media = %v; want 60 (média de 80/60/40)", resumo.SaudeMedia)
+	}
+	if totalPages != 2 || currentPage != 1 {
+		t.Fatalf("paginação = page %d de %d; want page 1 de 2 (resumo antes de paginar)", currentPage, totalPages)
+	}
+	if len(pageItems) != 2 {
+		t.Fatalf("page items = %d; want 2", len(pageItems))
+	}
+	// A escola sem_dados permanece no recorte e é empurrada para o fim.
+	if pageItems[len(pageItems)-1].Status == "sem_dados" {
+		t.Fatalf("sem_dados não deveria aparecer na primeira página de 2 itens com 3 escolas avaliadas")
+	}
+
+	// Busca textual refina dentro do recorte global.
+	_, resumoBusca, totalBusca, _, _ := buildSaudeOperacionalPage(universo, "Alfa", "criticidade", "desc", 1, 10)
+	if totalBusca != 1 || resumoBusca.Saudaveis != 1 {
+		t.Fatalf("busca dentro do recorte: total=%d resumo=%+v; want 1 escola saudável", totalBusca, resumoBusca)
 	}
 }
 

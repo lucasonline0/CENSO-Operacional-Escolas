@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -803,8 +804,85 @@ func buildSaudeOperacionalPage(
 	return filtered[offset:end], resumo, totalFiltrado, totalPages, currentPage
 }
 
+// saudeOperacionalFilters reúne os filtros globais do dashboard aplicados sobre
+// o cadastro de escolas (schools s), antes do LEFT JOIN com os censos do ano.
+// Strings vazias significam "filtro desativado".
+type saudeOperacionalFilters struct {
+	DRE              string
+	Municipio        string
+	Zona             string
+	RegiaoIntegracao string
+}
+
+// parseSaudeOperacionalFilters lê os filtros globais da query string. Espaços em
+// branco são removidos, de modo que um valor só com espaços equivale a ausência
+// de filtro (o backend não filtra nada nesse caso).
+func parseSaudeOperacionalFilters(q url.Values) saudeOperacionalFilters {
+	return saudeOperacionalFilters{
+		DRE:              strings.TrimSpace(q.Get("dre")),
+		Municipio:        strings.TrimSpace(q.Get("municipio")),
+		Zona:             strings.TrimSpace(q.Get("zona")),
+		RegiaoIntegracao: strings.TrimSpace(q.Get("regiao_integracao")),
+	}
+}
+
+// saudeOperacionalSelectSQL carrega TODAS as escolas cadastradas dentro do
+// recorte global e traz, via LEFT JOIN, o censo concluído ($1 = year). O LEFT
+// JOIN é essencial: escolas sem censo concluído continuam no resultado e são
+// classificadas como "sem_dados" pela camada de cálculo em Go.
+//
+// Os filtros globais incidem sobre schools s (não sobre o censo), garantindo
+// que total_escolas, resumo e paginação reflitam o recorte global e que as
+// escolas pendentes de censo permaneçam visíveis dentro dele. Por isso este
+// endpoint NÃO reutiliza AnalyticsFilters.WhereSQL(), que exige
+// status = 'completed' AND census_id IS NOT NULL e excluiria os pendentes.
+//
+// A comparação usa UPPER(TRIM(...)) para tolerar caixa e espaços. O filtro de
+// Região de Integração depende da compatibilidade entre schools.municipio e
+// reg_integracao.municipio (sem unaccent nesta etapa): municípios com grafia
+// divergente de acentuação podem não casar.
+const saudeOperacionalSelectSQL = `
+	SELECT
+		s.id,
+		s.codigo_inep,
+		COALESCE(s.nome_escola, ''),
+		COALESCE(s.municipio, ''),
+		COALESCE(s.dre, ''),
+		s.zona,
+		cr.id,
+		cr.data
+	FROM schools s
+	LEFT JOIN census_responses cr
+	  ON cr.school_id = s.id
+	 AND cr.year = $1
+	 AND cr.status = 'completed'
+	WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
+	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
+	  AND ($5 = '' OR s.municipio IN (
+	        SELECT municipio
+	        FROM reg_integracao
+	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
+	      ))
+	ORDER BY s.nome_escola, s.id
+`
+
+// buildSaudeOperacionalQuery devolve a query e os argumentos posicionais na
+// ordem esperada por saudeOperacionalSelectSQL: $1=year, $2=dre, $3=municipio,
+// $4=zona, $5=regiao_integracao.
+func buildSaudeOperacionalQuery(year int, f saudeOperacionalFilters) (string, []any) {
+	return saudeOperacionalSelectSQL, []any{
+		year,
+		f.DRE,
+		f.Municipio,
+		f.Zona,
+		f.RegiaoIntegracao,
+	}
+}
+
 // AdminAnalyticsSaudeOperacionalEscolas retorna escolas com índice de saúde operacional.
 // Parâmetros opcionais: year, page, page_size, search, sort, direction.
+// Filtros globais opcionais: dre, municipio, zona, regiao_integracao.
 // Sem page_size: usa 10 registros por página.
 func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -849,23 +927,10 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 		return
 	}
 
-	dbRows, err := app.models.Schools.DB.QueryContext(r.Context(), `
-		SELECT
-			s.id,
-			s.codigo_inep,
-			COALESCE(s.nome_escola, ''),
-			COALESCE(s.municipio, ''),
-			COALESCE(s.dre, ''),
-			s.zona,
-			cr.id,
-			cr.data
-		FROM schools s
-		LEFT JOIN census_responses cr
-		  ON cr.school_id = s.id
-		 AND cr.year = $1
-		 AND cr.status = 'completed'
-		ORDER BY s.nome_escola
-	`, year)
+	filters := parseSaudeOperacionalFilters(q)
+	query, args := buildSaudeOperacionalQuery(year, filters)
+
+	dbRows, err := app.models.Schools.DB.QueryContext(r.Context(), query, args...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("consultar saúde operacional das escolas: %v", err), http.StatusInternalServerError)
 		return

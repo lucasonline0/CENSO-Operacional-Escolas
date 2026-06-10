@@ -101,11 +101,22 @@ export interface CaracterizacaoInfraEducacionalPg {
 
 export interface CensusFull extends CensusRow { data: unknown; created_at: string; }
 
+// Resumo do recorte global da tela "Registros do Censo". Respeita os filtros
+// globais (year, dre, municipio, zona, regiao_integracao), mas não os filtros
+// locais da listagem (status, search, page, limit).
+export interface CensusSummary {
+  total_schools: number;
+  completed_censuses: number;
+  draft_censuses: number;
+  pending_sync: number;
+}
+
 export interface CensusPage {
   rows: CensusRow[];
   total: number;
   page: number;
   limit: number;
+  summary: CensusSummary;
 }
 
 // Frente 2 — Infraestrutura e Segurança.

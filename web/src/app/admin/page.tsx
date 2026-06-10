@@ -31,7 +31,7 @@ import { AbaGestaoFinanceiraGovernanca } from "@/components/admin/AbaGestaoFinan
 import { AbaSaudeOperacionalEscolas } from "@/components/admin/AbaSaudeOperacionalEscolas";
 import { FiltrosGlobais } from "@/components/admin/FiltrosGlobais";
 import type {
-  CensusRow, CensusPage, DashboardData, DashboardFilters, FiltrosOpcoes,
+  CensusPage, DashboardData, DashboardFilters, FiltrosOpcoes,
 } from "@/components/admin/shared/types";
 
 // ─── Login ────────────────────────────────────────────────────────────────────
@@ -354,7 +354,6 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const [censusPage,     setCensusPage]     = useState<CensusPage | null>(null);
   const [tab,            setTab]            = useState<Tab>("perfil");
   const [filterStatus,   setFilterStatus]   = useState("");
-  const [filterDre,      setFilterDre]      = useState("");
   const [search,         setSearch]         = useState("");
   const [err,            setErr]            = useState("");
   const [loading,        setLoading]        = useState(true);
@@ -379,18 +378,32 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     } finally { setLoading(false); }
   }, [token, logout]);
 
+  // Registros do Censo: filtros globais (ano, DRE, município, zona, Região de
+  // Integração) viram query params; status e busca textual são filtros locais
+  // da aba, mas a busca roda no backend (filtra todo o recorte, não só a página).
   const loadCensus = useCallback(async (limit = censusLimit, page = censusPageNum) => {
     const p = new URLSearchParams();
-    if (filterStatus) p.set("status", filterStatus);
-    if (filterDre) p.set("dre", filterDre);
+    if (filterStatus)              p.set("status", filterStatus);
+    if (filters.ano)               p.set("year", String(filters.ano));
+    if (filters.dre)               p.set("dre", filters.dre);
+    if (filters.municipio)         p.set("municipio", filters.municipio);
+    if (filters.zona)              p.set("zona", filters.zona);
+    if (filters.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
+    if (search)                    p.set("search", search);
     p.set("limit", String(limit));
     p.set("page", String(page));
     try { setCensusPage(await apiFetch<CensusPage>(`/v1/admin/census?${p}`, token)); }
     catch (e) { if ((e as Error).message === "UNAUTHORIZED") logout(); }
-  }, [token, filterStatus, filterDre, censusLimit, censusPageNum, logout]);
+  }, [token, filterStatus, filters, search, censusLimit, censusPageNum, logout]);
 
   useEffect(() => { loadDb(); }, [loadDb]);
-  useEffect(() => { if (tab === "census") loadCensus(); }, [tab, filterStatus, filterDre, censusLimit, censusPageNum, loadCensus]);
+  // Pequeno debounce: a busca textual agora dispara requisição ao backend e o
+  // timeout evita uma chamada por tecla digitada.
+  useEffect(() => {
+    if (tab !== "census") return;
+    const t = setTimeout(() => { loadCensus(); }, 300);
+    return () => clearTimeout(t);
+  }, [tab, loadCensus]);
   useEffect(() => {
     const qs = new URLSearchParams();
     if (filters.dre)               qs.set("dre", filters.dre);
@@ -418,15 +431,12 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
-  const match = (r: CensusRow, q: string) => {
-    const l = q.toLowerCase();
-    return r.nome_escola.toLowerCase().includes(l) || r.codigo_inep.includes(l) ||
-      r.municipio.toLowerCase().includes(l) || r.dre.toLowerCase().includes(l);
-  };
+  // Mudanças de recorte (filtros globais, status ou busca) voltam para a página 1.
+  const updateSearch = (s: string) => { setSearch(s); setCensusPageNum(1); };
+  const updateFilterStatus = (s: string) => { setFilterStatus(s); setCensusPageNum(1); };
+  const updateFilters = (f: DashboardFilters) => { setFilters(f); setCensusPageNum(1); };
 
-  const filteredCensus = (censusPage?.rows ?? []).filter((r) => !search || match(r, search));
-
-  const handleNav = (id: Tab) => { setTab(id); setSearch(""); setVisited((prev) => new Set([...prev, id])); setMobileNavOpen(false); };
+  const handleNav = (id: Tab) => { setTab(id); updateSearch(""); setVisited((prev) => new Set([...prev, id])); setMobileNavOpen(false); };
 
   const [dark, setDark] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -525,7 +535,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 <input
                   placeholder="Buscar indicadores, escolas, DREs…"
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => updateSearch(e.target.value)}
                 />
                 <kbd>⌘ /</kbd>
               </div>
@@ -564,7 +574,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             <FiltrosGlobais
               opcoes={filtrosOpcoes}
               filters={filters}
-              onFiltersChange={setFilters}
+              onFiltersChange={updateFilters}
             />
             {/* Renderiza todas as abas já visitadas. Quando volta para uma aba os dados já são carregados*/}
             {visited.has("perfil") && (
@@ -615,15 +625,11 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
             {tab === "census" && (
               <AbaTodosCensos
-                dbData={dbData}
                 censusPage={censusPage}
                 filterStatus={filterStatus}
-                setFilterStatus={setFilterStatus}
-                filterDre={filterDre}
-                setFilterDre={setFilterDre}
+                setFilterStatus={updateFilterStatus}
                 search={search}
-                setSearch={setSearch}
-                filteredCensus={filteredCensus}
+                setSearch={updateSearch}
                 censusLimit={censusLimit}
                 setCensusLimit={(l) => { setCensusLimit(l); setCensusPageNum(1); }}
                 censusPageNum={censusPageNum}

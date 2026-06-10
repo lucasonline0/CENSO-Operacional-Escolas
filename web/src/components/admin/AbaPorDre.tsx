@@ -6,9 +6,12 @@ import type { DashboardData } from "./shared/types";
 export function AbaPorDre({ dbData }: { dbData: DashboardData }) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm animate-fade-in-up">
-      <div className="px-6 py-4 border-b flex items-center gap-2" style={{ background: C.primaryLight }}>
-        <MapPinned size={16} style={{ color: C.primary }} />
-        <h2 className="font-semibold text-slate-800 text-sm">Andamento por Diretoria Regional de Ensino</h2>
+      <div className="px-6 py-4 border-b flex items-start gap-2" style={{ background: C.primaryLight }}>
+        <MapPinned size={16} style={{ color: C.primary }} className="mt-0.5 shrink-0" />
+        <div>
+          <h2 className="font-semibold text-slate-800 text-sm">Andamento do Preenchimento por Diretoria Regional de Ensino</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Percentual de escolas com censo concluído ou em rascunho, agrupado por DRE.</p>
+        </div>
       </div>
       <table className="w-full text-sm">
         <thead className="bg-slate-50 border-b border-slate-200">

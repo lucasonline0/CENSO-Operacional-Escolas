@@ -1,6 +1,10 @@
 import React from "react";
-import { Filter, Search, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Filter, Search, Loader2, ChevronLeft, ChevronRight,
+  Building2, CheckCircle2, FileText, CloudUpload,
+} from "lucide-react";
 import { CensusTable } from "./shared/CensusTable";
+import { StatCard } from "./shared/StatCard";
 import { sanitize } from "./shared/api";
 import type { CensusRow, CensusPage, DashboardData } from "./shared/types";
 
@@ -46,6 +50,16 @@ export function AbaTodosCensos({
 
   return (
     <div className="space-y-4">
+      {/* Cards de resumo */}
+      {dbData && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in-up">
+          <StatCard label="Escolas Cadastradas" value={dbData.total_schools}      Icon={Building2}    tone="blue"   />
+          <StatCard label="Censos Concluídos"   value={dbData.completed_censuses} Icon={CheckCircle2} tone="green"  />
+          <StatCard label="Rascunhos"            value={dbData.draft_censuses}     Icon={FileText}     tone="amber"  />
+          <StatCard label="Pendente na Planilha" value={dbData.pending_sync}       Icon={CloudUpload}  tone="orange" />
+        </div>
+      )}
+
       {/* Filtros */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-wrap items-center gap-3">
         <Filter size={15} className="text-slate-500" />

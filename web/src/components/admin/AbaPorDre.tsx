@@ -21,6 +21,27 @@ function buildEndpoint(filters?: DashboardFilters): string {
   return `${ENDPOINT_BASE}?${params.toString()}`;
 }
 
+// Monta os rótulos do recorte ativo exibidos como badges no cabeçalho da aba.
+// O ano vem preferencialmente de payload.ano_referencia (ano efetivamente usado
+// pelo backend). Município, Região de Integração e Zona são recortes territoriais
+// que reduzem o conjunto de escolas antes do agrupamento por DRE — quando nenhum
+// está ativo, o recorte abrange toda a rede estadual.
+function buildRecorteBadges(filters: DashboardFilters | undefined, anoReferencia?: number): string[] {
+  const badges: string[] = [];
+  if (anoReferencia !== undefined) badges.push(`Ano ${anoReferencia}`);
+  if (filters?.regiao_integracao) badges.push(`Região ${filters.regiao_integracao}`);
+  if (filters?.dre)               badges.push(`DRE ${filters.dre}`);
+  if (filters?.municipio)         badges.push(`Município ${filters.municipio}`);
+  if (filters?.zona)              badges.push(`Zona ${filters.zona}`);
+
+  const hasTerritorial = Boolean(
+    filters?.regiao_integracao || filters?.dre || filters?.municipio || filters?.zona,
+  );
+  if (!hasTerritorial) badges.push("Toda a rede estadual");
+
+  return badges;
+}
+
 export function AbaPorDre({
   token,
   onUnauth,
@@ -79,14 +100,30 @@ export function AbaPorDre({
     );
   }
 
+  const recorteBadges = buildRecorteBadges(filters, payload.ano_referencia);
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm animate-fade-in-up">
       <div className="px-6 py-4 border-b flex items-start gap-2" style={{ background: C.primaryLight }}>
         <MapPinned size={16} style={{ color: C.primary }} className="mt-0.5 shrink-0" />
-        <div>
+        <div className="min-w-0">
           <h2 className="font-semibold text-slate-800 text-sm">Andamento do Preenchimento por Diretoria Regional de Ensino</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Percentual de escolas com censo concluído no ano {payload.ano_referencia}, agrupado por DRE e respeitando os filtros globais.
+            Percentual de escolas com censo concluído no ano {payload.ano_referencia}, agrupado por DRE e respeitando o recorte selecionado nos filtros globais.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-slate-500">Recorte atual:</span>
+            {recorteBadges.map((badge) => (
+              <span
+                key={badge}
+                className="text-xs rounded-full border border-slate-200 bg-white/70 px-2.5 py-0.5 text-slate-600"
+              >
+                {badge}
+              </span>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-1.5">
+            Município, Região de Integração e Zona reduzem o conjunto de escolas antes do agrupamento por DRE.
           </p>
         </div>
       </div>

@@ -5,7 +5,7 @@ import {
   LogOut, Search, RefreshCw, CloudUpload, Lock, User as UserIcon,
   AlertCircle, Loader2, PanelLeftClose, Eye, EyeOff, ArrowRight,
   BarChart2, UsersRound, MonitorSmartphone, ShieldCheck, Utensils,
-  ClipboardCheck, Activity, Landmark, LayoutDashboard, Database, MapPinned,
+  ClipboardCheck, Activity, Landmark, Database, MapPinned,
   Menu, X, ChevronDown, HeartPulse,
   Sun,
   Moon,
@@ -18,7 +18,6 @@ import {
   apiFetch, saveToken, loadToken, clearToken, clearApiCache, sanitize, prefetchDashboard,
 } from "@/components/admin/shared/api";
 import { JsonModal } from "@/components/admin/shared/JsonModal";
-import { AbaOperacional } from "@/components/admin/AbaOperacional";
 import { AbaTodosCensos } from "@/components/admin/AbaTodosCensos";
 import { AbaPorDre } from "@/components/admin/AbaPorDre";
 import { AbaPerfilAlunos } from "@/components/admin/AbaPerfilAlunos";
@@ -190,7 +189,6 @@ type Tab =
   | "servicos"
   | "alunos"
   | "governanca"
-  | "operacional"
   | "saude"
   | "census"
   | "dre";
@@ -204,10 +202,9 @@ const PAGE_META: Record<Tab, { title: string }> = {
   servicos: { title: "Serviços Terceirizados" },
   alunos: { title: "Perfil dos Alunos e Resultados" },
   governanca: { title: "Gestão Financeira e Governança" },
-  operacional: { title: "Operacional" },
   saude: { title: "Índice de Saúde Operacional por escola" },
-  census: { title: "Todos os Censos" },
-  dre: { title: "Por DRE" },
+  census: { title: "Registros de Preenchimento do Censo" },
+  dre: { title: "Andamento do Preenchimento por DRE" },
 };
 
 type SubItem = { label: string; anchor: string };
@@ -276,10 +273,9 @@ const NAV_INDICATORS: NavItem[] = [
 ];
 
 const NAV_OPERACIONAL: NavItem[] = [
-  { id: "operacional", label: "Operacional", Icon: LayoutDashboard },
   { id: "saude", label: "Saúde Operacional", Icon: HeartPulse },
-  { id: "census", label: "Todos os Censos", Icon: Database },
-  { id: "dre", label: "Por DRE", Icon: MapPinned },
+  { id: "census", label: "Registros do Censo", Icon: Database },
+  { id: "dre", label: "Preenchimento por DRE", Icon: MapPinned },
 ];
 
 function NavGroup({
@@ -428,7 +424,6 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
       r.municipio.toLowerCase().includes(l) || r.dre.toLowerCase().includes(l);
   };
 
-  const filteredRecent = (dbData?.recent ?? []).filter((r) => !search || match(r, search));
   const filteredCensus = (censusPage?.rows ?? []).filter((r) => !search || match(r, search));
 
   const handleNav = (id: Tab) => { setTab(id); setSearch(""); setVisited((prev) => new Set([...prev, id])); setMobileNavOpen(false); };
@@ -616,17 +611,6 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               <div style={{ display: tab === "saude" ? undefined : "none" }}>
                 <AbaSaudeOperacionalEscolas token={token} onUnauth={logout} filters={filters} />
               </div>
-            )}
-
-            {tab === "operacional" && dbData && (
-              <AbaOperacional
-                dbData={dbData}
-                search={search}
-                setSearch={setSearch}
-                filteredRecent={filteredRecent}
-                onView={setViewId}
-                formatDate={fmtDate}
-              />
             )}
 
             {tab === "census" && (

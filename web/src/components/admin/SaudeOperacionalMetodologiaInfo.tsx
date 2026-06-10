@@ -34,13 +34,18 @@ const DIMENSOES: { nome: string; descricao: string }[] = [
   },
 ];
 
-const PESOS: { nome: string; peso: string }[] = [
+const PESOS_HABILITADOS: { nome: string; peso: string }[] = [
   { nome: "Infraestrutura", peso: "20%" },
   { nome: "Energia", peso: "10%" },
   { nome: "Merenda", peso: "15%" },
   { nome: "Segurança", peso: "15%" },
   { nome: "Pessoal", peso: "12%" },
   { nome: "Tecnologia", peso: "12%" },
+];
+
+const PESOS_PREVISTOS: { nome: string; peso: string }[] = [
+  { nome: "Pedagógico", peso: "8%" },
+  { nome: "Governança", peso: "8%" },
 ];
 
 const FAIXAS: { nome: string; intervalo: string }[] = [
@@ -122,7 +127,7 @@ export default function SaudeOperacionalMetodologiaInfo() {
           id={panelId}
           role="dialog"
           aria-label="Metodologia do Índice de Saúde Operacional"
-          className="absolute right-0 z-50 mt-2 w-[min(92vw,30rem)] max-w-[520px] rounded-xl border border-slate-200 bg-white p-4 text-left text-xs leading-relaxed text-slate-600 shadow-xl"
+          className="absolute right-0 z-50 mt-2 w-[min(calc(100vw-2rem),44rem)] rounded-xl border border-slate-200 bg-white p-5 text-left text-xs leading-relaxed text-slate-600 shadow-xl"
         >
           <h3 className="text-sm font-bold text-slate-900">
             Metodologia do Índice de Saúde Operacional
@@ -153,9 +158,9 @@ export default function SaudeOperacionalMetodologiaInfo() {
 
           <section className="mt-3">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Dimensões habilitadas
+              Dimensões habilitadas no cálculo atual
             </h4>
-            <ul className="mt-1 space-y-1">
+            <ul className="mt-1 grid gap-x-6 gap-y-1 sm:grid-cols-2">
               {DIMENSOES.map((dim) => (
                 <li key={dim.nome}>
                   <span className="font-semibold text-slate-700">
@@ -169,25 +174,53 @@ export default function SaudeOperacionalMetodologiaInfo() {
 
           <section className="mt-3">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Pesos utilizados
+              Pesos da metodologia
             </h4>
-            <ul className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1">
-              {PESOS.map((item) => (
-                <li key={item.nome} className="flex justify-between gap-2">
-                  <span>{item.nome}</span>
-                  <span className="font-semibold text-slate-700">
-                    {item.peso}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <div className="mt-1 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-md bg-slate-50 p-2.5">
+                <p className="text-[11px] font-semibold text-slate-700">
+                  Habilitadas no cálculo atual
+                </p>
+                <ul className="mt-1 space-y-1">
+                  {PESOS_HABILITADOS.map((item) => (
+                    <li key={item.nome} className="flex justify-between gap-2">
+                      <span>{item.nome}</span>
+                      <span className="font-semibold text-slate-700">
+                        {item.peso}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-md bg-slate-50 p-2.5">
+                <p className="text-[11px] font-semibold text-slate-700">
+                  Previstas na metodologia
+                </p>
+                <ul className="mt-1 space-y-1">
+                  {PESOS_PREVISTOS.map((item) => (
+                    <li key={item.nome} className="flex justify-between gap-2">
+                      <span>{item.nome}</span>
+                      <span className="font-semibold text-slate-700">
+                        {item.peso}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <p className="mt-2 text-slate-500">
+              Os pesos da metodologia somam 100%. Nesta tela, o cálculo atual
+              considera apenas as dimensões habilitadas. Pedagógico e Governança
+              estão previstos metodologicamente, mas ainda não entram na nota
+              exibida.
+            </p>
           </section>
 
           <section className="mt-3">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Faixas de classificação
             </h4>
-            <ul className="mt-1 space-y-1">
+            <ul className="mt-1 grid gap-x-6 gap-y-1 sm:grid-cols-2">
               {FAIXAS.map((faixa) => (
                 <li key={faixa.nome}>
                   <span className="font-semibold text-slate-700">
@@ -199,10 +232,17 @@ export default function SaudeOperacionalMetodologiaInfo() {
             </ul>
           </section>
 
-          <p className="mt-3 border-t border-slate-100 pt-2 text-slate-500">
-            Observação: escolas sem censo concluído aparecem como pendentes de
-            censo e não recebem nota.
-          </p>
+          <div className="mt-3 space-y-2 border-t border-slate-100 pt-2 text-slate-500">
+            <p>
+              Observação: escolas sem censo concluído aparecem como pendentes de
+              censo e não recebem nota.
+            </p>
+            <p>
+              Nota metodológica: os pesos totais somam 100%. Nesta tela,
+              Pedagógico e Governança aparecem como dimensões previstas, mas
+              ainda não estão habilitadas no cálculo exibido.
+            </p>
+          </div>
         </div>
       )}
     </div>

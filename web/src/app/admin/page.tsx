@@ -396,10 +396,16 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   useEffect(() => { loadDb(); }, [loadDb]);
   useEffect(() => { if (tab === "census") loadCensus(); }, [tab, filterStatus, filterDre, censusLimit, censusPageNum, loadCensus]);
   useEffect(() => {
-    apiFetch<FiltrosOpcoes>("/v1/admin/analytics/filtros/opcoes", token)
+    const qs = new URLSearchParams();
+    if (filters.dre)               qs.set("dre", filters.dre);
+    if (filters.municipio)         qs.set("municipio", filters.municipio);
+    if (filters.zona)              qs.set("zona", filters.zona);
+    if (filters.regiao_integracao) qs.set("regiao_integracao", filters.regiao_integracao);
+    const url = `/v1/admin/analytics/filtros/opcoes${qs.toString() ? `?${qs}` : ""}`;
+    apiFetch<FiltrosOpcoes>(url, token)
       .then(setFiltrosOpcoes)
       .catch((e) => { if ((e as Error).message === "UNAUTHORIZED") logout(); });
-  }, [token, logout]);
+  }, [filters, token, logout]);
 
 
   async function handleSync() {

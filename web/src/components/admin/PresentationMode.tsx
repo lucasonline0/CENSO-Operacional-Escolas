@@ -35,34 +35,34 @@ interface PresentationSlide {
 // ─── Slide list ───────────────────────────────────────────────────────────────
 
 const SLIDES: PresentationSlide[] = [
-  { id: "perfil-dimensao",        tabId: "perfil",         tabLabel: "Caracterização da Rede",         subLabel: "Dimensão e Perfil da Rede",             anchor: "sec-perfil-dimensao" },
-  { id: "perfil-oferta",          tabId: "perfil",         tabLabel: "Caracterização da Rede",         subLabel: "Organização da Oferta e Funcionamento", anchor: "sec-perfil-oferta" },
-  { id: "perfil-infra",           tabId: "perfil",         tabLabel: "Caracterização da Rede",         subLabel: "Infraestrutura Educacional",             anchor: "sec-perfil-infra" },
-  { id: "pessoal-estrutura",      tabId: "pessoal",        tabLabel: "Pessoal e Gestão Escolar",       subLabel: "Estrutura de Gestão Escolar",           anchor: "sec-pessoal-estrutura" },
-  { id: "pessoal-coordenacao",    tabId: "pessoal",        tabLabel: "Pessoal e Gestão Escolar",       subLabel: "Coordenação Pedagógica",                anchor: "sec-pessoal-coordenacao" },
-  { id: "pessoal-quadro",         tabId: "pessoal",        tabLabel: "Pessoal e Gestão Escolar",       subLabel: "Quadro de Pessoal",                     anchor: "sec-pessoal-quadro" },
-  { id: "tecnologia-digital",     tabId: "tecnologia",     tabLabel: "Tecnologia e Equipamentos",      subLabel: "Infraestrutura Digital",                anchor: "sec-tecnologia-digital" },
-  { id: "tecnologia-parque",      tabId: "tecnologia",     tabLabel: "Tecnologia e Equipamentos",      subLabel: "Parque Tecnológico",                    anchor: "sec-tecnologia-parque" },
-  { id: "tecnologia-pedagogico",  tabId: "tecnologia",     tabLabel: "Tecnologia e Equipamentos",      subLabel: "Uso Pedagógico",                        anchor: "sec-tecnologia-pedagogico" },
-  { id: "infra-condicoes",        tabId: "infraestrutura", tabLabel: "Infraestrutura e Segurança",     subLabel: "Condições Estruturais e Ambientes",     anchor: "sec-infra-condicoes" },
-  { id: "infra-energia",          tabId: "infraestrutura", tabLabel: "Infraestrutura e Segurança",     subLabel: "Energia, Climatização e Cap. Elétrica", anchor: "sec-infra-energia" },
-  { id: "infra-seguranca",        tabId: "infraestrutura", tabLabel: "Infraestrutura e Segurança",     subLabel: "Segurança Física e Patrimonial",        anchor: "sec-infra-seguranca" },
-  { id: "merenda-oferta",         tabId: "merenda",        tabLabel: "Merenda Escolar",                subLabel: "Oferta e Adequação da Merenda",         anchor: "sec-merenda-oferta" },
-  { id: "merenda-estrutura",      tabId: "merenda",        tabLabel: "Merenda Escolar",                subLabel: "Estrutura Física",                      anchor: "sec-merenda-estrutura" },
-  { id: "merenda-equipamentos",   tabId: "merenda",        tabLabel: "Merenda Escolar",                subLabel: "Equipamentos da Merenda",               anchor: "sec-merenda-equipamentos" },
-  { id: "merenda-sanitarias",     tabId: "merenda",        tabLabel: "Merenda Escolar",                subLabel: "Condições Sanitárias e Segurança",      anchor: "sec-merenda-sanitarias" },
-  { id: "servicos-visao",         tabId: "servicos",       tabLabel: "Serviços Terceirizados",         subLabel: "Visão Geral",                           anchor: "sec-servicos-visao" },
-  { id: "servicos-gerais",        tabId: "servicos",       tabLabel: "Serviços Terceirizados",         subLabel: "Serviços Gerais",                       anchor: "sec-servicos-gerais" },
-  { id: "servicos-portaria",      tabId: "servicos",       tabLabel: "Serviços Terceirizados",         subLabel: "Portaria",                              anchor: "sec-servicos-portaria" },
-  { id: "servicos-manipuladores", tabId: "servicos",       tabLabel: "Serviços Terceirizados",         subLabel: "Manipulador de Alimentos",              anchor: "sec-servicos-manipuladores" },
-  { id: "servicos-governanca",    tabId: "servicos",       tabLabel: "Serviços Terceirizados",         subLabel: "Governança / Supervisão",               anchor: "sec-servicos-governanca" },
-  { id: "alunos",                 tabId: "alunos",         tabLabel: "Perfil dos Alunos e Resultados" },
-  { id: "governanca",             tabId: "governanca",     tabLabel: "Gestão Financeira e Governança" },
-  { id: "saude",                  tabId: "saude",          tabLabel: "Saúde Operacional" },
+  { id: "perfil-dimensao", tabId: "perfil", tabLabel: "Caracterização da Rede", subLabel: "Dimensão e Perfil da Rede", anchor: "sec-perfil-dimensao" },
+  { id: "perfil-oferta", tabId: "perfil", tabLabel: "Caracterização da Rede", subLabel: "Organização da Oferta e Funcionamento", anchor: "sec-perfil-oferta" },
+  { id: "perfil-infra", tabId: "perfil", tabLabel: "Caracterização da Rede", subLabel: "Infraestrutura Educacional", anchor: "sec-perfil-infra" },
+  { id: "pessoal-estrutura", tabId: "pessoal", tabLabel: "Pessoal e Gestão Escolar", subLabel: "Estrutura de Gestão Escolar", anchor: "sec-pessoal-estrutura" },
+  { id: "pessoal-coordenacao", tabId: "pessoal", tabLabel: "Pessoal e Gestão Escolar", subLabel: "Coordenação Pedagógica", anchor: "sec-pessoal-coordenacao" },
+  { id: "pessoal-quadro", tabId: "pessoal", tabLabel: "Pessoal e Gestão Escolar", subLabel: "Quadro de Pessoal", anchor: "sec-pessoal-quadro" },
+  { id: "tecnologia-digital", tabId: "tecnologia", tabLabel: "Tecnologia e Equipamentos", subLabel: "Infraestrutura Digital", anchor: "sec-tecnologia-digital" },
+  { id: "tecnologia-parque", tabId: "tecnologia", tabLabel: "Tecnologia e Equipamentos", subLabel: "Parque Tecnológico", anchor: "sec-tecnologia-parque" },
+  { id: "tecnologia-pedagogico", tabId: "tecnologia", tabLabel: "Tecnologia e Equipamentos", subLabel: "Uso Pedagógico", anchor: "sec-tecnologia-pedagogico" },
+  { id: "infra-condicoes", tabId: "infraestrutura", tabLabel: "Infraestrutura e Segurança", subLabel: "Condições Estruturais e Ambientes", anchor: "sec-infra-condicoes" },
+  { id: "infra-energia", tabId: "infraestrutura", tabLabel: "Infraestrutura e Segurança", subLabel: "Energia, Climatização e Cap. Elétrica", anchor: "sec-infra-energia" },
+  { id: "infra-seguranca", tabId: "infraestrutura", tabLabel: "Infraestrutura e Segurança", subLabel: "Segurança Física e Patrimonial", anchor: "sec-infra-seguranca" },
+  { id: "merenda-oferta", tabId: "merenda", tabLabel: "Merenda Escolar", subLabel: "Oferta e Adequação da Merenda", anchor: "sec-merenda-oferta" },
+  { id: "merenda-estrutura", tabId: "merenda", tabLabel: "Merenda Escolar", subLabel: "Estrutura Física", anchor: "sec-merenda-estrutura" },
+  { id: "merenda-equipamentos", tabId: "merenda", tabLabel: "Merenda Escolar", subLabel: "Equipamentos da Merenda", anchor: "sec-merenda-equipamentos" },
+  { id: "merenda-sanitarias", tabId: "merenda", tabLabel: "Merenda Escolar", subLabel: "Condições Sanitárias e Segurança", anchor: "sec-merenda-sanitarias" },
+  { id: "servicos-visao", tabId: "servicos", tabLabel: "Serviços Terceirizados", subLabel: "Visão Geral", anchor: "sec-servicos-visao" },
+  { id: "servicos-gerais", tabId: "servicos", tabLabel: "Serviços Terceirizados", subLabel: "Serviços Gerais", anchor: "sec-servicos-gerais" },
+  { id: "servicos-portaria", tabId: "servicos", tabLabel: "Serviços Terceirizados", subLabel: "Portaria", anchor: "sec-servicos-portaria" },
+  { id: "servicos-manipuladores", tabId: "servicos", tabLabel: "Serviços Terceirizados", subLabel: "Manipulador de Alimentos", anchor: "sec-servicos-manipuladores" },
+  { id: "servicos-governanca", tabId: "servicos", tabLabel: "Serviços Terceirizados", subLabel: "Governança / Supervisão", anchor: "sec-servicos-governanca" },
+  { id: "alunos", tabId: "alunos", tabLabel: "Perfil dos Alunos e Resultados" },
+  { id: "governanca", tabId: "governanca", tabLabel: "Gestão Financeira e Governança" },
+  { id: "saude", tabId: "saude", tabLabel: "Saúde Operacional" },
 ];
 
 const INTERVAL_OPTIONS = [
-  { label: "5s",  value: 5000  },
+  { label: "5s", value: 5000 },
   { label: "10s", value: 10000 },
   { label: "15s", value: 15000 },
   { label: "30s", value: 30000 },
@@ -79,15 +79,15 @@ const SLIDES_BY_TAB: SlidesByTab = SLIDES.reduce<SlidesByTab>((acc, slide) => {
 }, []);
 
 const TAB_ICONS: Record<PresentationTab, React.ComponentType<{ size?: number; strokeWidth?: number }>> = {
-  perfil:         BarChart2,
-  pessoal:        UsersRound,
-  tecnologia:     MonitorSmartphone,
+  perfil: BarChart2,
+  pessoal: UsersRound,
+  tecnologia: MonitorSmartphone,
   infraestrutura: ShieldCheck,
-  merenda:        Utensils,
-  servicos:       ClipboardCheck,
-  alunos:         Activity,
-  governanca:     Landmark,
-  saude:          HeartPulse,
+  merenda: Utensils,
+  servicos: ClipboardCheck,
+  alunos: Activity,
+  governanca: Landmark,
+  saude: HeartPulse,
 };
 
 const ALL_TAB_IDS = [...new Set(SLIDES.map((s) => s.tabId))];
@@ -108,18 +108,18 @@ interface Props {
 
 export function PresentationMode({ token, onUnauth, onClose }: Props) {
   const [slideIndex, setSlideIndex] = useState(0);
-  const [mode, setMode]             = useState<"manual" | "auto">("manual");
+  const [mode, setMode] = useState<"manual" | "auto">("manual");
   const [intervalMs, setIntervalMs] = useState(10000);
-  const [isPlaying, setIsPlaying]   = useState(false);
-  const [showPanel, setShowPanel]   = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [showPanel, setShowPanel] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [visited, setVisited] = useState<Set<PresentationTab>>(() => new Set<PresentationTab>([SLIDES[0].tabId]));
 
-  const contentRef   = useRef<HTMLDivElement>(null);
-  const scrollAnim   = useRef<number | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const scrollAnim = useRef<number | null>(null);
 
   const currentSlide = SLIDES[slideIndex];
-  const total        = SLIDES.length;
+  const total = SLIDES.length;
 
   // ── Lock body scroll ─────────────────────────────────────────
   useEffect(() => {
@@ -129,9 +129,9 @@ export function PresentationMode({ token, onUnauth, onClose }: Props) {
 
   // ── Auto fullscreen on open ───────────────────────────────────
   useEffect(() => {
-    document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
+    document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => { });
     return () => {
-      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => { });
     };
   }, []);
 
@@ -144,9 +144,9 @@ export function PresentationMode({ token, onUnauth, onClose }: Props) {
 
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
+      document.documentElement.requestFullscreen().catch(() => { });
     } else {
-      document.exitFullscreen().catch(() => {});
+      document.exitFullscreen().catch(() => { });
     }
   }, []);
 
@@ -226,8 +226,8 @@ export function PresentationMode({ token, onUnauth, onClose }: Props) {
       if (!anchorEl) return;
 
       // ── Position section at top of viewport ──────────────────
-      const cRect  = container.getBoundingClientRect();
-      const aRect  = anchorEl.getBoundingClientRect();
+      const cRect = container.getBoundingClientRect();
+      const aRect = anchorEl.getBoundingClientRect();
       const startY = Math.max(0, container.scrollTop + (aRect.top - cRect.top) - 10);
       container.scrollTop = startY;
 
@@ -241,27 +241,27 @@ export function PresentationMode({ token, onUnauth, onClose }: Props) {
       if (nextInTab?.anchor) {
         const nextEl = container.querySelector(`#${nextInTab.anchor}`) as HTMLElement | null;
         if (nextEl) {
-          const nRect   = nextEl.getBoundingClientRect();
+          const nRect = nextEl.getBoundingClientRect();
           const nextTop = container.scrollTop + (nRect.top - cRect.top);
           if (nextTop > startY + 80) endY = nextTop - 14;
         }
       }
 
       // ── Decide whether content needs panning ─────────────────
-      const viewportH  = container.clientHeight;
-      const sectionH   = endY - startY;
+      const viewportH = container.clientHeight;
+      const sectionH = endY - startY;
       const scrollDist = Math.max(0, sectionH - viewportH * 0.93);
 
       if (scrollDist <= 24) return; // fits — nothing to do
 
       // ── Animate: wait → pan down → pause → pan up ────────────
-      const DOWN_PX_S  = 40;   // scroll speed downwards  (px/s)
-      const UP_PX_S    = 110;  // scroll speed upwards    (px/s)
-      const WAIT_MS    = 750;  // pause before starting
-      const PAUSE_MS   = 900;  // pause at bottom
+      const DOWN_PX_S = 40;   // scroll speed downwards  (px/s)
+      const UP_PX_S = 110;  // scroll speed upwards    (px/s)
+      const WAIT_MS = 750;  // pause before starting
+      const PAUSE_MS = 900;  // pause at bottom
 
       const downMs = (scrollDist / DOWN_PX_S) * 1000;
-      const upMs   = (scrollDist / UP_PX_S)   * 1000;
+      const upMs = (scrollDist / UP_PX_S) * 1000;
 
       type Phase = "wait" | "down" | "pause" | "up";
       let phase: Phase = "wait";
@@ -305,22 +305,22 @@ export function PresentationMode({ token, onUnauth, onClose }: Props) {
       clearTimeout(initTimer);
       cancelScroll();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slideIndex, mode]);
 
   // ── Tab renderer ─────────────────────────────────────────────
-  const renderTab = (tabId: PresentationTab) => {
+  const renderTab = (tabId: PresentationTab, activeAnchor?: string) => {
     switch (tabId) {
-      case "perfil":         return <AbaCaracterizacao token={token} onUnauth={onUnauth} presentationMode />;
-      case "pessoal":        return <AbaPessoalGestao token={token} onUnauth={onUnauth} />;
-      case "tecnologia":     return <AbaTecnologia token={token} onUnauth={onUnauth} />;
-      case "infraestrutura": return <AbaInfraestruturaSeguranca token={token} onUnauth={onUnauth} presentationMode />;
-      case "merenda":        return <AbaMerenda token={token} onUnauth={onUnauth} />;
-      case "servicos":       return <AbaServicosTerceirizados token={token} onUnauth={onUnauth} presentationMode />;
-      case "alunos":         return <AbaPerfilAlunos token={token} onUnauth={onUnauth} />;
-      case "governanca":     return <AbaGestaoFinanceiraGovernanca />;
-      case "saude":          return <AbaSaudeOperacionalEscolas token={token} onUnauth={onUnauth} presentationMode />;
-      default:               return null;
+      case "perfil": return <AbaCaracterizacao token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} />;
+      case "pessoal": return <AbaPessoalGestao token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} />;
+      case "tecnologia": return <AbaTecnologia token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} />;
+      case "infraestrutura": return <AbaInfraestruturaSeguranca token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} />;
+      case "merenda": return <AbaMerenda token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} />;
+      case "servicos": return <AbaServicosTerceirizados token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} />;
+      case "alunos": return <AbaPerfilAlunos token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} />;
+      case "governanca": return <AbaGestaoFinanceiraGovernanca presentationMode activeAnchor={activeAnchor} />;
+      case "saude": return <AbaSaudeOperacionalEscolas token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} />;
+      default: return null;
     }
   };
 
@@ -458,7 +458,7 @@ export function PresentationMode({ token, onUnauth, onClose }: Props) {
                 key={tabId}
                 style={{ display: currentSlide.tabId === tabId ? undefined : "none" }}
               >
-                {visited.has(tabId) && renderTab(tabId)}
+                {visited.has(tabId) && renderTab(tabId, currentSlide.anchor)}
               </div>
             ))}
           </div>

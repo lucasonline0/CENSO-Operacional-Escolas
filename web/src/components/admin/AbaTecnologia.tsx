@@ -39,6 +39,9 @@ function toSegments(items: CategoricStat[] | undefined) {
 type AbaTecnologiaProps = {
   token: string;
   onUnauth: () => void;
+  presentationMode?: boolean;
+  activeAnchor?: string;
+  onLoadComplete?: () => void;
 };
 
 function fmtPct(v: number | null | undefined): string {
@@ -63,7 +66,7 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
 }
 
 export function AbaTecnologia({
-  token, onUnauth,
+  token, onUnauth, presentationMode = false, activeAnchor, onLoadComplete
 }: AbaTecnologiaProps) {
   const [infra, setInfra] = useState<TecnologiaInfra | null>(
     () => getCached("/v1/admin/analytics/tecnologia/infraestrutura"),
@@ -100,11 +103,14 @@ export function AbaTecnologia({
       .catch(handleErr(setUsoErr));
 
     Promise.all([pInfra, pUso]).finally(() => {
-      if (!cancelled) setLoading(false);
+      if (!cancelled) {
+        setLoading(false);
+        onLoadComplete?.();
+      }
     });
 
     return () => { cancelled = true; };
-  }, [token, onUnauth]);
+  }, [token, onUnauth, onLoadComplete]);
 
   if (loading) {
     return (
@@ -167,22 +173,26 @@ export function AbaTecnologia({
     pct: parqueTotal > 0 ? (r.value / parqueTotal) * 100 : 0,
   }));
 
+  const isVisible = (anchor: string) => !presentationMode || activeAnchor === anchor;
+
   return (
     <div className="space-y-6">
       {/* Badge de fonte */}
-      <div className="flex items-center gap-2 text-xs text-emerald-700">
-        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-        <span>Fonte: PostgreSQL · ano corrente · censos concluídos</span>
-      </div>
+      {!presentationMode && (
+        <div className="flex items-center gap-2 text-xs text-emerald-700">
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+          <span>Fonte: PostgreSQL · ano corrente · censos concluídos</span>
+        </div>
+      )}
 
       {/* Banners de erro parcial */}
-      {infraErr && uso && (
+      {!presentationMode && infraErr && uso && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Dados de infraestrutura tecnológica indisponíveis ({infraErr}). Exibindo apenas o uso pedagógico.</span>
         </div>
       )}
-      {usoErr && infra && (
+      {!presentationMode && usoErr && infra && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Dados de uso pedagógico indisponíveis ({usoErr}). Exibindo apenas a infraestrutura tecnológica.</span>
@@ -190,263 +200,289 @@ export function AbaTecnologia({
       )}
 
       {/* ── Infraestrutura Digital ───────────────────────────────── */}
-      <div id="sec-tecnologia-digital" className="flex items-center gap-3">
-        <Wifi size={18} style={{ color: C.primary }} />
-        <h2 className="font-semibold text-slate-800 text-base">Infraestrutura Digital</h2>
-        <div className="flex-1 h-px bg-slate-200" />
-      </div>
+      {isVisible("sec-tecnologia-digital") && (
+        <div className="space-y-6">
+          <div id="sec-tecnologia-digital" className="flex items-center gap-3">
+            <Wifi size={18} style={{ color: C.primary }} />
+            <h2 className="font-semibold text-slate-800 text-base">Infraestrutura Digital</h2>
+            <div className="flex-1 h-px bg-slate-200" />
+          </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <StatCard
-          label="Escolas com Internet"
-          value={fmtPct(infra?.percentual_internet)}
-          Icon={Wifi}
-          tone="blue"
-          sub="das escolas"
-        />
-        <StatCard
-          label="Computadores Atendem"
-          value={fmtPct(infra?.percentual_computadores_atendem)}
-          Icon={Gauge}
-          tone="green"
-          sub="escolas que afirmam atender à demanda"
-        />
-      </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <StatCard
+              label="Escolas com Internet"
+              value={fmtPct(infra?.percentual_internet)}
+              Icon={Wifi}
+              tone="blue"
+              sub="das escolas"
+              compact={presentationMode}
+            />
+            <StatCard
+              label="Computadores Atendem"
+              value={fmtPct(infra?.percentual_computadores_atendem)}
+              Icon={Gauge}
+              tone="green"
+              sub="escolas que afirmam atender à demanda"
+              compact={presentationMode}
+            />
+          </div>
 
-      {/* 4 colunas no lg: Disponibilidade e Provedores ocupam 1 cada (rótulos
-          curtos); Qualidade ocupa 2 (rótulos longos, em barras horizontais). */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
-            <Wifi size={16} style={{ color: C.primary }} />
-            Disponibilidade de internet
-          </h3>
-          <p className="text-xs text-slate-400 mb-5">
-            Escolas com e sem internet declarada.
-          </p>
-          {internetSegments.length > 0 ? (
-            <Donut segments={internetSegments} />
-          ) : (
-            <NoData />
-          )}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+                <Wifi size={16} style={{ color: C.primary }} />
+                Disponibilidade de internet
+              </h3>
+              <p className="text-xs text-slate-400 mb-5">
+                Escolas com e sem internet declarada.
+              </p>
+              {internetSegments.length > 0 ? (
+                <Donut segments={internetSegments} />
+              ) : (
+                <NoData />
+              )}
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+                <Signal size={16} style={{ color: C.primary }} />
+                Provedores de internet
+              </h3>
+              <p className="text-xs text-slate-400 mb-5">
+                Número de escolas por provedor declarado.
+              </p>
+              {provedorSegments.length > 0 ? (
+                <Donut segments={provedorSegments} />
+              ) : (
+                <NoData />
+              )}
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm lg:col-span-2">
+              <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+                <Wifi size={16} style={{ color: C.primary }} />
+                Qualidade da conexão
+              </h3>
+              <p className="text-xs text-slate-400 mb-5">
+                Distribuição categórica auto-declarada pelas escolas.
+              </p>
+              {qualidadeBars.length > 0 ? (
+                <HBarChart rows={qualidadeBars} labelWidth="45%" rowGap="1.25rem" />
+              ) : (
+                <NoData />
+              )}
+            </div>
+          </div>
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
-            <Signal size={16} style={{ color: C.primary }} />
-            Provedores de internet
-          </h3>
-          <p className="text-xs text-slate-400 mb-5">
-            Número de escolas por provedor declarado.
-          </p>
-          {provedorSegments.length > 0 ? (
-            <Donut segments={provedorSegments} />
-          ) : (
-            <NoData />
-          )}
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm lg:col-span-2">
-          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
-            <Wifi size={16} style={{ color: C.primary }} />
-            Qualidade da conexão
-          </h3>
-          <p className="text-xs text-slate-400 mb-5">
-            Distribuição categórica auto-declarada pelas escolas.
-          </p>
-          {qualidadeBars.length > 0 ? (
-            <HBarChart rows={qualidadeBars} labelWidth="45%" rowGap="1.25rem" />
-          ) : (
-            <NoData />
-          )}
-        </div>
-      </div>
+      )}
 
       {/* ── Parque Tecnológico ───────────────────────────────────── */}
-      <div id="sec-tecnologia-parque" className="flex items-center gap-3 border-t border-slate-200 pt-4">
-        <Boxes size={18} style={{ color: C.primary }} />
-        <h2 className="font-semibold text-slate-800 text-base">Parque Tecnológico</h2>
-        <div className="flex-1 h-px bg-slate-200" />
-      </div>
+      {isVisible("sec-tecnologia-parque") && (
+        <div className="space-y-6">
+          <div id="sec-tecnologia-parque" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+            <Boxes size={18} style={{ color: C.primary }} />
+            <h2 className="font-semibold text-slate-800 text-base">Parque Tecnológico</h2>
+            <div className="flex-1 h-px bg-slate-200" />
+          </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <StatCard
-          label="Desktops Administrativos"
-          value={fmtInt(infra?.total_desktops_adm)}
-          Icon={Monitor}
-          tone="blue"
-          sub="total declarado"
-        />
-        <StatCard
-          label="Desktops de Alunos"
-          value={fmtInt(infra?.total_desktops_alunos)}
-          Icon={Monitor}
-          tone="green"
-          sub="total declarado"
-        />
-        <StatCard
-          label="Notebooks"
-          value={fmtInt(infra?.total_notebooks)}
-          Icon={Laptop}
-          tone="amber"
-          sub="total declarado"
-        />
-        <StatCard
-          label="Chromebooks"
-          value={fmtInt(infra?.total_chromebooks)}
-          Icon={Tablet}
-          tone="purple"
-          sub="total declarado"
-        />
-        <StatCard
-          label="Escolas c/ Computadores Inoperantes"
-          value={fmtInt(infra?.escolas_com_computadores_inoperantes)}
-          Icon={ZapOff}
-          tone="orange"
-          sub="escolas declararam"
-        />
-        <StatCard
-          label="Total de Computadores Inoperantes"
-          value={fmtInt(infra?.total_computadores_inoperantes)}
-          Icon={ZapOff}
-          tone="orange"
-          sub="equipamentos declarados"
-        />
-      </div>
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            <StatCard
+              label="Desktops Administrativos"
+              value={fmtInt(infra?.total_desktops_adm)}
+              Icon={Monitor}
+              tone="blue"
+              sub="total declarado"
+              compact={presentationMode}
+            />
+            <StatCard
+              label="Desktops de Alunos"
+              value={fmtInt(infra?.total_desktops_alunos)}
+              Icon={Monitor}
+              tone="green"
+              sub="total declarado"
+              compact={presentationMode}
+            />
+            <StatCard
+              label="Notebooks"
+              value={fmtInt(infra?.total_notebooks)}
+              Icon={Laptop}
+              tone="amber"
+              sub="total declarado"
+              compact={presentationMode}
+            />
+            <StatCard
+              label="Chromebooks"
+              value={fmtInt(infra?.total_chromebooks)}
+              Icon={Tablet}
+              tone="purple"
+              sub="total declarado"
+              compact={presentationMode}
+            />
+            <StatCard
+              label="Escolas c/ Computadores Inoperantes"
+              value={fmtInt(infra?.escolas_com_computadores_inoperantes)}
+              Icon={ZapOff}
+              tone="orange"
+              sub="escolas declararam"
+              compact={presentationMode}
+            />
+            <StatCard
+              label="Total de Computadores Inoperantes"
+              value={fmtInt(infra?.total_computadores_inoperantes)}
+              Icon={ZapOff}
+              tone="orange"
+              sub="equipamentos declarados"
+              compact={presentationMode}
+            />
+          </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
-            <Boxes size={16} style={{ color: C.primary }} />
-            Quantidade média de equipamentos por escola
-          </h3>
-          <p className="text-xs text-slate-400 mb-5">
-            Média por tipo no recorte (total declarado ÷ nº de escolas).
-          </p>
-          {mediaRows.length > 0 ? (
-            <HBarChart rows={mediaRows} labelWidth="11rem" />
-          ) : (
-            <NoData />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+                <Boxes size={16} style={{ color: C.primary }} />
+                Quantidade média de equipamentos por escola
+              </h3>
+              <p className="text-xs text-slate-400 mb-5">
+                Média por tipo no recorte (total declarado ÷ nº de escolas).
+              </p>
+              {mediaRows.length > 0 ? (
+                <HBarChart rows={mediaRows} labelWidth="11rem" />
+              ) : (
+                <NoData />
+              )}
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+                <PieChart size={16} style={{ color: C.primary }} />
+                Distribuição do parque tecnológico
+              </h3>
+              <p className="text-xs text-slate-400 mb-5">
+                Participação de cada tipo no total de equipamentos declarados.
+              </p>
+              {parqueTotal > 0 ? (
+                <Donut segments={parqueSegments} />
+              ) : (
+                <NoData />
+              )}
+            </div>
+          </div>
+
+          {!presentationMode && (
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div
+                className="px-6 py-4 border-b flex items-center gap-2"
+                style={{ background: C.primaryLight }}
+              >
+                <MonitorSmartphone size={16} className="shrink-0" strokeWidth={2} style={{ color: C.primary }} />
+                <h2 className="font-semibold text-slate-800 text-sm">Notas semânticas — Parque Tecnológico</h2>
+              </div>
+              <div className="px-6 py-4 text-xs text-slate-500 space-y-1">
+                <p>
+                  Quantidades de equipamentos são declaradas pelas escolas no formulário do censo.
+                </p>
+                <p>
+                  O número de escolas com computadores inoperantes não representa automaticamente um percentual do parque total.
+                </p>
+              </div>
+            </div>
           )}
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
-            <PieChart size={16} style={{ color: C.primary }} />
-            Distribuição do parque tecnológico
-          </h3>
-          <p className="text-xs text-slate-400 mb-5">
-            Participação de cada tipo no total de equipamentos declarados.
-          </p>
-          {parqueTotal > 0 ? (
-            <Donut segments={parqueSegments} />
-          ) : (
-            <NoData />
-          )}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-        <div
-          className="px-6 py-4 border-b flex items-center gap-2"
-          style={{ background: C.primaryLight }}
-        >
-          <MonitorSmartphone size={16} className="shrink-0" strokeWidth={2} style={{ color: C.primary }} />
-          <h2 className="font-semibold text-slate-800 text-sm">Notas semânticas — Parque Tecnológico</h2>
-        </div>
-        <div className="px-6 py-4 text-xs text-slate-500 space-y-1">
-          <p>
-            Quantidades de equipamentos são declaradas pelas escolas no formulário do censo.
-          </p>
-          <p>
-            O número de escolas com computadores inoperantes não representa automaticamente um percentual do parque total.
-          </p>
-        </div>
-      </div>
+      )}
 
       {/* ── Uso Pedagógico ───────────────────────────────────────── */}
-      <div id="sec-tecnologia-pedagogico" className="flex items-center gap-3 border-t border-slate-200 pt-4">
-        <Projector size={18} style={{ color: C.primary }} />
-        <h2 className="font-semibold text-slate-800 text-base">Uso Pedagógico</h2>
-        <div className="flex-1 h-px bg-slate-200" />
-      </div>
+      {isVisible("sec-tecnologia-pedagogico") && (
+        <div className="space-y-6">
+          <div id="sec-tecnologia-pedagogico" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+            <Projector size={18} style={{ color: C.primary }} />
+            <h2 className="font-semibold text-slate-800 text-base">Uso Pedagógico</h2>
+            <div className="flex-1 h-px bg-slate-200" />
+          </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Escolas com Projetor"
-          value={fmtPct(uso?.percentual_com_projetor)}
-          Icon={Projector}
-          tone="blue"
-          sub="das escolas"
-        />
-        <StatCard
-          label="Total de Projetores"
-          value={fmtInt(uso?.total_projetores)}
-          Icon={Projector}
-          tone="amber"
-          sub="total declarado"
-        />
-        <StatCard
-          label="Média de Projetores por Escola"
-          value={fmtDec(uso?.media_projetores_por_escola)}
-          Icon={Projector}
-          tone="green"
-          sub="por escola no recorte"
-        />
-        <StatCard
-          label="Escolas com Lousa Digital"
-          value={fmtPct(uso?.percentual_com_lousa_digital)}
-          Icon={PenSquare}
-          tone="purple"
-          sub="das escolas"
-        />
-      </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard
+              label="Escolas com Projetor"
+              value={fmtPct(uso?.percentual_com_projetor)}
+              Icon={Projector}
+              tone="blue"
+              sub="das escolas"
+              compact={presentationMode}
+            />
+            <StatCard
+              label="Total de Projetores"
+              value={fmtInt(uso?.total_projetores)}
+              Icon={Projector}
+              tone="amber"
+              sub="total declarado"
+              compact={presentationMode}
+            />
+            <StatCard
+              label="Média de Projetores por Escola"
+              value={fmtDec(uso?.media_projetores_por_escola)}
+              Icon={Projector}
+              tone="green"
+              sub="por escola no recorte"
+              compact={presentationMode}
+            />
+            <StatCard
+              label="Escolas com Lousa Digital"
+              value={fmtPct(uso?.percentual_com_lousa_digital)}
+              Icon={PenSquare}
+              tone="purple"
+              sub="das escolas"
+              compact={presentationMode}
+            />
+          </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
-            <Gauge size={16} style={{ color: C.primary }} />
-            Equipamentos atendem à demanda
-          </h3>
-          <p className="text-xs text-slate-400 mb-5">
-            Distribuição Sim / Parcialmente / Não declarada pelas escolas.
-          </p>
-          {atendeSegments.length > 0 ? (
-            <Donut segments={atendeSegments} />
-          ) : (
-            <NoData />
-          )}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+                <Gauge size={16} style={{ color: C.primary }} />
+                Equipamentos atendem à demanda
+              </h3>
+              <p className="text-xs text-slate-400 mb-5">
+                Distribuição Sim / Parcialmente / Não declarada pelas escolas.
+              </p>
+              {atendeSegments.length > 0 ? (
+                <Donut segments={atendeSegments} />
+              ) : (
+                <NoData />
+              )}
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+                <Projector size={16} style={{ color: C.primary }} />
+                Projetor multimídia
+              </h3>
+              <p className="text-xs text-slate-400 mb-5">
+                Escolas com e sem projetor multimídia.
+              </p>
+              {projetorSegments.length > 0 ? (
+                <Donut segments={projetorSegments} />
+              ) : (
+                <NoData />
+              )}
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+                <PenSquare size={16} style={{ color: C.primary }} />
+                Lousa digital
+              </h3>
+              <p className="text-xs text-slate-400 mb-5">
+                Escolas com e sem lousa digital.
+              </p>
+              {lousaSegments.length > 0 ? (
+                <Donut segments={lousaSegments} />
+              ) : (
+                <NoData />
+              )}
+            </div>
+          </div>
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
-            <Projector size={16} style={{ color: C.primary }} />
-            Projetor multimídia
-          </h3>
-          <p className="text-xs text-slate-400 mb-5">
-            Escolas com e sem projetor multimídia.
-          </p>
-          {projetorSegments.length > 0 ? (
-            <Donut segments={projetorSegments} />
-          ) : (
-            <NoData />
-          )}
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
-            <PenSquare size={16} style={{ color: C.primary }} />
-            Lousa digital
-          </h3>
-          <p className="text-xs text-slate-400 mb-5">
-            Escolas com e sem lousa digital.
-          </p>
-          {lousaSegments.length > 0 ? (
-            <Donut segments={lousaSegments} />
-          ) : (
-            <NoData />
-          )}
-        </div>
-      </div>
+      )}
 
-      <p className="text-xs text-slate-400">
-        Indicadores baseados nas declarações das escolas no formulário do censo.
-      </p>
+      {!presentationMode && (
+        <p className="text-xs text-slate-400">
+          Indicadores baseased nas declarações das escolas no formulário do censo.
+        </p>
+      )}
     </div>
   );
 }

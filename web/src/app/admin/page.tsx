@@ -30,6 +30,7 @@ import { AbaServicosTerceirizados } from "@/components/admin/AbaServicosTerceiri
 import { AbaGestaoFinanceiraGovernanca } from "@/components/admin/AbaGestaoFinanceiraGovernanca";
 import { AbaSaudeOperacionalEscolas } from "@/components/admin/AbaSaudeOperacionalEscolas";
 import { PresentationMode } from "@/components/admin/PresentationMode";
+import { FiltrosGlobais } from "@/components/admin/FiltrosGlobais";
 import type {
   CensusRow, CensusPage, DashboardData,
 } from "@/components/admin/shared/types";
@@ -512,28 +513,6 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               </div>
             </div>
             <div className="ca-topbar-right">
-              <div className="ca-search">
-                <Search size={14} />
-                <input
-                  placeholder="Buscar indicadores, escolas, DREs…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-                <kbd>⌘ /</kbd>
-              </div>
-              <button
-                className="ca-icon-btn"
-                title={syncing ? "Sincronizando…" : "Sync Planilha"}
-                onClick={handleSync}
-                disabled={syncing}
-              >
-                {syncing
-                  ? <Loader2 size={16} className="animate-spin" />
-                  : <CloudUpload size={16} />}
-              </button>
-              <button className="ca-icon-btn" title="Mudar tema" onClick={() => setDark(!dark)}>
-                {dark ? <Sun size={16} /> : <Moon size={16} />}
-              </button>
               <button
                 className="ca-pres-launch-btn hidden md:flex"
                 title="Modo Apresentação"
@@ -541,6 +520,9 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               >
                 <MonitorPlay size={15} />
                 <span>Modo Apresentação</span>
+              </button>
+              <button className="ca-icon-btn" title="Mudar tema" onClick={() => setDark(!dark)}>
+                {dark ? <Sun size={16} /> : <Moon size={16} />}
               </button>
               <button className="ca-icon-btn" title="Sair" onClick={logout}>
                 <LogOut size={16} />

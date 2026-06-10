@@ -20,6 +20,8 @@ import type {
 type AbaMerendaProps = {
   token: string;
   onUnauth: () => void;
+  presentationMode?: boolean;
+  activeAnchor?: string;
 };
 
 function fmtPct(v: number | null | undefined): string {
@@ -40,12 +42,13 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
 
 // Card de equipamento — total + média/escola.
 function EquipCard({
-  label, dados, Icon, tone,
+  label, dados, Icon, tone, compact = false,
 }: {
   label: string;
   dados: EquipTotais | undefined;
   Icon: React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>;
   tone: "blue" | "green" | "amber" | "orange" | "purple";
+  compact?: boolean;
 }) {
   const total = dados?.total ?? 0;
   const media = dados?.media_por_escola;
@@ -56,6 +59,7 @@ function EquipCard({
       Icon={Icon}
       tone={tone}
       sub={`média ${fmtMedia(media)} por escola`}
+      compact={compact}
     />
   );
 }
@@ -146,7 +150,9 @@ function StackedConservationBar({
   );
 }
 
-export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
+export function AbaMerenda({
+  token, onUnauth, presentationMode = false, activeAnchor
+}: AbaMerendaProps) {
   const [oferta,     setOferta]     = useState<MerendaOferta | null>(
     () => getCached("/v1/admin/analytics/merenda/oferta"),
   );
@@ -316,28 +322,32 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
     value: s.escolas,
   }));
 
+  const isVisible = (anchor: string) => !presentationMode || activeAnchor === anchor;
+
   return (
     <div className="space-y-6">
       {/* Badge de fonte */}
-      <div className="flex items-center gap-2 text-xs text-emerald-700">
-        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-        <span>Fonte: PostgreSQL · ano corrente · censos concluídos</span>
-      </div>
+      {!presentationMode && (
+        <div className="flex items-center gap-2 text-xs text-emerald-700">
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+          <span>Fonte: PostgreSQL · ano corrente · censos concluídos</span>
+        </div>
+      )}
 
       {/* Banners de erro parcial */}
-      {ofertaErr && (equip || sanit) && (
+      {!presentationMode && ofertaErr && (equip || sanit) && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Oferta e estrutura da merenda indisponíveis ({ofertaErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
-      {equipErr && (oferta || sanit) && (
+      {!presentationMode && equipErr && (oferta || sanit) && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Equipamentos da merenda indisponíveis ({equipErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
-      {sanitErr && (oferta || equip) && (
+      {!presentationMode && sanitErr && (oferta || equip) && (
         <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Condições sanitárias e segurança da merenda indisponíveis ({sanitErr}). Exibindo apenas os demais blocos.</span>
@@ -345,311 +355,331 @@ export function AbaMerenda({ token, onUnauth }: AbaMerendaProps) {
       )}
 
       {/* ── Oferta e Adequação da Merenda ────────────────────────── */}
-      <div id="sec-merenda-oferta" className="flex items-center gap-3">
-        <Utensils size={18} style={{ color: C.primary }} />
-        <h2 className="font-semibold text-slate-800 text-base">Oferta e Adequação da Merenda</h2>
-        <div className="flex-1 h-px bg-slate-200" />
-      </div>
+      {isVisible("sec-merenda-oferta") && (
+        <div className="space-y-6">
+          <div id="sec-merenda-oferta" className="flex items-center gap-3">
+            <Utensils size={18} style={{ color: C.primary }} />
+            <h2 className="font-semibold text-slate-800 text-base">Oferta e Adequação da Merenda</h2>
+            <div className="flex-1 h-px bg-slate-200" />
+          </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <StatCard
-          label="Atende às Necessidades"
-          value={fmtPct(oferta?.pct_atende_necessidades)}
-          Icon={CheckCircle2}
-          tone="green"
-          sub="das escolas"
-        />
-        <StatCard
-          label="Possui Refeitório"
-          value={fmtPct(oferta?.pct_possui_refeitorio)}
-          Icon={Utensils}
-          tone="blue"
-          sub="das escolas"
-        />
-      </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <StatCard
+              label="Atende às Necessidades"
+              value={fmtPct(oferta?.pct_atende_necessidades)}
+              Icon={CheckCircle2}
+              tone="green"
+              sub="das escolas"
+              compact={presentationMode}
+            />
+            <StatCard
+              label="Possui Refeitório"
+              value={fmtPct(oferta?.pct_possui_refeitorio)}
+              Icon={Utensils}
+              tone="blue"
+              sub="das escolas"
+              compact={presentationMode}
+            />
+          </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <ClipboardList size={16} style={{ color: C.primary }} />
-            Oferta regular da merenda
-          </h3>
-          {ofertaSegments.length > 0 ? (
-            <Donut segments={ofertaSegments} />
-          ) : (
-            <NoData />
-          )}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                <ClipboardList size={16} style={{ color: C.primary }} />
+                Oferta regular da merenda
+              </h3>
+              {ofertaSegments.length > 0 ? (
+                <Donut segments={ofertaSegments} />
+              ) : (
+                <NoData />
+              )}
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                <CheckCircle2 size={16} style={{ color: C.primary }} />
+                Qualidade da merenda
+              </h3>
+              {qualidadeRows.length > 0 ? (
+                <HBarChart rows={qualidadeRows} color={C.primary} />
+              ) : (
+                <NoData />
+              )}
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                <CheckCircle2 size={16} style={{ color: C.primary }} />
+                Merenda atende às necessidades dos alunos
+              </h3>
+              {atendeNecessidadesSegments.length > 0 ? (
+                <Donut segments={atendeNecessidadesSegments} />
+              ) : (
+                <NoData />
+              )}
+            </div>
+          </div>
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <CheckCircle2 size={16} style={{ color: C.primary }} />
-            Qualidade da merenda
-          </h3>
-          {qualidadeRows.length > 0 ? (
-            <HBarChart rows={qualidadeRows} color={C.primary} />
-          ) : (
-            <NoData />
-          )}
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <CheckCircle2 size={16} style={{ color: C.primary }} />
-            Merenda atende às necessidades dos alunos
-          </h3>
-          {atendeNecessidadesSegments.length > 0 ? (
-            <Donut segments={atendeNecessidadesSegments} />
-          ) : (
-            <NoData />
-          )}
-        </div>
-      </div>
+      )}
 
       {/* ── Estrutura Física da Cozinha ──────────────────────────── */}
-      <div id="sec-merenda-estrutura" className="flex items-center gap-3 border-t border-slate-200 pt-4">
-        <ChefHat size={18} style={{ color: C.primary }} />
-        <h2 className="font-semibold text-slate-800 text-base">Estrutura Física da Cozinha</h2>
-        <div className="flex-1 h-px bg-slate-200" />
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <ClipboardList size={16} style={{ color: C.primary }} />
-            Condições da cozinha
-          </h3>
-          {condCozinhaRows.length > 0 ? (
-            <HBarChart rows={condCozinhaRows} color={C.primary} />
-          ) : (
-            <NoData />
-          )}
+      {isVisible("sec-merenda-structure") && ( // Anchor is "sec-merenda-estrutura"
+        <div className="space-y-6">
+          <div id="sec-merenda-estrutura" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+            <ChefHat size={18} style={{ color: C.primary }} />
+            <h2 className="font-semibold text-slate-800 text-base">Estrutura Física da Cozinha</h2>
+            <div className="flex-1 h-px bg-slate-200" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                <ClipboardList size={16} style={{ color: C.primary }} />
+                Condições da cozinha
+              </h3>
+              {condCozinhaRows.length > 0 ? (
+                <HBarChart rows={condCozinhaRows} color={C.primary} />
+              ) : (
+                <NoData />
+              )}
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                <Utensils size={16} style={{ color: C.primary }} />
+                Possui refeitório?
+              </h3>
+              {possuiRefeitorioSegments.length > 0 ? (
+                <Donut segments={possuiRefeitorioSegments} />
+              ) : (
+                <NoData />
+              )}
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                <ChefHat size={16} style={{ color: C.primary }} />
+                Tamanho da cozinha
+              </h3>
+              {tamanhoCozinhaRows.length > 0 ? (
+                <HBarChart rows={tamanhoCozinhaRows} color={C.primary} />
+              ) : (
+                <NoData />
+              )}
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                <CheckCircle2 size={16} style={{ color: C.primary }} />
+                O refeitório atende a necessidade da escola adequadamente?
+              </h3>
+              {refeitorioAdequadoRows.length > 0 ? (
+                <HBarChart rows={refeitorioAdequadoRows} color={C.primary} />
+              ) : (
+                <NoData />
+              )}
+            </div>
+          </div>
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <Utensils size={16} style={{ color: C.primary }} />
-            Possui refeitório?
-          </h3>
-          {possuiRefeitorioSegments.length > 0 ? (
-            <Donut segments={possuiRefeitorioSegments} />
-          ) : (
-            <NoData />
-          )}
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <ChefHat size={16} style={{ color: C.primary }} />
-            Tamanho da cozinha
-          </h3>
-          {tamanhoCozinhaRows.length > 0 ? (
-            <HBarChart rows={tamanhoCozinhaRows} color={C.primary} />
-          ) : (
-            <NoData />
-          )}
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <CheckCircle2 size={16} style={{ color: C.primary }} />
-            O refeitório atende a necessidade da escola adequadamente?
-          </h3>
-          {refeitorioAdequadoRows.length > 0 ? (
-            <HBarChart rows={refeitorioAdequadoRows} color={C.primary} />
-          ) : (
-            <NoData />
-          )}
-        </div>
-      </div>
+      )}
 
       {/* ── Equipamentos da Merenda ──────────────────────────────── */}
-      <div id="sec-merenda-equipamentos" className="flex items-center gap-3 border-t border-slate-200 pt-4">
-        <Refrigerator size={18} style={{ color: C.primary }} />
-        <h2 className="font-semibold text-slate-800 text-base">Equipamentos da Merenda</h2>
-        <div className="flex-1 h-px bg-slate-200" />
-      </div>
+      {isVisible("sec-merenda-equipamentos") && (
+        <div className="space-y-6">
+          <div id="sec-merenda-equipamentos" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+            <Refrigerator size={18} style={{ color: C.primary }} />
+            <h2 className="font-semibold text-slate-800 text-base">Equipamentos da Merenda</h2>
+            <div className="flex-1 h-px bg-slate-200" />
+          </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <EquipCard label="Freezers"   dados={equip?.freezers}   Icon={Snowflake}    tone="blue" />
-        <EquipCard label="Geladeiras" dados={equip?.geladeiras} Icon={Refrigerator} tone="green" />
-        <EquipCard label="Fogões"     dados={equip?.fogoes}     Icon={Flame}        tone="orange" />
-        <EquipCard label="Fornos"     dados={equip?.fornos}     Icon={Microwave}    tone="amber" />
-        <EquipCard label="Bebedouros" dados={equip?.bebedouros} Icon={GlassWater}   tone="purple" />
-      </div>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <EquipCard label="Freezers"   dados={equip?.freezers}   Icon={Snowflake}    tone="blue"   compact={presentationMode} />
+            <EquipCard label="Geladeiras" dados={equip?.geladeiras} Icon={Refrigerator} tone="green"  compact={presentationMode} />
+            <EquipCard label="Fogões"     dados={equip?.fogoes}     Icon={Flame}        tone="orange" compact={presentationMode} />
+            <EquipCard label="Fornos"     dados={equip?.fornos}     Icon={Microwave}    tone="amber"  compact={presentationMode} />
+            <EquipCard label="Bebedouros" dados={equip?.bebedouros} Icon={GlassWater}   tone="purple" compact={presentationMode} />
+          </div>
 
-      {/* Gráficos sintéticos de equipamentos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <CheckCircle2 size={16} style={{ color: C.primary }} />
-            Presença de equipamentos por tipo
-          </h3>
-          {presencaRows.length > 0 ? (
-            <HBarChart rows={presencaRows} color={C.primary} labelWidth="6rem" />
-          ) : (
-            <NoData />
-          )}
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <Users size={16} style={{ color: C.primary }} />
-            Escolas com 1, 2 ou mais tipos de equipamentos
-          </h3>
-          {faixasRows.length > 0 ? (
-            <HBarChart rows={faixasRows} color={C.primary} labelWidth="7rem" />
-          ) : (
-            <NoData />
-          )}
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <ClipboardList size={16} style={{ color: C.primary }} />
-            Quantidade média de equipamentos por escola
-          </h3>
-          {mediaRows.some((r) => r.value > 0) ? (
-            <HBarChart rows={mediaRows} color={C.primary} labelWidth="6rem" />
-          ) : (
-            <NoData />
-          )}
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <AlertCircle size={16} className="text-rose-500" />
-            Criticidade por equipamento
-          </h3>
-          <p className="text-xs text-slate-400 -mt-3 mb-4">% de escolas com estado ruim ou inoperante</p>
-          {criticidadeRows.length > 0 ? (
-            <HBarChart rows={criticidadeRows} color="#E11D48" labelWidth="6rem" />
-          ) : (
-            <NoData />
-          )}
-        </div>
-      </div>
-
-      {/* Estado de conservação — visão consolidada */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-        <div
-          className="px-6 py-4 border-b flex items-center gap-2"
-          style={{ background: C.primaryLight }}
-        >
-          <ClipboardList size={16} className="shrink-0" strokeWidth={2} style={{ color: C.primary }} />
-          <h2 className="font-semibold text-slate-800 text-sm">Estado de conservação — visão consolidada</h2>
-        </div>
-        <div className="p-6">
-          {consolidadoEquipList.length > 0 ? (
-            <StackedConservationBar
-              equipamentos={consolidadoEquipList}
-              estados={estadosConsolidados}
-              dados={consolidadoPorEquip}
-              nomeEquip={equipNome}
-            />
-          ) : (
-            <NoData />
-          )}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-        <div
-          className="px-6 py-4 border-b flex items-center gap-2"
-          style={{ background: C.primaryLight }}
-        >
-          <ClipboardList size={16} className="shrink-0" strokeWidth={2} style={{ color: C.primary }} />
-          <h2 className="font-semibold text-slate-800 text-sm">Distribuição do estado dos equipamentos</h2>
-        </div>
-        <div className="p-6">
-          {equip && equip.dist_estados.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-200">
-                    <th className="py-2 pr-4 font-medium">Equipamento</th>
-                    <th className="py-2 pr-4 font-medium">Estado</th>
-                    <th className="py-2 font-medium text-right">Escolas</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {equipOrder.flatMap((eq) =>
-                    (estadosPorEquip[eq] ?? []).map((row, idx) => (
-                      <tr key={`${eq}-${row.estado}`} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors group">
-                        <td className="py-2 pr-4 text-slate-700 font-medium group-hover:text-blue-700 transition-colors">
-                          {idx === 0 ? (equipLabels[eq] ?? eq) : ""}
-                        </td>
-                        <td className="py-2 pr-4 text-slate-600 group-hover:text-slate-900 transition-colors">{row.estado}</td>
-                        <td className="py-2 text-right tabular-nums text-slate-800 font-semibold group-hover:text-blue-900 transition-colors">
-                          {row.escolas.toLocaleString("pt-BR")}
-                        </td>
-                      </tr>
-                    )),
-                  )}
-                </tbody>
-              </table>
+          {/* Gráficos sintéticos de equipamentos */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                <CheckCircle2 size={16} style={{ color: C.primary }} />
+                Presença de equipamentos por tipo
+              </h3>
+              {presencaRows.length > 0 ? (
+                <HBarChart rows={presencaRows} color={C.primary} labelWidth="6rem" />
+              ) : (
+                <NoData />
+              )}
             </div>
-          ) : (
-            <NoData />
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                <Users size={16} style={{ color: C.primary }} />
+                Escolas com 1, 2 ou mais tipos de equipamentos
+              </h3>
+              {faixasRows.length > 0 ? (
+                <HBarChart rows={faixasRows} color={C.primary} labelWidth="7rem" />
+              ) : (
+                <NoData />
+              )}
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                <ClipboardList size={16} style={{ color: C.primary }} />
+                Quantidade média de equipamentos por escola
+              </h3>
+              {mediaRows.some((r) => r.value > 0) ? (
+                <HBarChart rows={mediaRows} color={C.primary} labelWidth="6rem" />
+              ) : (
+                <NoData />
+              )}
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                <AlertCircle size={16} className="text-rose-500" />
+                Criticidade por equipamento
+              </h3>
+              <p className="text-xs text-slate-400 -mt-3 mb-4">% de escolas com estado ruim ou inoperante</p>
+              {criticidadeRows.length > 0 ? (
+                <HBarChart rows={criticidadeRows} color="#E11D48" labelWidth="6rem" />
+              ) : (
+                <NoData />
+              )}
+            </div>
+          </div>
+
+          {/* Estado de conservação — visão consolidada */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+            <div
+              className="px-6 py-4 border-b flex items-center gap-2"
+              style={{ background: C.primaryLight }}
+            >
+              <ClipboardList size={16} className="shrink-0" strokeWidth={2} style={{ color: C.primary }} />
+              <h2 className="font-semibold text-slate-800 text-sm">Estado de conservação — visão consolidada</h2>
+            </div>
+            <div className="p-6">
+              {consolidadoEquipList.length > 0 ? (
+                <StackedConservationBar
+                  equipamentos={consolidadoEquipList}
+                  estados={estadosConsolidados}
+                  dados={consolidadoPorEquip}
+                  nomeEquip={equipNome}
+                />
+              ) : (
+                <NoData />
+              )}
+            </div>
+          </div>
+
+          {!presentationMode && (
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div
+                className="px-6 py-4 border-b flex items-center gap-2"
+                style={{ background: C.primaryLight }}
+              >
+                <ClipboardList size={16} className="shrink-0" strokeWidth={2} style={{ color: C.primary }} />
+                <h2 className="font-semibold text-slate-800 text-sm">Distribuição do estado dos equipamentos</h2>
+              </div>
+              <div className="p-6">
+                {equip && equip.dist_estados.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-200">
+                          <th className="py-2 pr-4 font-medium">Equipamento</th>
+                          <th className="py-2 pr-4 font-medium">Estado</th>
+                          <th className="py-2 font-medium text-right">Escolas</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {equipOrder.flatMap((eq) =>
+                          (estadosPorEquip[eq] ?? []).map((row, idx) => (
+                            <tr key={`${eq}-${row.estado}`} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors group">
+                              <td className="py-2 pr-4 text-slate-700 font-medium group-hover:text-blue-700 transition-colors">
+                                {idx === 0 ? (equipLabels[eq] ?? eq) : ""}
+                              </td>
+                              <td className="py-2 pr-4 text-slate-600 group-hover:text-slate-900 transition-colors">{row.estado}</td>
+                              <td className="py-2 text-right tabular-nums text-slate-800 font-semibold group-hover:text-blue-900 transition-colors">
+                                {row.escolas.toLocaleString("pt-BR")}
+                              </td>
+                            </tr>
+                          )),
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <NoData />
+                )}
+              </div>
+            </div>
           )}
         </div>
-      </div>
+      )}
 
       {/* ── Condições Sanitárias e Segurança ─────────────────────── */}
-      <div id="sec-merenda-sanitarias" className="flex items-center gap-3 border-t border-slate-200 pt-4">
-        <ShieldCheck size={18} style={{ color: C.primary }} />
-        <h2 className="font-semibold text-slate-800 text-base">Condições Sanitárias e Segurança</h2>
-        <div className="flex-1 h-px bg-slate-200" />
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <Package size={16} style={{ color: C.primary }} />
-            Despensa exclusiva p/ gêneros alimentícios
-          </h3>
-          {despensaSegments.length > 0 ? (
-            <Donut segments={despensaSegments} />
-          ) : (
-            <NoData />
-          )}
+      {isVisible("sec-merenda-sanitarias") && (
+        <div className="space-y-6">
+          <div id="sec-merenda-sanitarias" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+            <ShieldCheck size={18} style={{ color: C.primary }} />
+            <h2 className="font-semibold text-slate-800 text-base">Condições Sanitárias e Segurança</h2>
+            <div className="flex-1 h-px bg-slate-200" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                <Package size={16} style={{ color: C.primary }} />
+                Despensa exclusiva p/ gêneros alimentícios
+              </h3>
+              {despensaSegments.length > 0 ? (
+                <Donut segments={despensaSegments} />
+              ) : (
+                <NoData />
+              )}
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                <CheckCircle2 size={16} style={{ color: C.primary }} />
+                O depósito conserva adequadamente os alimentos?
+              </h3>
+              {depositoSegments.length > 0 ? (
+                <Donut segments={depositoSegments} />
+              ) : (
+                <NoData />
+              )}
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                <ClipboardList size={16} style={{ color: C.primary }} />
+                Presença de itens básicos
+              </h3>
+              <p className="text-xs text-slate-400 -mt-4 mb-5">% sobre o total de escolas concluídas no recorte</p>
+              {itensBasicosRows.length > 0 ? (
+                <HBarChart rows={itensBasicosRows} color={C.primary} labelWidth="9rem" />
+              ) : (
+                <NoData />
+              )}
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                <FireExtinguisher size={16} style={{ color: C.primary }} />
+                Estoque de EPIs e extintor de incêndio
+              </h3>
+              {epiExtintorRows.length > 0 ? (
+                <HBarChart rows={epiExtintorRows} color={C.primary} />
+              ) : (
+                <NoData />
+              )}
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                <Flame size={16} style={{ color: C.primary }} />
+                Recarga e manutenção dos extintores
+              </h3>
+              {manutencaoExtintorRows.length > 0 ? (
+                <HBarChart rows={manutencaoExtintorRows} color={C.primary} />
+              ) : (
+                <NoData />
+              )}
+            </div>
+          </div>
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <CheckCircle2 size={16} style={{ color: C.primary }} />
-            O depósito conserva adequadamente os alimentos?
-          </h3>
-          {depositoSegments.length > 0 ? (
-            <Donut segments={depositoSegments} />
-          ) : (
-            <NoData />
-          )}
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <ClipboardList size={16} style={{ color: C.primary }} />
-            Presença de itens básicos
-          </h3>
-          <p className="text-xs text-slate-400 -mt-4 mb-5">% sobre o total de escolas concluídas no recorte</p>
-          {itensBasicosRows.length > 0 ? (
-            <HBarChart rows={itensBasicosRows} color={C.primary} labelWidth="9rem" />
-          ) : (
-            <NoData />
-          )}
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <FireExtinguisher size={16} style={{ color: C.primary }} />
-            Estoque de EPIs e extintor de incêndio
-          </h3>
-          {epiExtintorRows.length > 0 ? (
-            <HBarChart rows={epiExtintorRows} color={C.primary} />
-          ) : (
-            <NoData />
-          )}
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <Flame size={16} style={{ color: C.primary }} />
-            Recarga e manutenção dos extintores
-          </h3>
-          {manutencaoExtintorRows.length > 0 ? (
-            <HBarChart rows={manutencaoExtintorRows} color={C.primary} />
-          ) : (
-            <NoData />
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 }

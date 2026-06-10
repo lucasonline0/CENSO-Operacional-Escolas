@@ -23,6 +23,7 @@ import type {
   SaudeOperacionalEscola,
   SaudeOperacionalPayload,
   SaudeOperacionalStatus,
+  DashboardFilters,
 } from "./shared/types";
 
 const ENDPOINT_BASE = "/v1/admin/analytics/escolas/saude-operacional";
@@ -256,10 +257,16 @@ export function AbaSaudeOperacionalEscolas({
   token,
   onUnauth,
   presentationMode = false,
+  filters,
+  activeAnchor,
+  onLoadComplete
 }: {
   token: string;
   onUnauth: () => void;
   presentationMode?: boolean;
+  filters?: DashboardFilters;
+  activeAnchor?: string;
+  onLoadComplete?: () => void;
 }) {
   const [payload, setPayload] = useState<SaudeOperacionalPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -320,13 +327,16 @@ export function AbaSaudeOperacionalEscolas({
         if (!cancelled) setError(message);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          onLoadComplete?.();
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [token, onUnauth, sortKey, sortDir, page, pageSize, serverSearch]);
+  }, [token, onUnauth, sortKey, sortDir, page, pageSize, serverSearch, onLoadComplete]);
 
   if (loading && payload === null) {
     return (

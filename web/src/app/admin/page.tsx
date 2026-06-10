@@ -350,7 +350,6 @@ function NavGroup({
 }
 
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
-  const [dbData,         setDbData]         = useState<DashboardData | null>(null);
   const [censusPage,     setCensusPage]     = useState<CensusPage | null>(null);
   const [tab,            setTab]            = useState<Tab>("perfil");
   const [filterStatus,   setFilterStatus]   = useState("");
@@ -369,9 +368,13 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
   const logout = useCallback(() => { clearToken(); clearApiCache(); onLogout(); }, [onLogout]);
 
+  // O endpoint legado /v1/admin/dashboard segue sendo consultado para gatear o
+  // estado de carregamento/erro do painel operacional. O payload (incl. by_dre)
+  // não é mais armazenado no cliente: a aba "Preenchimento por DRE" agora usa o
+  // endpoint analítico próprio /v1/admin/analytics/preenchimento/dre.
   const loadDb = useCallback(async () => {
     try {
-      setDbData(await apiFetch<DashboardData>("/v1/admin/dashboard", token));
+      await apiFetch<DashboardData>("/v1/admin/dashboard", token);
     } catch (e) {
       if ((e as Error).message === "UNAUTHORIZED") { logout(); return; }
       setErr("Erro ao carregar painel operacional.");
@@ -639,8 +642,10 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               />
             )}
 
-            {tab === "dre" && dbData && (
-              <AbaPorDre dbData={dbData} />
+            {visited.has("dre") && (
+              <div style={{ display: tab === "dre" ? undefined : "none" }}>
+                <AbaPorDre token={token} onUnauth={logout} filters={filters} />
+              </div>
             )}
           </div>
 

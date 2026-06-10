@@ -466,6 +466,28 @@ export interface SaudeOperacionalPayload {
   escolas: SaudeOperacionalEscola[];
 }
 
+// Andamento do preenchimento do censo por DRE.
+// Payload de /v1/admin/analytics/preenchimento/dre. Respeita os filtros globais
+// (year, dre, municipio, zona, regiao_integracao). pending = total sem censo no
+// ano (total - completed - draft).
+export interface PreenchimentoDreRow {
+  dre: string;
+  total: number;
+  completed: number;
+  draft: number;
+  pending: number;
+  completion_percentage: number;
+}
+
+export interface PreenchimentoDrePayload {
+  ano_referencia: number;
+  total_escolas: number;
+  total_completed: number;
+  total_draft: number;
+  total_pending: number;
+  dres: PreenchimentoDreRow[];
+}
+
 // Estado global de filtros do dashboard.
 // Passado para cada aba e repassado como query params para os endpoints analíticos.
 export interface DashboardFilters {

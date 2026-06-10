@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { apiFetch, sanitize } from "./shared/api";
 import { C } from "./shared/constants";
+import SaudeOperacionalMetodologiaInfo from "./SaudeOperacionalMetodologiaInfo";
 import type {
   SaudeOperacionalEscola,
   SaudeOperacionalPayload,
@@ -408,9 +409,7 @@ export function AbaSaudeOperacionalEscolas({
               {escolasAvaliadas.toLocaleString("pt-BR")} de{" "}
               {payload.total_escolas.toLocaleString("pt-BR")} escolas cadastradas
             </span>
-            <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700">
-              Metodologia v{payload.metodologia.versao}
-            </span>
+            <SaudeOperacionalMetodologiaInfo />
           </div>
           <p className="mt-2 text-xs text-slate-500 lg:text-right">
             Escolas sem censo concluído no ano aparecem como pendentes de censo.

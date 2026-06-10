@@ -364,6 +364,7 @@ export function AbaSaudeOperacionalEscolas({
   }
 
   const { resumo } = payload;
+  const escolasAvaliadas = resumo.saudaveis + resumo.atencao + resumo.criticas;
   const totalPages = payload.total_pages;
 
   const pageStart = payload.escolas.length > 0
@@ -386,24 +387,31 @@ export function AbaSaudeOperacionalEscolas({
             Visão escola a escola da saúde operacional, criticidade e dimensões avaliadas.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 lg:justify-end">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            Fonte: PostgreSQL · ano de referência {payload.ano_referencia} · censos concluídos
-          </span>
-          <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700">
-            Metodologia v{payload.metodologia.versao}
-          </span>
+        <div className="lg:max-w-xl">
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              Base: censos concluídos de {payload.ano_referencia} · cobertura:{" "}
+              {escolasAvaliadas.toLocaleString("pt-BR")} de{" "}
+              {payload.total_escolas.toLocaleString("pt-BR")} escolas cadastradas
+            </span>
+            <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700">
+              Metodologia v{payload.metodologia.versao}
+            </span>
+          </div>
+          <p className="mt-2 text-xs text-slate-500 lg:text-right">
+            Escolas sem censo concluído no ano aparecem como pendentes de censo.
+          </p>
         </div>
       </header>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         <SummaryCard
-          label="Total de escolas"
-          value={payload.total_escolas}
+          label="Escolas avaliadas"
+          value={escolasAvaliadas}
           Icon={Building2}
           tone="blue"
-          sub={`Ano ${payload.ano_referencia}`}
+          sub={`${escolasAvaliadas.toLocaleString("pt-BR")} de ${payload.total_escolas.toLocaleString("pt-BR")} cadastradas`}
         />
         <SummaryCard
           label="Saudáveis"
@@ -424,7 +432,7 @@ export function AbaSaudeOperacionalEscolas({
           tone="rose"
         />
         <SummaryCard
-          label="Sem dados"
+          label="Pendentes de censo"
           value={resumo.sem_dados}
           Icon={CircleHelp}
           tone="slate"

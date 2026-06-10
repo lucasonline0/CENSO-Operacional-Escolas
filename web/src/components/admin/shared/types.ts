@@ -279,7 +279,6 @@ export interface ServicosGerais {
   total_temporario: number;
   total_terceirizado: number;
   media_total_por_escola: number;
-  top_empresas: EmpresaStat[];
 }
 
 export interface ServicosPortaria {
@@ -379,78 +378,4 @@ export interface CaracterizacaoOfertaFuncionamento {
   modalidades_ofertadas:  LabelEscolasStat[];
   turnos:                 LabelEscolasStat[];
   media_turnos_por_porte: MediaTurnosPorPorteStat[];
-}
-
-// Índice de Saúde Operacional por escola.
-// Payload de /v1/admin/analytics/escolas/saude-operacional.
-export type SaudeOperacionalStatus =
-  | "saudavel"
-  | "atencao"
-  | "critica"
-  | "sem_dados";
-
-export interface SaudeOperacionalPesos {
-  infraestrutura: number;
-  energia: number;
-  merenda: number;
-  seguranca: number;
-  pessoal: number;
-  tecnologia: number;
-  pedagogico: number;
-  governanca: number;
-}
-
-export interface SaudeOperacionalMetodologia {
-  nome: string;
-  versao: string;
-  dimensoes_habilitadas: string[];
-  pesos: SaudeOperacionalPesos;
-}
-
-export interface SaudeOperacionalDimensoes {
-  infraestrutura: number | null;
-  energia: number | null;
-  merenda: number | null;
-  seguranca: number | null;
-  pessoal: number | null;
-  tecnologia: number | null;
-  pedagogico: number | null;
-  governanca: number | null;
-}
-
-export interface SaudeOperacionalEscola {
-  school_id: number;
-  census_id: number | null;
-  codigo_inep: string | null;
-  escola: string;
-  municipio: string;
-  dre: string;
-  zona: string | null;
-  total_alunos: number | null;
-  salas_aula: number | null;
-  alunos_por_sala: number | null;
-  saude: number | null;
-  criticidade: number | null;
-  status: SaudeOperacionalStatus;
-  dimensoes: SaudeOperacionalDimensoes;
-}
-
-export interface SaudeOperacionalResumo {
-  saudaveis: number;
-  atencao: number;
-  criticas: number;
-  sem_dados: number;
-  saude_media: number | null;
-}
-
-export interface SaudeOperacionalPayload {
-  total_escolas: number;
-  total_filtrado: number;
-  page: number;
-  page_size: number;
-  total_pages: number;
-  ano_referencia: number;
-  metodologia: SaudeOperacionalMetodologia;
-  resumo: SaudeOperacionalResumo;
-  escolas: SaudeOperacionalEscola[];
 }

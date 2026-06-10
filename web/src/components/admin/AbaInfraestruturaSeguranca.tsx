@@ -146,19 +146,19 @@ export function AbaInfraestruturaSeguranca({
       )}
 
       {/* ── Condições Estruturais e Ambientes ────────────────────── */}
-      <div className="flex items-center gap-3 animate-fade-in-up">
+      <div className="flex items-center gap-3">
         <Layers size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Condições Estruturais e Ambientes</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
       {condicoes && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fade-in-up [animation-delay:150ms]">
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-slate-300 transition-all duration-300 group cursor-default animate-fade-in-up">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs text-slate-500 font-medium uppercase tracking-wide group-hover:text-slate-700 transition-colors">Reforma Crítica</p>
-                <p className="text-3xl font-bold text-slate-900 mt-2 tabular-nums group-hover:scale-105 origin-left transition-transform">
+                <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">Reforma Crítica</p>
+                <p className="text-3xl font-bold text-slate-900 mt-2 tabular-nums">
                   {fmtPct(condicoes.pct_reforma_critica)}
                 </p>
                 <p className="text-xs text-slate-400 mt-1">das escolas necessitam de reforma geral ou estão com a obra parada</p>
@@ -166,16 +166,16 @@ export function AbaInfraestruturaSeguranca({
                   Reforma geral: {fmtPct(condicoes.pct_reforma_geral)} · Obra parada: {fmtPct(condicoes.pct_obra_parada)}
                 </p>
               </div>
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-50 text-amber-700 ring-1 ring-amber-100 shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-transform">
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-50 text-amber-700 ring-1 ring-amber-100 shrink-0">
                 <Wrench size={21} strokeWidth={2} />
               </div>
             </div>
           </div>
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-slate-300 transition-all duration-300 group cursor-default animate-fade-in-up">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs text-slate-500 font-medium uppercase tracking-wide group-hover:text-slate-700 transition-colors">Cobertura Plena de Ambientes</p>
-                <p className="text-3xl font-bold text-slate-900 mt-2 tabular-nums group-hover:scale-105 origin-left transition-transform">
+                <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">Cobertura Plena de Ambientes</p>
+                <p className="text-3xl font-bold text-slate-900 mt-2 tabular-nums">
                   {fmtPct(condicoes.pct_cobertura_plena)}
                 </p>
                 <p className="text-xs text-slate-400 mt-1">das escolas possuem todos os 8 ambientes essenciais</p>
@@ -183,7 +183,7 @@ export function AbaInfraestruturaSeguranca({
                   Biblioteca · Lab. Ciências · Lab. Informática · Quadra · Refeitório · Cozinha · Sala dos Professores · SAEE
                 </p>
               </div>
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-transform">
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 shrink-0">
                 <Building2 size={21} strokeWidth={2} />
               </div>
             </div>
@@ -191,7 +191,7 @@ export function AbaInfraestruturaSeguranca({
         </div>
       )}
 
-      <div id="sec-infra-condicoes" className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fade-in-up [animation-delay:300ms]">
+      <div id="sec-infra-condicoes" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
             <Layers size={16} style={{ color: C.primary }} />
@@ -302,11 +302,11 @@ export function AbaInfraestruturaSeguranca({
                 </thead>
                 <tbody>
                   {rows.map((r, i) => (
-                    <tr key={r.faixa} className={`transition-colors hover:bg-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
-                      <td className="px-5 py-3 text-slate-700 font-medium">{r.faixa}</td>
-                      <td className="px-5 py-3 text-right text-slate-600 tabular-nums">{r.total_salas.toLocaleString("pt-BR")}</td>
-                      <td className="px-5 py-3 text-right text-slate-600 tabular-nums">{r.climatizadas.toLocaleString("pt-BR")}</td>
-                      <td className="px-5 py-3 text-right text-slate-600 tabular-nums">{r.nao_climatizadas.toLocaleString("pt-BR")}</td>
+                    <tr key={r.faixa} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                      <td className="px-5 py-3 text-slate-700">{r.faixa}</td>
+                      <td className="px-5 py-3 text-right text-slate-600">{r.total_salas.toLocaleString("pt-BR")}</td>
+                      <td className="px-5 py-3 text-right text-slate-600">{r.climatizadas.toLocaleString("pt-BR")}</td>
+                      <td className="px-5 py-3 text-right text-slate-600">{r.nao_climatizadas.toLocaleString("pt-BR")}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -390,7 +390,7 @@ export function AbaInfraestruturaSeguranca({
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm animate-fade-in-up [animation-delay:450ms]">
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
           <Lightbulb size={16} style={{ color: "#ec4899" }} />
           Iluminação Externa
@@ -402,14 +402,14 @@ export function AbaInfraestruturaSeguranca({
                 s.valor === "Adequada"    ? "#22c55e" :
                 s.valor === "Regular"     ? "#f97316" : "#ec4899";
               return (
-                <div key={s.valor} className="group cursor-default">
+                <div key={s.valor}>
                   <div className="flex justify-between text-xs text-slate-600 mb-1">
-                    <span className="font-medium group-hover:text-slate-900 transition-colors">{s.valor}</span>
-                    <span className="group-hover:text-slate-900 group-hover:font-medium transition-all">{s.escolas} escola{s.escolas !== 1 ? "s" : ""} · {s.percentual.toFixed(1).replace(".", ",")}%</span>
+                    <span className="font-medium">{s.valor}</span>
+                    <span>{s.escolas} escola{s.escolas !== 1 ? "s" : ""} · {s.percentual.toFixed(1).replace(".", ",")}%</span>
                   </div>
-                  <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden transition-transform group-hover:scale-[1.01] origin-left">
+                  <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
                     <div
-                      className="h-3 rounded-full transition-all duration-500 group-hover:brightness-110"
+                      className="h-3 rounded-full transition-all"
                       style={{ width: `${s.percentual}%`, background: color }}
                     />
                   </div>

@@ -172,7 +172,7 @@ export function AbaPessoalGestao({
       )}
 
       {/* ── Resumo Executivo ─────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in-up">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Coordenadores Pedagógicos"
           value={fmtInt(estrutura?.total_coordenadores_pedagogicos)}
@@ -203,7 +203,7 @@ export function AbaPessoalGestao({
         />
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm animate-fade-in-up [animation-delay:150ms]">
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
           <UsersRound size={16} style={{ color: C.primary }} />
           Composição da Gestão Escolar
@@ -219,7 +219,7 @@ export function AbaPessoalGestao({
       </div>
 
       {/* ── Coordenação Pedagógica ───────────────────────────────── */}
-      <div id="sec-pessoal-coordenacao" className="flex items-center gap-3 border-t border-slate-200 pt-4 animate-fade-in-up [animation-delay:300ms]">
+      <div id="sec-pessoal-coordenacao" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <GraduationCap size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Coordenação Pedagógica</h2>
         <div className="flex-1 h-px bg-slate-200" />
@@ -332,15 +332,15 @@ export function AbaPessoalGestao({
               </thead>
               <tbody>
                 {porDreSorted.map((d) => (
-                  <tr key={d.dre} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors group">
-                    <td className="py-2 pr-4 text-slate-700 font-medium group-hover:text-blue-700 transition-colors">{d.dre}</td>
-                    <td className="py-2 pr-4 text-right tabular-nums text-slate-800 group-hover:text-slate-900 transition-colors">
+                  <tr key={d.dre} className="border-b border-slate-100 last:border-0">
+                    <td className="py-2 pr-4 text-slate-700">{d.dre}</td>
+                    <td className="py-2 pr-4 text-right tabular-nums text-slate-800">
                       {Math.round(d.total_efetivos).toLocaleString("pt-BR")}
                     </td>
-                    <td className="py-2 pr-4 text-right tabular-nums text-slate-800 group-hover:text-slate-900 transition-colors">
+                    <td className="py-2 pr-4 text-right tabular-nums text-slate-800">
                       {Math.round(d.total_temporarios).toLocaleString("pt-BR")}
                     </td>
-                    <td className="py-2 text-right tabular-nums text-slate-800 font-semibold group-hover:text-blue-900 transition-colors">
+                    <td className="py-2 text-right tabular-nums text-slate-800 font-semibold">
                       {fmtMedia(d.media_total_professores)}
                     </td>
                   </tr>

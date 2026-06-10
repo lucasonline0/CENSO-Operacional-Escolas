@@ -182,11 +182,10 @@ type ServicosVisaoGeral struct {
 }
 
 type ServicosGerais struct {
-	TotalEfetivo        float64       `json:"total_efetivo"`
-	TotalTemporario     float64       `json:"total_temporario"`
-	TotalTerceirizado   float64       `json:"total_terceirizado"`
-	MediaTotalPorEscola float64       `json:"media_total_por_escola"`
-	TopEmpresas         []EmpresaStat `json:"top_empresas"`
+	TotalEfetivo        float64 `json:"total_efetivo"`
+	TotalTemporario     float64 `json:"total_temporario"`
+	TotalTerceirizado   float64 `json:"total_terceirizado"`
+	MediaTotalPorEscola float64 `json:"media_total_por_escola"`
 }
 
 type ServicosPortaria struct {
@@ -1094,7 +1093,7 @@ func (app *application) AdminAnalyticsServicosGerais(w http.ResponseWriter, r *h
 	ctx := r.Context()
 	db := app.models.Schools.DB
 
-	out := ServicosGerais{TopEmpresas: []EmpresaStat{}}
+	var out ServicosGerais
 
 	const filtro = `status = 'completed' AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int AND census_id IS NOT NULL`
 
@@ -1118,34 +1117,6 @@ func (app *application) AdminAnalyticsServicosGerais(w http.ResponseWriter, r *h
 	)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("servicos_gerais: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT empresa_terceirizada_sg AS empresa, COUNT(DISTINCT school_id) AS escolas
-		FROM vw_censo_servicos_terceirizados
-		WHERE %s
-			AND empresa_terceirizada_sg IS NOT NULL
-			AND TRIM(empresa_terceirizada_sg::text) <> ''
-		GROUP BY empresa_terceirizada_sg
-		ORDER BY escolas DESC
-		LIMIT 10
-	`, filtro))
-	if err != nil {
-		app.errorJSON(w, fmt.Errorf("top_empresas_servicos_gerais: %v", err), http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var e EmpresaStat
-		if err := rows.Scan(&e.Empresa, &e.Escolas); err != nil {
-			app.errorJSON(w, fmt.Errorf("scan empresas_servicos_gerais: %v", err), http.StatusInternalServerError)
-			return
-		}
-		out.TopEmpresas = append(out.TopEmpresas, e)
-	}
-	if err := rows.Err(); err != nil {
-		app.errorJSON(w, fmt.Errorf("iter empresas_servicos_gerais: %v", err), http.StatusInternalServerError)
 		return
 	}
 

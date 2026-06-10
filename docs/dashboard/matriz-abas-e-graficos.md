@@ -47,18 +47,12 @@ Decisões registradas pelo time, válidas para todo o trabalho a partir desta br
 6. A **fonte futura** de "Gestão Financeira / Governança" virá de **bases próprias validadas pelas coordenações responsáveis**, não do banco do censo operacional.
 7. As **5 abas temáticas já integradas em primeira versão** (Pessoal e Gestão Escolar, Tecnologia e Equipamentos, Infraestrutura e Segurança, Merenda Escolar, Serviços Terceirizados) **não devem receber gráficos inéditos** (fora do escopo do painel original) antes desta matriz mínima ser validada com as áreas finalísticas da SEDUC. **Exceção:** gráficos mínimos que já existiam no painel original (Data Studio/Looker Studio) e ainda não estão refletidos na aplicação podem ser **documentados como lacunas** nesta matriz e **implementados após diagnóstico técnico**, mesmo antes da validação — eles não são novidade de escopo, e sim recuperação da referência mínima. O caso de Tecnologia e Equipamentos (ver §5.3) foi o primeiro a seguir esse caminho; **Merenda Escolar (ver §5.5) é o segundo**, alinhado neste PR documental.
 8. **Recursos Humanos da Merenda (merendeiras/manipuladores de alimentos) saiu da aba Merenda Escolar como bloco finalístico.** O Data Studio mantinha uma subaba "Recursos Humanos" dentro de Merenda; por decisão de produto, esses indicadores (total de merendeiras por vínculo, adequação do quantitativo, média por escola, empresas e supervisão) agora ficam no menu **Serviços Terceirizados**, em bloco próprio **"Manipulador de Alimentos"**, junto de Serviços Gerais e Portaria. **MER-RH-01 entregue:** `sec-merenda-rh` foi removido de `AbaMerenda.tsx`, `sec-servicos-manipuladores` foi adicionado em `AbaServicosTerceirizados.tsx`, o endpoint novo `/servicos-terceirizados/manipuladores-alimentos` foi criado e `/merenda/recursos-humanos` permanece legado. A avaliação do serviço das merendeiras segue como pendência futura/produto por falta de fonte/escala consolidada nesta entrega.
-9. **Saúde Operacional foi implementada como aba transversal no grupo Operacional.** O nome oficial é **"Índice de Saúde Operacional por escola"**, com rótulo reduzido **"Saúde Operacional"** no menu, após Operacional e antes de Todos os Censos. A fonte é PostgreSQL via `GET /v1/admin/analytics/escolas/saude-operacional`; a tela usa fetch lazy e não participa do prefetch global do login.
 
 ---
 
-## 3. Estado consolidado das abas
+## 3. Estado atual das abas (pós-merge em `develop`)
 
-Snapshot consolidado das entregas funcionais concluídas. O backend de Saúde
-Operacional já integra `develop`; o frontend foi confirmado na entrega
-`feat/frontend-saude-operacional-escolas`. Esta documentação registra o estado
-pós-implementação e deve acompanhar a incorporação da entrega frontend à base.
-O snapshot suplanta a seção 2.1 de
-[plano-trabalho-paralelo.md](plano-trabalho-paralelo.md).
+Snapshot real da branch `develop`, atualizado neste PR. Suplanta a seção 2.1 de [plano-trabalho-paralelo.md](plano-trabalho-paralelo.md).
 
 | # | Aba | Estado | Fonte | Componente React |
 |---|---|---|---|---|
@@ -71,9 +65,8 @@ O snapshot suplanta a seção 2.1 de
 | 7 | Perfil dos Alunos e Resultados | Implementação atual/legada mantida | Google Sheets `/v1/admin/indicadores-metrics` | `AbaPerfilAlunos.tsx` |
 | 8 | Gestão Financeira e Governança | Placeholder institucional | — (sem fetch) | `AbaGestaoFinanceiraGovernanca.tsx` |
 | 9 | Operacional | Integrada | PostgreSQL `/v1/admin/dashboard` | `AbaOperacional.tsx` |
-| 10 | Saúde Operacional | **Implementada** | PostgreSQL `/v1/admin/analytics/escolas/saude-operacional` | `AbaSaudeOperacionalEscolas.tsx` |
-| 11 | Todos os Censos | Integrada | PostgreSQL `/v1/admin/census` | `AbaTodosCensos.tsx` |
-| 12 | Por DRE | Integrada | PostgreSQL `/v1/admin/dashboard.by_dre` | `AbaPorDre.tsx` |
+| 10 | Todos os Censos | Integrada | PostgreSQL `/v1/admin/census` | `AbaTodosCensos.tsx` |
+| 11 | Por DRE | Integrada | PostgreSQL `/v1/admin/dashboard.by_dre` | `AbaPorDre.tsx` |
 
 > **Importante.** A redação anterior em `plano-trabalho-paralelo.md` (Frente 1 backend pendente, abas 2–6 como placeholder) está superada por este snapshot. As views `0003_*` a `0012_*` e os handlers `analytics_pessoal_tecnologia.go` e `analytics_infra_merenda_servicos.go` já estão em `develop`, e os 5 componentes `Aba*.tsx` correspondentes consomem esses endpoints.
 
@@ -278,7 +271,6 @@ Endpoints atuais: `/v1/admin/analytics/servicos-terceirizados/{visao-geral,servi
 | Serviços Gerais | Terceirizados (KPI total) | PG `/servicos-terceirizados/servicos-gerais` | presente | — | — | — |
 | Serviços Gerais | Média total por escola (KPI) | PG `/servicos-terceirizados/servicos-gerais` | presente | — | — | — |
 | Serviços Gerais | Distribuição por vínculo (donut) | PG `/servicos-terceirizados/servicos-gerais` | presente | — | — | — |
-| Serviços Gerais | Top empresas terceirizadas (barra) | PG `/servicos-terceirizados/servicos-gerais` | presente (SERV-GERAIS-EMP-01) | — | — | Top 10 por escolas em `vw_censo_servicos_terceirizados.empresa_terceirizada_sg`; campo textual sujeito a variações de grafia. |
 | Portaria | Escolas com agentes de portaria (KPI %) | PG `/servicos-terceirizados/portaria` | presente | — | — | — |
 | Portaria | Média de agentes por escola (KPI) | PG `/servicos-terceirizados/portaria` | presente | — | — | — |
 | Portaria | Top empresas de portaria (barra/tabela) | PG `/servicos-terceirizados/portaria` | presente | — | — | — |
@@ -338,19 +330,10 @@ As abas a seguir são intencionalmente **fora da matriz analítica** — servem 
 | Aba | Conteúdo | Fonte | Componente React |
 |---|---|---|---|
 | Operacional | KPIs de progresso do censo (preenchimento, taxa de conclusão, andamento por DRE) | PG `/v1/admin/dashboard` | `AbaOperacional.tsx` |
-| Saúde Operacional | **Índice de Saúde Operacional por escola**: cards sintéticos, busca local, tabela escola a escola, farol, barra de saúde e badges de dimensão | PG `/v1/admin/analytics/escolas/saude-operacional` | `AbaSaudeOperacionalEscolas.tsx` |
 | Todos os Censos | Listagem paginada de censos com filtro/busca, modal "ver JSON" | PG `/v1/admin/census` | `AbaTodosCensos.tsx` |
 | Por DRE | Visão tabular por DRE (totais e progresso) | PG `/v1/admin/dashboard.by_dre` | `AbaPorDre.tsx` |
 
-Saúde Operacional está implementada como visão transversal de priorização. O
-endpoint lista todas as escolas cadastradas; somente censo concluído do ano de
-referência alimenta as notas. Escola sem censo elegível permanece na tabela com
-status `sem_dados`.
-
-Na metodologia `1.0.0`, as dimensões habilitadas são Infraestrutura, Energia,
-Merenda, Segurança, Pessoal e Tecnologia. Pedagógico e Governança permanecem
-`null` e aparecem como `—`. O frontend preserva `null` diferente de zero, não
-recalcula saúde, criticidade, status ou pesos e não usa dados fake.
+Estas abas **não recebem alteração nesta rodada**. Aparecem aqui para que a leitura do `/admin` seja completa.
 
 ---
 

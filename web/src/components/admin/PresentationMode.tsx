@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   X, ChevronLeft, ChevronRight, Play, Pause, LayoutList,
   Maximize2, Minimize2,
@@ -114,12 +114,15 @@ export function PresentationMode({ token, onUnauth, onClose }: Props) {
   const [showPanel, setShowPanel] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [visited, setVisited] = useState<Set<PresentationTab>>(() => new Set<PresentationTab>([SLIDES[0].tabId]));
+  const [loadingTabs, setLoadingTabs] = useState<Set<PresentationTab>>(() => new Set<PresentationTab>([SLIDES[0].tabId]));
 
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollAnim = useRef<number | null>(null);
 
   const currentSlide = SLIDES[slideIndex];
   const total = SLIDES.length;
+
+  const isLoading = loadingTabs.has(currentSlide.tabId);
 
   // ── Lock body scroll ─────────────────────────────────────────
   useEffect(() => {
@@ -150,9 +153,32 @@ export function PresentationMode({ token, onUnauth, onClose }: Props) {
     }
   }, []);
 
+  // ── Loading helpers ──────────────────────────────────────────
+  const handleLoadComplete = useCallback((tabId: PresentationTab) => {
+    setLoadingTabs((prev) => {
+      if (!prev.has(tabId)) return prev;
+      const next = new Set(prev);
+      next.delete(tabId);
+      return next;
+    });
+  }, []);
+
+  // Memoize callbacks to avoid re-triggering child useEffects
+  const tabCallbacks = useMemo(() => {
+    const map: Partial<Record<PresentationTab, () => void>> = {};
+    ALL_TAB_IDS.forEach((id) => {
+      map[id] = () => handleLoadComplete(id);
+    });
+    return map;
+  }, [handleLoadComplete]);
+
   // ── Navigation helpers ────────────────────────────────────────
   const visit = useCallback((tabId: PresentationTab) => {
-    setVisited((prev) => new Set([...prev, tabId]));
+    setVisited((prev) => {
+      if (prev.has(tabId)) return prev;
+      setLoadingTabs((lt) => new Set([...lt, tabId]));
+      return new Set([...prev, tabId]);
+    });
   }, []);
 
   const goTo = useCallback((idx: number) => {
@@ -199,21 +225,20 @@ export function PresentationMode({ token, onUnauth, onClose }: Props) {
 
   // ── Auto-advance timer ────────────────────────────────────────
   useEffect(() => {
-    if (mode !== "auto" || !isPlaying) return;
+    if (mode !== "auto" || !isPlaying || isLoading) return;
     const timer = setTimeout(goNext, intervalMs);
     return () => clearTimeout(timer);
-  }, [mode, isPlaying, slideIndex, intervalMs, goNext]);
+  }, [mode, isPlaying, slideIndex, intervalMs, goNext, isLoading]);
 
   // ── Section scroll + content auto-pan ────────────────────────
   useEffect(() => {
+    if (isLoading) return; // Wait for content before starting scroll/pan
     cancelScroll();
 
     const container = contentRef.current;
     if (!container) return;
 
-    let initTimer: ReturnType<typeof setTimeout>;
-
-    initTimer = setTimeout(() => {
+    const initTimer = setTimeout(() => {
       const slide = SLIDES[slideIndex];
 
       // No anchor — scroll to top
@@ -306,20 +331,21 @@ export function PresentationMode({ token, onUnauth, onClose }: Props) {
       cancelScroll();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slideIndex, mode]);
+  }, [slideIndex, mode, isLoading]);
 
   // ── Tab renderer ─────────────────────────────────────────────
   const renderTab = (tabId: PresentationTab, activeAnchor?: string) => {
+    const onDone = tabCallbacks[tabId];
     switch (tabId) {
-      case "perfil": return <AbaCaracterizacao token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} />;
-      case "pessoal": return <AbaPessoalGestao token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} />;
-      case "tecnologia": return <AbaTecnologia token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} />;
-      case "infraestrutura": return <AbaInfraestruturaSeguranca token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} />;
-      case "merenda": return <AbaMerenda token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} />;
-      case "servicos": return <AbaServicosTerceirizados token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} />;
-      case "alunos": return <AbaPerfilAlunos token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} />;
-      case "governanca": return <AbaGestaoFinanceiraGovernanca presentationMode activeAnchor={activeAnchor} />;
-      case "saude": return <AbaSaudeOperacionalEscolas token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} />;
+      case "perfil": return <AbaCaracterizacao token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} onLoadComplete={onDone} />;
+      case "pessoal": return <AbaPessoalGestao token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} onLoadComplete={onDone} />;
+      case "tecnologia": return <AbaTecnologia token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} onLoadComplete={onDone} />;
+      case "infraestrutura": return <AbaInfraestruturaSeguranca token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} onLoadComplete={onDone} />;
+      case "merenda": return <AbaMerenda token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} onLoadComplete={onDone} />;
+      case "servicos": return <AbaServicosTerceirizados token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} onLoadComplete={onDone} />;
+      case "alunos": return <AbaPerfilAlunos token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} onLoadComplete={onDone} />;
+      case "governanca": return <AbaGestaoFinanceiraGovernanca presentationMode activeAnchor={activeAnchor} onLoadComplete={onDone} />;
+      case "saude": return <AbaSaudeOperacionalEscolas token={token} onUnauth={onUnauth} presentationMode activeAnchor={activeAnchor} onLoadComplete={onDone} />;
       default: return null;
     }
   };
@@ -440,9 +466,13 @@ export function PresentationMode({ token, onUnauth, onClose }: Props) {
       {mode === "auto" && isPlaying && (
         <div className="ca-pres-progress">
           <div
-            key={`${slideIndex}-${isPlaying}-${intervalMs}`}
+            key={`${slideIndex}-${isPlaying}-${intervalMs}-${isLoading}`}
             className="ca-pres-progress-bar"
-            style={{ animationDuration: `${intervalMs}ms` }}
+            style={{
+              animationDuration: `${intervalMs}ms`,
+              animationPlayState: isLoading ? "paused" : "running",
+              opacity: isLoading ? 0 : 1
+            }}
           />
         </div>
       )}

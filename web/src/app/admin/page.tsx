@@ -533,34 +533,11 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               </div>
             </div>
             <div className="ca-topbar-right">
-              <div className="ca-search">
-                <Search size={14} />
-                <input
-                  placeholder="Buscar indicadores, escolas, DREs…"
-                  value={search}
-                  onChange={(e) => updateSearch(e.target.value)}
-                />
-                <kbd>⌘ /</kbd>
-              </div>
-              <button
-                className="ca-icon-btn"
-                title={syncing ? "Sincronizando…" : "Sync Planilha"}
-                onClick={handleSync}
-                disabled={syncing}
-              >
-                {syncing
-                  ? <Loader2 size={16} className="animate-spin" />
-                  : <CloudUpload size={16} />}
+              <button className="ca-icon-btn" title="Mudar tema" onClick={() => setDark(!dark)}>
+                {dark ? <Sun size={16} /> : <Moon size={16} />}
               </button>
               <button className="ca-icon-btn" title="Sair" onClick={logout}>
                 <LogOut size={16} />
-              </button>
-              <button className="ca-icon-btn" title="Mudar tema" onClick={() => setDark(!dark)}>
-                {
-                  dark
-                    ? <Sun size={16} />
-                    : <Moon size={16} />
-                }
               </button>
             </div>
           </div>

@@ -16,6 +16,7 @@ import type {
   MerendaOferta, MerendaEquipamentos, EquipTotais,
   MerendaCondicoesSanitarias, DashboardFilters,
 } from "./shared/types";
+import { buildPostgresSourceLabel } from "./shared/sourceLabel";
 
 function buildFilterParams(filters?: DashboardFilters): string {
   if (!filters) return "";
@@ -329,7 +330,7 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
       {/* Badge de fonte */}
       <div className="flex items-center gap-2 text-xs text-emerald-700">
         <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-        <span>Fonte: PostgreSQL · ano corrente · censos concluídos</span>
+        <span>Fonte: {buildPostgresSourceLabel(filters)}</span>
       </div>
 
       {/* Banners de erro parcial */}

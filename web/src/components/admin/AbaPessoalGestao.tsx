@@ -148,13 +148,13 @@ export function AbaPessoalGestao({
   return (
     <div className="space-y-6">
       {/* Badge de fonte */}
-      <div className="flex items-center gap-2 text-xs text-emerald-700">
+      <div data-pres-hide="true" className="flex items-center gap-2 text-xs text-emerald-700">
         <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
         <span>Fonte: {buildPostgresSourceLabel(filters)}</span>
       </div>
 
       {/* ── Estrutura de Gestão Escolar ──────────────────────────── */}
-      <div id="sec-pessoal-estrutura" className="flex items-center gap-3">
+      <div id="sec-pessoal-estrutura" data-pres-hide="true" className="flex items-center gap-3">
         <UsersRound size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Estrutura de Gestão Escolar</h2>
         <div className="flex-1 h-px bg-slate-200" />
@@ -162,24 +162,25 @@ export function AbaPessoalGestao({
 
       {/* Banners de erro parcial */}
       {estruturaErr && (coordenacao || quadro) && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+        <div data-pres-hide="true" className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Dados de estrutura de gestão indisponíveis ({estruturaErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
       {coordenacaoErr && (estrutura || quadro) && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+        <div data-pres-hide="true" className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Dados de coordenação indisponíveis ({coordenacaoErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
       {quadroErr && (estrutura || coordenacao) && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+        <div data-pres-hide="true" className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Dados de quadro de pessoal indisponíveis ({quadroErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
 
+      <div data-pres-slide="pessoal-estrutura-resumo" className="space-y-6">
       {/* ── Resumo Executivo ─────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in-up">
         <StatCard
@@ -212,6 +213,8 @@ export function AbaPessoalGestao({
         />
       </div>
 
+      </div>
+      <div data-pres-slide="pessoal-estrutura-composicao" className="space-y-6">
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm animate-fade-in-up [animation-delay:150ms]">
         <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
           <UsersRound size={16} style={{ color: C.primary }} />
@@ -227,13 +230,15 @@ export function AbaPessoalGestao({
         )}
       </div>
 
+      </div>
       {/* ── Coordenação Pedagógica ───────────────────────────────── */}
-      <div id="sec-pessoal-coordenacao" className="flex items-center gap-3 border-t border-slate-200 pt-4 animate-fade-in-up [animation-delay:300ms]">
+      <div id="sec-pessoal-coordenacao" data-pres-hide="true" className="flex items-center gap-3 border-t border-slate-200 pt-4 animate-fade-in-up [animation-delay:300ms]">
         <GraduationCap size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Coordenação Pedagógica</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
+      <div data-pres-slide="pessoal-coordenacao" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
@@ -251,13 +256,15 @@ export function AbaPessoalGestao({
         </div>
       </div>
 
+      </div>
       {/* ── Quadro de Pessoal ────────────────────────────────────── */}
-      <div id="sec-pessoal-quadro" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+      <div id="sec-pessoal-quadro" data-pres-hide="true" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <Briefcase size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Quadro de Pessoal</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
+      <div data-pres-slide="pessoal-quadro-indicadores" className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Servidores Administrativos"
@@ -289,6 +296,8 @@ export function AbaPessoalGestao({
         />
       </div>
 
+      </div>
+      <div data-pres-slide="pessoal-quadro-distribuicao" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
@@ -320,6 +329,8 @@ export function AbaPessoalGestao({
         </div>
       </div>
 
+      </div>
+      <div data-pres-slide="pessoal-quadro-dre" className="space-y-6">
       {quadro && quadro.por_dre.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
           <div
@@ -329,7 +340,7 @@ export function AbaPessoalGestao({
             <ClipboardList size={16} className="shrink-0" strokeWidth={2} style={{ color: C.primary }} />
             <h2 className="font-semibold text-slate-800 text-sm">Detalhamento por DRE</h2>
           </div>
-          <div className="p-6 overflow-x-auto">
+          <div data-pres-table-scroll="true" className="p-6 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-200">
@@ -362,6 +373,7 @@ export function AbaPessoalGestao({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

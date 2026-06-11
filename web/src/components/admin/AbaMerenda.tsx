@@ -328,38 +328,39 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
   return (
     <div className="space-y-6">
       {/* Badge de fonte */}
-      <div className="flex items-center gap-2 text-xs text-emerald-700">
+      <div data-pres-hide="true" className="flex items-center gap-2 text-xs text-emerald-700">
         <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
         <span>Fonte: {buildPostgresSourceLabel(filters)}</span>
       </div>
 
       {/* Banners de erro parcial */}
       {ofertaErr && (equip || sanit) && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+        <div data-pres-hide="true" className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Oferta e estrutura da merenda indisponíveis ({ofertaErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
       {equipErr && (oferta || sanit) && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+        <div data-pres-hide="true" className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Equipamentos da merenda indisponíveis ({equipErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
       {sanitErr && (oferta || equip) && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+        <div data-pres-hide="true" className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Condições sanitárias e segurança da merenda indisponíveis ({sanitErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
 
       {/* ── Oferta e Adequação da Merenda ────────────────────────── */}
-      <div id="sec-merenda-oferta" className="flex items-center gap-3">
+      <div id="sec-merenda-oferta" data-pres-hide="true" className="flex items-center gap-3">
         <Utensils size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Oferta e Adequação da Merenda</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
+      <div data-pres-slide="merenda-oferta-resumo" className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <StatCard
           label="Atende às Necessidades"
@@ -377,6 +378,8 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
         />
       </div>
 
+      </div>
+      <div data-pres-slide="merenda-oferta-graficos" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
@@ -389,6 +392,11 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
             <NoData />
           )}
         </div>
+      </div>
+      </div>
+
+      <div data-pres-slide="merenda-oferta-necessidades" className="space-y-6">
+      <div className="grid grid-cols-1 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
             <CheckCircle2 size={16} style={{ color: C.primary }} />
@@ -413,12 +421,14 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
         </div>
       </div>
 
+      </div>
       {/* ── Estrutura Física da Cozinha ──────────────────────────── */}
-      <div id="sec-merenda-estrutura" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+      <div id="sec-merenda-estrutura" data-pres-hide="true" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <ChefHat size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Estrutura Física da Cozinha</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
+      <div data-pres-slide="merenda-estrutura-cozinha" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
@@ -442,6 +452,10 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
             <NoData />
           )}
         </div>
+      </div>
+      </div>
+      <div data-pres-slide="merenda-estrutura-refeitorio" className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
             <ChefHat size={16} style={{ color: C.primary }} />
@@ -466,13 +480,15 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
         </div>
       </div>
 
+      </div>
       {/* ── Equipamentos da Merenda ──────────────────────────────── */}
-      <div id="sec-merenda-equipamentos" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+      <div id="sec-merenda-equipamentos" data-pres-hide="true" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <Refrigerator size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Equipamentos da Merenda</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
+      <div data-pres-slide="merenda-equipamentos-cards" className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <EquipCard label="Freezers"   dados={equip?.freezers}   Icon={Snowflake}    tone="blue" />
         <EquipCard label="Geladeiras" dados={equip?.geladeiras} Icon={Refrigerator} tone="green" />
@@ -480,7 +496,9 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
         <EquipCard label="Fornos"     dados={equip?.fornos}     Icon={Microwave}    tone="amber" />
         <EquipCard label="Bebedouros" dados={equip?.bebedouros} Icon={GlassWater}   tone="purple" />
       </div>
+      </div>
 
+      <div data-pres-slide="merenda-equipamentos-cobertura" className="space-y-6">
       {/* Gráficos sintéticos de equipamentos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
@@ -505,6 +523,11 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
             <NoData />
           )}
         </div>
+      </div>
+      </div>
+
+      <div data-pres-slide="merenda-equipamentos-criticidade" className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
             <ClipboardList size={16} style={{ color: C.primary }} />
@@ -529,7 +552,9 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
           )}
         </div>
       </div>
+      </div>
 
+      <div data-pres-slide="merenda-equipamentos-conservacao" className="space-y-6">
       {/* Estado de conservação — visão consolidada */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         <div
@@ -552,7 +577,9 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
           )}
         </div>
       </div>
+      </div>
 
+      <div data-pres-slide="merenda-equipamentos-tabela" className="space-y-6">
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         <div
           className="px-6 py-4 border-b flex items-center gap-2"
@@ -563,7 +590,7 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
         </div>
         <div className="p-6">
           {equip && equip.dist_estados.length > 0 ? (
-            <div className="overflow-x-auto">
+            <div data-pres-table-scroll="true" className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-200">
@@ -594,13 +621,15 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
           )}
         </div>
       </div>
+      </div>
 
       {/* ── Condições Sanitárias e Segurança ─────────────────────── */}
-      <div id="sec-merenda-sanitarias" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+      <div id="sec-merenda-sanitarias" data-pres-hide="true" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <ShieldCheck size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Condições Sanitárias e Segurança</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
+      <div data-pres-slide="merenda-sanitarias-armazenamento" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
@@ -624,6 +653,11 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
             <NoData />
           )}
         </div>
+      </div>
+      </div>
+
+      <div data-pres-slide="merenda-sanitarias-itens" className="space-y-6">
+      <div className="grid grid-cols-1 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
             <ClipboardList size={16} style={{ color: C.primary }} />
@@ -636,6 +670,11 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
             <NoData />
           )}
         </div>
+      </div>
+      </div>
+
+      <div data-pres-slide="merenda-sanitarias-seguranca" className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
             <FireExtinguisher size={16} style={{ color: C.primary }} />
@@ -658,6 +697,7 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
             <NoData />
           )}
         </div>
+      </div>
       </div>
     </div>
   );

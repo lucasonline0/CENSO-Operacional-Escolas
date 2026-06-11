@@ -388,7 +388,7 @@ export function AbaSaudeOperacionalEscolas({
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:flex-row lg:items-start lg:justify-between">
+      <header data-pres-hide="true" className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="mb-2 flex items-center gap-2 text-sm font-semibold" style={{ color: C.primary }}>
             <HeartPulse size={18} />
@@ -417,6 +417,7 @@ export function AbaSaudeOperacionalEscolas({
         </div>
       </header>
 
+      <div data-pres-slide="saude-resumo-indicadores" className="space-y-6">
       <div id="sec-saude-resumo" className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         <SummaryCard
           label="Escolas avaliadas"
@@ -457,8 +458,9 @@ export function AbaSaudeOperacionalEscolas({
           sub="Escolas com nota"
         />
       </div>
+      </div>
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <div data-pres-hide="true" className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full sm:max-w-md">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -487,144 +489,146 @@ export function AbaSaudeOperacionalEscolas({
       </div>
 
       {loading && (
-        <div className="flex items-center gap-2 text-xs text-slate-400">
+        <div data-pres-hide="true" className="flex items-center gap-2 text-xs text-slate-400">
           <Loader2 className="animate-spin" size={14} style={{ color: C.primary }} />
           Atualizando…
         </div>
       )}
 
-      {payload.total_escolas === 0 ? (
-        <div className="rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center shadow-sm">
-          <CircleHelp size={28} className="mx-auto mb-3 text-slate-300" />
-          <p className="text-sm font-medium text-slate-600">Nenhuma escola disponível.</p>
-          <p className="mt-1 text-xs text-slate-400">
-            O endpoint não retornou registros para o ano de referência.
-          </p>
-        </div>
-      ) : (
-        <div id="sec-saude-escolas" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="min-w-[1900px] w-full text-sm">
-              <thead style={{ background: C.primary }} className="text-white">
-                <tr>
-                  <th scope="col" className="w-16 px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide">
-                    Farol
-                  </th>
-                  <SortHeader label="Escola" sortKey="escola" activeKey={sortKey} direction={sortDir} onSort={handleSort} className="min-w-64" />
-                  <SortHeader label="Município" sortKey="municipio" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                  <SortHeader label="DRE" sortKey="dre" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                  <SortHeader label="Zona" sortKey="zona" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                  <SortHeader label="Alunos" sortKey="total_alunos" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                  <SortHeader label="Aln/sala" sortKey="alunos_por_sala" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                  <SortHeader label="Saúde" sortKey="saude" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                  <SortHeader label="Criticidade" sortKey="criticidade" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                  <SortHeader label="Infra" sortKey="infraestrutura" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                  <SortHeader label="Energia" sortKey="energia" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                  <SortHeader label="Merenda" sortKey="merenda" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                  <SortHeader label="Segur." sortKey="seguranca" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                  <SortHeader label="Pessoal" sortKey="pessoal" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                  <SortHeader label="Tec." sortKey="tecnologia" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                  <SortHeader label="Pedag." sortKey="pedagogico" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                  <SortHeader label="Gov." sortKey="governanca" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {payload.escolas.map((escola: SaudeOperacionalEscola) => (
-                  <tr key={escola.school_id} className="hover:bg-slate-50/80">
-                    <td className="w-16 px-3 py-3 text-center">
-                      <StatusBadge status={escola.status} />
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="max-w-80 font-medium text-slate-800">{escola.escola}</div>
-                      <div className="mt-0.5 text-[11px] text-slate-400">
-                        INEP: {escola.codigo_inep ?? "—"}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 text-slate-600">{escola.municipio}</td>
-                    <td className="px-3 py-3 text-slate-600">{escola.dre}</td>
-                    <td className="px-3 py-3 text-slate-600">{escola.zona ?? "—"}</td>
-                    <td className="px-3 py-3 text-right tabular-nums text-slate-700">{fmtInt(escola.total_alunos)}</td>
-                    <td className="px-3 py-3 text-right tabular-nums text-slate-700">{fmtDecimal(escola.alunos_por_sala)}</td>
-                    <td className="px-3 py-3"><HealthCell value={escola.saude} status={escola.status} /></td>
-                    <td className="px-3 py-3 text-right font-semibold tabular-nums text-slate-700">{fmtDecimal(escola.criticidade)}</td>
-                    <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.infraestrutura} /></td>
-                    <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.energia} /></td>
-                    <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.merenda} /></td>
-                    <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.seguranca} /></td>
-                    <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.pessoal} /></td>
-                    <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.tecnologia} /></td>
-                    <td className="px-3 py-3 text-center"><DimensionBadge value={null} /></td>
-                    <td className="px-3 py-3 text-center"><DimensionBadge value={null} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div data-pres-slide="saude-escolas-tabela">
+        {payload.total_escolas === 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center shadow-sm">
+            <CircleHelp size={28} className="mx-auto mb-3 text-slate-300" />
+            <p className="text-sm font-medium text-slate-600">Nenhuma escola disponível.</p>
+            <p className="mt-1 text-xs text-slate-400">
+              O endpoint não retornou registros para o ano de referência.
+            </p>
           </div>
-
-          {payload.escolas.length === 0 && (
-            <div className="border-t border-slate-100 px-6 py-12 text-center">
-              <Search size={24} className="mx-auto mb-2 text-slate-300" />
-              <p className="text-sm font-medium text-slate-600">Nenhuma escola encontrada.</p>
-              <p className="mt-1 text-xs text-slate-400">Tente outro termo de busca.</p>
+        ) : (
+          <div id="sec-saude-escolas" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div data-pres-table-scroll="true" className="overflow-x-auto">
+              <table className="min-w-[1900px] w-full text-sm">
+                <thead style={{ background: C.primary }} className="text-white">
+                  <tr>
+                    <th scope="col" className="w-16 px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide">
+                      Farol
+                    </th>
+                    <SortHeader label="Escola" sortKey="escola" activeKey={sortKey} direction={sortDir} onSort={handleSort} className="min-w-64" />
+                    <SortHeader label="Município" sortKey="municipio" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                    <SortHeader label="DRE" sortKey="dre" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                    <SortHeader label="Zona" sortKey="zona" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                    <SortHeader label="Alunos" sortKey="total_alunos" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                    <SortHeader label="Aln/sala" sortKey="alunos_por_sala" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                    <SortHeader label="Saúde" sortKey="saude" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                    <SortHeader label="Criticidade" sortKey="criticidade" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                    <SortHeader label="Infra" sortKey="infraestrutura" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                    <SortHeader label="Energia" sortKey="energia" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                    <SortHeader label="Merenda" sortKey="merenda" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                    <SortHeader label="Segur." sortKey="seguranca" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                    <SortHeader label="Pessoal" sortKey="pessoal" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                    <SortHeader label="Tec." sortKey="tecnologia" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                    <SortHeader label="Pedag." sortKey="pedagogico" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                    <SortHeader label="Gov." sortKey="governanca" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {payload.escolas.map((escola: SaudeOperacionalEscola) => (
+                    <tr key={escola.school_id} className="hover:bg-slate-50/80">
+                      <td className="w-16 px-3 py-3 text-center">
+                        <StatusBadge status={escola.status} />
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="max-w-80 font-medium text-slate-800">{escola.escola}</div>
+                        <div className="mt-0.5 text-[11px] text-slate-400">
+                          INEP: {escola.codigo_inep ?? "—"}
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-slate-600">{escola.municipio}</td>
+                      <td className="px-3 py-3 text-slate-600">{escola.dre}</td>
+                      <td className="px-3 py-3 text-slate-600">{escola.zona ?? "—"}</td>
+                      <td className="px-3 py-3 text-right tabular-nums text-slate-700">{fmtInt(escola.total_alunos)}</td>
+                      <td className="px-3 py-3 text-right tabular-nums text-slate-700">{fmtDecimal(escola.alunos_por_sala)}</td>
+                      <td className="px-3 py-3"><HealthCell value={escola.saude} status={escola.status} /></td>
+                      <td className="px-3 py-3 text-right font-semibold tabular-nums text-slate-700">{fmtDecimal(escola.criticidade)}</td>
+                      <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.infraestrutura} /></td>
+                      <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.energia} /></td>
+                      <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.merenda} /></td>
+                      <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.seguranca} /></td>
+                      <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.pessoal} /></td>
+                      <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.tecnologia} /></td>
+                      <td className="px-3 py-3 text-center"><DimensionBadge value={null} /></td>
+                      <td className="px-3 py-3 text-center"><DimensionBadge value={null} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
 
-          <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 sm:flex-row">
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <span>Linhas por página:</span>
-              <div className="flex gap-1">
-                {PAGE_SIZE_OPTIONS.map((size) => (
-                  <button
-                    key={size}
-                    type="button"
-                    onClick={() => handlePageSizeChange(size)}
-                    className={`rounded px-2 py-1 font-medium transition-colors ${
-                      pageSize === size
-                        ? "text-white"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                    style={pageSize === size ? { background: C.primary } : undefined}
-                  >
-                    {size}
-                  </button>
-                ))}
+            {payload.escolas.length === 0 && (
+              <div className="border-t border-slate-100 px-6 py-12 text-center">
+                <Search size={24} className="mx-auto mb-2 text-slate-300" />
+                <p className="text-sm font-medium text-slate-600">Nenhuma escola encontrada.</p>
+                <p className="mt-1 text-xs text-slate-400">Tente outro termo de busca.</p>
+              </div>
+            )}
+
+            <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 sm:flex-row">
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span>Linhas por página:</span>
+                <div className="flex gap-1">
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => handlePageSizeChange(size)}
+                      className={`rounded px-2 py-1 font-medium transition-colors ${
+                        pageSize === size
+                          ? "text-white"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                      style={pageSize === size ? { background: C.primary } : undefined}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 text-xs text-slate-500">
+                {pageStart > 0 && (
+                  <span className="mr-2">
+                    {pageStart.toLocaleString("pt-BR")}–{pageEnd.toLocaleString("pt-BR")} de{" "}
+                    <strong className="text-slate-700">{payload.total_filtrado.toLocaleString("pt-BR")}</strong>
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handlePageChange(Math.max(1, payload.page - 1))}
+                  disabled={payload.page <= 1 || totalPages === 0}
+                  className="flex items-center gap-1 rounded border border-slate-200 px-2 py-1 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ArrowLeft size={13} />
+                  Anterior
+                </button>
+                <span className="px-2 font-medium text-slate-700">
+                  {totalPages === 0 ? "0 de 0" : `${payload.page} / ${totalPages}`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handlePageChange(Math.min(totalPages, payload.page + 1))}
+                  disabled={totalPages === 0 || payload.page >= totalPages}
+                  className="flex items-center gap-1 rounded border border-slate-200 px-2 py-1 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Próxima
+                  <ArrowRight size={13} />
+                </button>
               </div>
             </div>
-
-            <div className="flex items-center gap-1 text-xs text-slate-500">
-              {pageStart > 0 && (
-                <span className="mr-2">
-                  {pageStart.toLocaleString("pt-BR")}–{pageEnd.toLocaleString("pt-BR")} de{" "}
-                  <strong className="text-slate-700">{payload.total_filtrado.toLocaleString("pt-BR")}</strong>
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={() => handlePageChange(Math.max(1, payload.page - 1))}
-                disabled={payload.page <= 1 || totalPages === 0}
-                className="flex items-center gap-1 rounded border border-slate-200 px-2 py-1 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <ArrowLeft size={13} />
-                Anterior
-              </button>
-              <span className="px-2 font-medium text-slate-700">
-                {totalPages === 0 ? "0 de 0" : `${payload.page} / ${totalPages}`}
-              </span>
-              <button
-                type="button"
-                onClick={() => handlePageChange(Math.min(totalPages, payload.page + 1))}
-                disabled={totalPages === 0 || payload.page >= totalPages}
-                className="flex items-center gap-1 rounded border border-slate-200 px-2 py-1 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Próxima
-                <ArrowRight size={13} />
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      <div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+      <div data-pres-hide="true" className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
         <CircleHelp size={15} className="mt-0.5 shrink-0" />
         <span>
           Saúde, criticidade, status e notas dimensionais são exibidos conforme retornados pelo backend.

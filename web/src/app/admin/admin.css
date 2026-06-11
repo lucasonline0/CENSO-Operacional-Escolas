@@ -1332,76 +1332,206 @@
   color: var(--bg);
 }
 
-/* Overlay base */
+/* ── Layout de deck: o dashboard vira a tela do slide ──────────── */
+/* Oculta o cromo normal do painel enquanto a apresentação está ativa. */
+.censo-admin .ca-app.presenting .ca-sidebar,
+.censo-admin .ca-app.presenting .ca-topbar,
+.censo-admin .ca-app.presenting .ca-filters-wrap,
+.censo-admin .ca-app.presenting .ca-nav-overlay,
+.censo-admin .ca-app.presenting .ca-error-note,
+.censo-admin .ca-app.presenting .ca-partners-strip {
+  display: none;
+}
+
+/* Sem coluna de sidebar: a área principal ocupa toda a largura. */
+.censo-admin .ca-app.presenting {
+  grid-template-columns: 1fr;
+  min-height: 100vh;
+  height: 100vh;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.censo-admin .ca-app.presenting .ca-main {
+  margin-left: 0;
+  width: 100%;
+  height: 100vh;
+  min-height: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+
+/* Espaço para o header e o footer fixos da apresentação não cobrirem o conteúdo. */
+.censo-admin .ca-app.presenting .admin-page {
+  box-sizing: border-box;
+  height: 100vh;
+  min-height: 0;
+  padding: 96px 40px 72px;
+  gap: 0;
+  overflow: hidden;
+}
+
+/* Wrapper neutro dos filtros — não altera o layout no modo normal. */
+.censo-admin .ca-filters-wrap {
+  display: contents;
+}
+
+/* Apenas o slide ativo participa do layout do deck. */
+.censo-admin .ca-app.presenting [data-pres-hide="true"],
+.censo-admin .ca-app.presenting [data-pres-slide] {
+  display: none !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active {
+  display: block !important;
+  width: 100%;
+  min-height: calc(100vh - 184px);
+  max-height: calc(100vh - 184px);
+  overflow: hidden;
+}
+
+/* Tabelas extensas rolam dentro do slide, sem reativar o scroll da página. */
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active [data-pres-table-scroll="true"] {
+  max-height: calc(100vh - 260px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active [data-pres-table-scroll="true"] table {
+  font-size: 0.82rem;
+}
+
+/* Compactação restrita ao deck para manter cards e gráficos dentro da tela. */
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .p-6 {
+  padding: 16px !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .p-5 {
+  padding: 14px !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .gap-5 {
+  gap: 12px !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .gap-4 {
+  gap: 10px !important;
+}
+
+/* ── Camada da apresentação (header + footer fixos) ────────────── */
 .censo-admin .ca-pres-shell {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
+  pointer-events: none; /* a camada não bloqueia o conteúdo; só os controles. */
 }
 
-.censo-admin .ca-pres-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(2, 6, 23, 0.55);
-  backdrop-filter: blur(2px);
-}
-
-.censo-admin .ca-pres-panel {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  width: min(720px, 100%);
-  max-height: 100%;
-  background: var(--crd);
-  border: 1px solid var(--bdr);
-  border-radius: var(--rad);
-  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.35);
-  overflow: hidden;
-}
-
-.censo-admin .ca-pres-header {
+/* Header fixo no topo */
+.censo-admin .ca-pres-top {
+  pointer-events: auto;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 18px 20px;
+  gap: 24px;
+  min-height: 78px;
+  padding: 12px 40px;
+  background: var(--frame);
   border-bottom: 1px solid var(--bdr);
+  box-shadow: 0 6px 24px rgba(2, 6, 23, 0.08);
 }
 
-.censo-admin .ca-pres-title {
+.censo-admin .ca-pres-heading {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.censo-admin .ca-pres-kicker {
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--accent);
 }
 
-.censo-admin .ca-pres-title strong {
-  display: block;
-  font-size: 15px;
+.censo-admin .ca-pres-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--ink);
+  line-height: 1.2;
 }
 
-.censo-admin .ca-pres-title span {
-  display: block;
+.censo-admin .ca-pres-subtitle {
   font-size: 12.5px;
+  font-weight: 500;
   color: var(--muted);
+}
+
+.censo-admin .ca-pres-missing {
+  font-size: 12px;
+  color: #B45309;
+}
+
+.censo-admin .ca-pres-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.censo-admin .ca-pres-counter {
+  min-width: 60px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.censo-admin .ca-pres-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--rad-sm);
+  color: var(--accent);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.censo-admin .ca-pres-nav-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
 }
 
 .censo-admin .ca-pres-close {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
+  gap: 7px;
+  height: 38px;
+  padding: 0 14px;
   background: transparent;
   border: 1px solid var(--bdr);
   border-radius: var(--rad-sm);
   color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
@@ -1411,35 +1541,41 @@
   color: var(--ink);
 }
 
-.censo-admin .ca-pres-body {
-  flex: 1;
-  padding: 24px 20px;
-  overflow: auto;
-}
-
-.censo-admin .ca-pres-card {
-  padding: 24px;
-  background: var(--bg);
-  border: 1px solid var(--bdr);
-  border-radius: var(--rad-sm);
-  text-align: center;
-}
-
-.censo-admin .ca-pres-card h2 {
-  margin: 0 0 8px;
-  font-size: 16px;
-  color: var(--ink);
-}
-
-.censo-admin .ca-pres-card p {
-  margin: 0;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.censo-admin .ca-pres-actions {
+/* Footer institucional fixo */
+.censo-admin .ca-pres-footer {
+  pointer-events: auto;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
   display: flex;
-  justify-content: flex-end;
-  padding: 16px 20px;
+  align-items: center;
+  justify-content: center;
+  min-height: 58px;
+  padding: 10px 40px;
+  background: var(--frame);
   border-top: 1px solid var(--bdr);
+}
+
+.censo-admin .ca-pres-footer-logo {
+  height: 30px;
+  width: auto;
+  object-fit: contain;
+}
+
+@media (max-width: 640px) {
+  .censo-admin .ca-app.presenting .admin-page {
+    padding-top: 108px;
+    padding-bottom: 68px;
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active {
+    min-height: calc(100vh - 190px);
+    max-height: calc(100vh - 190px);
+  }
+  .censo-admin .ca-pres-top { padding: 14px 20px; gap: 14px; }
+  .censo-admin .ca-pres-title { font-size: 18px; }
+  .censo-admin .ca-pres-close span { display: none; }
+  .censo-admin .ca-pres-close { padding: 0; width: 38px; justify-content: center; }
 }

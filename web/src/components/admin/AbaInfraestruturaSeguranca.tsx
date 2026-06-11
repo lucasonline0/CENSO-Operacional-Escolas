@@ -135,32 +135,33 @@ export function AbaInfraestruturaSeguranca({
   return (
     <div className="space-y-6">
       {/* Badge de fonte */}
-      <div className="flex items-center gap-2 text-xs text-emerald-700">
+      <div data-pres-hide="true" className="flex items-center gap-2 text-xs text-emerald-700">
         <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
         <span>Fonte: {buildPostgresSourceLabel(filters)}</span>
       </div>
 
       {/* Banners de erro parcial */}
       {condErr && seguranca && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+        <div data-pres-hide="true" className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Condições estruturais indisponíveis ({condErr}). Exibindo apenas os indicadores de segurança.</span>
         </div>
       )}
       {segErr && condicoes && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+        <div data-pres-hide="true" className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Segurança física indisponível ({segErr}). Exibindo apenas as condições estruturais.</span>
         </div>
       )}
 
       {/* ── Condições Estruturais e Ambientes ────────────────────── */}
-      <div className="flex items-center gap-3 animate-fade-in-up">
+      <div data-pres-hide="true" className="flex items-center gap-3 animate-fade-in-up">
         <Layers size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Condições Estruturais e Ambientes</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
+      <div data-pres-slide="infra-condicoes-resumo" className="space-y-6">
       {condicoes && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fade-in-up [animation-delay:150ms]">
           <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-slate-300 transition-all duration-300 group cursor-default animate-fade-in-up">
@@ -200,6 +201,8 @@ export function AbaInfraestruturaSeguranca({
         </div>
       )}
 
+      </div>
+      <div data-pres-slide="infra-condicoes-situacao" className="space-y-6">
       <div id="sec-infra-condicoes" className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fade-in-up [animation-delay:300ms]">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
@@ -225,6 +228,8 @@ export function AbaInfraestruturaSeguranca({
         </div>
       </div>
 
+      </div>
+      <div data-pres-slide="infra-condicoes-ambientes" className="space-y-6">
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
           <MapPinned size={16} style={{ color: C.primary }} />
@@ -237,12 +242,14 @@ export function AbaInfraestruturaSeguranca({
         )}
       </div>
 
+      </div>
       {/* ── Energia, Climatização e Capacidade Elétrica ── */}
-      <div id="sec-infra-energia" className="flex items-center gap-3">
+      <div id="sec-infra-energia" data-pres-hide="true" className="flex items-center gap-3">
         <Zap size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Energia, Climatização e Cap. Elétrica</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
+      <div data-pres-slide="infra-energia-distribuicao" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
@@ -291,6 +298,8 @@ export function AbaInfraestruturaSeguranca({
         </div>
       </div>
 
+      </div>
+      <div data-pres-slide="infra-energia-tabela" className="space-y-6">
       {/* Tabela: salas climatizadas por faixa */}
       {energia && (energia.tabela_climatizacao ?? []).length > 0 && (() => {
         const rows = energia.tabela_climatizacao;
@@ -299,7 +308,7 @@ export function AbaInfraestruturaSeguranca({
         const totNao = rows.reduce((s, r) => s + r.nao_climatizadas, 0);
         return (
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
+            <div data-pres-table-scroll="true" className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
@@ -333,12 +342,14 @@ export function AbaInfraestruturaSeguranca({
         );
       })()}
 
+      </div>
       {/* ── Segurança Física e Patrimonial ───────────────────────── */}
-      <div className="flex items-center gap-3">
+      <div data-pres-hide="true" className="flex items-center gap-3">
         <ShieldCheck size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Segurança Física e Patrimonial</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
+      <div data-pres-slide="infra-seguranca-indicadores" className="space-y-6">
       <div id="sec-infra-seguranca" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Guarita"
@@ -370,6 +381,8 @@ export function AbaInfraestruturaSeguranca({
         />
       </div>
 
+      </div>
+      <div data-pres-slide="infra-seguranca-acesso" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
@@ -399,6 +412,8 @@ export function AbaInfraestruturaSeguranca({
         </div>
       </div>
 
+      </div>
+      <div data-pres-slide="infra-seguranca-iluminacao" className="space-y-6">
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm animate-fade-in-up [animation-delay:450ms]">
         <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
           <Lightbulb size={16} style={{ color: "#ec4899" }} />
@@ -431,6 +446,8 @@ export function AbaInfraestruturaSeguranca({
         )}
       </div>
 
+      </div>
+      <div data-pres-slide="infra-seguranca-perimetro" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
@@ -468,6 +485,7 @@ export function AbaInfraestruturaSeguranca({
             <NoData />
           )}
         </div>
+      </div>
       </div>
     </div>
   );

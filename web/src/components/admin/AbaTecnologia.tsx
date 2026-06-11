@@ -182,32 +182,33 @@ export function AbaTecnologia({
   return (
     <div className="space-y-6">
       {/* Badge de fonte */}
-      <div className="flex items-center gap-2 text-xs text-emerald-700">
+      <div data-pres-hide="true" className="flex items-center gap-2 text-xs text-emerald-700">
         <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
         <span>Fonte: {buildPostgresSourceLabel(filters)}</span>
       </div>
 
       {/* Banners de erro parcial */}
       {infraErr && uso && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+        <div data-pres-hide="true" className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Dados de infraestrutura tecnológica indisponíveis ({infraErr}). Exibindo apenas o uso pedagógico.</span>
         </div>
       )}
       {usoErr && infra && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+        <div data-pres-hide="true" className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Dados de uso pedagógico indisponíveis ({usoErr}). Exibindo apenas a infraestrutura tecnológica.</span>
         </div>
       )}
 
       {/* ── Infraestrutura Digital ───────────────────────────────── */}
-      <div id="sec-tecnologia-digital" className="flex items-center gap-3">
+      <div id="sec-tecnologia-digital" data-pres-hide="true" className="flex items-center gap-3">
         <Wifi size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Infraestrutura Digital</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
+      <div data-pres-slide="tecnologia-digital-indicadores" className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <StatCard
           label="Escolas com Internet"
@@ -225,6 +226,8 @@ export function AbaTecnologia({
         />
       </div>
 
+      </div>
+      <div data-pres-slide="tecnologia-digital-conexao" className="space-y-6">
       {/* 4 colunas no lg: Disponibilidade e Provedores ocupam 1 cada (rótulos
           curtos); Qualidade ocupa 2 (rótulos longos, em barras horizontais). */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
@@ -272,13 +275,15 @@ export function AbaTecnologia({
         </div>
       </div>
 
+      </div>
       {/* ── Parque Tecnológico ───────────────────────────────────── */}
-      <div id="sec-tecnologia-parque" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+      <div id="sec-tecnologia-parque" data-pres-hide="true" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <Boxes size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Parque Tecnológico</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
+      <div data-pres-slide="tecnologia-parque-indicadores" className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
           label="Desktops Administrativos"
@@ -324,6 +329,8 @@ export function AbaTecnologia({
         />
       </div>
 
+      </div>
+      <div data-pres-slide="tecnologia-parque-distribuicao" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
@@ -355,6 +362,8 @@ export function AbaTecnologia({
         </div>
       </div>
 
+      </div>
+      <div data-pres-slide="tecnologia-parque-notas" className="space-y-6">
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         <div
           className="px-6 py-4 border-b flex items-center gap-2"
@@ -373,13 +382,15 @@ export function AbaTecnologia({
         </div>
       </div>
 
+      </div>
       {/* ── Uso Pedagógico ───────────────────────────────────────── */}
-      <div id="sec-tecnologia-pedagogico" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+      <div id="sec-tecnologia-pedagogico" data-pres-hide="true" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <Projector size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Uso Pedagógico</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
+      <div data-pres-slide="tecnologia-pedagogico-indicadores" className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Escolas com Projetor"
@@ -411,6 +422,8 @@ export function AbaTecnologia({
         />
       </div>
 
+      </div>
+      <div data-pres-slide="tecnologia-pedagogico-distribuicao" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
@@ -455,8 +468,9 @@ export function AbaTecnologia({
           )}
         </div>
       </div>
+      </div>
 
-      <p className="text-xs text-slate-400">
+      <p data-pres-hide="true" className="text-xs text-slate-400">
         Indicadores baseados nas declarações das escolas no formulário do censo.
       </p>
     </div>

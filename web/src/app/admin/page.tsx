@@ -463,7 +463,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
   return (
     <div className={`censo-admin${dark ? " dark" : ""}`}>
-      <div className={`ca-app${collapsed ? " collapsed" : ""}${mobileNavOpen ? " nav-open" : ""}`}>
+      <div className={`ca-app${collapsed ? " collapsed" : ""}${mobileNavOpen ? " nav-open" : ""}${presentationMode ? " presenting" : ""}`}>
 
         {/* Overlay da gaveta de navegação — visível apenas no mobile (CSS) */}
         <div className="ca-nav-overlay" onClick={() => setMobileNavOpen(false)} />
@@ -586,11 +586,13 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               </div>
             )}
 
-            <FiltrosGlobais
-              opcoes={filtrosOpcoes}
-              filters={filters}
-              onFiltersChange={updateFilters}
-            />
+            <div className="ca-filters-wrap">
+              <FiltrosGlobais
+                opcoes={filtrosOpcoes}
+                filters={filters}
+                onFiltersChange={updateFilters}
+              />
+            </div>
             {/* Renderiza todas as abas já visitadas. Quando volta para uma aba os dados já são carregados*/}
             {visited.has("perfil") && (
               <div style={{ display: tab === "perfil" ? undefined : "none" }}>
@@ -677,7 +679,11 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
       )}
 
       {presentationMode && (
-        <PresentationMode onClose={() => setPresentationMode(false)} />
+        <PresentationMode
+          onClose={() => setPresentationMode(false)}
+          onNavigateTab={(tabId) => handleNav(tabId as Tab)}
+          dark={dark}
+        />
       )}
     </div>
   );

@@ -7,6 +7,7 @@ import {
   LayoutGrid, ShieldCheck, Info, X,
 } from "lucide-react";
 import { apiFetch, getCached, allCached } from "./shared/api";
+import { buildPostgresSourceLabel } from "./shared/sourceLabel";
 import { C, PORTE_COLORS, ZONA_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut, PieChart } from "./shared/Donut";
@@ -195,7 +196,7 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
   // falha vira "Sheets fallback (parcial)" para deixar claro ao operador
   // que parte da aba está lendo do legado.
   const sourceLabel =
-    usePerfilPg && useDrePg ? "PostgreSQL · ano corrente · censos concluídos"
+    usePerfilPg && useDrePg ? buildPostgresSourceLabel(filters)
       : !usePerfilPg && !useDrePg ? "Google Sheets · fallback"
         : "Google Sheets · fallback (parcial)";
   const sourceTone = usePerfilPg && useDrePg ? "emerald" : "amber";

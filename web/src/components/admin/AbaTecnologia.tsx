@@ -5,14 +5,15 @@ import {
   MonitorSmartphone, AlertCircle, Loader2, Wifi, Signal, Monitor,
   Laptop, Tablet, Projector, PenSquare, Gauge, ZapOff, Boxes, PieChart,
 } from "lucide-react";
-import { apiFetch, getCached, allCached } from "./shared/api";
+import { apiFetch } from "./shared/api";
 import { C, PORTE_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
 import { HBarChart } from "./shared/BarChart";
 import type {
-  TecnologiaInfra, TecnologiaUso, CategoricStat,
+  TecnologiaInfra, TecnologiaUso, CategoricStat, DashboardFilters,
 } from "./shared/types";
+import { buildFilterParams, buildPostgresSourceLabel } from "./shared/api";
 
 // Cores semânticas para distribuições Sim/Parcialmente/Não; demais rótulos
 // caem no rodízio PORTE_COLORS, preservando o estilo visual da aba.
@@ -42,6 +43,7 @@ type AbaTecnologiaProps = {
   presentationMode?: boolean;
   activeAnchor?: string;
   onLoadComplete?: () => void;
+  filters?: DashboardFilters;
 };
 
 function fmtPct(v: number | null | undefined): string {
@@ -66,23 +68,21 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
 }
 
 export function AbaTecnologia({
-  token, onUnauth, presentationMode = false, activeAnchor, onLoadComplete
+  token, onUnauth, filters, presentationMode = false, activeAnchor, onLoadComplete
 }: AbaTecnologiaProps) {
-  const [infra, setInfra] = useState<TecnologiaInfra | null>(
-    () => getCached("/v1/admin/analytics/tecnologia/infraestrutura"),
-  );
-  const [uso,   setUso]   = useState<TecnologiaUso | null>(
-    () => getCached("/v1/admin/analytics/tecnologia/uso-pedagogico"),
-  );
+  const [infra, setInfra] = useState<TecnologiaInfra | null>(null);
+  const [uso, setUso] = useState<TecnologiaUso | null>(null);
   const [infraErr, setInfraErr] = useState("");
-  const [usoErr,   setUsoErr]   = useState("");
-  const [loading,  setLoading]  = useState<boolean>(() => !allCached([
-    "/v1/admin/analytics/tecnologia/infraestrutura",
-    "/v1/admin/analytics/tecnologia/uso-pedagogico",
-  ]));
+  const [usoErr, setUsoErr] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setInfra(null); setUso(null);
+    setInfraErr(""); setUsoErr("");
+
+    const qs = buildFilterParams(filters);
 
     const handleErr = (setter: (s: string) => void) => (e: unknown) => {
       const msg = (e as Error).message;
@@ -91,13 +91,13 @@ export function AbaTecnologia({
     };
 
     const pInfra = apiFetch<TecnologiaInfra>(
-      "/v1/admin/analytics/tecnologia/infraestrutura", token,
+      `/v1/admin/analytics/tecnologia/infraestrutura${qs}`, token,
     )
       .then((d) => { if (!cancelled) setInfra(d); })
       .catch(handleErr(setInfraErr));
 
     const pUso = apiFetch<TecnologiaUso>(
-      "/v1/admin/analytics/tecnologia/uso-pedagogico", token,
+      `/v1/admin/analytics/tecnologia/uso-pedagogico${qs}`, token,
     )
       .then((d) => { if (!cancelled) setUso(d); })
       .catch(handleErr(setUsoErr));
@@ -110,7 +110,7 @@ export function AbaTecnologia({
     });
 
     return () => { cancelled = true; };
-  }, [token, onUnauth, onLoadComplete]);
+  }, [token, onUnauth, filters, onLoadComplete]);
 
   if (loading) {
     return (
@@ -145,10 +145,10 @@ export function AbaTecnologia({
   }));
 
   // Distribuições derivadas do payload expandido.
-  const internetSegments  = toSegments(infra?.disponibilidade_internet);
-  const atendeSegments    = toSegments(infra?.computadores_atendem_demanda);
-  const projetorSegments  = toSegments(uso?.possui_projetor_dist);
-  const lousaSegments     = toSegments(uso?.possui_lousa_digital_dist);
+  const internetSegments = toSegments(infra?.disponibilidade_internet);
+  const atendeSegments = toSegments(infra?.computadores_atendem_demanda);
+  const projetorSegments = toSegments(uso?.possui_projetor_dist);
+  const lousaSegments = toSegments(uso?.possui_lousa_digital_dist);
 
   // Média por tipo de equipamento (vinda do backend) → barras horizontais.
   const mediaRows = (infra?.media_equipamentos_por_escola ?? []).map((m) => ({
@@ -161,9 +161,9 @@ export function AbaTecnologia({
   // totais já entregues pelo endpoint, sem ida adicional ao backend.
   const parqueTotals = [
     { label: "Desktops administrativos", value: infra?.total_desktops_adm ?? 0 },
-    { label: "Desktops de alunos",       value: infra?.total_desktops_alunos ?? 0 },
-    { label: "Notebooks",                value: infra?.total_notebooks ?? 0 },
-    { label: "Chromebooks",              value: infra?.total_chromebooks ?? 0 },
+    { label: "Desktops de alunos", value: infra?.total_desktops_alunos ?? 0 },
+    { label: "Notebooks", value: infra?.total_notebooks ?? 0 },
+    { label: "Chromebooks", value: infra?.total_chromebooks ?? 0 },
   ];
   const parqueTotal = parqueTotals.reduce((s, r) => s + r.value, 0);
   const parqueSegments = parqueTotals.map((r, i) => ({
@@ -178,12 +178,10 @@ export function AbaTecnologia({
   return (
     <div className="space-y-6">
       {/* Badge de fonte */}
-      {!presentationMode && (
-        <div className="flex items-center gap-2 text-xs text-emerald-700">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-          <span>Fonte: PostgreSQL · ano corrente · censos concluídos</span>
-        </div>
-      )}
+      <div className="flex items-center gap-2 text-xs text-emerald-700">
+        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+        <span>Fonte: {buildPostgresSourceLabel(filters)}</span>
+      </div>
 
       {/* Banners de erro parcial */}
       {!presentationMode && infraErr && uso && (

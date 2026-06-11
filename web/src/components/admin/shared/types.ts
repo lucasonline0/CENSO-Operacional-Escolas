@@ -454,3 +454,11 @@ export interface SaudeOperacionalPayload {
   resumo: SaudeOperacionalResumo;
   escolas: SaudeOperacionalEscola[];
 }
+
+export interface DashboardFilters {
+  ano?: number;
+  regiao_integracao?: string;
+  dre?: string;
+  municipio?: string;
+  zona?: string;
+}

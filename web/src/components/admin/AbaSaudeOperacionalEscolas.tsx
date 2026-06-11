@@ -27,6 +27,8 @@ import type {
 } from "./shared/types";
 
 const ENDPOINT_BASE = "/v1/admin/analytics/escolas/saude-operacional";
+// Temporário: o dashboard atual está fixado no ciclo do Censo Escolar 2026.
+const DASHBOARD_REFERENCE_YEAR = 2026;
 
 const PAGE_SIZE_OPTIONS = [10, 50, 100, 1000] as const;
 type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number];
@@ -117,14 +119,20 @@ function buildEndpoint(
   page: number,
   pageSize: PageSizeOption,
   search: string,
+  filters?: DashboardFilters,
 ): string {
   const params = new URLSearchParams({
+    year: String(filters?.ano ?? DASHBOARD_REFERENCE_YEAR),
     sort: sortKey,
     direction: sortDir,
     page: String(page),
     page_size: String(pageSize),
   });
   if (search.trim()) params.set("search", search.trim());
+  if (filters?.dre) params.set("dre", filters.dre);
+  if (filters?.municipio) params.set("municipio", filters.municipio);
+  if (filters?.zona) params.set("zona", filters.zona);
+  if (filters?.regiao_integracao) params.set("regiao_integracao", filters.regiao_integracao);
   return `${ENDPOINT_BASE}?${params.toString()}`;
 }
 
@@ -142,18 +150,18 @@ function SummaryCard({
   sub?: string;
 }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-slate-300 transition-all duration-300 group cursor-default animate-fade-in-up">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wide">
+          <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wide group-hover:text-slate-700 transition-colors">
             {label}
           </p>
-          <p className="text-2xl font-bold text-slate-900 mt-2 tabular-nums">
+          <p className="text-2xl font-bold text-slate-900 mt-2 tabular-nums group-hover:scale-105 origin-left transition-transform">
             {typeof value === "number" ? value.toLocaleString("pt-BR") : value}
           </p>
-          {sub && <p className="text-[11px] text-slate-400 mt-1">{sub}</p>}
+          {sub && <p className="text-[11px] text-slate-400 mt-1 group-hover:text-slate-500 transition-colors">{sub}</p>}
         </div>
-        <div className={`w-10 h-10 rounded-xl flex shrink-0 items-center justify-center ring-1 ${SUMMARY_TONES[tone]}`}>
+        <div className={`w-10 h-10 rounded-xl flex shrink-0 items-center justify-center ring-1 group-hover:scale-110 group-hover:rotate-3 transition-transform ${SUMMARY_TONES[tone]}`}>
           <Icon size={19} strokeWidth={2} />
         </div>
       </div>
@@ -259,7 +267,7 @@ export function AbaSaudeOperacionalEscolas({
   presentationMode = false,
   filters,
   activeAnchor,
-  onLoadComplete
+  onLoadComplete,
 }: {
   token: string;
   onUnauth: () => void;
@@ -285,12 +293,26 @@ export function AbaSaudeOperacionalEscolas({
     setSearchInput(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
+      if (page !== 1 || value !== serverSearch) setLoading(true);
       setPage(1);
       setServerSearch(value);
     }, 400);
+  }, [page, serverSearch]);
+
+  useEffect(() => () => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
   }, []);
 
+  // Quando os filtros globais mudam, volta para a primeira página
+  useEffect(() => {
+    setPage(1);
+  }, [filters]);
+
   function handleSort(key: SortKey) {
+    setLoading(true);
     if (sortKey === key) {
       setSortDir((current) => current === "asc" ? "desc" : "asc");
     } else {
@@ -301,15 +323,22 @@ export function AbaSaudeOperacionalEscolas({
   }
 
   function handlePageSizeChange(size: PageSizeOption) {
+    if (size === pageSize && page === 1) return;
+    setLoading(true);
     setPageSize(size);
     setPage(1);
   }
 
+  function handlePageChange(nextPage: number) {
+    if (nextPage === page) return;
+    setLoading(true);
+    setPage(nextPage);
+  }
+
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
 
-    const url = buildEndpoint(sortKey, sortDir, page, pageSize, serverSearch);
+    const url = buildEndpoint(sortKey, sortDir, page, pageSize, serverSearch, filters);
 
     apiFetch<SaudeOperacionalPayload>(url, token)
       .then((data) => {
@@ -336,7 +365,7 @@ export function AbaSaudeOperacionalEscolas({
     return () => {
       cancelled = true;
     };
-  }, [token, onUnauth, sortKey, sortDir, page, pageSize, serverSearch, onLoadComplete]);
+  }, [token, onUnauth, sortKey, sortDir, page, pageSize, serverSearch, filters, onLoadComplete]);
 
   if (loading && payload === null) {
     return (
@@ -357,6 +386,7 @@ export function AbaSaudeOperacionalEscolas({
   }
 
   const { resumo } = payload;
+  const escolasAvaliadas = resumo.saudaveis + resumo.atencao + resumo.criticas;
   const totalPages = payload.total_pages;
 
   const pageStart = payload.escolas.length > 0
@@ -379,24 +409,28 @@ export function AbaSaudeOperacionalEscolas({
             Visão escola a escola da saúde operacional, criticidade e dimensões avaliadas.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 lg:justify-end">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            Fonte: PostgreSQL · ano de referência {payload.ano_referencia} · censos concluídos
-          </span>
-          <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700">
-            Metodologia v{payload.metodologia.versao}
-          </span>
+        <div className="lg:max-w-xl">
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              Base: censos concluídos de {payload.ano_referencia} · cobertura:{" "}
+              {escolasAvaliadas.toLocaleString("pt-BR")} de{" "}
+              {payload.total_escolas.toLocaleString("pt-BR")} escolas cadastradas
+            </span>
+          </div>
+          <p className="mt-2 text-xs text-slate-500 lg:text-right">
+            Escolas sem censo concluído no ano aparecem como pendentes de censo.
+          </p>
         </div>
       </header>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         <SummaryCard
-          label="Total de escolas"
-          value={payload.total_escolas}
+          label="Escolas avaliadas"
+          value={escolasAvaliadas}
           Icon={Building2}
           tone="blue"
-          sub={`Ano ${payload.ano_referencia}`}
+          sub={`${escolasAvaliadas.toLocaleString("pt-BR")} de ${payload.total_escolas.toLocaleString("pt-BR")} cadastradas`}
         />
         <SummaryCard
           label="Saudáveis"
@@ -417,7 +451,7 @@ export function AbaSaudeOperacionalEscolas({
           tone="rose"
         />
         <SummaryCard
-          label="Sem dados"
+          label="Pendentes de censo"
           value={resumo.sem_dados}
           Icon={CircleHelp}
           tone="slate"
@@ -551,11 +585,10 @@ export function AbaSaudeOperacionalEscolas({
                     key={size}
                     type="button"
                     onClick={() => handlePageSizeChange(size)}
-                    className={`rounded px-2 py-1 font-medium transition-colors ${
-                      pageSize === size
+                    className={`rounded px-2 py-1 font-medium transition-colors ${pageSize === size
                         ? "text-white"
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
+                      }`}
                     style={pageSize === size ? { background: C.primary } : undefined}
                   >
                     {size}
@@ -573,20 +606,20 @@ export function AbaSaudeOperacionalEscolas({
               )}
               <button
                 type="button"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
+                onClick={() => handlePageChange(Math.max(1, payload.page - 1))}
+                disabled={payload.page <= 1 || totalPages === 0}
                 className="flex items-center gap-1 rounded border border-slate-200 px-2 py-1 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <ArrowLeft size={13} />
                 Anterior
               </button>
               <span className="px-2 font-medium text-slate-700">
-                {page} / {totalPages || 1}
+                {totalPages === 0 ? "0 de 0" : `${payload.page} / ${totalPages}`}
               </span>
               <button
                 type="button"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
+                onClick={() => handlePageChange(Math.min(totalPages, payload.page + 1))}
+                disabled={totalPages === 0 || payload.page >= totalPages}
                 className="flex items-center gap-1 rounded border border-slate-200 px-2 py-1 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Próxima

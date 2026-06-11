@@ -86,3 +86,33 @@ export async function prefetchDashboard(token: string): Promise<void> {
   const timeout = new Promise<void>((resolve) => setTimeout(resolve, 6000));
   await Promise.race([fetches, timeout]);
 }
+
+// ── Filtros e Labels ────────────────────────────────────────────────────────
+
+import type { DashboardFilters } from "./types";
+
+export function buildFilterParams(filters?: DashboardFilters): string {
+  if (!filters) return "";
+  const p = new URLSearchParams();
+  if (filters.ano) p.set("year", String(filters.ano));
+  if (filters.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
+  if (filters.dre) p.set("dre", filters.dre);
+  if (filters.municipio) p.set("municipio", filters.municipio);
+  if (filters.zona) p.set("zona", filters.zona);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
+
+export function buildPostgresSourceLabel(filters?: DashboardFilters): string {
+  const base = "PostgreSQL · ano corrente · censos concluídos";
+  if (!filters) return base;
+
+  const parts: string[] = [];
+  if (filters.regiao_integracao) parts.push(filters.regiao_integracao);
+  if (filters.dre) parts.push(filters.dre);
+  if (filters.municipio) parts.push(filters.municipio);
+  if (filters.zona) parts.push(filters.zona);
+
+  if (parts.length === 0) return base;
+  return `${base} (${parts.join(" · ")})`;
+}

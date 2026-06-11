@@ -5,14 +5,15 @@ import {
   UsersRound, AlertCircle, Loader2, GraduationCap, BookOpen,
   Briefcase, UserCheck, Users, ClipboardList, MapPinned, Layers,
 } from "lucide-react";
-import { apiFetch, getCached, allCached } from "./shared/api";
+import { apiFetch } from "./shared/api";
 import { C } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
 import { HBarChart } from "./shared/BarChart";
 import type {
-  PessoalEstrutura, PessoalCoordenacao, QuadroPessoal,
+  PessoalEstrutura, PessoalCoordenacao, QuadroPessoal, DashboardFilters,
 } from "./shared/types";
+import { buildFilterParams, buildPostgresSourceLabel } from "./shared/api";
 
 type AbaPessoalGestaoProps = {
   token: string;
@@ -20,6 +21,7 @@ type AbaPessoalGestaoProps = {
   presentationMode?: boolean;
   activeAnchor?: string;
   onLoadComplete?: () => void;
+  filters?: DashboardFilters;
 };
 
 function fmtMedia(v: number | null | undefined): string {
@@ -39,28 +41,23 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
 }
 
 export function AbaPessoalGestao({
-  token, onUnauth, presentationMode = false, activeAnchor, onLoadComplete
+  token, onUnauth, filters, presentationMode = false, activeAnchor, onLoadComplete
 }: AbaPessoalGestaoProps) {
-  const [estrutura,   setEstrutura]   = useState<PessoalEstrutura | null>(
-    () => getCached("/v1/admin/analytics/pessoal-gestao/estrutura"),
-  );
-  const [coordenacao, setCoordenacao] = useState<PessoalCoordenacao | null>(
-    () => getCached("/v1/admin/analytics/pessoal-gestao/coordenacao"),
-  );
-  const [quadro,      setQuadro]      = useState<QuadroPessoal | null>(
-    () => getCached("/v1/admin/analytics/pessoal-gestao/quadro-pessoal"),
-  );
-  const [estruturaErr,   setEstruturaErr]   = useState("");
+  const [estrutura, setEstrutura] = useState<PessoalEstrutura | null>(null);
+  const [coordenacao, setCoordenacao] = useState<PessoalCoordenacao | null>(null);
+  const [quadro, setQuadro] = useState<QuadroPessoal | null>(null);
+  const [estruturaErr, setEstruturaErr] = useState("");
   const [coordenacaoErr, setCoordenacaoErr] = useState("");
-  const [quadroErr,      setQuadroErr]      = useState("");
-  const [loading,        setLoading]        = useState<boolean>(() => !allCached([
-    "/v1/admin/analytics/pessoal-gestao/estrutura",
-    "/v1/admin/analytics/pessoal-gestao/coordenacao",
-    "/v1/admin/analytics/pessoal-gestao/quadro-pessoal",
-  ]));
+  const [quadroErr, setQuadroErr] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setEstrutura(null); setCoordenacao(null); setQuadro(null);
+    setEstruturaErr(""); setCoordenacaoErr(""); setQuadroErr("");
+
+    const qs = buildFilterParams(filters);
 
     const handleErr = (setter: (s: string) => void) => (e: unknown) => {
       const msg = (e as Error).message;
@@ -69,19 +66,19 @@ export function AbaPessoalGestao({
     };
 
     const pEstrutura = apiFetch<PessoalEstrutura>(
-      "/v1/admin/analytics/pessoal-gestao/estrutura", token,
+      `/v1/admin/analytics/pessoal-gestao/estrutura${qs}`, token,
     )
       .then((d) => { if (!cancelled) setEstrutura(d); })
       .catch(handleErr(setEstruturaErr));
 
     const pCoord = apiFetch<PessoalCoordenacao>(
-      "/v1/admin/analytics/pessoal-gestao/coordenacao", token,
+      `/v1/admin/analytics/pessoal-gestao/coordenacao${qs}`, token,
     )
       .then((d) => { if (!cancelled) setCoordenacao(d); })
       .catch(handleErr(setCoordenacaoErr));
 
     const pQuadro = apiFetch<QuadroPessoal>(
-      "/v1/admin/analytics/pessoal-gestao/quadro-pessoal", token,
+      `/v1/admin/analytics/pessoal-gestao/quadro-pessoal${qs}`, token,
     )
       .then((d) => { if (!cancelled) setQuadro(d); })
       .catch(handleErr(setQuadroErr));
@@ -94,7 +91,8 @@ export function AbaPessoalGestao({
     });
 
     return () => { cancelled = true; };
-  }, [token, onUnauth, onLoadComplete]);
+  }, [token, onUnauth, filters, onLoadComplete]);
+
 
   if (loading) {
     return (
@@ -128,9 +126,9 @@ export function AbaPessoalGestao({
   // Donut efetivo vs temporário.
   const vinculoSegments = quadro
     ? [
-        { label: "Efetivos",   value: Math.round(quadro.total_professores_efetivos),    color: "#1E5B8A" },
-        { label: "Temporários", value: Math.round(quadro.total_professores_temporarios), color: "#8B5CF6" },
-      ].filter((s) => s.value > 0)
+      { label: "Efetivos", value: Math.round(quadro.total_professores_efetivos), color: "#1E5B8A" },
+      { label: "Temporários", value: Math.round(quadro.total_professores_temporarios), color: "#8B5CF6" },
+    ].filter((s) => s.value > 0)
     : [];
 
   // Por DRE: top 10 com mais professores (efetivos+temporários).
@@ -147,12 +145,17 @@ export function AbaPessoalGestao({
   return (
     <div className="space-y-6">
       {/* Badge de fonte */}
-      {!presentationMode && (
-        <div className="flex items-center gap-2 text-xs text-emerald-700">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-          <span>Fonte: PostgreSQL · ano corrente · censos concluídos</span>
-        </div>
-      )}
+      <div className="flex items-center gap-2 text-xs text-emerald-700">
+        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+        <span>Fonte: {buildPostgresSourceLabel(filters)}</span>
+      </div>
+
+      {/* ── Estrutura de Gestão Escolar ──────────────────────────── */}
+      <div id="sec-pessoal-estrutura" className="flex items-center gap-3">
+        <UsersRound size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Estrutura de Gestão Escolar</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
 
       {/* Banners de erro parcial */}
       {!presentationMode && estruturaErr && (coordenacao || quadro) && (

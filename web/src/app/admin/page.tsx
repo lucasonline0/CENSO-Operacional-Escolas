@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  LogOut, Search, RefreshCw, CloudUpload, Lock, User as UserIcon,
+  LogOut, RefreshCw, Lock, User as UserIcon,
   AlertCircle, Loader2, PanelLeftClose, Eye, EyeOff, ArrowRight,
   BarChart2, UsersRound, MonitorSmartphone, ShieldCheck, Utensils,
   ClipboardCheck, Activity, Landmark, LayoutDashboard, Database, MapPinned,
@@ -30,7 +30,6 @@ import { AbaServicosTerceirizados } from "@/components/admin/AbaServicosTerceiri
 import { AbaGestaoFinanceiraGovernanca } from "@/components/admin/AbaGestaoFinanceiraGovernanca";
 import { AbaSaudeOperacionalEscolas } from "@/components/admin/AbaSaudeOperacionalEscolas";
 import { PresentationMode } from "@/components/admin/PresentationMode";
-import { FiltrosGlobais } from "@/components/admin/FiltrosGlobais";
 import type {
   CensusRow, CensusPage, DashboardData,
 } from "@/components/admin/shared/types";

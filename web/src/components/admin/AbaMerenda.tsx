@@ -7,15 +7,16 @@ import {
   ChefHat, ClipboardList,
   ShieldCheck, Package, FireExtinguisher,
 } from "lucide-react";
-import { apiFetch, getCached, allCached } from "./shared/api";
+import { apiFetch } from "./shared/api";
 import { C, PORTE_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
 import { HBarChart } from "./shared/BarChart";
 import type {
   MerendaOferta, MerendaEquipamentos, EquipTotais,
-  MerendaCondicoesSanitarias,
+  MerendaCondicoesSanitarias, DashboardFilters,
 } from "./shared/types";
+import { buildFilterParams, buildPostgresSourceLabel } from "./shared/api";
 
 type AbaMerendaProps = {
   token: string;
@@ -23,6 +24,7 @@ type AbaMerendaProps = {
   presentationMode?: boolean;
   activeAnchor?: string;
   onLoadComplete?: () => void;
+  filters?: DashboardFilters;
 };
 
 function fmtPct(v: number | null | undefined): string {
@@ -135,9 +137,8 @@ function StackedConservationBar({
                   })}
               </div>
               <span
-                className={`w-14 shrink-0 text-xs font-semibold tabular-nums ${
-                  showRuimOutside ? "text-rose-700" : "text-transparent"
-                }`}
+                className={`w-14 shrink-0 text-xs font-semibold tabular-nums ${showRuimOutside ? "text-rose-700" : "text-transparent"
+                  }`}
                 title={ruimOutsideTitle}
                 aria-hidden={!showRuimOutside}
               >
@@ -152,28 +153,30 @@ function StackedConservationBar({
 }
 
 export function AbaMerenda({
-  token, onUnauth, presentationMode = false, activeAnchor, onLoadComplete
+  token,
+  onUnauth,
+  presentationMode = false,
+  filters,
+  activeAnchor,
+  onLoadComplete,
 }: AbaMerendaProps) {
-  const [oferta,     setOferta]     = useState<MerendaOferta | null>(
-    () => getCached("/v1/admin/analytics/merenda/oferta"),
-  );
-  const [equip,      setEquip]      = useState<MerendaEquipamentos | null>(
-    () => getCached("/v1/admin/analytics/merenda/equipamentos"),
-  );
-  const [sanit,      setSanit]      = useState<MerendaCondicoesSanitarias | null>(
-    () => getCached("/v1/admin/analytics/merenda/condicoes-sanitarias"),
-  );
-  const [ofertaErr,  setOfertaErr]  = useState("");
-  const [equipErr,   setEquipErr]   = useState("");
-  const [sanitErr,   setSanitErr]   = useState("");
-  const [loading,    setLoading]    = useState<boolean>(() => !allCached([
-    "/v1/admin/analytics/merenda/oferta",
-    "/v1/admin/analytics/merenda/equipamentos",
-    "/v1/admin/analytics/merenda/condicoes-sanitarias",
-  ]));
+  const [oferta, setOferta] = useState<MerendaOferta | null>(null);
+
+  const [equip, setEquip] = useState<MerendaEquipamentos | null>(null);
+
+  const [sanit, setSanit] = useState<MerendaCondicoesSanitarias | null>(null);
+  const [ofertaErr, setOfertaErr] = useState("");
+  const [equipErr, setEquipErr] = useState("");
+  const [sanitErr, setSanitErr] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setOferta(null); setEquip(null); setSanit(null);
+    setOfertaErr(""); setEquipErr(""); setSanitErr("");
+
+    const qs = buildFilterParams(filters);
 
     const handleErr = (setter: (s: string) => void) => (e: unknown) => {
       const msg = (e as Error).message;
@@ -181,15 +184,15 @@ export function AbaMerenda({
       if (!cancelled) setter(msg);
     };
 
-    const pOferta = apiFetch<MerendaOferta>("/v1/admin/analytics/merenda/oferta", token)
+    const pOferta = apiFetch<MerendaOferta>(`/v1/admin/analytics/merenda/oferta${qs}`, token)
       .then((d) => { if (!cancelled) setOferta(d); })
       .catch(handleErr(setOfertaErr));
 
-    const pEquip = apiFetch<MerendaEquipamentos>("/v1/admin/analytics/merenda/equipamentos", token)
+    const pEquip = apiFetch<MerendaEquipamentos>(`/v1/admin/analytics/merenda/equipamentos${qs}`, token)
       .then((d) => { if (!cancelled) setEquip(d); })
       .catch(handleErr(setEquipErr));
 
-    const pSanit = apiFetch<MerendaCondicoesSanitarias>("/v1/admin/analytics/merenda/condicoes-sanitarias", token)
+    const pSanit = apiFetch<MerendaCondicoesSanitarias>(`/v1/admin/analytics/merenda/condicoes-sanitarias${qs}`, token)
       .then((d) => { if (!cancelled) setSanit(d); })
       .catch(handleErr(setSanitErr));
 
@@ -201,7 +204,8 @@ export function AbaMerenda({
     });
 
     return () => { cancelled = true; };
-  }, [token, onUnauth, onLoadComplete]);
+  }, [token, onUnauth, filters, onLoadComplete]);
+
 
   if (loading) {
     return (
@@ -331,12 +335,10 @@ export function AbaMerenda({
   return (
     <div className="space-y-6">
       {/* Badge de fonte */}
-      {!presentationMode && (
-        <div className="flex items-center gap-2 text-xs text-emerald-700">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-          <span>Fonte: PostgreSQL · ano corrente · censos concluídos</span>
-        </div>
-      )}
+      <div className="flex items-center gap-2 text-xs text-emerald-700">
+        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+        <span>Fonte: {buildPostgresSourceLabel(filters)}</span>
+      </div>
 
       {/* Banners de erro parcial */}
       {!presentationMode && ofertaErr && (equip || sanit) && (
@@ -491,11 +493,11 @@ export function AbaMerenda({
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            <EquipCard label="Freezers"   dados={equip?.freezers}   Icon={Snowflake}    tone="blue"   compact={presentationMode} />
-            <EquipCard label="Geladeiras" dados={equip?.geladeiras} Icon={Refrigerator} tone="green"  compact={presentationMode} />
-            <EquipCard label="Fogões"     dados={equip?.fogoes}     Icon={Flame}        tone="orange" compact={presentationMode} />
-            <EquipCard label="Fornos"     dados={equip?.fornos}     Icon={Microwave}    tone="amber"  compact={presentationMode} />
-            <EquipCard label="Bebedouros" dados={equip?.bebedouros} Icon={GlassWater}   tone="purple" compact={presentationMode} />
+            <EquipCard label="Freezers" dados={equip?.freezers} Icon={Snowflake} tone="blue" compact={presentationMode} />
+            <EquipCard label="Geladeiras" dados={equip?.geladeiras} Icon={Refrigerator} tone="green" compact={presentationMode} />
+            <EquipCard label="Fogões" dados={equip?.fogoes} Icon={Flame} tone="orange" compact={presentationMode} />
+            <EquipCard label="Fornos" dados={equip?.fornos} Icon={Microwave} tone="amber" compact={presentationMode} />
+            <EquipCard label="Bebedouros" dados={equip?.bebedouros} Icon={GlassWater} tone="purple" compact={presentationMode} />
           </div>
 
           {/* Gráficos sintéticos de equipamentos */}

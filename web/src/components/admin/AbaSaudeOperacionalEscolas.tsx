@@ -417,7 +417,7 @@ export function AbaSaudeOperacionalEscolas({
         </div>
       </header>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+      <div id="sec-saude-resumo" className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         <SummaryCard
           label="Escolas avaliadas"
           value={escolasAvaliadas}
@@ -502,7 +502,7 @@ export function AbaSaudeOperacionalEscolas({
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div id="sec-saude-escolas" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
             <table className="min-w-[1900px] w-full text-sm">
               <thead style={{ background: C.primary }} className="text-white">

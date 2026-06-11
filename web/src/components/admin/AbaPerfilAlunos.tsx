@@ -77,7 +77,7 @@ export function AbaPerfilAlunos({
       )}
 
       {/* Stat card de risco — big number */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fade-in-up [animation-delay:150ms]">
+      <div id="sec-alunos-visao" className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fade-in-up [animation-delay:150ms]">
         <StatCard
           label="Escolas com Risco de Fluxo"
           value={metrics.escolas_risco_fluxo}
@@ -103,7 +103,7 @@ export function AbaPerfilAlunos({
       </div>
 
       {/* Linha 1: dois gráficos de barra vertical */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fade-in-up [animation-delay:300ms]">
+      <div id="sec-alunos-faixas" className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fade-in-up [animation-delay:300ms]">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1">
             Distribuição por Faixa de Beneficiários
@@ -144,7 +144,7 @@ export function AbaPerfilAlunos({
       </div>
 
       {/* Linha 2: Top 10 DREs + card risco */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div id="sec-alunos-abandono" className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1">
             Top 10 DREs com maior taxa média de abandono

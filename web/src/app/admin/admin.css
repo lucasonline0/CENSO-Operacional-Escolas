@@ -1306,3 +1306,140 @@
   .censo-admin .admin-page { padding: 14px 12px 24px; }
   .censo-admin .ca-crumbs { font-size: 12.5px; }
 }
+
+/* ── Presentation Mode Shell ───────────────────────────────────── */
+
+/* Botão de abertura na topbar */
+.censo-admin .ca-pres-launch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px;
+  height: 36px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--rad-sm);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.censo-admin .ca-pres-launch-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+
+/* Overlay base */
+.censo-admin .ca-pres-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.censo-admin .ca-pres-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.censo-admin .ca-pres-panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(720px, 100%);
+  max-height: 100%;
+  background: var(--crd);
+  border: 1px solid var(--bdr);
+  border-radius: var(--rad);
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.35);
+  overflow: hidden;
+}
+
+.censo-admin .ca-pres-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--bdr);
+}
+
+.censo-admin .ca-pres-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--accent);
+}
+
+.censo-admin .ca-pres-title strong {
+  display: block;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.censo-admin .ca-pres-title span {
+  display: block;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.censo-admin .ca-pres-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  background: transparent;
+  border: 1px solid var(--bdr);
+  border-radius: var(--rad-sm);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.censo-admin .ca-pres-close:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.censo-admin .ca-pres-body {
+  flex: 1;
+  padding: 24px 20px;
+  overflow: auto;
+}
+
+.censo-admin .ca-pres-card {
+  padding: 24px;
+  background: var(--bg);
+  border: 1px solid var(--bdr);
+  border-radius: var(--rad-sm);
+  text-align: center;
+}
+
+.censo-admin .ca-pres-card h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: var(--ink);
+}
+
+.censo-admin .ca-pres-card p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.censo-admin .ca-pres-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 20px;
+  border-top: 1px solid var(--bdr);
+}

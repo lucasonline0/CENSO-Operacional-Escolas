@@ -10,7 +10,15 @@ import { StatCard } from "./shared/StatCard";
 import { VBarChart } from "./shared/BarChart";
 import type { IndicadoresMetrics } from "./shared/types";
 
-export function AbaPerfilAlunos({ token, onUnauth }: { token: string; onUnauth: () => void }) {
+export function AbaPerfilAlunos({
+  token, onUnauth, presentationMode, activeAnchor, onLoadComplete
+}: {
+  token: string;
+  onUnauth: () => void;
+  presentationMode?: boolean;
+  activeAnchor?: string;
+  onLoadComplete?: () => void;
+}) {
   const [metrics, setMetrics] = useState<IndicadoresMetrics | null>(
     () => getCached("/v1/admin/indicadores-metrics"),
   );
@@ -20,14 +28,23 @@ export function AbaPerfilAlunos({ token, onUnauth }: { token: string; onUnauth: 
   const [err, setErr]         = useState("");
 
   useEffect(() => {
+    let cancelled = false;
     apiFetch<IndicadoresMetrics>("/v1/admin/indicadores-metrics", token)
-      .then(setMetrics)
-      .catch((e) => {
-        if ((e as Error).message === "UNAUTHORIZED") { onUnauth(); return; }
-        setErr((e as Error).message);
+      .then((data) => {
+        if (!cancelled) setMetrics(data);
       })
-      .finally(() => setLoading(false));
-  }, [token, onUnauth]);
+      .catch((e) => {
+        if ((e as Error).message === "UNAUTHORIZED") { if (!cancelled) onUnauth(); return; }
+        if (!cancelled) setErr((e as Error).message);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+          onLoadComplete?.();
+        }
+      });
+      return () => { cancelled = true; };
+  }, [token, onUnauth, onLoadComplete]);
 
   if (loading) return (
     <div className="flex items-center justify-center py-24 text-slate-400">
@@ -51,11 +68,13 @@ export function AbaPerfilAlunos({ token, onUnauth }: { token: string; onUnauth: 
   return (
     <div className="space-y-5">
       {/* Label do subtab — igual Looker Studio */}
-      <div className="bg-orange-50 border border-orange-200 rounded-xl px-5 py-3 animate-slide-in-right">
-        <p className="text-sm text-orange-800 italic font-medium">
-          Qual é o perfil socioeconômico dos estudantes e como está a permanência e o fluxo escolar na rede?
-        </p>
-      </div>
+      {!presentationMode && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl px-5 py-3 animate-slide-in-right">
+          <p className="text-sm text-orange-800 italic font-medium">
+            Qual é o perfil socioeconômico dos estudantes e como está a permanência e o fluxo escolar na rede?
+          </p>
+        </div>
+      )}
 
       {/* Stat card de risco — big number */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fade-in-up [animation-delay:150ms]">
@@ -65,18 +84,21 @@ export function AbaPerfilAlunos({ token, onUnauth }: { token: string; onUnauth: 
           Icon={AlertTriangle}
           tone="orange"
           sub="flag ativa de risco"
+          compact={presentationMode}
         />
         <StatCard
           label="Escolas Analisadas (Beneficiários)"
           value={totalBenef}
           Icon={Users}
           tone="blue"
+          compact={presentationMode}
         />
         <StatCard
           label="Escolas Analisadas (Abandono)"
           value={totalAbandono}
           Icon={Activity}
           tone="amber"
+          compact={presentationMode}
         />
       </div>
 

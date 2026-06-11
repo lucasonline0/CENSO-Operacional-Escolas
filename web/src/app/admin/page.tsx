@@ -7,6 +7,7 @@ import {
   BarChart2, UsersRound, MonitorSmartphone, ShieldCheck, Utensils,
   ClipboardCheck, Activity, Landmark, Database, MapPinned,
   Menu, X, ChevronDown, HeartPulse,
+  MonitorPlay,
   Sun,
   Moon,
 } from "lucide-react";
@@ -30,6 +31,7 @@ import { AbaServicosTerceirizados } from "@/components/admin/AbaServicosTerceiri
 import { AbaGestaoFinanceiraGovernanca } from "@/components/admin/AbaGestaoFinanceiraGovernanca";
 import { AbaSaudeOperacionalEscolas } from "@/components/admin/AbaSaudeOperacionalEscolas";
 import { FiltrosGlobais } from "@/components/admin/FiltrosGlobais";
+import PresentationMode from "@/components/admin/PresentationMode";
 import type {
   CensusPage, DashboardData, DashboardFilters, FiltrosOpcoes,
 } from "@/components/admin/shared/types";
@@ -365,6 +367,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const [mobileNavOpen,  setMobileNavOpen]  = useState(false);
   const [filters,        setFilters]        = useState<DashboardFilters>({});
   const [filtrosOpcoes,  setFiltrosOpcoes]  = useState<FiltrosOpcoes | null>(null);
+  const [presentationMode, setPresentationMode] = useState(false);
 
   const logout = useCallback(() => { clearToken(); clearApiCache(); onLogout(); }, [onLogout]);
 
@@ -543,6 +546,15 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 <kbd>⌘ /</kbd>
               </div>
               <button
+                type="button"
+                className="ca-pres-launch-btn"
+                title="Modo Apresentação"
+                onClick={() => setPresentationMode(true)}
+              >
+                <MonitorPlay size={16} />
+                <span>Modo Apresentação</span>
+              </button>
+              <button
                 className="ca-icon-btn"
                 title={syncing ? "Sincronizando…" : "Sync Planilha"}
                 onClick={handleSync}
@@ -662,6 +674,10 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
       {viewId !== null && (
         <JsonModal censusId={viewId} token={token} onClose={() => setViewId(null)} />
+      )}
+
+      {presentationMode && (
+        <PresentationMode onClose={() => setPresentationMode(false)} />
       )}
     </div>
   );

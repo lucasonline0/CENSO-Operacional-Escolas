@@ -213,8 +213,6 @@ export function AbaPessoalGestao({
         />
       </div>
 
-      </div>
-      <div data-pres-slide="pessoal-estrutura-composicao" className="space-y-6">
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm animate-fade-in-up [animation-delay:150ms]">
         <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
           <UsersRound size={16} style={{ color: C.primary }} />

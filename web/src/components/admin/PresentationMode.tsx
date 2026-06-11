@@ -49,26 +49,20 @@ function createSlides(
 
 const SLIDES: PresentationSlide[] = [
   ...createSlides("perfil", "Caracterização da Rede", "Dimensão e Perfil da Rede", [
-    ["perfil-dimensao-indicadores", "Indicadores gerais"],
-    ["perfil-dimensao-distribuicao", "Distribuição das escolas"],
-    ["perfil-dimensao-matriculas", "Matrículas por porte"],
+    ["perfil-dimensao-indicadores", "Indicadores, distribuição e matrículas"],
   ]),
   ...createSlides("perfil", "Caracterização da Rede", "Organização da Oferta e Funcionamento", [
-    ["perfil-oferta-etapas", "Etapas e modalidades"],
-    ["perfil-oferta-turnos", "Turnos de funcionamento"],
+    ["perfil-oferta-etapas", "Etapas, modalidades e turnos"],
   ]),
   ...createSlides("perfil", "Caracterização da Rede", "Infraestrutura Educacional", [
-    ["perfil-infra-indicadores", "Indicadores de cobertura"],
-    ["perfil-infra-ambientes", "Ambientes essenciais"],
-    ["perfil-infra-media", "Média por porte"],
+    ["perfil-infra-indicadores", "Indicadores, ambientes e média por porte"],
   ]),
   ...createSlides("perfil", "Caracterização da Rede", "Detalhamento por DRE", [
     ["perfil-dre-tabela", "Tabela consolidada"],
   ]),
 
   ...createSlides("pessoal", "Pessoal e Gestão Escolar", "Estrutura de Gestão Escolar", [
-    ["pessoal-estrutura-resumo", "Indicadores gerais"],
-    ["pessoal-estrutura-composicao", "Composição da gestão"],
+    ["pessoal-estrutura-resumo", "Indicadores e composição da gestão"],
   ]),
   ...createSlides("pessoal", "Pessoal e Gestão Escolar", "Coordenação Pedagógica", [
     ["pessoal-coordenacao", "Cobertura e composição"],
@@ -170,10 +164,14 @@ const SLIDES: PresentationSlide[] = [
   ]),
 ];
 
+// top padding (49px) + bottom padding (24px) + breathing room (16px)
+const PRES_PAGE_PADDING = 89;
+
 function removeActiveSlideState() {
   document.querySelectorAll<HTMLElement>("[data-pres-slide]").forEach((element) => {
     element.classList.remove("ca-pres-slide-active");
     element.removeAttribute("aria-current");
+    element.style.zoom = "";
   });
 }
 
@@ -199,6 +197,26 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
     }
   }, []);
 
+  const applySlideZoom = useCallback((element: HTMLElement) => {
+    const measure = () => {
+      const available = window.innerHeight - PRES_PAGE_PADDING;
+      const natural = element.scrollHeight;
+      if (natural > 0 && available > 0) {
+        element.style.zoom = (available / natural).toFixed(3);
+      }
+    };
+
+    element.style.zoom = "1";
+    requestAnimationFrame(measure);
+
+    // Re-measure after async data may have loaded (e.g. HBarChart rows)
+    window.setTimeout(() => {
+      if (!element.classList.contains("ca-pres-slide-active")) return;
+      element.style.zoom = "1";
+      requestAnimationFrame(measure);
+    }, 800);
+  }, []);
+
   const activateSlideWithRetry = useCallback((target: PresentationSlide, navigationToken: number) => {
     let attempts = 0;
 
@@ -215,6 +233,7 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
       if (element) {
         element.classList.add("ca-pres-slide-active");
         element.setAttribute("aria-current", "true");
+        applySlideZoom(element);
         retryTimerRef.current = null;
         setSlideStatus("found");
         return;
@@ -230,7 +249,7 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
     };
 
     retryTimerRef.current = window.setTimeout(tryActivate, RETRY_INTERVAL_MS);
-  }, []);
+  }, [applySlideZoom]);
 
   const goToSlide = useCallback((nextIndex: number) => {
     const normalized = ((nextIndex % total) + total) % total;
@@ -280,14 +299,30 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
   }, [goNext, goPrev, onClose]);
 
   useEffect(() => {
+    const handleResize = () => {
+      const active = document.querySelector<HTMLElement>("[data-pres-slide].ca-pres-slide-active");
+      if (active) applySlideZoom(active);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [applySlideZoom]);
+
+  useEffect(() => {
     const previousBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
+    if (document.fullscreenEnabled && !document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
 
     return () => {
       navigationTokenRef.current += 1;
       clearRetryTimer();
       removeActiveSlideState();
       document.body.style.overflow = previousBodyOverflow;
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
     };
   }, [clearRetryTimer]);
 
@@ -296,13 +331,19 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
       <header className="ca-pres-top">
         <div className="ca-pres-heading">
           <span className="ca-pres-kicker">
-            <MonitorPlay size={15} />
+            <MonitorPlay size={14} />
             {slide.tabLabel}
           </span>
+          <span className="ca-pres-sep">›</span>
           <span className="ca-pres-title">{slide.sectionLabel}</span>
-          {slide.slideTitle && <span className="ca-pres-subtitle">{slide.slideTitle}</span>}
+          {slide.slideTitle && (
+            <>
+              <span className="ca-pres-sep">·</span>
+              <span className="ca-pres-subtitle">{slide.slideTitle}</span>
+            </>
+          )}
           {slideStatus === "missing" && (
-            <span className="ca-pres-missing">Slide não encontrado após o carregamento da aba.</span>
+            <span className="ca-pres-missing">Slide não encontrado.</span>
           )}
         </div>
 
@@ -341,13 +382,7 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
         </div>
       </header>
 
-      <footer className="ca-pres-footer">
-        <img
-          className="ca-pres-footer-logo"
-          src={dark ? "/logo-horizontal-letter-white.png" : "/parceiros.png"}
-          alt="FADEP · Secretaria de Educação · Governo do Pará"
-        />
-      </footer>
+
     </div>
   );
 }

@@ -56,6 +56,7 @@ export function VBarChart({
   barMaxWidth = 56,
   gapClass = "gap-3",
   valueInside = false,
+  heightClass = "h-52",
 }: {
   rows: { label: string; value: number }[];
   color?: string;
@@ -63,13 +64,14 @@ export function VBarChart({
   barMaxWidth?: number;
   gapClass?: string;
   valueInside?: boolean;
+  heightClass?: string;
 }) {
   const [hovered, setHovered] = useState<{ label: string; value: number; pct: string; x: number; y: number } | null>(null);
   const total = rows.reduce((s, r) => s + r.value, 0);
   const max = Math.max(...rows.map((r) => r.value), 1);
 
   return (
-    <div className={`flex items-end justify-around ${gapClass} w-full h-52 pt-6 relative`}>
+    <div className={`flex items-end justify-around ${gapClass} w-full ${heightClass} pt-6 relative`}>
       <ChartTooltip
         active={!!hovered}
         label={hovered?.label ?? ""}

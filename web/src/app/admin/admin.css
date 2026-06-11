@@ -1362,12 +1362,12 @@
   overflow: hidden;
 }
 
-/* Espaço para o header e o footer fixos da apresentação não cobrirem o conteúdo. */
+/* Espaço para o header fixo da apresentação não cobrir o conteúdo. */
 .censo-admin .ca-app.presenting .admin-page {
   box-sizing: border-box;
   height: 100vh;
   min-height: 0;
-  padding: 96px 40px 72px;
+  padding: 49px 40px 24px;
   gap: 0;
   overflow: hidden;
 }
@@ -1386,8 +1386,7 @@
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active {
   display: block !important;
   width: 100%;
-  min-height: calc(100vh - 184px);
-  max-height: calc(100vh - 184px);
+  /* height/zoom aplicados dinamicamente via JS (applySlideZoom) */
   overflow: hidden;
 }
 
@@ -1403,21 +1402,55 @@
   font-size: 0.82rem;
 }
 
+/* Reduz o SVG dos donuts/pie charts no deck para que múltiplas linhas caibam na tela. */
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active svg[viewBox="0 0 100 100"] {
+  width: 110px !important;
+  height: 110px !important;
+}
+
 /* Compactação restrita ao deck para manter cards e gráficos dentro da tela. */
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .p-6 {
-  padding: 16px !important;
+  padding: 12px !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .p-5 {
-  padding: 14px !important;
+  padding: 10px !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .p-4 {
+  padding: 8px !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .gap-5 {
-  gap: 12px !important;
+  gap: 8px !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .gap-4 {
-  gap: 10px !important;
+  gap: 6px !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .gap-3 {
+  gap: 5px !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .space-y-6 > * + * {
+  margin-top: 8px !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .space-y-5 > * + * {
+  margin-top: 6px !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .space-y-4 > * + * {
+  margin-top: 5px !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .mb-4 {
+  margin-bottom: 6px !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .mb-5 {
+  margin-bottom: 8px !important;
 }
 
 /* ── Camada da apresentação (header + footer fixos) ────────────── */
@@ -1439,44 +1472,57 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  min-height: 78px;
-  padding: 12px 40px;
+  height: 48px;
+  padding: 0 32px;
   background: var(--frame);
   border-bottom: 1px solid var(--bdr);
-  box-shadow: 0 6px 24px rgba(2, 6, 23, 0.08);
+  box-shadow: 0 4px 16px rgba(2, 6, 23, 0.07);
 }
 
 .censo-admin .ca-pres-heading {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
+  flex: 1;
+  overflow: hidden;
 }
 
 .censo-admin .ca-pres-kicker {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-size: 12.5px;
+  gap: 6px;
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--accent);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.censo-admin .ca-pres-sep {
+  color: var(--muted);
+  font-size: 15px;
+  flex-shrink: 0;
+  user-select: none;
 }
 
 .censo-admin .ca-pres-title {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
-  letter-spacing: -0.01em;
   color: var(--ink);
-  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .censo-admin .ca-pres-subtitle {
-  font-size: 12.5px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 400;
   color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .censo-admin .ca-pres-missing {
@@ -1565,17 +1611,17 @@
 
 @media (max-width: 640px) {
   .censo-admin .ca-app.presenting .admin-page {
-    padding-top: 108px;
-    padding-bottom: 68px;
-    padding-left: 20px;
-    padding-right: 20px;
+    padding-top: 56px;
+    padding-bottom: 8px;
+    padding-left: 16px;
+    padding-right: 16px;
   }
   .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active {
-    min-height: calc(100vh - 190px);
-    max-height: calc(100vh - 190px);
+    /* height/zoom gerenciados via JS */
   }
-  .censo-admin .ca-pres-top { padding: 14px 20px; gap: 14px; }
-  .censo-admin .ca-pres-title { font-size: 18px; }
+  .censo-admin .ca-pres-top { padding: 0 16px; gap: 10px; }
+  .censo-admin .ca-pres-kicker { font-size: 12px; }
+  .censo-admin .ca-pres-title { font-size: 13px; }
   .censo-admin .ca-pres-close span { display: none; }
-  .censo-admin .ca-pres-close { padding: 0; width: 38px; justify-content: center; }
+  .censo-admin .ca-pres-close { padding: 0; width: 34px; justify-content: center; }
 }

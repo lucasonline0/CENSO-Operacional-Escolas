@@ -101,11 +101,22 @@ export interface CaracterizacaoInfraEducacionalPg {
 
 export interface CensusFull extends CensusRow { data: unknown; created_at: string; }
 
+// Resumo do recorte global da tela "Registros do Censo". Respeita os filtros
+// globais (year, dre, municipio, zona, regiao_integracao), mas não os filtros
+// locais da listagem (status, search, page, limit).
+export interface CensusSummary {
+  total_schools: number;
+  completed_censuses: number;
+  draft_censuses: number;
+  pending_sync: number;
+}
+
 export interface CensusPage {
   rows: CensusRow[];
   total: number;
   page: number;
   limit: number;
+  summary: CensusSummary;
 }
 
 // Frente 2 — Infraestrutura e Segurança.
@@ -279,6 +290,7 @@ export interface ServicosGerais {
   total_temporario: number;
   total_terceirizado: number;
   media_total_por_escola: number;
+  top_empresas: EmpresaStat[];
 }
 
 export interface ServicosPortaria {
@@ -378,4 +390,130 @@ export interface CaracterizacaoOfertaFuncionamento {
   modalidades_ofertadas:  LabelEscolasStat[];
   turnos:                 LabelEscolasStat[];
   media_turnos_por_porte: MediaTurnosPorPorteStat[];
+}
+
+// Índice de Saúde Operacional por escola.
+// Payload de /v1/admin/analytics/escolas/saude-operacional.
+export type SaudeOperacionalStatus =
+  | "saudavel"
+  | "atencao"
+  | "critica"
+  | "sem_dados";
+
+export interface SaudeOperacionalPesos {
+  infraestrutura: number;
+  energia: number;
+  merenda: number;
+  seguranca: number;
+  pessoal: number;
+  tecnologia: number;
+  pedagogico: number;
+  governanca: number;
+}
+
+export interface SaudeOperacionalMetodologia {
+  nome: string;
+  versao: string;
+  dimensoes_habilitadas: string[];
+  pesos: SaudeOperacionalPesos;
+}
+
+export interface SaudeOperacionalDimensoes {
+  infraestrutura: number | null;
+  energia: number | null;
+  merenda: number | null;
+  seguranca: number | null;
+  pessoal: number | null;
+  tecnologia: number | null;
+  pedagogico: number | null;
+  governanca: number | null;
+}
+
+export interface SaudeOperacionalEscola {
+  school_id: number;
+  census_id: number | null;
+  codigo_inep: string | null;
+  escola: string;
+  municipio: string;
+  dre: string;
+  zona: string | null;
+  total_alunos: number | null;
+  salas_aula: number | null;
+  alunos_por_sala: number | null;
+  saude: number | null;
+  criticidade: number | null;
+  status: SaudeOperacionalStatus;
+  dimensoes: SaudeOperacionalDimensoes;
+}
+
+export interface SaudeOperacionalResumo {
+  saudaveis: number;
+  atencao: number;
+  criticas: number;
+  sem_dados: number;
+  saude_media: number | null;
+}
+
+export interface SaudeOperacionalPayload {
+  total_escolas: number;
+  total_filtrado: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  ano_referencia: number;
+  metodologia: SaudeOperacionalMetodologia;
+  resumo: SaudeOperacionalResumo;
+  escolas: SaudeOperacionalEscola[];
+}
+
+// Andamento do preenchimento do censo por DRE.
+// Payload de /v1/admin/analytics/preenchimento/dre. Respeita os filtros globais
+// (year, dre, municipio, zona, regiao_integracao). pending = total sem censo no
+// ano (total - completed - draft).
+export interface PreenchimentoDreRow {
+  dre: string;
+  total: number;
+  completed: number;
+  draft: number;
+  pending: number;
+  completion_percentage: number;
+}
+
+export interface PreenchimentoDrePayload {
+  ano_referencia: number;
+  total_escolas: number;
+  total_completed: number;
+  total_draft: number;
+  total_pending: number;
+  dres: PreenchimentoDreRow[];
+}
+
+// Estado global de filtros do dashboard.
+// Passado para cada aba e repassado como query params para os endpoints analíticos.
+export interface DashboardFilters {
+  ano?: number;
+  regiao_integracao?: string;
+  dre?: string;
+  municipio?: string;
+  zona?: string;
+}
+
+// Filtros globais do dashboard.
+// Payload de GET /v1/admin/analytics/filtros/opcoes.
+export interface FiltrosEscolaItem {
+  school_id: number;
+  codigo_inep: string | null;
+  nome_escola: string;
+  municipio: string;
+  dre: string;
+  zona: string | null;
+}
+
+export interface FiltrosOpcoes {
+  anos: number[];
+  regioes_integracao: string[];
+  dres: string[];
+  municipios: string[];
+  zonas: string[];
+  escolas: FiltrosEscolaItem[];
 }

@@ -7,24 +7,24 @@
 
 /* ── CSS Variables (scoped to wrapper) ────────────────────── */
 .censo-admin {
-  --bg:       #F4F2EE;
+  --bg:       #F8FAFC; /* Slate 50 */
   --frame:    #FFFFFF;
-  --side:     #EFECE5;
+  --side:     #F1F5F9; /* Slate 100 */
   --crd:      #FFFFFF;
-  --bdr:      #ECE8DE;
-  --bdr-2:    #E2DDD0;
-  --hover:    #EFECE5;
-  --active:   #E6E2D6;
+  --bdr:      #E2E8F0; /* Slate 200 */
+  --bdr-2:    #CBD5E1; /* Slate 300 */
+  --hover:    #F1F5F9;
+  --active:   #E2E8F0;
 
-  --ink:      #14110C;
-  --ink-2:    #2A2620;
-  --muted:    #908A7E;
-  --muted-2:  #B7B1A4;
+  --ink:      #0F172A; /* Slate 900 */
+  --ink-2:    #334155; /* Slate 700 */
+  --muted:    #64748B; /* Slate 500 */
+  --muted-2:  #94A3B8; /* Slate 400 */
 
-  --accent:       #103D8E;
-  --accent-2:     #2A66C7;
-  --accent-soft:  #E6ECF8;
-  --accent-line:  #C6D3EC;
+  --accent:       #1E5B8A;
+  --accent-2:     #2574AF;
+  --accent-soft:  #F0F7FF;
+  --accent-line:  #BAE6FD;
 
   --pos:    #2F7A55;
   --neg:    #D9272E;
@@ -32,8 +32,21 @@
   --terra:  #D9272E;
   --sage:   #6E9170;
   --umber:  #7A6B4F;
-  --gold:   #C28344;
+  --gold:       #C28344;
   --slate-c: #4A6FA0;
+
+  /* Chart Colors */
+  --zona-urbana: #1E5B8A;
+  --zona-rural: #F59E0B;
+  --zona-ribeirinha: #8B5CF6;
+  --zona-outros: #94A3B8;
+
+  --porte-1: #93C5FD;
+  --porte-2: #60A5FA;
+  --porte-3: #3B82F6;
+  --porte-4: #2563EB;
+  --porte-5: #1D4ED8;
+  --porte-6: #1E40AF;
 
   --rad:      14px;
   --rad-sm:   10px;
@@ -50,6 +63,175 @@
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* ── Dark Mode Variables ────────────────────────────────── */
+.censo-admin.dark {
+  --bg:       #020617; /* Slate 950 */
+  --frame:    #0F172A; /* Slate 900 */
+  --side:     #0F172A;
+  --crd:      #1E293B; /* Slate 800 */
+  --bdr:      #1E293B;
+  --bdr-2:    #334155; /* Slate 700 */
+  --hover:    #1E293B;
+  --active:   #334155;
+
+  --ink:      #F8FAFC; /* Slate 50 */
+  --ink-2:    #E2E8F0; /* Slate 200 */
+  --muted:    #94A3B8; /* Slate 400 */
+  --muted-2:  #64748B; /* Slate 500 */
+
+  --accent:       #38BDF8; /* Sky 400 */
+  --accent-2:     #7DD3FC; /* Sky 300 */
+  --accent-soft:  #082F49; /* Sky 950 soft */
+  --accent-line:  #075985;
+
+  --pos:    #4ADE80; /* Green 400 */
+  --neg:    #F87171; /* Red 400 */
+  --warn:   #FBBF24; /* Amber 400 */
+
+  /* Chart Colors Dark Mode */
+  --zona-urbana: #38BDF8;
+  --zona-rural: #FBBF24;
+  --zona-ribeirinha: #A78BFA;
+  --zona-outros: #64748B;
+
+  --porte-1: #7DD3FC;
+  --porte-2: #38BDF8;
+  --porte-3: #0EA5E9;
+  --porte-4: #0284C7;
+  --porte-5: #0369A1;
+  --porte-6: #075985;
+}
+
+/* ── Dark Mode Overrides for Components ─────────────────── */
+.censo-admin.dark .bg-white,
+.censo-admin.dark .bg-slate-50 {
+  background-color: var(--frame) !important;
+}
+
+.censo-admin.dark .border-slate-200,
+.censo-admin.dark .border-slate-100 {
+  border-color: var(--bdr) !important;
+}
+
+.censo-admin.dark .text-slate-900,
+.censo-admin.dark .text-slate-800,
+.censo-admin.dark .text-slate-700 {
+  color: var(--ink) !important;
+}
+
+.censo-admin.dark .text-slate-600,
+.censo-admin.dark .text-slate-500,
+.censo-admin.dark .text-slate-400 {
+  color: var(--muted) !important;
+}
+
+.censo-admin.dark .bg-slate-100 {
+  background-color: var(--active) !important;
+}
+
+.censo-admin.dark .hover\:bg-slate-100:hover,
+.censo-admin.dark .hover\:bg-slate-50:hover {
+  background-color: var(--hover) !important;
+}
+
+/* Overrides para StatCard tones em dark mode */
+.censo-admin.dark .bg-blue-50,
+.censo-admin.dark .bg-emerald-50,
+.censo-admin.dark .bg-amber-50,
+.censo-admin.dark .bg-orange-50,
+.censo-admin.dark .bg-purple-50 {
+  background-color: var(--accent-soft) !important;
+  opacity: 0.8;
+}
+
+.censo-admin.dark .text-blue-700,
+.censo-admin.dark .text-emerald-700,
+.censo-admin.dark .text-amber-700,
+.censo-admin.dark .text-orange-700,
+.censo-admin.dark .text-purple-700 {
+  color: var(--accent) !important;
+}
+
+.censo-admin.dark img {
+  filter: brightness(0.9) contrast(1.1);
+}
+
+/* Overrides para Gráficos (Donut/PieChart) */
+.censo-admin.dark svg circle[stroke="#EFF2F6"],
+.censo-admin.dark svg circle[fill="#EFF2F6"] {
+  stroke: var(--bdr) !important;
+  fill: var(--bdr) !important;
+}
+
+.censo-admin.dark svg text {
+  fill: var(--ink) !important;
+}
+
+.censo-admin.dark svg text[fill="#64748B"] {
+  fill: var(--muted) !important;
+}
+
+.censo-admin.dark .ca-nav-item:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.censo-admin.dark .ca-nav-subitem:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+/* ── Global Table Styles ────────────────────────────────── */
+.censo-admin table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.censo-admin thead th {
+  background: var(--side);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--bdr);
+}
+
+.censo-admin tbody td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--bdr);
+  color: var(--ink-2);
+  font-size: 13.5px;
+  transition: background .12s ease;
+}
+
+.censo-admin tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.censo-admin tbody tr:hover td {
+  background: var(--hover);
+}
+
+.censo-admin.dark thead th {
+  background: var(--side);
+  color: var(--muted);
+  border-bottom: 1px solid var(--bdr-2);
+}
+
+.censo-admin.dark tbody tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.censo-admin.dark tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.censo-admin.dark .ca-partners-strip img {
+  filter: none;
+  opacity: 1;
 }
 
 .censo-admin *, .censo-admin *::before, .censo-admin *::after {
@@ -217,15 +399,15 @@
   gap: 10px;
   padding: 9px 10px;
   border-radius: 9px;
-  color: #4A4338;
+  color: var(--muted);
   cursor: pointer;
   font-size: 13.5px;
   font-weight: 500;
   border: 1px solid transparent;
-  transition: background .12s ease;
+  transition: background .12s ease, color .12s ease;
 }
 .censo-admin .ca-nav-item .ca-icon {
-  color: #6F6759;
+  color: var(--muted-2);
   width: 18px;
   height: 18px;
   flex: 0 0 18px;

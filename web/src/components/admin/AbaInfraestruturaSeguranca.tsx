@@ -6,18 +6,32 @@ import {
   Camera, DoorClosed, Lightbulb, Siren, MapPinned, Layers, Home,
   Sparkles, BellRing, Zap, Wrench,
 } from "lucide-react";
-import { apiFetch, getCached, allCached } from "./shared/api";
+import { apiFetch } from "./shared/api";
 import { C, PORTE_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
 import { HBarChart } from "./shared/BarChart";
 import type {
-  InfraCondicoes, InfraSeguranca, InfraEnergia,
+  InfraCondicoes, InfraSeguranca, InfraEnergia, DashboardFilters,
 } from "./shared/types";
+import { buildPostgresSourceLabel } from "./shared/sourceLabel";
+
+function buildFilterParams(filters?: DashboardFilters): string {
+  if (!filters) return "";
+  const p = new URLSearchParams();
+  if (filters.ano) p.set("year", String(filters.ano));
+  if (filters.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
+  if (filters.dre) p.set("dre", filters.dre);
+  if (filters.municipio) p.set("municipio", filters.municipio);
+  if (filters.zona) p.set("zona", filters.zona);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
 
 type AbaInfraestruturaSegurancaProps = {
   token: string;
   onUnauth: () => void;
+  filters?: DashboardFilters;
 };
 
 // Formata percentual vindo do backend (float entre 0 e 100) como "xx,x%".
@@ -34,27 +48,22 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
 }
 
 export function AbaInfraestruturaSeguranca({
-  token, onUnauth,
+  token, onUnauth, filters,
 }: AbaInfraestruturaSegurancaProps) {
-  const [condicoes, setCondicoes] = useState<InfraCondicoes | null>(
-    () => getCached("/v1/admin/analytics/infraestrutura/condicoes"),
-  );
-  const [seguranca, setSeguranca] = useState<InfraSeguranca | null>(
-    () => getCached("/v1/admin/analytics/infraestrutura/seguranca"),
-  );
-  const [energia,   setEnergia]   = useState<InfraEnergia | null>(
-    () => getCached("/v1/admin/analytics/infraestrutura/energia"),
-  );
+  const [condicoes, setCondicoes] = useState<InfraCondicoes | null>(null);
+  const [seguranca, setSeguranca] = useState<InfraSeguranca | null>(null);
+  const [energia,   setEnergia]   = useState<InfraEnergia | null>(null);
   const [condErr,   setCondErr]   = useState("");
   const [segErr,    setSegErr]    = useState("");
-  const [loading,   setLoading]   = useState<boolean>(() => !allCached([
-    "/v1/admin/analytics/infraestrutura/condicoes",
-    "/v1/admin/analytics/infraestrutura/seguranca",
-    "/v1/admin/analytics/infraestrutura/energia",
-  ]));
+  const [loading,   setLoading]   = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setCondicoes(null); setSeguranca(null); setEnergia(null);
+    setCondErr(""); setSegErr("");
+
+    const qs = buildFilterParams(filters);
 
     const handleErr = (setter: (s: string) => void) => (e: unknown) => {
       const msg = (e as Error).message;
@@ -62,15 +71,15 @@ export function AbaInfraestruturaSeguranca({
       if (!cancelled) setter(msg);
     };
 
-    const pCond = apiFetch<InfraCondicoes>("/v1/admin/analytics/infraestrutura/condicoes", token)
+    const pCond = apiFetch<InfraCondicoes>(`/v1/admin/analytics/infraestrutura/condicoes${qs}`, token)
       .then((d) => { if (!cancelled) setCondicoes(d); })
       .catch(handleErr(setCondErr));
 
-    const pSeg = apiFetch<InfraSeguranca>("/v1/admin/analytics/infraestrutura/seguranca", token)
+    const pSeg = apiFetch<InfraSeguranca>(`/v1/admin/analytics/infraestrutura/seguranca${qs}`, token)
       .then((d) => { if (!cancelled) setSeguranca(d); })
       .catch(handleErr(setSegErr));
 
-    const pEnergia = apiFetch<InfraEnergia>("/v1/admin/analytics/infraestrutura/energia", token)
+    const pEnergia = apiFetch<InfraEnergia>(`/v1/admin/analytics/infraestrutura/energia${qs}`, token)
       .then((d) => { if (!cancelled) setEnergia(d); })
       .catch((e: unknown) => {
         const msg = (e as Error).message;
@@ -82,7 +91,7 @@ export function AbaInfraestruturaSeguranca({
     });
 
     return () => { cancelled = true; };
-  }, [token, onUnauth]);
+  }, [token, onUnauth, filters]);
 
   if (loading) {
     return (
@@ -128,7 +137,7 @@ export function AbaInfraestruturaSeguranca({
       {/* Badge de fonte */}
       <div className="flex items-center gap-2 text-xs text-emerald-700">
         <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-        <span>Fonte: PostgreSQL · ano corrente · censos concluídos</span>
+        <span>Fonte: {buildPostgresSourceLabel(filters)}</span>
       </div>
 
       {/* Banners de erro parcial */}
@@ -146,19 +155,19 @@ export function AbaInfraestruturaSeguranca({
       )}
 
       {/* ── Condições Estruturais e Ambientes ────────────────────── */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 animate-fade-in-up">
         <Layers size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Condições Estruturais e Ambientes</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
       {condicoes && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fade-in-up [animation-delay:150ms]">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-slate-300 transition-all duration-300 group cursor-default animate-fade-in-up">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">Reforma Crítica</p>
-                <p className="text-3xl font-bold text-slate-900 mt-2 tabular-nums">
+                <p className="text-xs text-slate-500 font-medium uppercase tracking-wide group-hover:text-slate-700 transition-colors">Reforma Crítica</p>
+                <p className="text-3xl font-bold text-slate-900 mt-2 tabular-nums group-hover:scale-105 origin-left transition-transform">
                   {fmtPct(condicoes.pct_reforma_critica)}
                 </p>
                 <p className="text-xs text-slate-400 mt-1">das escolas necessitam de reforma geral ou estão com a obra parada</p>
@@ -166,16 +175,16 @@ export function AbaInfraestruturaSeguranca({
                   Reforma geral: {fmtPct(condicoes.pct_reforma_geral)} · Obra parada: {fmtPct(condicoes.pct_obra_parada)}
                 </p>
               </div>
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-50 text-amber-700 ring-1 ring-amber-100 shrink-0">
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-50 text-amber-700 ring-1 ring-amber-100 shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-transform">
                 <Wrench size={21} strokeWidth={2} />
               </div>
             </div>
           </div>
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-slate-300 transition-all duration-300 group cursor-default animate-fade-in-up">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">Cobertura Plena de Ambientes</p>
-                <p className="text-3xl font-bold text-slate-900 mt-2 tabular-nums">
+                <p className="text-xs text-slate-500 font-medium uppercase tracking-wide group-hover:text-slate-700 transition-colors">Cobertura Plena de Ambientes</p>
+                <p className="text-3xl font-bold text-slate-900 mt-2 tabular-nums group-hover:scale-105 origin-left transition-transform">
                   {fmtPct(condicoes.pct_cobertura_plena)}
                 </p>
                 <p className="text-xs text-slate-400 mt-1">das escolas possuem todos os 8 ambientes essenciais</p>
@@ -183,7 +192,7 @@ export function AbaInfraestruturaSeguranca({
                   Biblioteca · Lab. Ciências · Lab. Informática · Quadra · Refeitório · Cozinha · Sala dos Professores · SAEE
                 </p>
               </div>
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 shrink-0">
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-transform">
                 <Building2 size={21} strokeWidth={2} />
               </div>
             </div>
@@ -191,7 +200,7 @@ export function AbaInfraestruturaSeguranca({
         </div>
       )}
 
-      <div id="sec-infra-condicoes" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div id="sec-infra-condicoes" className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fade-in-up [animation-delay:300ms]">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
             <Layers size={16} style={{ color: C.primary }} />
@@ -302,11 +311,11 @@ export function AbaInfraestruturaSeguranca({
                 </thead>
                 <tbody>
                   {rows.map((r, i) => (
-                    <tr key={r.faixa} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}>
-                      <td className="px-5 py-3 text-slate-700">{r.faixa}</td>
-                      <td className="px-5 py-3 text-right text-slate-600">{r.total_salas.toLocaleString("pt-BR")}</td>
-                      <td className="px-5 py-3 text-right text-slate-600">{r.climatizadas.toLocaleString("pt-BR")}</td>
-                      <td className="px-5 py-3 text-right text-slate-600">{r.nao_climatizadas.toLocaleString("pt-BR")}</td>
+                    <tr key={r.faixa} className={`transition-colors hover:bg-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
+                      <td className="px-5 py-3 text-slate-700 font-medium">{r.faixa}</td>
+                      <td className="px-5 py-3 text-right text-slate-600 tabular-nums">{r.total_salas.toLocaleString("pt-BR")}</td>
+                      <td className="px-5 py-3 text-right text-slate-600 tabular-nums">{r.climatizadas.toLocaleString("pt-BR")}</td>
+                      <td className="px-5 py-3 text-right text-slate-600 tabular-nums">{r.nao_climatizadas.toLocaleString("pt-BR")}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -390,7 +399,7 @@ export function AbaInfraestruturaSeguranca({
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm animate-fade-in-up [animation-delay:450ms]">
         <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
           <Lightbulb size={16} style={{ color: "#ec4899" }} />
           Iluminação Externa
@@ -402,14 +411,14 @@ export function AbaInfraestruturaSeguranca({
                 s.valor === "Adequada"    ? "#22c55e" :
                 s.valor === "Regular"     ? "#f97316" : "#ec4899";
               return (
-                <div key={s.valor}>
+                <div key={s.valor} className="group cursor-default">
                   <div className="flex justify-between text-xs text-slate-600 mb-1">
-                    <span className="font-medium">{s.valor}</span>
-                    <span>{s.escolas} escola{s.escolas !== 1 ? "s" : ""} · {s.percentual.toFixed(1).replace(".", ",")}%</span>
+                    <span className="font-medium group-hover:text-slate-900 transition-colors">{s.valor}</span>
+                    <span className="group-hover:text-slate-900 group-hover:font-medium transition-all">{s.escolas} escola{s.escolas !== 1 ? "s" : ""} · {s.percentual.toFixed(1).replace(".", ",")}%</span>
                   </div>
-                  <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                  <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden transition-transform group-hover:scale-[1.01] origin-left">
                     <div
-                      className="h-3 rounded-full transition-all"
+                      className="h-3 rounded-full transition-all duration-500 group-hover:brightness-110"
                       style={{ width: `${s.percentual}%`, background: color }}
                     />
                   </div>

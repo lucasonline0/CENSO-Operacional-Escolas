@@ -51,14 +51,14 @@ export function AbaPerfilAlunos({ token, onUnauth }: { token: string; onUnauth: 
   return (
     <div className="space-y-5">
       {/* Label do subtab — igual Looker Studio */}
-      <div className="bg-orange-50 border border-orange-200 rounded-xl px-5 py-3">
+      <div className="bg-orange-50 border border-orange-200 rounded-xl px-5 py-3 animate-slide-in-right">
         <p className="text-sm text-orange-800 italic font-medium">
           Qual é o perfil socioeconômico dos estudantes e como está a permanência e o fluxo escolar na rede?
         </p>
       </div>
 
       {/* Stat card de risco — big number */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fade-in-up [animation-delay:150ms]">
         <StatCard
           label="Escolas com Risco de Fluxo"
           value={metrics.escolas_risco_fluxo}
@@ -81,7 +81,7 @@ export function AbaPerfilAlunos({ token, onUnauth }: { token: string; onUnauth: 
       </div>
 
       {/* Linha 1: dois gráficos de barra vertical */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fade-in-up [animation-delay:300ms]">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1">
             Distribuição por Faixa de Beneficiários

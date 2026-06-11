@@ -1,21 +1,21 @@
 import React from "react";
-import { Filter, Search, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Filter, Search, Loader2, ChevronLeft, ChevronRight,
+  Building2, CheckCircle2, FileText, CloudUpload,
+} from "lucide-react";
 import { CensusTable } from "./shared/CensusTable";
+import { StatCard } from "./shared/StatCard";
 import { sanitize } from "./shared/api";
-import type { CensusRow, CensusPage, DashboardData } from "./shared/types";
+import type { CensusPage } from "./shared/types";
 
 const PAGE_SIZE_OPTIONS = [10, 50, 100, 1000];
 
 export function AbaTodosCensos({
-  dbData,
   censusPage,
   filterStatus,
   setFilterStatus,
-  filterDre,
-  setFilterDre,
   search,
   setSearch,
-  filteredCensus,
   censusLimit,
   setCensusLimit,
   censusPageNum,
@@ -23,15 +23,11 @@ export function AbaTodosCensos({
   onView,
   formatDate,
 }: {
-  dbData: DashboardData | null;
   censusPage: CensusPage | null;
   filterStatus: string;
   setFilterStatus: (s: string) => void;
-  filterDre: string;
-  setFilterDre: (s: string) => void;
   search: string;
   setSearch: (s: string) => void;
-  filteredCensus: CensusRow[];
   censusLimit: number;
   setCensusLimit: (l: number) => void;
   censusPageNum: number;
@@ -43,9 +39,21 @@ export function AbaTodosCensos({
   const totalPages = Math.max(1, Math.ceil(total / censusLimit));
   const firstRow   = total === 0 ? 0 : (censusPageNum - 1) * censusLimit + 1;
   const lastRow    = Math.min(censusPageNum * censusLimit, total);
+  const summary    = censusPage?.summary;
 
   return (
     <div className="space-y-4">
+      {/* Cards de resumo — refletem o recorte dos filtros globais (summary),
+          sem serem afetados por status, busca ou paginação da listagem. */}
+      {summary && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in-up">
+          <StatCard label="Escolas Cadastradas" value={summary.total_schools}      Icon={Building2}    tone="blue"   />
+          <StatCard label="Censos Concluídos"   value={summary.completed_censuses} Icon={CheckCircle2} tone="green"  />
+          <StatCard label="Rascunhos"            value={summary.draft_censuses}     Icon={FileText}     tone="amber"  />
+          <StatCard label="Pendente na Planilha" value={summary.pending_sync}       Icon={CloudUpload}  tone="orange" />
+        </div>
+      )}
+
       {/* Filtros */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-wrap items-center gap-3">
         <Filter size={15} className="text-slate-500" />
@@ -56,12 +64,6 @@ export function AbaTodosCensos({
           <option value="">Todos os status</option>
           <option value="completed">Concluído</option>
           <option value="draft">Rascunho</option>
-        </select>
-
-        <select value={filterDre} onChange={(e) => setFilterDre(e.target.value)}
-          className="border border-slate-300 bg-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 max-w-xs">
-          <option value="">Todas as DREs</option>
-          {(dbData?.by_dre ?? []).map((d) => <option key={d.dre} value={d.dre}>{d.dre}</option>)}
         </select>
 
         <div className="flex items-center gap-2 text-sm text-slate-600">
@@ -89,7 +91,7 @@ export function AbaTodosCensos({
         ? <div className="bg-white rounded-2xl py-14 text-center text-slate-400 text-sm border border-slate-200">
             <Loader2 className="animate-spin mx-auto mb-2" size={18} />Carregando…
           </div>
-        : <CensusTable rows={filteredCensus} onView={onView} formatDate={formatDate} />}
+        : <CensusTable rows={censusPage.rows} onView={onView} formatDate={formatDate} />}
 
       {/* Rodapé de paginação */}
       {censusPage !== null && (

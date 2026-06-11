@@ -5,14 +5,27 @@ import {
   MonitorSmartphone, AlertCircle, Loader2, Wifi, Signal, Monitor,
   Laptop, Tablet, Projector, PenSquare, Gauge, ZapOff, Boxes, PieChart,
 } from "lucide-react";
-import { apiFetch, getCached, allCached } from "./shared/api";
+import { apiFetch } from "./shared/api";
 import { C, PORTE_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
 import { HBarChart } from "./shared/BarChart";
 import type {
-  TecnologiaInfra, TecnologiaUso, CategoricStat,
+  TecnologiaInfra, TecnologiaUso, CategoricStat, DashboardFilters,
 } from "./shared/types";
+import { buildPostgresSourceLabel } from "./shared/sourceLabel";
+
+function buildFilterParams(filters?: DashboardFilters): string {
+  if (!filters) return "";
+  const p = new URLSearchParams();
+  if (filters.ano) p.set("year", String(filters.ano));
+  if (filters.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
+  if (filters.dre) p.set("dre", filters.dre);
+  if (filters.municipio) p.set("municipio", filters.municipio);
+  if (filters.zona) p.set("zona", filters.zona);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
 
 // Cores semânticas para distribuições Sim/Parcialmente/Não; demais rótulos
 // caem no rodízio PORTE_COLORS, preservando o estilo visual da aba.
@@ -39,6 +52,7 @@ function toSegments(items: CategoricStat[] | undefined) {
 type AbaTecnologiaProps = {
   token: string;
   onUnauth: () => void;
+  filters?: DashboardFilters;
 };
 
 function fmtPct(v: number | null | undefined): string {
@@ -63,23 +77,21 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
 }
 
 export function AbaTecnologia({
-  token, onUnauth,
+  token, onUnauth, filters,
 }: AbaTecnologiaProps) {
-  const [infra, setInfra] = useState<TecnologiaInfra | null>(
-    () => getCached("/v1/admin/analytics/tecnologia/infraestrutura"),
-  );
-  const [uso,   setUso]   = useState<TecnologiaUso | null>(
-    () => getCached("/v1/admin/analytics/tecnologia/uso-pedagogico"),
-  );
+  const [infra, setInfra] = useState<TecnologiaInfra | null>(null);
+  const [uso,   setUso]   = useState<TecnologiaUso | null>(null);
   const [infraErr, setInfraErr] = useState("");
   const [usoErr,   setUsoErr]   = useState("");
-  const [loading,  setLoading]  = useState<boolean>(() => !allCached([
-    "/v1/admin/analytics/tecnologia/infraestrutura",
-    "/v1/admin/analytics/tecnologia/uso-pedagogico",
-  ]));
+  const [loading,  setLoading]  = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setInfra(null); setUso(null);
+    setInfraErr(""); setUsoErr("");
+
+    const qs = buildFilterParams(filters);
 
     const handleErr = (setter: (s: string) => void) => (e: unknown) => {
       const msg = (e as Error).message;
@@ -88,13 +100,13 @@ export function AbaTecnologia({
     };
 
     const pInfra = apiFetch<TecnologiaInfra>(
-      "/v1/admin/analytics/tecnologia/infraestrutura", token,
+      `/v1/admin/analytics/tecnologia/infraestrutura${qs}`, token,
     )
       .then((d) => { if (!cancelled) setInfra(d); })
       .catch(handleErr(setInfraErr));
 
     const pUso = apiFetch<TecnologiaUso>(
-      "/v1/admin/analytics/tecnologia/uso-pedagogico", token,
+      `/v1/admin/analytics/tecnologia/uso-pedagogico${qs}`, token,
     )
       .then((d) => { if (!cancelled) setUso(d); })
       .catch(handleErr(setUsoErr));
@@ -104,7 +116,7 @@ export function AbaTecnologia({
     });
 
     return () => { cancelled = true; };
-  }, [token, onUnauth]);
+  }, [token, onUnauth, filters]);
 
   if (loading) {
     return (
@@ -172,7 +184,7 @@ export function AbaTecnologia({
       {/* Badge de fonte */}
       <div className="flex items-center gap-2 text-xs text-emerald-700">
         <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-        <span>Fonte: PostgreSQL · ano corrente · censos concluídos</span>
+        <span>Fonte: {buildPostgresSourceLabel(filters)}</span>
       </div>
 
       {/* Banners de erro parcial */}

@@ -6,19 +6,33 @@ import {
   Briefcase, Building, UserCheck, Construction, BadgeCheck,
   ChefHat,
 } from "lucide-react";
-import { apiFetch, getCached, allCached } from "./shared/api";
+import { apiFetch } from "./shared/api";
 import { C, PORTE_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut } from "./shared/Donut";
 import { HBarChart } from "./shared/BarChart";
 import type {
   ServicosVisaoGeral, ServicosGerais, ServicosPortaria,
-  ServicosManipuladoresAlimentos,
+  ServicosManipuladoresAlimentos, DashboardFilters,
 } from "./shared/types";
+import { buildPostgresSourceLabel } from "./shared/sourceLabel";
+
+function buildFilterParams(filters?: DashboardFilters): string {
+  if (!filters) return "";
+  const p = new URLSearchParams();
+  if (filters.ano) p.set("year", String(filters.ano));
+  if (filters.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
+  if (filters.dre) p.set("dre", filters.dre);
+  if (filters.municipio) p.set("municipio", filters.municipio);
+  if (filters.zona) p.set("zona", filters.zona);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
 
 type AbaServicosTerceirizadosProps = {
   token: string;
   onUnauth: () => void;
+  filters?: DashboardFilters;
 };
 
 function fmtPct(v: number | null | undefined): string {
@@ -38,33 +52,25 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
 }
 
 export function AbaServicosTerceirizados({
-  token, onUnauth,
+  token, onUnauth, filters,
 }: AbaServicosTerceirizadosProps) {
-  const [visao,    setVisao]    = useState<ServicosVisaoGeral | null>(
-    () => getCached("/v1/admin/analytics/servicos-terceirizados/visao-geral"),
-  );
-  const [sg,       setSg]       = useState<ServicosGerais | null>(
-    () => getCached("/v1/admin/analytics/servicos-terceirizados/servicos-gerais"),
-  );
-  const [portaria, setPortaria] = useState<ServicosPortaria | null>(
-    () => getCached("/v1/admin/analytics/servicos-terceirizados/portaria"),
-  );
-  const [manip,    setManip]    = useState<ServicosManipuladoresAlimentos | null>(
-    () => getCached("/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos"),
-  );
+  const [visao,    setVisao]    = useState<ServicosVisaoGeral | null>(null);
+  const [sg,       setSg]       = useState<ServicosGerais | null>(null);
+  const [portaria, setPortaria] = useState<ServicosPortaria | null>(null);
+  const [manip,    setManip]    = useState<ServicosManipuladoresAlimentos | null>(null);
   const [visaoErr,    setVisaoErr]    = useState("");
   const [sgErr,       setSgErr]       = useState("");
   const [portariaErr, setPortariaErr] = useState("");
   const [manipErr,    setManipErr]    = useState("");
-  const [loading,     setLoading]     = useState<boolean>(() => !allCached([
-    "/v1/admin/analytics/servicos-terceirizados/visao-geral",
-    "/v1/admin/analytics/servicos-terceirizados/servicos-gerais",
-    "/v1/admin/analytics/servicos-terceirizados/portaria",
-    "/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos",
-  ]));
+  const [loading,     setLoading]     = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setVisao(null); setSg(null); setPortaria(null); setManip(null);
+    setVisaoErr(""); setSgErr(""); setPortariaErr(""); setManipErr("");
+
+    const qs = buildFilterParams(filters);
 
     const handleErr = (setter: (s: string) => void) => (e: unknown) => {
       const msg = (e as Error).message;
@@ -73,25 +79,25 @@ export function AbaServicosTerceirizados({
     };
 
     const pVisao = apiFetch<ServicosVisaoGeral>(
-      "/v1/admin/analytics/servicos-terceirizados/visao-geral", token,
+      `/v1/admin/analytics/servicos-terceirizados/visao-geral${qs}`, token,
     )
       .then((d) => { if (!cancelled) setVisao(d); })
       .catch(handleErr(setVisaoErr));
 
     const pSg = apiFetch<ServicosGerais>(
-      "/v1/admin/analytics/servicos-terceirizados/servicos-gerais", token,
+      `/v1/admin/analytics/servicos-terceirizados/servicos-gerais${qs}`, token,
     )
       .then((d) => { if (!cancelled) setSg(d); })
       .catch(handleErr(setSgErr));
 
     const pPortaria = apiFetch<ServicosPortaria>(
-      "/v1/admin/analytics/servicos-terceirizados/portaria", token,
+      `/v1/admin/analytics/servicos-terceirizados/portaria${qs}`, token,
     )
       .then((d) => { if (!cancelled) setPortaria(d); })
       .catch(handleErr(setPortariaErr));
 
     const pManip = apiFetch<ServicosManipuladoresAlimentos>(
-      "/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos", token,
+      `/v1/admin/analytics/servicos-terceirizados/manipuladores-alimentos${qs}`, token,
     )
       .then((d) => { if (!cancelled) setManip(d); })
       .catch(handleErr(setManipErr));
@@ -101,7 +107,7 @@ export function AbaServicosTerceirizados({
     });
 
     return () => { cancelled = true; };
-  }, [token, onUnauth]);
+  }, [token, onUnauth, filters]);
 
   if (loading) {
     return (
@@ -144,6 +150,10 @@ export function AbaServicosTerceirizados({
         { label: "Terceirizado", value: Math.round(sg.total_terceirizado), color: "#F59E0B" },
       ].filter((s) => s.value > 0)
     : [];
+  const topEmpresasSgRows = (sg?.top_empresas ?? []).map((e) => ({
+    label: e.empresa,
+    value: e.escolas,
+  }));
 
   const topEmpresasPortariaRows = (portaria?.top_empresas ?? []).map((e) => ({
     label: e.empresa,
@@ -173,7 +183,7 @@ export function AbaServicosTerceirizados({
       {/* Badge de fonte */}
       <div className="flex items-center gap-2 text-xs text-emerald-700">
         <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-        <span>Fonte: PostgreSQL · ano corrente · censos concluídos</span>
+        <span>Fonte: {buildPostgresSourceLabel(filters)}</span>
       </div>
 
       {/* Banners de erro parcial */}
@@ -203,13 +213,13 @@ export function AbaServicosTerceirizados({
       )}
 
       {/* ── Visão Geral ──────────────────────────────────────────── */}
-      <div id="sec-servicos-visao" className="flex items-center gap-3">
+      <div id="sec-servicos-visao" className="flex items-center gap-3 animate-fade-in-up">
         <Layers size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Visão Geral</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in-up [animation-delay:150ms]">
         <StatCard
           label="Áreas com Terceirização"
           value={areasComTerceirizacao.toLocaleString("pt-BR")}
@@ -240,7 +250,7 @@ export function AbaServicosTerceirizados({
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fade-in-up [animation-delay:300ms]">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
             <Layers size={16} style={{ color: C.primary }} />
@@ -261,7 +271,7 @@ export function AbaServicosTerceirizados({
             Quantidade de áreas terceirizadas por escola
           </h3>
           <p className="text-xs text-slate-400 mb-5">
-            Distribuição das escolas conforme o número de áreas terceirizadas.
+            Distribuição das escolas conforme the número de áreas terceirizadas.
           </p>
           {porQtdSegments.length > 0 ? (
             <Donut segments={porQtdSegments} />
@@ -309,19 +319,35 @@ export function AbaServicosTerceirizados({
         />
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-        <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
-          <Users size={16} style={{ color: C.primary }} />
-          Serviços Gerais — distribuição por vínculo
-        </h3>
-        <p className="text-xs text-slate-400 mb-5">
-          Soma dos quantitativos declarados pelas escolas em cada vínculo.
-        </p>
-        {sgVinculoSegments.length > 0 ? (
-          <Donut segments={sgVinculoSegments} />
-        ) : (
-          <NoData />
-        )}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <Users size={16} style={{ color: C.primary }} />
+            Serviços Gerais — distribuição por vínculo
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Soma dos quantitativos declarados pelas escolas em cada vínculo.
+          </p>
+          {sgVinculoSegments.length > 0 ? (
+            <Donut segments={sgVinculoSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <Building size={16} style={{ color: C.primary }} />
+            Top empresas terceirizadas — Serviços Gerais
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Empresas informadas em campo textual; variações de grafia podem aparecer separadamente.
+          </p>
+          {topEmpresasSgRows.length > 0 ? (
+            <HBarChart rows={topEmpresasSgRows} color={C.primary} labelWidth="9rem" />
+          ) : (
+            <NoData />
+          )}
+        </div>
       </div>
 
       {/* ── Portaria ─────────────────────────────────────────────── */}
@@ -358,7 +384,7 @@ export function AbaServicosTerceirizados({
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
           <Building size={16} style={{ color: C.primary }} />
-          Top empresas de portaria
+          Top empresas terceirizadas — Agentes de Portaria
         </h3>
         <p className="text-xs text-slate-400 mb-5">
           Empresas informadas em campo textual; variações de grafia podem aparecer separadamente.
@@ -458,7 +484,7 @@ export function AbaServicosTerceirizados({
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm lg:col-span-2">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
             <Building size={16} style={{ color: C.primary }} />
-            Top empresas terceirizadas
+            Top empresas terceirizadas — Manipulador de Alimentos
           </h3>
           <p className="text-xs text-slate-400 mb-5">
             Empresas informadas em campo textual; variações de grafia podem aparecer separadamente.

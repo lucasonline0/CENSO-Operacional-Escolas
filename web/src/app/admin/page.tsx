@@ -5,8 +5,10 @@ import {
   LogOut, Search, RefreshCw, CloudUpload, Lock, User as UserIcon,
   AlertCircle, Loader2, PanelLeftClose, Eye, EyeOff, ArrowRight,
   BarChart2, UsersRound, MonitorSmartphone, ShieldCheck, Utensils,
-  ClipboardCheck, Activity, Landmark, LayoutDashboard, Database, MapPinned,
-  Menu, X, ChevronDown,
+  ClipboardCheck, Activity, Landmark, Database, MapPinned,
+  Menu, X, ChevronDown, HeartPulse,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 import "./admin.css";
@@ -16,7 +18,6 @@ import {
   apiFetch, saveToken, loadToken, clearToken, clearApiCache, sanitize, prefetchDashboard,
 } from "@/components/admin/shared/api";
 import { JsonModal } from "@/components/admin/shared/JsonModal";
-import { AbaOperacional } from "@/components/admin/AbaOperacional";
 import { AbaTodosCensos } from "@/components/admin/AbaTodosCensos";
 import { AbaPorDre } from "@/components/admin/AbaPorDre";
 import { AbaPerfilAlunos } from "@/components/admin/AbaPerfilAlunos";
@@ -27,8 +28,10 @@ import { AbaInfraestruturaSeguranca } from "@/components/admin/AbaInfraestrutura
 import { AbaMerenda } from "@/components/admin/AbaMerenda";
 import { AbaServicosTerceirizados } from "@/components/admin/AbaServicosTerceirizados";
 import { AbaGestaoFinanceiraGovernanca } from "@/components/admin/AbaGestaoFinanceiraGovernanca";
+import { AbaSaudeOperacionalEscolas } from "@/components/admin/AbaSaudeOperacionalEscolas";
+import { FiltrosGlobais } from "@/components/admin/FiltrosGlobais";
 import type {
-  CensusRow, CensusPage, DashboardData,
+  CensusPage, DashboardData, DashboardFilters, FiltrosOpcoes,
 } from "@/components/admin/shared/types";
 
 // ─── Login ────────────────────────────────────────────────────────────────────
@@ -36,9 +39,9 @@ import type {
 function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [showPwd,  setShowPwd]  = useState(false);
-  const [error,    setError]    = useState("");
-  const [status,   setStatus]   = useState<"idle" | "auth" | "prefetch">("idle");
+  const [showPwd, setShowPwd] = useState(false);
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState<"idle" | "auth" | "prefetch">("idle");
   const [attempts, setAttempts] = useState(0);
   const blocked = attempts >= 5;
   const loading = status !== "idle";
@@ -51,7 +54,7 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
     const p = sanitize(password).slice(0, 128);
     if (!u || !p) { setError("Preencha usuário e senha."); setStatus("idle"); return; }
     try {
-      const res  = await fetch(`${API}/v1/admin/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: u, password: p }) });
+      const res = await fetch(`${API}/v1/admin/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: u, password: p }) });
       const json = await res.json();
       if (!res.ok) { setAttempts((a) => a + 1); setError(json.message ?? "Credenciais inválidas."); setStatus("idle"); return; }
       const token = (json.data as { token: string }).token;
@@ -162,9 +165,9 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
               )}
 
               <button type="submit" className="ca-submit-btn" disabled={loading || blocked}>
-                {status === "auth"     ? <><Loader2 size={15} className="animate-spin" />Autenticando…</>
-                : status === "prefetch"? <><Loader2 size={15} className="animate-spin" />Carregando painel…</>
-                :                        <>Entrar no painel <ArrowRight size={14} /></>}
+                {status === "auth" ? <><Loader2 size={15} className="animate-spin" />Autenticando…</>
+                  : status === "prefetch" ? <><Loader2 size={15} className="animate-spin" />Carregando painel…</>
+                    : <>Entrar no painel <ArrowRight size={14} /></>}
               </button>
             </form>
           </div>
@@ -186,22 +189,22 @@ type Tab =
   | "servicos"
   | "alunos"
   | "governanca"
-  | "operacional"
+  | "saude"
   | "census"
   | "dre";
 
 const PAGE_META: Record<Tab, { title: string }> = {
-  perfil:         { title: "Caracterização da Rede"         },
-  pessoal:        { title: "Pessoal e Gestão Escolar"       },
-  tecnologia:     { title: "Tecnologia e Equipamentos"      },
-  infraestrutura: { title: "Infraestrutura e Segurança"     },
-  merenda:        { title: "Merenda Escolar"                },
-  servicos:       { title: "Serviços Terceirizados"         },
-  alunos:         { title: "Perfil dos Alunos e Resultados" },
-  governanca:     { title: "Gestão Financeira e Governança" },
-  operacional:    { title: "Operacional"                    },
-  census:         { title: "Todos os Censos"                },
-  dre:            { title: "Por DRE"                        },
+  perfil: { title: "Caracterização da Rede" },
+  pessoal: { title: "Pessoal e Gestão Escolar" },
+  tecnologia: { title: "Tecnologia e Equipamentos" },
+  infraestrutura: { title: "Infraestrutura e Segurança" },
+  merenda: { title: "Merenda Escolar" },
+  servicos: { title: "Serviços Terceirizados" },
+  alunos: { title: "Perfil dos Alunos e Resultados" },
+  governanca: { title: "Gestão Financeira e Governança" },
+  saude: { title: "Índice de Saúde Operacional por escola" },
+  census: { title: "Registros de Preenchimento do Censo" },
+  dre: { title: "Andamento do Preenchimento por DRE" },
 };
 
 type SubItem = { label: string; anchor: string };
@@ -217,62 +220,62 @@ const NAV_INDICATORS: NavItem[] = [
   {
     id: "perfil", label: "Caracterização da Rede", Icon: BarChart2,
     subItems: [
-      { label: "Dimensão e Perfil da Rede",              anchor: "sec-perfil-dimensao" },
-      { label: "Organização da Oferta e Funcionamento",  anchor: "sec-perfil-oferta"   },
-      { label: "Infraestrutura Educacional",             anchor: "sec-perfil-infra"    },
+      { label: "Dimensão e Perfil da Rede", anchor: "sec-perfil-dimensao" },
+      { label: "Organização da Oferta e Funcionamento", anchor: "sec-perfil-oferta" },
+      { label: "Infraestrutura Educacional", anchor: "sec-perfil-infra" },
     ],
   },
   {
     id: "pessoal", label: "Pessoal e Gestão Escolar", Icon: UsersRound,
     subItems: [
-      { label: "Estrutura de Gestão Escolar", anchor: "sec-pessoal-estrutura"   },
-      { label: "Coordenação Pedagógica",      anchor: "sec-pessoal-coordenacao" },
-      { label: "Quadro de Pessoal",           anchor: "sec-pessoal-quadro"      },
+      { label: "Estrutura de Gestão Escolar", anchor: "sec-pessoal-estrutura" },
+      { label: "Coordenação Pedagógica", anchor: "sec-pessoal-coordenacao" },
+      { label: "Quadro de Pessoal", anchor: "sec-pessoal-quadro" },
     ],
   },
   {
     id: "tecnologia", label: "Tecnologia e Equipamentos", Icon: MonitorSmartphone,
     subItems: [
-      { label: "Infraestrutura Digital", anchor: "sec-tecnologia-digital"    },
-      { label: "Parque Tecnológico",     anchor: "sec-tecnologia-parque"     },
-      { label: "Uso Pedagógico",         anchor: "sec-tecnologia-pedagogico" },
+      { label: "Infraestrutura Digital", anchor: "sec-tecnologia-digital" },
+      { label: "Parque Tecnológico", anchor: "sec-tecnologia-parque" },
+      { label: "Uso Pedagógico", anchor: "sec-tecnologia-pedagogico" },
     ],
   },
   {
     id: "infraestrutura", label: "Infraestrutura e Segurança", Icon: ShieldCheck,
     subItems: [
-      { label: "Condições Estruturais e Ambientes",       anchor: "sec-infra-condicoes" },
-      { label: "Energia, Climatização e Cap. Elétrica",   anchor: "sec-infra-energia"   },
-      { label: "Segurança Física e Patrimonial",          anchor: "sec-infra-seguranca" },
+      { label: "Condições Estruturais e Ambientes", anchor: "sec-infra-condicoes" },
+      { label: "Energia, Climatização e Cap. Elétrica", anchor: "sec-infra-energia" },
+      { label: "Segurança Física e Patrimonial", anchor: "sec-infra-seguranca" },
     ],
   },
   {
     id: "merenda", label: "Merenda Escolar", Icon: Utensils,
     subItems: [
-      { label: "Oferta e Adequação da Merenda", anchor: "sec-merenda-oferta"       },
-      { label: "Estrutura Física",              anchor: "sec-merenda-estrutura"    },
-      { label: "Equipamentos da Merenda",       anchor: "sec-merenda-equipamentos" },
+      { label: "Oferta e Adequação da Merenda", anchor: "sec-merenda-oferta" },
+      { label: "Estrutura Física", anchor: "sec-merenda-estrutura" },
+      { label: "Equipamentos da Merenda", anchor: "sec-merenda-equipamentos" },
       { label: "Condições Sanitárias e Segurança", anchor: "sec-merenda-sanitarias" },
     ],
   },
   {
     id: "servicos", label: "Serviços Terceirizados", Icon: ClipboardCheck,
     subItems: [
-      { label: "Visão Geral",             anchor: "sec-servicos-visao"       },
-      { label: "Serviços Gerais",         anchor: "sec-servicos-gerais"      },
-      { label: "Portaria",                anchor: "sec-servicos-portaria"    },
+      { label: "Visão Geral", anchor: "sec-servicos-visao" },
+      { label: "Serviços Gerais", anchor: "sec-servicos-gerais" },
+      { label: "Portaria", anchor: "sec-servicos-portaria" },
       { label: "Manipulador de Alimentos", anchor: "sec-servicos-manipuladores" },
-      { label: "Governança / Supervisão", anchor: "sec-servicos-governanca"  },
+      { label: "Governança / Supervisão", anchor: "sec-servicos-governanca" },
     ],
   },
-  { id: "alunos",     label: "Perfil dos Alunos e Resultados", Icon: Activity  },
-  { id: "governanca", label: "Gestão Financeira e Governança", Icon: Landmark  },
+  { id: "alunos", label: "Perfil dos Alunos e Resultados", Icon: Activity },
+  { id: "governanca", label: "Gestão Financeira e Governança", Icon: Landmark },
 ];
 
 const NAV_OPERACIONAL: NavItem[] = [
-  { id: "operacional", label: "Operacional",    Icon: LayoutDashboard },
-  { id: "census",      label: "Todos os Censos",Icon: Database        },
-  { id: "dre",         label: "Por DRE",         Icon: MapPinned      },
+  { id: "saude", label: "Saúde Operacional", Icon: HeartPulse },
+  { id: "census", label: "Registros do Censo", Icon: Database },
+  { id: "dre", label: "Preenchimento por DRE", Icon: MapPinned },
 ];
 
 function NavGroup({
@@ -347,11 +350,9 @@ function NavGroup({
 }
 
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
-  const [dbData,         setDbData]         = useState<DashboardData | null>(null);
   const [censusPage,     setCensusPage]     = useState<CensusPage | null>(null);
   const [tab,            setTab]            = useState<Tab>("perfil");
   const [filterStatus,   setFilterStatus]   = useState("");
-  const [filterDre,      setFilterDre]      = useState("");
   const [search,         setSearch]         = useState("");
   const [err,            setErr]            = useState("");
   const [loading,        setLoading]        = useState(true);
@@ -362,36 +363,67 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const [censusLimit,    setCensusLimit]    = useState(10);
   const [censusPageNum,  setCensusPageNum]  = useState(1);
   const [mobileNavOpen,  setMobileNavOpen]  = useState(false);
+  const [filters,        setFilters]        = useState<DashboardFilters>({});
+  const [filtrosOpcoes,  setFiltrosOpcoes]  = useState<FiltrosOpcoes | null>(null);
 
   const logout = useCallback(() => { clearToken(); clearApiCache(); onLogout(); }, [onLogout]);
 
+  // O endpoint legado /v1/admin/dashboard segue sendo consultado para gatear o
+  // estado de carregamento/erro do painel operacional. O payload (incl. by_dre)
+  // não é mais armazenado no cliente: a aba "Preenchimento por DRE" agora usa o
+  // endpoint analítico próprio /v1/admin/analytics/preenchimento/dre.
   const loadDb = useCallback(async () => {
     try {
-      setDbData(await apiFetch<DashboardData>("/v1/admin/dashboard", token));
+      await apiFetch<DashboardData>("/v1/admin/dashboard", token);
     } catch (e) {
       if ((e as Error).message === "UNAUTHORIZED") { logout(); return; }
       setErr("Erro ao carregar painel operacional.");
     } finally { setLoading(false); }
   }, [token, logout]);
 
+  // Registros do Censo: filtros globais (ano, DRE, município, zona, Região de
+  // Integração) viram query params; status e busca textual são filtros locais
+  // da aba, mas a busca roda no backend (filtra todo o recorte, não só a página).
   const loadCensus = useCallback(async (limit = censusLimit, page = censusPageNum) => {
     const p = new URLSearchParams();
-    if (filterStatus) p.set("status", filterStatus);
-    if (filterDre)    p.set("dre", filterDre);
+    if (filterStatus)              p.set("status", filterStatus);
+    if (filters.ano)               p.set("year", String(filters.ano));
+    if (filters.dre)               p.set("dre", filters.dre);
+    if (filters.municipio)         p.set("municipio", filters.municipio);
+    if (filters.zona)              p.set("zona", filters.zona);
+    if (filters.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
+    if (search)                    p.set("search", search);
     p.set("limit", String(limit));
-    p.set("page",  String(page));
+    p.set("page", String(page));
     try { setCensusPage(await apiFetch<CensusPage>(`/v1/admin/census?${p}`, token)); }
     catch (e) { if ((e as Error).message === "UNAUTHORIZED") logout(); }
-  }, [token, filterStatus, filterDre, censusLimit, censusPageNum, logout]);
+  }, [token, filterStatus, filters, search, censusLimit, censusPageNum, logout]);
 
   useEffect(() => { loadDb(); }, [loadDb]);
-  useEffect(() => { if (tab === "census") loadCensus(); }, [tab, filterStatus, filterDre, censusLimit, censusPageNum, loadCensus]);
+  // Pequeno debounce: a busca textual agora dispara requisição ao backend e o
+  // timeout evita uma chamada por tecla digitada.
+  useEffect(() => {
+    if (tab !== "census") return;
+    const t = setTimeout(() => { loadCensus(); }, 300);
+    return () => clearTimeout(t);
+  }, [tab, loadCensus]);
+  useEffect(() => {
+    const qs = new URLSearchParams();
+    if (filters.dre)               qs.set("dre", filters.dre);
+    if (filters.municipio)         qs.set("municipio", filters.municipio);
+    if (filters.zona)              qs.set("zona", filters.zona);
+    if (filters.regiao_integracao) qs.set("regiao_integracao", filters.regiao_integracao);
+    const url = `/v1/admin/analytics/filtros/opcoes${qs.toString() ? `?${qs}` : ""}`;
+    apiFetch<FiltrosOpcoes>(url, token)
+      .then(setFiltrosOpcoes)
+      .catch((e) => { if ((e as Error).message === "UNAUTHORIZED") logout(); });
+  }, [filters, token, logout]);
 
 
   async function handleSync() {
     setSyncing(true);
     try {
-      const res  = await fetch(`${API}/v1/admin/sync-sheets`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API}/v1/admin/sync-sheets`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
       const json = await res.json();
       alert(json.message ?? "Sync concluído.");
       loadDb();
@@ -400,18 +432,25 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   }
 
   const fmtDate = (iso: string) =>
-    new Date(iso).toLocaleString("pt-BR", { day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit" });
+    new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
-  const match = (r: CensusRow, q: string) => {
-    const l = q.toLowerCase();
-    return r.nome_escola.toLowerCase().includes(l) || r.codigo_inep.includes(l) ||
-           r.municipio.toLowerCase().includes(l)   || r.dre.toLowerCase().includes(l);
-  };
+  // Mudanças de recorte (filtros globais, status ou busca) voltam para a página 1.
+  const updateSearch = (s: string) => { setSearch(s); setCensusPageNum(1); };
+  const updateFilterStatus = (s: string) => { setFilterStatus(s); setCensusPageNum(1); };
+  const updateFilters = (f: DashboardFilters) => { setFilters(f); setCensusPageNum(1); };
 
-  const filteredRecent  = (dbData?.recent ?? []).filter((r) => !search || match(r, search));
-  const filteredCensus  = (censusPage?.rows ?? []).filter((r) => !search || match(r, search));
+  const handleNav = (id: Tab) => { setTab(id); updateSearch(""); setVisited((prev) => new Set([...prev, id])); setMobileNavOpen(false); };
 
-  const handleNav = (id: Tab) => { setTab(id); setSearch(""); setVisited((prev) => new Set([...prev, id])); setMobileNavOpen(false); };
+  const [dark, setDark] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("censo_admin_theme") === "dark";
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("censo_admin_theme", dark ? "dark" : "light");
+  }, [dark]);
 
   if (loading) return (
     <div className="censo-admin" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -420,7 +459,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   );
 
   return (
-    <div className="censo-admin">
+    <div className={`censo-admin${dark ? " dark" : ""}`}>
       <div className={`ca-app${collapsed ? " collapsed" : ""}${mobileNavOpen ? " nav-open" : ""}`}>
 
         {/* Overlay da gaveta de navegação — visível apenas no mobile (CSS) */}
@@ -499,7 +538,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 <input
                   placeholder="Buscar indicadores, escolas, DREs…"
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => updateSearch(e.target.value)}
                 />
                 <kbd>⌘ /</kbd>
               </div>
@@ -516,6 +555,13 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               <button className="ca-icon-btn" title="Sair" onClick={logout}>
                 <LogOut size={16} />
               </button>
+              <button className="ca-icon-btn" title="Mudar tema" onClick={() => setDark(!dark)}>
+                {
+                  dark
+                    ? <Sun size={16} />
+                    : <Moon size={16} />
+                }
+              </button>
             </div>
           </div>
 
@@ -527,35 +573,41 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 {err}
               </div>
             )}
-{/* Renderiza todas as abas já visitadas. Quando volta para uma aba os dados já são carregados*/}
+
+            <FiltrosGlobais
+              opcoes={filtrosOpcoes}
+              filters={filters}
+              onFiltersChange={updateFilters}
+            />
+            {/* Renderiza todas as abas já visitadas. Quando volta para uma aba os dados já são carregados*/}
             {visited.has("perfil") && (
               <div style={{ display: tab === "perfil" ? undefined : "none" }}>
-                <AbaCaracterizacao token={token} onUnauth={logout} />
+                <AbaCaracterizacao token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("pessoal") && (
               <div style={{ display: tab === "pessoal" ? undefined : "none" }}>
-                <AbaPessoalGestao token={token} onUnauth={logout} />
+                <AbaPessoalGestao token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("tecnologia") && (
               <div style={{ display: tab === "tecnologia" ? undefined : "none" }}>
-                <AbaTecnologia token={token} onUnauth={logout} />
+                <AbaTecnologia token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("infraestrutura") && (
               <div style={{ display: tab === "infraestrutura" ? undefined : "none" }}>
-                <AbaInfraestruturaSeguranca token={token} onUnauth={logout} />
+                <AbaInfraestruturaSeguranca token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("merenda") && (
               <div style={{ display: tab === "merenda" ? undefined : "none" }}>
-                <AbaMerenda token={token} onUnauth={logout} />
+                <AbaMerenda token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("servicos") && (
               <div style={{ display: tab === "servicos" ? undefined : "none" }}>
-                <AbaServicosTerceirizados token={token} onUnauth={logout} />
+                <AbaServicosTerceirizados token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("alunos") && (
@@ -568,29 +620,19 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 <AbaGestaoFinanceiraGovernanca />
               </div>
             )}
-
-            {tab === "operacional" && dbData && (
-              <AbaOperacional
-                dbData={dbData}
-                search={search}
-                setSearch={setSearch}
-                filteredRecent={filteredRecent}
-                onView={setViewId}
-                formatDate={fmtDate}
-              />
+            {visited.has("saude") && (
+              <div style={{ display: tab === "saude" ? undefined : "none" }}>
+                <AbaSaudeOperacionalEscolas token={token} onUnauth={logout} filters={filters} />
+              </div>
             )}
 
             {tab === "census" && (
               <AbaTodosCensos
-                dbData={dbData}
                 censusPage={censusPage}
                 filterStatus={filterStatus}
-                setFilterStatus={setFilterStatus}
-                filterDre={filterDre}
-                setFilterDre={setFilterDre}
+                setFilterStatus={updateFilterStatus}
                 search={search}
-                setSearch={setSearch}
-                filteredCensus={filteredCensus}
+                setSearch={updateSearch}
                 censusLimit={censusLimit}
                 setCensusLimit={(l) => { setCensusLimit(l); setCensusPageNum(1); }}
                 censusPageNum={censusPageNum}
@@ -600,14 +642,19 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               />
             )}
 
-            {tab === "dre" && dbData && (
-              <AbaPorDre dbData={dbData} />
+            {visited.has("dre") && (
+              <div style={{ display: tab === "dre" ? undefined : "none" }}>
+                <AbaPorDre token={token} onUnauth={logout} filters={filters} />
+              </div>
             )}
           </div>
 
           {/* Partners footer */}
           <footer className="ca-partners-strip">
-            <img src="/parceiros.png" alt="FADEP · Secretaria de Educação · Governo do Pará" />
+            <img
+              src={dark ? "/logo-horizontal-letter-white.png" : "/parceiros.png"}
+              alt="FADEP · Secretaria de Educação · Governo do Pará"
+            />
           </footer>
         </main>
 

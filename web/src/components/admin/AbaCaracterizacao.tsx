@@ -7,6 +7,7 @@ import {
   LayoutGrid, ShieldCheck, Info, X,
 } from "lucide-react";
 import { apiFetch, getCached, allCached } from "./shared/api";
+import { buildPostgresSourceLabel } from "./shared/sourceLabel";
 import { C, PORTE_COLORS, ZONA_COLORS } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import { Donut, PieChart } from "./shared/Donut";
@@ -14,61 +15,64 @@ import { HBarChart, VBarChart } from "./shared/BarChart";
 import type {
   CaracterizacaoPerfilPg, CaracterizacaoDREPg, SheetMetrics,
   CaracterizacaoOfertaFuncionamento, CaracterizacaoInfraEducacionalPg,
+  DashboardFilters,
 } from "./shared/types";
 
+function buildFilterParams(filters?: DashboardFilters): string {
+  if (!filters) return "";
+  const p = new URLSearchParams();
+  if (filters.ano) p.set("year", String(filters.ano));
+  if (filters.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
+  if (filters.dre) p.set("dre", filters.dre);
+  if (filters.municipio) p.set("municipio", filters.municipio);
+  if (filters.zona) p.set("zona", filters.zona);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
+
 const TURNO_COLORS: Record<string, string> = {
-  "Manhã":    "#F59E0B",
-  "Tarde":    "#3B82F6",
-  "Noite":    "#6366F1",
+  "Manhã": "#F59E0B",
+  "Tarde": "#3B82F6",
+  "Noite": "#6366F1",
   "Integral": "#10B981",
 };
 
 // Cores das faixas de cobertura essencial (donut). Da maior cobertura
 // (verde) à menor (vermelho), com cinza para "sem essenciais informados".
 const FAIXA_COBERTURA_COLORS: Record<string, string> = {
-  "Cobertura plena":           "#10B981",
-  "Alta cobertura":            "#3B82F6",
-  "Cobertura intermediária":   "#F59E0B",
-  "Baixa cobertura":           "#EF4444",
+  "Cobertura plena": "#10B981",
+  "Alta cobertura": "#3B82F6",
+  "Cobertura intermediária": "#F59E0B",
+  "Baixa cobertura": "#EF4444",
   "Sem essenciais informados": "#94A3B8",
 };
 
-export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth: () => void }) {
+export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string; onUnauth: () => void; filters?: DashboardFilters }) {
   // Fase 2B.1: a aba "Caracterização da Rede" passa a consumir PostgreSQL via
   // /v1/admin/analytics/caracterizacao/perfil e /caracterizacao/dre. Os dados
   // legados de /v1/admin/sheet-metrics continuam carregados em paralelo como
   // fallback para qualquer parte cujo endpoint analítico falhe.
-  const [perfilPg, setPerfilPg] = useState<CaracterizacaoPerfilPg | null>(
-    () => getCached("/v1/admin/analytics/caracterizacao/perfil"),
-  );
-  const [drePg,    setDrePg]    = useState<CaracterizacaoDREPg | null>(
-    () => getCached("/v1/admin/analytics/caracterizacao/dre"),
-  );
-  const [ofertaPg, setOfertaPg] = useState<CaracterizacaoOfertaFuncionamento | null>(
-    () => getCached("/v1/admin/analytics/caracterizacao/oferta-funcionamento"),
-  );
-  const [infraPg,  setInfraPg]  = useState<CaracterizacaoInfraEducacionalPg | null>(
-    () => getCached("/v1/admin/analytics/caracterizacao/infraestrutura-educacional"),
-  );
-  const [metrics,  setMetrics]  = useState<SheetMetrics | null>(
-    () => getCached("/v1/admin/sheet-metrics"),
-  );
+  const [perfilPg, setPerfilPg] = useState<CaracterizacaoPerfilPg | null>(null);
+  const [drePg,    setDrePg]    = useState<CaracterizacaoDREPg | null>(null);
+  const [ofertaPg, setOfertaPg] = useState<CaracterizacaoOfertaFuncionamento | null>(null);
+  const [infraPg,  setInfraPg]  = useState<CaracterizacaoInfraEducacionalPg | null>(null);
+  const [metrics,  setMetrics]  = useState<SheetMetrics | null>(null);
   const [perfilErr, setPerfilErr] = useState("");
-  const [dreErr,    setDreErr]    = useState("");
+  const [dreErr, setDreErr] = useState("");
   const [ofertaErr, setOfertaErr] = useState("");
   const [infraErr,  setInfraErr]  = useState("");
   const [sheetErr,  setSheetErr]  = useState("");
-  const [loading,   setLoading]   = useState<boolean>(() => !allCached([
-    "/v1/admin/analytics/caracterizacao/perfil",
-    "/v1/admin/analytics/caracterizacao/dre",
-    "/v1/admin/analytics/caracterizacao/oferta-funcionamento",
-    "/v1/admin/analytics/caracterizacao/infraestrutura-educacional",
-  ]));
+  const [loading,   setLoading]   = useState(true);
   // Janela informativa explicando quais ambientes são essenciais.
   const [infoOpen, setInfoOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setPerfilPg(null); setDrePg(null); setOfertaPg(null); setInfraPg(null); setMetrics(null);
+    setPerfilErr(""); setDreErr(""); setOfertaErr(""); setInfraErr(""); setSheetErr("");
+
+    const qs = buildFilterParams(filters);
 
     const handleErr = (setter: (s: string) => void) => (e: unknown) => {
       const msg = (e as Error).message;
@@ -76,19 +80,19 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
       if (!cancelled) setter(msg);
     };
 
-    const pPerfil = apiFetch<CaracterizacaoPerfilPg>("/v1/admin/analytics/caracterizacao/perfil", token)
+    const pPerfil = apiFetch<CaracterizacaoPerfilPg>(`/v1/admin/analytics/caracterizacao/perfil${qs}`, token)
       .then((d) => { if (!cancelled) setPerfilPg(d); })
       .catch(handleErr(setPerfilErr));
 
-    const pDre = apiFetch<CaracterizacaoDREPg>("/v1/admin/analytics/caracterizacao/dre", token)
+    const pDre = apiFetch<CaracterizacaoDREPg>(`/v1/admin/analytics/caracterizacao/dre${qs}`, token)
       .then((d) => { if (!cancelled) setDrePg(d); })
       .catch(handleErr(setDreErr));
 
-    const pOferta = apiFetch<CaracterizacaoOfertaFuncionamento>("/v1/admin/analytics/caracterizacao/oferta-funcionamento", token)
+    const pOferta = apiFetch<CaracterizacaoOfertaFuncionamento>(`/v1/admin/analytics/caracterizacao/oferta-funcionamento${qs}`, token)
       .then((d) => { if (!cancelled) setOfertaPg(d); })
       .catch(handleErr(setOfertaErr));
 
-    const pInfra = apiFetch<CaracterizacaoInfraEducacionalPg>("/v1/admin/analytics/caracterizacao/infraestrutura-educacional", token)
+    const pInfra = apiFetch<CaracterizacaoInfraEducacionalPg>(`/v1/admin/analytics/caracterizacao/infraestrutura-educacional${qs}`, token)
       .then((d) => { if (!cancelled) setInfraPg(d); })
       .catch(handleErr(setInfraErr));
 
@@ -101,7 +105,7 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
     });
 
     return () => { cancelled = true; };
-  }, [token, onUnauth]);
+  }, [token, onUnauth, filters]);
 
   if (loading) return (
     <div className="flex items-center justify-center py-24 text-slate-400">
@@ -124,7 +128,7 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
   const usePerfilPg = perfilPg !== null;
 
   const safePorPorteSheet = metrics?.por_porte ?? [];
-  const safePorZonaSheet  = metrics?.por_zona  ?? [];
+  const safePorZonaSheet = metrics?.por_zona ?? [];
 
   // Total de escolas exibido nos cards e no centro dos donuts.
   const totalEscolas = usePerfilPg
@@ -147,108 +151,104 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
 
   const porteDonut = usePerfilPg
     ? perfilPg!.por_porte.map((p, i) => ({
-        label: p.porte, value: p.escolas, color: PORTE_COLORS[i] ?? "#94A3B8",
-      }))
+      label: p.porte, value: p.escolas, color: PORTE_COLORS[i] ?? "#94A3B8",
+    }))
     : safePorPorteSheet.map((p, i) => ({
-        label: p.porte, value: p.count, color: PORTE_COLORS[i] ?? "#94A3B8",
-      }));
+      label: p.porte, value: p.count, color: PORTE_COLORS[i] ?? "#94A3B8",
+    }));
 
   const zonaDonut = usePerfilPg
     ? perfilPg!.por_zona.map((z) => ({
-        label: z.zona, value: z.escolas, color: ZONA_COLORS[z.zona] ?? "#94A3B8",
-      }))
+      label: z.zona, value: z.escolas, color: ZONA_COLORS[z.zona] ?? "#94A3B8",
+    }))
     : safePorZonaSheet.map((z) => ({
-        label: z.zona, value: z.count, color: ZONA_COLORS[z.zona] ?? "#94A3B8",
-      }));
+      label: z.zona, value: z.count, color: ZONA_COLORS[z.zona] ?? "#94A3B8",
+    }));
 
   const matriculasBar = usePerfilPg
     ? perfilPg!.matriculas_por_porte.map((m) => ({
-        label: m.porte, value: Math.round(m.total_alunos),
-      }))
+      label: m.porte, value: Math.round(m.total_alunos),
+    }))
     : safePorPorteSheet.map((p) => ({ label: p.porte, value: p.alunos }));
 
   // ── Resolução DRE (bar + tabela): prefere PG; fallback p/ sheet-metrics.
   const useDrePg = drePg !== null;
   const safePorDreSheet = metrics?.por_dre ?? [];
 
-  const dreBar = useDrePg
-    ? drePg!.top_dres.slice(0, 15).map((d) => ({ label: d.dre, value: d.escolas }))
-    : safePorDreSheet.slice(0, 15).map((d) => ({ label: d.dre, value: d.escolas }));
-
   type DreRow = { dre: string; escolas: number; alunos: number; salas: number; media: number };
   const dreTable: DreRow[] = useDrePg
     ? drePg!.detalhamento.map((d) => ({
-        dre:     d.dre,
-        escolas: d.escolas,
-        alunos:  Math.round(d.total_alunos),
-        salas:   Math.round(d.salas_aula),
-        media:   Math.round(d.media_alunos_por_escola),
-      }))
+      dre: d.dre,
+      escolas: d.escolas,
+      alunos: Math.round(d.total_alunos),
+      salas: Math.round(d.salas_aula),
+      media: Math.round(d.media_alunos_por_escola),
+    }))
     : safePorDreSheet.map((d) => ({
-        dre:     d.dre,
-        escolas: d.escolas,
-        alunos:  d.alunos,
-        salas:   d.salas,
-        media:   d.escolas > 0 ? Math.round(d.alunos / d.escolas) : 0,
-      }));
+      dre: d.dre,
+      escolas: d.escolas,
+      alunos: d.alunos,
+      salas: d.salas,
+      media: d.escolas > 0 ? Math.round(d.alunos / d.escolas) : 0,
+    }));
 
   // Fonte global da aba (informativa). PG total = perfil + dre; qualquer
   // falha vira "Sheets fallback (parcial)" para deixar claro ao operador
   // que parte da aba está lendo do legado.
   const sourceLabel =
-    usePerfilPg && useDrePg ? "PostgreSQL · ano corrente · censos concluídos"
-    : !usePerfilPg && !useDrePg ? "Google Sheets · fallback"
-    : "Google Sheets · fallback (parcial)";
+    usePerfilPg && useDrePg ? buildPostgresSourceLabel(filters)
+      : !usePerfilPg && !useDrePg ? "Google Sheets · fallback"
+        : "Google Sheets · fallback (parcial)";
   const sourceTone = usePerfilPg && useDrePg ? "emerald" : "amber";
 
   return (
     <div className="space-y-6">
       {/* Indicação discreta da fonte de dados da aba. */}
-      <div className={`flex items-center gap-2 text-xs ${
-        sourceTone === "emerald" ? "text-emerald-700" : "text-amber-700"
-      }`}>
-        <span className={`inline-block w-2 h-2 rounded-full ${
-          sourceTone === "emerald" ? "bg-emerald-500" : "bg-amber-500"
-        }`} />
+      <div className={`flex items-center gap-2 text-xs ${sourceTone === "emerald" ? "text-emerald-700" : "text-amber-700"
+        }`}>
+        <span className={`inline-block w-2 h-2 rounded-full ${sourceTone === "emerald" ? "bg-emerald-500" : "bg-amber-500"
+          }`} />
         <span>Fonte: {sourceLabel}</span>
       </div>
 
       {/* Avisos detalhados de falha — só aparecem se houve fallback. */}
       {(perfilErr || dreErr) && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm animate-fade-in">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>
             Indicadores via PostgreSQL parcialmente indisponíveis
             {perfilErr && <> (perfil: {perfilErr})</>}
-            {dreErr    && <> (DRE: {dreErr})</>}
+            {dreErr && <> (DRE: {dreErr})</>}
             . Exibindo valores da planilha como fallback.
           </span>
         </div>
       )}
       {/* Se até a planilha falhou mas o PG funcionou, deixamos só um aviso suave. */}
       {sheetErr && !perfilErr && !dreErr && (
-        <div className="flex items-start gap-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl px-4 py-3 text-xs">
+        <div className="flex items-start gap-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl px-4 py-3 text-xs animate-fade-in">
           <AlertCircle size={14} className="shrink-0 mt-0.5" />
           <span>Planilha (fallback) indisponível ({sheetErr}). Operando 100% via PostgreSQL.</span>
         </div>
       )}
 
       {/* ── Dimensão e Perfil da Rede ─────────────────────────── */}
-      <div id="sec-perfil-dimensao" className="flex items-center gap-3">
-        <Building2 size={18} style={{ color: C.primary }} />
-        <h2 className="font-semibold text-slate-800 text-base">Dimensão e Perfil da Rede</h2>
-        <div className="flex-1 h-px bg-slate-200" />
-      </div>
+      <div id="sec-perfil-dimensao" className="animate-fade-in-up">
+        <div className="flex items-center gap-3 mb-4">
+          <Building2 size={18} style={{ color: C.primary }} />
+          <h2 className="font-semibold text-slate-800 text-base">Dimensão e Perfil da Rede</h2>
+          <div className="flex-1 h-px bg-slate-200" />
+        </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total de Escolas" value={totalEscolas} Icon={Building2} tone="blue" sub="Censos concluídos" />
-        <StatCard label="Total de Alunos" value={totalAlunos} Icon={Users} tone="green" />
-        <StatCard label="Média por Escola" value={mediaAlunos} Icon={TrendingUp} tone="amber" sub="alunos/escola" />
-        <StatCard label="Alunos PcD" value={totalAlunosPcd} Icon={GraduationCap} tone="purple" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard label="Total de Escolas" value={totalEscolas} Icon={Building2} tone="blue" sub="Censos concluídos" />
+          <StatCard label="Total de Alunos" value={totalAlunos} Icon={Users} tone="green" />
+          <StatCard label="Média por Escola" value={mediaAlunos} Icon={TrendingUp} tone="amber" sub="alunos/escola" />
+          <StatCard label="Alunos PcD" value={totalAlunosPcd} Icon={GraduationCap} tone="purple" />
+        </div>
       </div>
 
       {/* Linha de donuts — Distribuição por Porte e por Zona */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fade-in-up [animation-delay:150ms]">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
             <BarChart2 size={16} style={{ color: C.primary }} />
@@ -266,7 +266,7 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
       </div>
 
       {/* Distribuição de Matrículas por Porte — bar chart */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm animate-fade-in-up [animation-delay:300ms]">
         <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
           <Users size={16} style={{ color: C.primary }} />
           Distribuição de Matrículas por Porte
@@ -274,20 +274,13 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
         <HBarChart rows={matriculasBar} color={C.primary} />
       </div>
 
-      {/* DRE bar */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-        <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-          <MapPinned size={16} style={{ color: C.primary }} />
-          Escolas Concluídas por DRE (Top 15)
-        </h3>
-        <HBarChart rows={dreBar} color="#2563EB" />
-      </div>
-
       {/* ── Organização da Oferta e Funcionamento ─────────────── */}
-      <div id="sec-perfil-oferta" className="flex items-center gap-3">
-        <Clock size={18} style={{ color: C.primary }} />
-        <h2 className="font-semibold text-slate-800 text-base">Organização da Oferta e Funcionamento</h2>
-        <div className="flex-1 h-px bg-slate-200" />
+      <div id="sec-perfil-oferta" className="animate-fade-in-up [animation-delay:600ms]">
+        <div className="flex items-center gap-3 mb-4">
+          <Clock size={18} style={{ color: C.primary }} />
+          <h2 className="font-semibold text-slate-800 text-base">Organização da Oferta e Funcionamento</h2>
+          <div className="flex-1 h-px bg-slate-200" />
+        </div>
       </div>
 
       <div className="space-y-5">
@@ -365,119 +358,121 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
       </div>
 
       {/* ── Infraestrutura Educacional ────────────────────────── */}
-      <div id="sec-perfil-infra" className="flex items-center gap-3">
-        <LayoutGrid size={18} style={{ color: C.primary }} />
-        <h2 className="font-semibold text-slate-800 text-base">Infraestrutura Educacional</h2>
-        <button
-          type="button"
-          onClick={() => setInfoOpen(true)}
-          aria-label="Sobre os ambientes essenciais"
-          className="text-slate-400 hover:text-slate-600 transition-colors"
-        >
-          <Info size={16} />
-        </button>
-        <div className="flex-1 h-px bg-slate-200" />
-      </div>
+      <div id="sec-perfil-infra" className="animate-fade-in-up [animation-delay:750ms]">
+        <div className="flex items-center gap-3 mb-4">
+          <LayoutGrid size={18} style={{ color: C.primary }} />
+          <h2 className="font-semibold text-slate-800 text-base">Infraestrutura Educacional</h2>
+          <button
+            type="button"
+            onClick={() => setInfoOpen(true)}
+            aria-label="Sobre os ambientes essenciais"
+            className="text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <Info size={16} />
+          </button>
+          <div className="flex-1 h-px bg-slate-200" />
+        </div>
 
-      <div className="space-y-5">
-        {infraErr && !infraPg && (
-          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
-            <AlertCircle size={15} className="shrink-0 mt-0.5" />
-            <span>Infraestrutura Educacional indisponível ({infraErr}).</span>
-          </div>
-        )}
-
-        {infraPg && (
-          <>
-            {/* KPIs de cobertura essencial. "Total de Escolas" não é
-                repetido aqui — já consta no bloco Dimensão e Perfil da Rede. */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <StatCard
-                label="Média de Ambientes Essenciais"
-                value={infraPg.cobertura_essenciais.media_ambientes_essenciais.toLocaleString("pt-BR")}
-                Icon={LayoutGrid}
-                tone="blue"
-                sub={`de ${infraPg.cobertura_essenciais.total_essenciais} por escola`}
-              />
-              <StatCard
-                label="Cobertura Plena"
-                value={`${infraPg.cobertura_essenciais.pct_cobertura_plena.toLocaleString("pt-BR")}%`}
-                Icon={ShieldCheck}
-                tone="green"
-                sub={`possuem os ${infraPg.cobertura_essenciais.total_essenciais} essenciais`}
-              />
+        <div className="space-y-5">
+          {infraErr && !infraPg && (
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+              <AlertCircle size={15} className="shrink-0 mt-0.5" />
+              <span>Infraestrutura Educacional indisponível ({infraErr}).</span>
             </div>
+          )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {/* Ranking de ambientes mais presentes */}
+          {infraPg && (
+            <>
+              {/* KPIs de cobertura essencial. "Total de Escolas" não é
+                repetido aqui — já consta no bloco Dimensão e Perfil da Rede. */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <StatCard
+                  label="Média de Ambientes Essenciais"
+                  value={infraPg.cobertura_essenciais.media_ambientes_essenciais.toLocaleString("pt-BR")}
+                  Icon={LayoutGrid}
+                  tone="blue"
+                  sub={`de ${infraPg.cobertura_essenciais.total_essenciais} por escola`}
+                />
+                <StatCard
+                  label="Cobertura Plena"
+                  value={`${infraPg.cobertura_essenciais.pct_cobertura_plena.toLocaleString("pt-BR")}%`}
+                  Icon={ShieldCheck}
+                  tone="green"
+                  sub={`possuem os ${infraPg.cobertura_essenciais.total_essenciais} essenciais`}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                {/* Ranking de ambientes mais presentes */}
+                <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                  <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                    <BarChart2 size={16} style={{ color: C.primary }} />
+                    Ambientes mais Presentes
+                  </h3>
+                  {infraPg.ambientes.length > 0 ? (
+                    <HBarChart
+                      rows={infraPg.ambientes.map((a) => ({
+                        label: a.label,
+                        value: a.escolas,
+                        trailing: `${a.percentual.toLocaleString("pt-BR")}%`,
+                      }))}
+                      color={C.primary}
+                    />
+                  ) : (
+                    <p className="text-sm text-slate-400">Nenhum ambiente declarado.</p>
+                  )}
+                </div>
+
+                {/* Distribuição por faixa de cobertura essencial */}
+                <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                  <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                    <ShieldCheck size={16} style={{ color: C.primary }} />
+                    Cobertura de Ambientes Essenciais
+                  </h3>
+                  <Donut
+                    segments={infraPg.cobertura_essenciais.por_faixa.map((f) => ({
+                      label: f.label,
+                      value: f.escolas,
+                      color: FAIXA_COBERTURA_COLORS[f.label] ?? "#94A3B8",
+                    }))}
+                    label={totalEscolas.toLocaleString("pt-BR")}
+                    sub="escolas"
+                  />
+                </div>
+              </div>
+
+              {/* Média de essenciais por porte */}
               <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
                 <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-                  <BarChart2 size={16} style={{ color: C.primary }} />
-                  Ambientes mais Presentes
+                  <TrendingUp size={16} style={{ color: C.primary }} />
+                  Média de Essenciais por Porte
                 </h3>
-                {infraPg.ambientes.length > 0 ? (
-                  <HBarChart
-                    rows={infraPg.ambientes.map((a) => ({
-                      label: a.label,
-                      value: a.escolas,
-                      trailing: `${a.percentual.toLocaleString("pt-BR")}%`,
-                    }))}
-                    color={C.primary}
+                {infraPg.media_essenciais_por_porte.length > 0 ? (
+                  <VBarChart
+                    rows={infraPg.media_essenciais_por_porte.map((m) => ({ label: m.porte, value: m.media }))}
+                    color="#2563EB"
+                    showPct={false}
+                    barMaxWidth={120}
+                    gapClass="gap-1"
+                    valueInside
                   />
                 ) : (
-                  <p className="text-sm text-slate-400">Nenhum ambiente declarado.</p>
+                  <p className="text-sm text-slate-400">Sem dados de porte.</p>
                 )}
               </div>
-
-              {/* Distribuição por faixa de cobertura essencial */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-                  <ShieldCheck size={16} style={{ color: C.primary }} />
-                  Cobertura de Ambientes Essenciais
-                </h3>
-                <Donut
-                  segments={infraPg.cobertura_essenciais.por_faixa.map((f) => ({
-                    label: f.label,
-                    value: f.escolas,
-                    color: FAIXA_COBERTURA_COLORS[f.label] ?? "#94A3B8",
-                  }))}
-                  label={totalEscolas.toLocaleString("pt-BR")}
-                  sub="escolas"
-                />
-              </div>
-            </div>
-
-            {/* Média de essenciais por porte */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-              <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-                <TrendingUp size={16} style={{ color: C.primary }} />
-                Média de Essenciais por Porte
-              </h3>
-              {infraPg.media_essenciais_por_porte.length > 0 ? (
-                <VBarChart
-                  rows={infraPg.media_essenciais_por_porte.map((m) => ({ label: m.porte, value: m.media }))}
-                  color="#2563EB"
-                  showPct={false}
-                  barMaxWidth={120}
-                  gapClass="gap-1"
-                  valueInside
-                />
-              ) : (
-                <p className="text-sm text-slate-400">Sem dados de porte.</p>
-              )}
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Janela informativa — ambientes essenciais */}
       {infoOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 animate-fade-in"
           onClick={() => setInfoOpen(false)}
         >
           <div
-            className="bg-white rounded-2xl border border-slate-200 shadow-lg max-w-md w-full p-6"
+            className="bg-white rounded-2xl border border-slate-200 shadow-lg max-w-md w-full p-6 animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3 mb-4">
@@ -516,7 +511,7 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
       )}
 
       {/* Tabela DRE detalhada */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm animate-fade-in-up [animation-delay:900ms]">
         <div className="px-6 py-4 border-b border-slate-200 flex items-center gap-2" style={{ background: C.primaryLight }}>
           <MapPinned size={16} style={{ color: C.primary }} />
           <h3 className="font-semibold text-slate-800 text-sm">Detalhamento por DRE</h3>
@@ -525,14 +520,14 @@ export function AbaCaracterizacao({ token, onUnauth }: { token: string; onUnauth
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                {["DRE","Escolas","Total de Alunos","Média Alunos/Escola","Salas de Aula"].map((h,i) => (
-                  <th key={i} className={`px-5 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wide ${i===0?"text-left":"text-right"}`}>{h}</th>
+                {["DRE", "Escolas", "Total de Alunos", "Média Alunos/Escola", "Salas de Aula"].map((h, i) => (
+                  <th key={i} className={`px-5 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wide ${i === 0 ? "text-left" : "text-right"}`}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {dreTable.map((d, i) => (
-                <tr key={d.dre} className={i%2===0?"bg-white":"bg-slate-50/50"}>
+                <tr key={d.dre} className={`transition-colors hover:bg-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
                   <td className="px-5 py-3 font-medium text-slate-800">{d.dre}</td>
                   <td className="px-5 py-3 text-right tabular-nums text-slate-700 font-semibold">{d.escolas.toLocaleString("pt-BR")}</td>
                   <td className="px-5 py-3 text-right tabular-nums text-slate-600">{d.alunos.toLocaleString("pt-BR")}</td>

@@ -20,7 +20,7 @@
 
 ## 1. Objetivo
 
-Consolidar, em um único lugar, a **matriz oficial** de abas / blocos / gráficos do `/admin`, refletindo o estado real da branch `develop` (pós-merge das Frentes 1, 2 e 3 backend + integração visual das 5 abas temáticas + placeholder institucional de Gestão Financeira e Governança).
+Consolidar, em um único lugar, a **matriz oficial** de abas / blocos / gráficos do `/admin`, refletindo o estado real da branch `develop` (pós-merge das Frentes 1, 2 e 3 backend + integração visual das 5 abas temáticas + placeholder institucional de Gestão Financeira e Governança — esta última agora com **frente documental de planejamento ativa**, ver §5.8 e [gestao-financeira-governanca-prodep.md](gestao-financeira-governanca-prodep.md)).
 
 A matriz tem três usos:
 
@@ -42,9 +42,9 @@ Decisões registradas pelo time, válidas para todo o trabalho a partir desta br
    - Organização da Oferta e Funcionamento;
    - Infraestrutura Educacional.
 3. **Perfil dos Alunos e Resultados** permanece com a implementação atual/legada (consome `/v1/admin/indicadores-metrics`, alimentado por Google Sheets). Será remodelada futuramente, provavelmente a partir de uma planilha própria — fora desta rodada.
-4. **Gestão Financeira e Governança** é **placeholder institucional**. Sem fetch, sem endpoint, sem view SQL, sem dado fake.
-5. **Gestão Financeira e Governança não deve consumir o banco PostgreSQL do formulário do censo** nesta rodada.
-6. A **fonte futura** de "Gestão Financeira / Governança" virá de **bases próprias validadas pelas coordenações responsáveis**, não do banco do censo operacional.
+4. **Gestão Financeira e Governança** segue **placeholder institucional na UI** (sem fetch, sem endpoint, sem view SQL, sem dado fake), mas passou de "placeholder conceitual" para **planejamento ativo** numa frente documental dedicada — ver §5.8 e [gestao-financeira-governanca-prodep.md](gestao-financeira-governanca-prodep.md). Nenhum código, migration, endpoint ou frontend foi implementado ainda.
+5. **A fonte primária dessa aba é administrativa externa:** a planilha consolidada de recursos do **PRODEP** (`CONSOLIDADO - PRODEP.xlsx`), a ser carregada em **tabela própria no PostgreSQL** via script/processo controlado — **não** derivada das views analíticas do censo. A integração é por `INEP`/`codigo_inep`.
+6. O planejamento prevê **combinar três fontes**: (a) dados administrativos do PRODEP (tabela própria); (b) dados **declaratórios** do formulário do censo (seção Gestão, Participação e Política — para blocos de governança e para cruzamentos de divergência); (c) cadastro `schools` para integração territorial. Isso **atualiza** a orientação anterior de "não consumir o banco do censo": os dados declaratórios do censo passam a ser fonte legítima de blocos específicos e de alertas, sem que a aba dependa do banco do censo como fonte financeira principal.
 7. As **5 abas temáticas já integradas em primeira versão** (Pessoal e Gestão Escolar, Tecnologia e Equipamentos, Infraestrutura e Segurança, Merenda Escolar, Serviços Terceirizados) **não devem receber gráficos inéditos** (fora do escopo do painel original) antes desta matriz mínima ser validada com as áreas finalísticas da SEDUC. **Exceção:** gráficos mínimos que já existiam no painel original (Data Studio/Looker Studio) e ainda não estão refletidos na aplicação podem ser **documentados como lacunas** nesta matriz e **implementados após diagnóstico técnico**, mesmo antes da validação — eles não são novidade de escopo, e sim recuperação da referência mínima. O caso de Tecnologia e Equipamentos (ver §5.3) foi o primeiro a seguir esse caminho; **Merenda Escolar (ver §5.5) é o segundo**, alinhado neste PR documental.
 8. **Recursos Humanos da Merenda (merendeiras/manipuladores de alimentos) saiu da aba Merenda Escolar como bloco finalístico.** O Data Studio mantinha uma subaba "Recursos Humanos" dentro de Merenda; por decisão de produto, esses indicadores (total de merendeiras por vínculo, adequação do quantitativo, média por escola, empresas e supervisão) agora ficam no menu **Serviços Terceirizados**, em bloco próprio **"Manipulador de Alimentos"**, junto de Serviços Gerais e Portaria. **MER-RH-01 entregue:** `sec-merenda-rh` foi removido de `AbaMerenda.tsx`, `sec-servicos-manipuladores` foi adicionado em `AbaServicosTerceirizados.tsx`, o endpoint novo `/servicos-terceirizados/manipuladores-alimentos` foi criado e `/merenda/recursos-humanos` permanece legado. A avaliação do serviço das merendeiras segue como pendência futura/produto por falta de fonte/escala consolidada nesta entrega.
 9. **Saúde Operacional foi implementada como aba transversal no grupo Operacional.** O nome oficial é **"Índice de Saúde Operacional por escola"**, com rótulo reduzido **"Saúde Operacional"** no menu, após Operacional e antes de Todos os Censos. A fonte é PostgreSQL via `GET /v1/admin/analytics/escolas/saude-operacional`; a tela usa fetch lazy e não participa do prefetch global do login.
@@ -69,7 +69,7 @@ O snapshot suplanta a seção 2.1 de
 | 5 | Merenda Escolar | Integrada (1ª versão) | PostgreSQL `/v1/admin/analytics/merenda/{oferta,equipamentos,recursos-humanos}` | `AbaMerenda.tsx` |
 | 6 | Serviços Terceirizados | Integrada (1ª versão) | PostgreSQL `/v1/admin/analytics/servicos-terceirizados/{visao-geral,servicos-gerais,portaria,manipuladores-alimentos}` | `AbaServicosTerceirizados.tsx` |
 | 7 | Perfil dos Alunos e Resultados | Implementação atual/legada mantida | Google Sheets `/v1/admin/indicadores-metrics` | `AbaPerfilAlunos.tsx` |
-| 8 | Gestão Financeira e Governança | Placeholder institucional | — (sem fetch) | `AbaGestaoFinanceiraGovernanca.tsx` |
+| 8 | Gestão Financeira e Governança | Placeholder institucional (UI) · **planejamento ativo** (frente documental PRODEP) | — (sem fetch; fonte planejada: PRODEP + declaratório do censo + `schools`) | `AbaGestaoFinanceiraGovernanca.tsx` |
 | 9 | Operacional | Integrada | PostgreSQL `/v1/admin/dashboard` | `AbaOperacional.tsx` |
 | 10 | Saúde Operacional | **Implementada** | PostgreSQL `/v1/admin/analytics/escolas/saude-operacional` | `AbaSaudeOperacionalEscolas.tsx` |
 | 11 | Todos os Censos | Integrada | PostgreSQL `/v1/admin/census` | `AbaTodosCensos.tsx` |
@@ -92,7 +92,7 @@ Visão consolidada das abas, **com foco analítico**. As abas operacionais (Oper
 | Merenda Escolar | Integrada (1ª versão) | PostgreSQL | Oferta e Adequação da Merenda · Estrutura Física · Equipamentos da Merenda · Condições Sanitárias e Segurança | Endpoints `/merenda/*`. Blocos oficiais realinhados aos gráficos mínimos do Data Studio (ver §5.5). Os quatro blocos finalísticos estão entregues (MER-01A/B/C); "Condições Sanitárias e Segurança" foi entregue em MER-01C via `/merenda/condicoes-sanitarias`. **Recursos Humanos / merendeiras migra conceitualmente para Serviços Terceirizados** (§2.8), não é mais bloco finalístico de Merenda. |
 | Serviços Terceirizados | Integrada (1ª versão) | PostgreSQL | Visão Geral · Serviços Gerais · Portaria · Manipulador de Alimentos · Governança / Supervisão | Endpoints `/servicos-terceirizados/*`. Bloco "Manipulador de Alimentos" entregue em MER-RH-01 sobre `vw_censo_rh_merendeiras`; "Governança / Supervisão" depende de campos de supervisão/avaliação (ver §5.6). |
 | Perfil dos Alunos e Resultados | Implementação atual mantida | Sheets `/indicadores-metrics` | Perfil Socioeducacional e Permanência (futuro) · Resultados e Desempenho (futuro) | Remodelagem futura, **fora desta rodada**. |
-| Gestão Financeira e Governança | Placeholder institucional | — | Governança Institucional e Regularização (futuro) · Execução Financeira e Prestação de Contas (futuro) · Participação Comunitária e Risco de Governança (futuro) | Sem fetch. Fonte futura: base própria das coordenações, **fora do banco do censo**. |
+| Gestão Financeira e Governança | Placeholder institucional (UI) · planejamento ativo | — (sem fetch) | Governança Institucional e Regularização (futuro) · Execução Financeira e Prestação de Contas (futuro) · Participação Comunitária e Risco de Governança (futuro) | Sem fetch/endpoint/frontend funcional. **Planejada — fonte administrativa PRODEP + dados declaratórios do censo + `schools`.** Detalhamento em [gestao-financeira-governanca-prodep.md](gestao-financeira-governanca-prodep.md). |
 
 ---
 
@@ -314,20 +314,25 @@ A renderização atual permanece inalterada — qualquer mudança vem em **rodad
 
 ### 5.8 Gestão Financeira e Governança
 
-**Status:** placeholder institucional. **Sem fetch, sem endpoint, sem view SQL, sem dado fake.** Renderiza apenas `EmptyStatePlaceholder` com seções nomeadas.
+**Status:** placeholder institucional **na UI** (`EmptyStatePlaceholder` com seções nomeadas) — **sem fetch, sem endpoint, sem view SQL, sem dado fake**. Em paralelo, há **frente documental de planejamento ativa** que define a arquitetura de dados e os indicadores desta aba a partir de uma fonte administrativa externa (PRODEP) combinada com dados declaratórios do censo. **Planejada, não implementada.** O documento de referência é [gestao-financeira-governanca-prodep.md](gestao-financeira-governanca-prodep.md).
 
-Blocos futuros sugeridos (referência, não compromisso):
+**Fonte planejada (não é placeholder conceitual):**
+- **administrativa externa** — planilha `CONSOLIDADO - PRODEP.xlsx` (recursos PRODEP 2023/2024/2025, Geral e Alimentação, valores recebidos e reprogramados, status de prestação de contas), a ser carregada em **tabela própria no PostgreSQL** via script controlado;
+- **declaratória** — seção Gestão, Participação e Política do formulário do censo;
+- **cadastral** — `schools` (integração territorial por `codigo_inep`).
+
+Blocos planejados (referência da frente documental, ainda sem compromisso de PR):
 - Governança Institucional e Regularização
 - Execução Financeira e Prestação de Contas
 - Participação Comunitária e Risco de Governança
 
-| Bloco (futuro) | Gráficos sugeridos | Fonte futura provável | Status | Lacuna backend | Lacuna frontend | Observações |
+| Bloco (futuro) | Gráficos sugeridos | Fonte planejada | Status | Lacuna backend | Lacuna frontend | Observações |
 |---|---|---|---|---|---|---|
-| Governança Institucional e Regularização | CNPJ válido, estatuto atualizado, conselhos ativos | Base externa das coordenações | futuro | Definir fonte (não é o banco do censo) | Remodelar `AbaGestaoFinanceiraGovernanca.tsx` | Decisão de produto pendente: qual base e quem é o "dono". |
-| Execução Financeira e Prestação de Contas | Recursos recebidos, executados, % prestado de contas, prazos | Base externa | futuro | Idem | Idem | Idem. |
-| Participação Comunitária e Risco de Governança | Frequência de reuniões, % escolas com conselho ativo, indicador composto de risco | Base externa | futuro | Idem | Idem | Idem. |
+| Governança Institucional e Regularização | Regularização CEE, conselho escolar constituído/ativo, grêmio estudantil | Declaratório do censo (`regularizada_cee`, `conselho_escolar`, `conselho_ativo`, `gremio_estudantil`) + `schools` | planejado (doc) | Definir view/endpoint sobre declaratório; nenhuma view criada | Remodelar `AbaGestaoFinanceiraGovernanca.tsx` | Detalhado no doc PRODEP §6 (Bloco C). |
+| Execução Financeira e Prestação de Contas | Total recebido/reprogramado, % reprogramado, escolas com `NÃO PRESTOU CONTAS`, rankings | Tabela PRODEP própria (a criar) | planejado (doc) | Migration estrutural + script de carga + endpoint — **nenhum implementado** | Idem | Detalhado no doc PRODEP §4 e §6 (Blocos A e B). |
+| Participação Comunitária e Risco de Governança | Frequência de reuniões, planos/políticas, alertas cruzados PRODEP × declaratório | Declaratório do censo (`reunioes_comunidade`, `plano_evacuacao`, `politica_bullying`) + PRODEP | planejado (doc) | Idem | Idem | Cruzamentos de divergência detalhados no doc PRODEP §6 (Bloco D). |
 
-A aba **não deve consumir o banco PostgreSQL do censo** nesta rodada. Qualquer tentativa de "preencher" essa aba com dados do censo conflita com decisão de produto.
+A aba **continua sem qualquer fetch ou backend funcional** nesta rodada. A frente documental apenas **planeja**: carga de dados, migration, endpoint e frontend ficam **fora de escopo** até as fases seguintes (ver doc PRODEP §7 e §8).
 
 ---
 
@@ -389,7 +394,7 @@ Itens identificados na matriz como `planejado` ou `presente / a confirmar`. Não
 - **Denominador oficial do percentual de computadores inoperantes** (Tecnologia — Parque Tecnológico).
 - **Escala oficial de avaliação** para Governança/Supervisão de Serviços Terceirizados.
 - **Fonte de dados futura para Perfil dos Alunos e Resultados** (planilha própria a indicar).
-- **Fonte de dados futura para Gestão Financeira e Governança** (base externa das coordenações responsáveis).
+- **Gestão Financeira e Governança:** fonte primária definida em planejamento — planilha PRODEP carregada em tabela própria + declaratório do censo + `schools` (ver [gestao-financeira-governanca-prodep.md](gestao-financeira-governanca-prodep.md)). Pendências de produto a resolver antes da implementação: estratégia de saneamento dos 17 municípios `#N/A`, tratamento do status textual `NÃO PRESTOU CONTAS` nas colunas de reprogramado, e validação dos limiares de risco (reprogramado > 50% / > 75%).
 - **Critério oficial de "porte"** já consta em `vw_censo_enriquecida`, mas deve ser revalidado quando a matriz for revisada com SEDUC.
 
 ---

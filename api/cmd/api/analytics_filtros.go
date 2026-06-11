@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -20,15 +22,22 @@ type AnalyticsFilters struct {
 }
 
 func parseAnalyticsFilters(r *http.Request) AnalyticsFilters {
-	qs := r.URL.Query()
+	return parseAnalyticsFiltersFromValues(r.URL.Query(), time.Now())
+}
+
+// parseAnalyticsFiltersFromValues is the testable core of parseAnalyticsFilters.
+// Textual filters are trimmed of surrounding whitespace; absent filters become
+// "". Year falls back to now.Year() when missing, blank, non-numeric, zero or
+// negative.
+func parseAnalyticsFiltersFromValues(q url.Values, now time.Time) AnalyticsFilters {
 	f := AnalyticsFilters{
-		Year:             time.Now().Year(),
-		DRE:              qs.Get("dre"),
-		Municipio:        qs.Get("municipio"),
-		Zona:             qs.Get("zona"),
-		RegiaoIntegracao: qs.Get("regiao_integracao"),
+		Year:             now.Year(),
+		DRE:              strings.TrimSpace(q.Get("dre")),
+		Municipio:        strings.TrimSpace(q.Get("municipio")),
+		Zona:             strings.TrimSpace(q.Get("zona")),
+		RegiaoIntegracao: strings.TrimSpace(q.Get("regiao_integracao")),
 	}
-	if y, err := strconv.Atoi(qs.Get("year")); err == nil && y > 0 {
+	if y, err := strconv.Atoi(strings.TrimSpace(q.Get("year"))); err == nil && y > 0 {
 		f.Year = y
 	}
 	return f
@@ -42,10 +51,14 @@ func (f AnalyticsFilters) WhereSQL() string {
 	return `status = 'completed'
       AND year = $1
       AND census_id IS NOT NULL
-      AND ($2 = '' OR dre = $2)
-      AND ($3 = '' OR municipio = $3)
-      AND ($4 = '' OR zona = $4)
-      AND ($5 = '' OR municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))`
+      AND ($2 = '' OR UPPER(TRIM(dre)) = UPPER(TRIM($2)))
+      AND ($3 = '' OR UPPER(TRIM(municipio)) = UPPER(TRIM($3)))
+      AND ($4 = '' OR UPPER(TRIM(zona)) = UPPER(TRIM($4)))
+      AND ($5 = '' OR UPPER(TRIM(municipio)) IN (
+        SELECT UPPER(TRIM(municipio))
+        FROM reg_integracao
+        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
+      ))`
 }
 
 // Args returns the five positional arguments that match WhereSQL in order.

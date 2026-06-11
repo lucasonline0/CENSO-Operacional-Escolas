@@ -1,8 +1,18 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Landmark } from "lucide-react";
 import { EmptyStatePlaceholder } from "./shared/EmptyStatePlaceholder";
 
-export function AbaGestaoFinanceiraGovernanca() {
+export function AbaGestaoFinanceiraGovernanca({
+  presentationMode, activeAnchor, onLoadComplete
+}: {
+  presentationMode?: boolean;
+  activeAnchor?: string;
+  onLoadComplete?: () => void;
+}) {
+  useEffect(() => {
+    onLoadComplete?.();
+  }, [onLoadComplete]);
+
   return (
     <EmptyStatePlaceholder
       title="Gestão Financeira e Governança"

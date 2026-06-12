@@ -271,7 +271,16 @@ const NAV_INDICATORS: NavItem[] = [
     ],
   },
   { id: "alunos", label: "Perfil dos Alunos e Resultados", Icon: Activity },
-  { id: "governanca", label: "Gestão Financeira e Governança", Icon: Landmark },
+  {
+    id: "governanca", label: "Gestão Financeira e Governança", Icon: Landmark,
+    subItems: [
+      { label: "Visão Geral Financeira", anchor: "sec-financeiro-resumo" },
+      { label: "Execução por Ano", anchor: "sec-financeiro-evolucao" },
+      { label: "Prestação de Contas", anchor: "sec-financeiro-prestacao" },
+      { label: "Vínculo Cadastral", anchor: "sec-financeiro-vinculo" },
+      { label: "Rankings de Escolas", anchor: "sec-financeiro-rankings" },
+    ],
+  },
 ];
 
 const NAV_OPERACIONAL: NavItem[] = [
@@ -622,7 +631,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             )}
             {visited.has("governanca") && (
               <div style={{ display: tab === "governanca" ? undefined : "none" }}>
-                <AbaGestaoFinanceiraGovernanca />
+                <AbaGestaoFinanceiraGovernanca token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("saude") && (

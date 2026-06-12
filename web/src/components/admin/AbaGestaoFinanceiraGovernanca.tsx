@@ -381,6 +381,7 @@ export function AbaGestaoFinanceiraGovernanca({
           base_dige e registros PRODEP-only validados. Esses registros não alimentam
           automaticamente o Índice de Saúde Operacional escola-a-escola enquanto não
           houver vínculo confirmado com <code className="font-mono">schools</code>.
+          {" "}O filtro <strong className="font-medium">Zona</strong> não se aplica aos dados PRODEP.
         </div>
       </div>
 

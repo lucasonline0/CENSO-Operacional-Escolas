@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -59,6 +60,49 @@ func TestParseProdepFilters_InvalidValuesRejected(t *testing.T) {
 		if _, err := parseProdepFilters(q); err == nil {
 			t.Fatalf("%s: esperava erro de validação, obtive nil", name)
 		}
+	}
+}
+
+func TestProdepAccentMapsSameLength(t *testing.T) {
+	// translate() exige que os dois lados tenham o mesmo número de caracteres.
+	from := []rune(prodepAccentFrom)
+	to := []rune(prodepAccentTo)
+	if len(from) != len(to) {
+		t.Fatalf("mapas de acento com tamanhos diferentes: from=%d to=%d", len(from), len(to))
+	}
+}
+
+func TestSQLNormalizeProdep_WithPrefix(t *testing.T) {
+	got := sqlNormalizeProdep("$3::text", "DRE")
+	for _, want := range []string{"regexp_replace(", "$3::text", "DRE", "translate(", "UPPER(TRIM("} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expressão normalizada não contém %q: %s", want, got)
+		}
+	}
+}
+
+func TestSQLNormalizeProdep_NoPrefix(t *testing.T) {
+	got := sqlNormalizeProdep("COALESCE(municipio_resolvido, '')", "")
+	if strings.Contains(got, "regexp_replace(") {
+		t.Fatalf("prefixo vazio não deveria gerar regexp_replace: %s", got)
+	}
+	for _, want := range []string{"translate(", "UPPER(TRIM(", "municipio_resolvido"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expressão normalizada não contém %q: %s", want, got)
+		}
+	}
+}
+
+func TestProdepWhereSQLNormalizesGeoFilters(t *testing.T) {
+	// O WHERE montado deve aplicar a normalização aos filtros geográficos e
+	// preservar os filtros enumerados sem alteração.
+	for _, want := range []string{"dre_prodep", "municipio_resolvido", "ri_prodep", "translate(", "regexp_replace("} {
+		if !strings.Contains(prodepWhereSQL, want) {
+			t.Fatalf("prodepWhereSQL não contém %q", want)
+		}
+	}
+	if !strings.Contains(prodepWhereSQL, "usar_na_carga = true") {
+		t.Fatalf("prodepWhereSQL deve manter o filtro usar_na_carga = true")
 	}
 }
 

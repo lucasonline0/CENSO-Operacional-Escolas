@@ -536,15 +536,6 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               </div>
             </div>
             <div className="ca-topbar-right">
-              <div className="ca-search">
-                <Search size={14} />
-                <input
-                  placeholder="Buscar indicadores, escolas, DREs…"
-                  value={search}
-                  onChange={(e) => updateSearch(e.target.value)}
-                />
-                <kbd>⌘ /</kbd>
-              </div>
               <button
                 type="button"
                 className="ca-pres-launch-btn"

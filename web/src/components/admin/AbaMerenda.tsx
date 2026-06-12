@@ -378,6 +378,43 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
         />
       </div>
 
+      {/* pres-only: oferta, necessidades e qualidade num único slide */}
+      <div data-pres-only="true" className="grid grid-cols-3 gap-5 mt-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <ClipboardList size={16} style={{ color: C.primary }} />
+            Oferta regular da merenda
+          </h3>
+          {ofertaSegments.length > 0 ? (
+            <Donut segments={ofertaSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <CheckCircle2 size={16} style={{ color: C.primary }} />
+            Merenda atende às necessidades dos alunos
+          </h3>
+          {atendeNecessidadesSegments.length > 0 ? (
+            <Donut segments={atendeNecessidadesSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <CheckCircle2 size={16} style={{ color: C.primary }} />
+            Qualidade da merenda
+          </h3>
+          {qualidadeRows.length > 0 ? (
+            <HBarChart rows={qualidadeRows} color={C.primary} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+      </div>
+
       </div>
       <div data-pres-slide="merenda-oferta-graficos" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -453,6 +490,33 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
           )}
         </div>
       </div>
+
+      {/* pres-only: tamanho da cozinha + refeitório adequado dentro do slide de estrutura */}
+      <div data-pres-only="true" className="grid grid-cols-2 gap-5 mt-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <ChefHat size={16} style={{ color: C.primary }} />
+            Tamanho da cozinha
+          </h3>
+          {tamanhoCozinhaRows.length > 0 ? (
+            <HBarChart rows={tamanhoCozinhaRows} color={C.primary} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <CheckCircle2 size={16} style={{ color: C.primary }} />
+            O refeitório atende a necessidade da escola adequadamente?
+          </h3>
+          {refeitorioAdequadoRows.length > 0 ? (
+            <HBarChart rows={refeitorioAdequadoRows} color={C.primary} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+      </div>
+
       </div>
       <div data-pres-slide="merenda-estrutura-refeitorio" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -488,7 +552,7 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
-      <div data-pres-slide="merenda-equipamentos-cards" className="space-y-6">
+      <div data-pres-slide="merenda-equipamentos-cards" data-pres-zoom="0.90" className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <EquipCard label="Freezers"   dados={equip?.freezers}   Icon={Snowflake}    tone="blue" />
         <EquipCard label="Geladeiras" dados={equip?.geladeiras} Icon={Refrigerator} tone="green" />
@@ -496,6 +560,78 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
         <EquipCard label="Fornos"     dados={equip?.fornos}     Icon={Microwave}    tone="amber" />
         <EquipCard label="Bebedouros" dados={equip?.bebedouros} Icon={GlassWater}   tone="purple" />
       </div>
+
+      {/* pres-only: presença, faixas, criticidade e conservação no mesmo slide */}
+      <div data-pres-only="true" className="grid grid-cols-2 gap-5 mt-2">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <CheckCircle2 size={16} style={{ color: C.primary }} />
+            Presença de equipamentos por tipo
+          </h3>
+          {presencaRows.length > 0 ? (
+            <HBarChart rows={presencaRows} color={C.primary} labelWidth="6rem" />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <Users size={16} style={{ color: C.primary }} />
+            Escolas com 1, 2 ou mais tipos de equipamentos
+          </h3>
+          {faixasRows.length > 0 ? (
+            <HBarChart rows={faixasRows} color={C.primary} labelWidth="7rem" />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <ClipboardList size={16} style={{ color: C.primary }} />
+            Quantidade média de equipamentos por escola
+          </h3>
+          {mediaRows.some((r) => r.value > 0) ? (
+            <HBarChart rows={mediaRows} color={C.primary} labelWidth="6rem" />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <AlertCircle size={16} className="text-rose-500" />
+            Criticidade por equipamento
+          </h3>
+          <p className="text-xs text-slate-400 -mt-3 mb-4">% de escolas com estado ruim ou inoperante</p>
+          {criticidadeRows.length > 0 ? (
+            <HBarChart rows={criticidadeRows} color="#E11D48" labelWidth="6rem" />
+          ) : (
+            <NoData />
+          )}
+        </div>
+      </div>
+
+      {/* pres-only: conservação consolidada */}
+      <div data-pres-only="true" className="mt-2">
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+          <div className="px-6 py-4 border-b flex items-center gap-2" style={{ background: C.primaryLight }}>
+            <ClipboardList size={16} className="shrink-0" strokeWidth={2} style={{ color: C.primary }} />
+            <h2 className="font-semibold text-slate-800 text-sm">Estado de conservação — visão consolidada</h2>
+          </div>
+          <div className="p-6">
+            {consolidadoEquipList.length > 0 ? (
+              <StackedConservationBar
+                equipamentos={consolidadoEquipList}
+                estados={estadosConsolidados}
+                dados={consolidadoPorEquip}
+                nomeEquip={equipNome}
+              />
+            ) : (
+              <NoData />
+            )}
+          </div>
+        </div>
+      </div>
+
       </div>
 
       <div data-pres-slide="merenda-equipamentos-cobertura" className="space-y-6">
@@ -630,7 +766,7 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
         <div className="flex-1 h-px bg-slate-200" />
       </div>
       <div data-pres-slide="merenda-sanitarias-armazenamento" className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div data-pres-hide="true" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
             <Package size={16} style={{ color: C.primary }} />
@@ -654,6 +790,67 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
           )}
         </div>
       </div>
+
+      {/* pres-only: todos os cards de Condições Sanitárias e Segurança no mesmo slide */}
+      <div data-pres-only="true" className="grid grid-cols-3 gap-5 mt-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <Package size={16} style={{ color: C.primary }} />
+            Despensa exclusiva p/ gêneros alimentícios
+          </h3>
+          {despensaSegments.length > 0 ? (
+            <Donut segments={despensaSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <CheckCircle2 size={16} style={{ color: C.primary }} />
+            O depósito conserva adequadamente os alimentos?
+          </h3>
+          {depositoSegments.length > 0 ? (
+            <Donut segments={depositoSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <ClipboardList size={16} style={{ color: C.primary }} />
+            Presença de itens básicos
+          </h3>
+          <p className="text-xs text-slate-400 -mt-4 mb-5">% sobre o total de escolas concluídas no recorte</p>
+          {itensBasicosRows.length > 0 ? (
+            <HBarChart rows={itensBasicosRows} color={C.primary} labelWidth="9rem" />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <FireExtinguisher size={16} style={{ color: C.primary }} />
+            Estoque de EPIs e extintor de incêndio
+          </h3>
+          {epiExtintorRows.length > 0 ? (
+            <HBarChart rows={epiExtintorRows} color={C.primary} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <Flame size={16} style={{ color: C.primary }} />
+            Recarga e manutenção dos extintores
+          </h3>
+          {manutencaoExtintorRows.length > 0 ? (
+            <HBarChart rows={manutencaoExtintorRows} color={C.primary} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+      </div>
+
       </div>
 
       <div data-pres-slide="merenda-sanitarias-itens" className="space-y-6">

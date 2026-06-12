@@ -1383,6 +1383,11 @@
   display: none !important;
 }
 
+/* Elementos visíveis apenas no modo apresentação */
+.censo-admin .ca-app:not(.presenting) [data-pres-only="true"] {
+  display: none !important;
+}
+
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active {
   display: block !important;
   width: 100%;
@@ -1739,13 +1744,26 @@
   font-weight: 500;
 }
 
-/* Oculta as seções internas, divisores e cabeçalhos de cartões/tabelas/gráficos no modo apresentação */
-.censo-admin .ca-app.presenting [data-pres-slide] h2,
-.censo-admin .ca-app.presenting [data-pres-slide] h3,
+/* Oculta divisores e cabeçalhos de seção dentro dos slides no modo apresentação.
+   h2/h3 NÃO são ocultados aqui — os divisores de seção já têm data-pres-hide no container. */
 .censo-admin .ca-app.presenting [data-pres-slide] .px-6.py-4.border-b,
 .censo-admin .ca-app.presenting [data-pres-slide] .flex.items-center.gap-3.mb-4,
 .censo-admin .ca-app.presenting [data-pres-slide] .flex.items-center.gap-3.mb-5 {
   display: none !important;
+}
+
+/* Restaura cabeçalhos de card (ex: conservação) dentro de blocos exclusivos da apresentação */
+.censo-admin .ca-app.presenting [data-pres-slide] [data-pres-only="true"] .px-6.py-4.border-b {
+  display: flex !important;
+}
+
+/* Reduz cards específicos do slide Infraestrutura Digital no Modo Apresentação */
+.censo-admin .ca-app.presenting [data-pres-card="disponibilidade-internet"],
+.censo-admin .ca-app.presenting [data-pres-card="provedores-internet"] {
+  zoom: 0.80;
+}
+.censo-admin .ca-app.presenting [data-pres-card="qualidade-conexao"] {
+  zoom: 0.90;
 }
 
 @media (max-width: 640px) {

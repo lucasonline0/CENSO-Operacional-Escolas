@@ -57,68 +57,46 @@ const SLIDES: PresentationSlide[] = [
     ["perfil-dre-tabela", "Tabela consolidada"],
   ]),
 
-  ...createSlides("pessoal", "Pessoal e Gestão Escolar", "Estrutura de Gestão Escolar", [
-    ["pessoal-estrutura-resumo", "Indicadores e composição da gestão"],
-  ]),
-  ...createSlides("pessoal", "Pessoal e Gestão Escolar", "Coordenação Pedagógica", [
-    ["pessoal-coordenacao", "Cobertura e composição"],
+  ...createSlides("pessoal", "Pessoal e Gestão Escolar", "Estrutura de Gestão e Coordenação Pedagógica", [
+    ["pessoal-estrutura-resumo", "Composição da gestão e coordenação por área"],
   ]),
   ...createSlides("pessoal", "Pessoal e Gestão Escolar", "Quadro de Pessoal", [
-    ["pessoal-quadro-indicadores", "Indicadores gerais"],
-    ["pessoal-quadro-distribuicao", "Distribuição por vínculo"],
+    ["pessoal-quadro-indicadores", "Indicadores e distribuição do quadro docente"],
     ["pessoal-quadro-dre", "Detalhamento por DRE"],
   ]),
 
   ...createSlides("tecnologia", "Tecnologia e Equipamentos", "Infraestrutura Digital", [
-    ["tecnologia-digital-indicadores", "Indicadores gerais"],
-    ["tecnologia-digital-conexao", "Disponibilidade e qualidade da conexão"],
+    ["tecnologia-digital-indicadores", "Indicadores, disponibilidade e qualidade da conexão"],
   ]),
   ...createSlides("tecnologia", "Tecnologia e Equipamentos", "Parque Tecnológico", [
-    ["tecnologia-parque-indicadores", "Inventário de equipamentos"],
-    ["tecnologia-parque-distribuicao", "Distribuição do parque"],
-    ["tecnologia-parque-notas", "Notas por equipamento"],
+    ["tecnologia-parque-indicadores", "Inventário, distribuição e notas do parque tecnológico"],
   ]),
   ...createSlides("tecnologia", "Tecnologia e Equipamentos", "Uso Pedagógico", [
-    ["tecnologia-pedagogico-indicadores", "Indicadores gerais"],
-    ["tecnologia-pedagogico-distribuicao", "Recursos e uso pedagógico"],
+    ["tecnologia-pedagogico-indicadores", "Indicadores e distribuição do uso pedagógico"],
   ]),
 
   ...createSlides("infraestrutura", "Infraestrutura e Segurança", "Condições Estruturais e Ambientes", [
-    ["infra-condicoes-resumo", "Indicadores gerais"],
-    ["infra-condicoes-situacao", "Situação dos prédios"],
-    ["infra-condicoes-ambientes", "Ambientes escolares"],
+    ["infra-condicoes-resumo", "Indicadores, situação dos prédios e ambientes escolares"],
   ]),
   ...createSlides("infraestrutura", "Infraestrutura e Segurança", "Energia, Climatização e Capacidade Elétrica", [
-    ["infra-energia-distribuicao", "Energia e climatização"],
-    ["infra-energia-tabela", "Salas climatizadas"],
+    ["infra-energia-distribuicao", "Energia, climatização e salas climatizadas"],
   ]),
   ...createSlides("infraestrutura", "Infraestrutura e Segurança", "Segurança Física e Patrimonial", [
-    ["infra-seguranca-indicadores", "Indicadores gerais"],
-    ["infra-seguranca-acesso", "Controle de acesso"],
-    ["infra-seguranca-iluminacao", "Iluminação e monitoramento"],
-    ["infra-seguranca-perimetro", "Proteção perimetral"],
+    ["infra-seguranca-indicadores", "Indicadores, acesso, iluminação e proteção perimetral"],
   ]),
 
   ...createSlides("merenda", "Merenda Escolar", "Oferta e Adequação da Merenda", [
-    ["merenda-oferta-resumo", "Indicadores gerais"],
-    ["merenda-oferta-graficos", "Regularidade da oferta"],
-    ["merenda-oferta-necessidades", "Qualidade e atendimento"],
+    ["merenda-oferta-resumo", "Indicadores, regularidade e qualidade da oferta"],
   ]),
   ...createSlides("merenda", "Merenda Escolar", "Estrutura Física da Cozinha", [
-    ["merenda-estrutura-cozinha", "Condições da cozinha e refeitório"],
-    ["merenda-estrutura-refeitorio", "Tamanho e adequação"],
+    ["merenda-estrutura-cozinha", "Condições, tamanho e adequação da cozinha e refeitório"],
   ]),
   ...createSlides("merenda", "Merenda Escolar", "Equipamentos da Merenda", [
-    ["merenda-equipamentos-cards", "Inventário geral"],
-    ["merenda-equipamentos-cobertura", "Cobertura por tipo"],
-    ["merenda-equipamentos-criticidade", "Médias e criticidade"],
-    ["merenda-equipamentos-conservacao", "Estado de conservação"],
+    ["merenda-equipamentos-cards", "Inventário, cobertura, criticidade e conservação"],
     ["merenda-equipamentos-tabela", "Distribuição dos estados"],
   ]),
   ...createSlides("merenda", "Merenda Escolar", "Condições Sanitárias e Segurança", [
-    ["merenda-sanitarias-armazenamento", "Armazenamento dos alimentos"],
-    ["merenda-sanitarias-itens", "Presença de itens básicos"],
-    ["merenda-sanitarias-seguranca", "EPIs e extintores"],
+    ["merenda-sanitarias-armazenamento", "Armazenamento, itens básicos e segurança"],
   ]),
 
   ...createSlides("servicos", "Serviços Terceirizados", "Visão Geral", [
@@ -160,8 +138,8 @@ const SLIDES: PresentationSlide[] = [
   ]),
 ];
 
-// top padding (49px) + bottom padding (24px) + breathing room (16px)
-const PRES_PAGE_PADDING = 89;
+// top padding (49px) + bottom padding (24px) + breathing room (32px)
+const PRES_PAGE_PADDING = 105;
 
 function removeActiveSlideState() {
   document.querySelectorAll<HTMLElement>("[data-pres-slide]").forEach((element) => {
@@ -210,8 +188,16 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
   }, []);
 
   const applySlideZoom = useCallback((element: HTMLElement) => {
+    // Slides can opt out of dynamic zoom with a fixed value via data-pres-zoom
+    const fixedZoom = element.dataset.presZoom;
+    if (fixedZoom) {
+      element.style.zoom = fixedZoom;
+      return;
+    }
+
     const measure = () => {
       const available = window.innerHeight - PRES_PAGE_PADDING;
+      element.style.zoom = "1";
       const natural = element.scrollHeight;
       if (natural > 0 && available > 0) {
         element.style.zoom = (available / natural).toFixed(3);
@@ -221,12 +207,19 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
     element.style.zoom = "1";
     requestAnimationFrame(measure);
 
-    // Re-measure after async data may have loaded (e.g. HBarChart rows)
+    // Re-measure at multiple intervals to catch async data loads
     window.setTimeout(() => {
       if (!element.classList.contains("ca-pres-slide-active")) return;
-      element.style.zoom = "1";
       requestAnimationFrame(measure);
-    }, 800);
+    }, 400);
+    window.setTimeout(() => {
+      if (!element.classList.contains("ca-pres-slide-active")) return;
+      requestAnimationFrame(measure);
+    }, 1200);
+    window.setTimeout(() => {
+      if (!element.classList.contains("ca-pres-slide-active")) return;
+      requestAnimationFrame(measure);
+    }, 2500);
   }, []);
 
   const activateSlideWithRetry = useCallback((target: PresentationSlide, navigationToken: number) => {
@@ -502,8 +495,15 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
             <span>Fechar</span>
           </button>
         </div>
+      </header>
 
-
+      {/* Barra de progresso */}
+      <div className="ca-pres-progress-track" aria-hidden="true">
+        <div
+          className="ca-pres-progress-bar"
+          style={{ width: isPlaying ? `${progress}%` : "0%" }}
+        />
+      </div>
     </div>
   );
 }

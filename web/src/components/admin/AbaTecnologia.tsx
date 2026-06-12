@@ -226,10 +226,55 @@ export function AbaTecnologia({
         />
       </div>
 
+
+      {/* Modo apresentação: gráficos de conexão junto aos indicadores */}
+      <div data-pres-only="true" className="grid grid-cols-4 gap-5">
+        <div data-pres-card="disponibilidade-internet" className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <Wifi size={16} style={{ color: C.primary }} />
+            Disponibilidade de internet
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Escolas com e sem internet declarada.
+          </p>
+          {internetSegments.length > 0 ? (
+            <Donut segments={internetSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div data-pres-card="provedores-internet" className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <Signal size={16} style={{ color: C.primary }} />
+            Provedores de internet
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Número de escolas por provedor declarado.
+          </p>
+          {provedorSegments.length > 0 ? (
+            <Donut segments={provedorSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div data-pres-card="qualidade-conexao" className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm col-span-2">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <Wifi size={16} style={{ color: C.primary }} />
+            Qualidade da conexão
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Distribuição categórica auto-declarada pelas escolas.
+          </p>
+          {qualidadeBars.length > 0 ? (
+            <HBarChart rows={qualidadeBars} labelWidth="45%" rowGap="1.25rem" />
+          ) : (
+            <NoData />
+          )}
+        </div>
+      </div>
+
       </div>
       <div data-pres-slide="tecnologia-digital-conexao" className="space-y-6">
-      {/* 4 colunas no lg: Disponibilidade e Provedores ocupam 1 cada (rótulos
-          curtos); Qualidade ocupa 2 (rótulos longos, em barras horizontais). */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
@@ -329,6 +374,39 @@ export function AbaTecnologia({
         />
       </div>
 
+
+      {/* Modo apresentação: distribuição + parque junto aos indicadores */}
+      <div data-pres-only="true" className="grid grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <Boxes size={16} style={{ color: C.primary }} />
+            Quantidade média de equipamentos por escola
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Média por tipo no recorte (total declarado ÷ nº de escolas).
+          </p>
+          {mediaRows.length > 0 ? (
+            <HBarChart rows={mediaRows} labelWidth="11rem" />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <PieChart size={16} style={{ color: C.primary }} />
+            Distribuição do parque tecnológico
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Participação de cada tipo no total de equipamentos declarados.
+          </p>
+          {parqueTotal > 0 ? (
+            <Donut segments={parqueSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+      </div>
+
       </div>
       <div data-pres-slide="tecnologia-parque-distribuicao" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -420,6 +498,53 @@ export function AbaTecnologia({
           tone="purple"
           sub="das escolas"
         />
+      </div>
+
+
+      {/* Modo apresentação: donuts pedagógicos junto aos indicadores */}
+      <div data-pres-only="true" className="grid grid-cols-3 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <Gauge size={16} style={{ color: C.primary }} />
+            Equipamentos atendem à demanda
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Distribuição Sim / Parcialmente / Não declarada pelas escolas.
+          </p>
+          {atendeSegments.length > 0 ? (
+            <Donut segments={atendeSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <Projector size={16} style={{ color: C.primary }} />
+            Projetor multimídia
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Escolas com e sem projetor multimídia.
+          </p>
+          {projetorSegments.length > 0 ? (
+            <Donut segments={projetorSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <PenSquare size={16} style={{ color: C.primary }} />
+            Lousa digital
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Escolas com e sem lousa digital.
+          </p>
+          {lousaSegments.length > 0 ? (
+            <Donut segments={lousaSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
       </div>
 
       </div>

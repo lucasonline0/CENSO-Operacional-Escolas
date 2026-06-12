@@ -180,7 +180,7 @@ export function AbaPessoalGestao({
         </div>
       )}
 
-      <div data-pres-slide="pessoal-estrutura-resumo" className="space-y-6">
+      <div data-pres-slide="pessoal-estrutura-resumo" data-pres-zoom="1.72" className="space-y-6">
       {/* ── Resumo Executivo ─────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in-up">
         <StatCard
@@ -213,7 +213,8 @@ export function AbaPessoalGestao({
         />
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm animate-fade-in-up [animation-delay:150ms]">
+      {/* Vista normal: Composição em largura total */}
+      <div data-pres-hide="true" className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm animate-fade-in-up [animation-delay:150ms]">
         <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
           <UsersRound size={16} style={{ color: C.primary }} />
           Composição da Gestão Escolar
@@ -228,17 +229,23 @@ export function AbaPessoalGestao({
         )}
       </div>
 
-      </div>
-      {/* ── Coordenação Pedagógica ───────────────────────────────── */}
-      <div id="sec-pessoal-coordenacao" data-pres-hide="true" className="flex items-center gap-3 border-t border-slate-200 pt-4 animate-fade-in-up [animation-delay:300ms]">
-        <GraduationCap size={18} style={{ color: C.primary }} />
-        <h2 className="font-semibold text-slate-800 text-base">Coordenação Pedagógica</h2>
-        <div className="flex-1 h-px bg-slate-200" />
-      </div>
-
-      <div data-pres-slide="pessoal-coordenacao" className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+      {/* Modo apresentação: Composição + Coordenação lado a lado */}
+      <div data-pres-only="true" className="grid grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <UsersRound size={16} style={{ color: C.primary }} />
+            Composição da Gestão Escolar
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Percentual de escolas que declaram possuir cada função/cargo de gestão.
+          </p>
+          {composicaoRows.length > 0 ? (
+            <HBarChart rows={composicaoRows} unit="%" color={C.primary} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
             <Layers size={16} style={{ color: C.primary }} />
             Coordenação por área
@@ -254,6 +261,31 @@ export function AbaPessoalGestao({
         </div>
       </div>
 
+      </div>
+      {/* ── Coordenação Pedagógica ───────────────────────────────── */}
+      <div id="sec-pessoal-coordenacao" data-pres-hide="true" className="flex items-center gap-3 border-t border-slate-200 pt-4 animate-fade-in-up [animation-delay:300ms]">
+        <GraduationCap size={18} style={{ color: C.primary }} />
+        <h2 className="font-semibold text-slate-800 text-base">Coordenação Pedagógica</h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
+
+      <div data-pres-slide="pessoal-coordenacao" className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div data-pres-hide="true" className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <Layers size={16} style={{ color: C.primary }} />
+            Coordenação por área
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Cada escola pode declarar mais de uma área de coordenação.
+          </p>
+          {porAreaRows.length > 0 ? (
+            <HBarChart rows={porAreaRows} unit="%" color={C.primary} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+      </div>
       </div>
       {/* ── Quadro de Pessoal ────────────────────────────────────── */}
       <div id="sec-pessoal-quadro" data-pres-hide="true" className="flex items-center gap-3 border-t border-slate-200 pt-4">
@@ -292,6 +324,39 @@ export function AbaPessoalGestao({
           tone="purple"
           sub="média declarada"
         />
+      </div>
+
+
+      {/* Modo apresentação: Distribuição + DRE Top 10 junto aos indicadores */}
+      <div data-pres-only="true" className="grid grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <Users size={16} style={{ color: C.primary }} />
+            Distribuição do quadro docente
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Mix entre professores efetivos e temporários.
+          </p>
+          {vinculoSegments.length > 0 ? (
+            <Donut segments={vinculoSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
+            <MapPinned size={16} style={{ color: C.primary }} />
+            Quadro docente por DRE (Top 10)
+          </h3>
+          <p className="text-xs text-slate-400 mb-5">
+            Soma de efetivos e temporários declarados, por DRE.
+          </p>
+          {porDreTopRows.length > 0 ? (
+            <HBarChart rows={porDreTopRows} color={C.primary} />
+          ) : (
+            <NoData />
+          )}
+        </div>
       </div>
 
       </div>

@@ -201,6 +201,44 @@ export function AbaInfraestruturaSeguranca({
         </div>
       )}
 
+
+      {/* Modo apresentação: situação + tipo + ambientes em um só slide */}
+      <div data-pres-only="true" className="grid grid-cols-3 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <Layers size={16} style={{ color: C.primary }} />
+            Situação da Estrutura
+          </h3>
+          {situacaoSegments.length > 0 ? (
+            <Donut segments={situacaoSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <Building2 size={16} style={{ color: C.primary }} />
+            Distribuição por Tipo de Prédio
+          </h3>
+          {tipoPredioSegments.length > 0 ? (
+            <Donut segments={tipoPredioSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <MapPinned size={16} style={{ color: C.primary }} />
+            Ambientes mais presentes (Top 10)
+          </h3>
+          {ambientesRows.length > 0 ? (
+            <HBarChart rows={ambientesRows} color={C.primary} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+      </div>
+
       </div>
       <div data-pres-slide="infra-condicoes-situacao" className="space-y-6">
       <div id="sec-infra-condicoes" className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fade-in-up [animation-delay:300ms]">
@@ -298,6 +336,50 @@ export function AbaInfraestruturaSeguranca({
         </div>
       </div>
 
+      {/* pres-only: tabela de climatização dentro do slide de energia */}
+      <div data-pres-only="true" className="mt-4">
+        {energia && (energia.tabela_climatizacao ?? []).length > 0 && (() => {
+          const rows = energia.tabela_climatizacao;
+          const totSalas = rows.reduce((s, r) => s + r.total_salas, 0);
+          const totClimat = rows.reduce((s, r) => s + r.climatizadas, 0);
+          const totNao = rows.reduce((s, r) => s + r.nao_climatizadas, 0);
+          return (
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div data-pres-table-scroll="true" className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-left px-5 py-3 font-semibold text-slate-700">Climatização de salas de aula</th>
+                      <th className="text-right px-5 py-3 font-semibold text-slate-700">Total de salas</th>
+                      <th className="text-right px-5 py-3 font-semibold text-slate-700">Climatizadas</th>
+                      <th className="text-right px-5 py-3 font-semibold text-slate-700">Não climatizadas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r, i) => (
+                      <tr key={r.faixa} className={`transition-colors hover:bg-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
+                        <td className="px-5 py-3 text-slate-700 font-medium">{r.faixa}</td>
+                        <td className="px-5 py-3 text-right text-slate-600 tabular-nums">{r.total_salas.toLocaleString("pt-BR")}</td>
+                        <td className="px-5 py-3 text-right text-slate-600 tabular-nums">{r.climatizadas.toLocaleString("pt-BR")}</td>
+                        <td className="px-5 py-3 text-right text-slate-600 tabular-nums">{r.nao_climatizadas.toLocaleString("pt-BR")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold">
+                      <td className="px-5 py-3 text-slate-800">Total geral</td>
+                      <td className="px-5 py-3 text-right text-slate-800">{totSalas.toLocaleString("pt-BR")}</td>
+                      <td className="px-5 py-3 text-right text-slate-800">{totClimat.toLocaleString("pt-BR")}</td>
+                      <td className="px-5 py-3 text-right text-slate-800">{totNao.toLocaleString("pt-BR")}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
       </div>
       <div data-pres-slide="infra-energia-tabela" className="space-y-6">
       {/* Tabela: salas climatizadas por faixa */}
@@ -379,6 +461,85 @@ export function AbaInfraestruturaSeguranca({
           tone="purple"
           sub="das escolas"
         />
+      </div>
+
+      {/* pres-only: câmeras, portão, iluminação e perímetro no mesmo slide */}
+      <div data-pres-only="true" className="grid grid-cols-2 gap-5 mt-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <Camera size={16} style={{ color: C.primary }} />
+            Distribuição do status das câmeras
+          </h3>
+          {camerasSegments.length > 0 ? (
+            <Donut segments={camerasSegments} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <DoorClosed size={16} style={{ color: C.primary }} />
+            Controle de Portão
+          </h3>
+          {(seguranca?.dist_controle_portao ?? []).length > 0 ? (
+            <Donut segments={(seguranca!.dist_controle_portao).map((s, i) => ({
+              label: s.valor,
+              value: s.escolas,
+              color: PORTE_COLORS[i % PORTE_COLORS.length] ?? "#94A3B8",
+            }))} />
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <Lightbulb size={16} style={{ color: "#ec4899" }} />
+            Iluminação Externa
+          </h3>
+          {(seguranca?.dist_iluminacao_externa ?? []).length > 0 ? (
+            <div className="space-y-3">
+              {(seguranca!.dist_iluminacao_externa).map((s) => {
+                const color =
+                  s.valor === "Adequada"    ? "#22c55e" :
+                  s.valor === "Regular"     ? "#f97316" : "#ec4899";
+                return (
+                  <div key={s.valor} className="group cursor-default">
+                    <div className="flex justify-between text-xs text-slate-600 mb-1">
+                      <span className="font-medium group-hover:text-slate-900 transition-colors">{s.valor}</span>
+                      <span className="group-hover:text-slate-900 group-hover:font-medium transition-all">{s.escolas} escola{s.escolas !== 1 ? "s" : ""} · {s.percentual.toFixed(1).replace(".", ",")}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden transition-transform group-hover:scale-[1.01] origin-left">
+                      <div
+                        className="h-3 rounded-full transition-all duration-500 group-hover:brightness-110"
+                        style={{ width: `${s.percentual}%`, background: color }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <NoData />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <Home size={16} style={{ color: C.primary }} />
+            Muro ou cerca no perímetro
+          </h3>
+          {(condicoes?.dist_muro_cerca ?? []).length > 0 ? (
+            <HBarChart
+              rows={(condicoes!.dist_muro_cerca).map((s) => ({
+                label: s.valor,
+                value: s.escolas,
+                pct: s.percentual,
+              }))}
+              color={C.primary}
+            />
+          ) : (
+            <NoData />
+          )}
+        </div>
       </div>
 
       </div>

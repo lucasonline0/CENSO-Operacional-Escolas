@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2, MonitorPlay, Pause, Play, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Clock, Loader2, MonitorPlay, Pause, Play, X } from "lucide-react";
 
 type PresentationTab =
   | "perfil"
@@ -180,6 +180,8 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(10); // 10 segundos por padrão
   const [progress, setProgress] = useState(0);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
 
   const slideIndexRef = useRef(0);
   const retryTimerRef = useRef<number | null>(null);
@@ -298,27 +300,31 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
       setProgress((prev) => {
         const next = prev + (intervalMs / (duration * 1000)) * 100;
         if (next >= 100) {
-          return 100;
+          setTimeout(goNext, 0);
+          return 0;
         }
         return next;
       });
     }, intervalMs);
 
     return () => clearInterval(timer);
-  }, [isPlaying, slideStatus, duration]);
-
-  // Efeito para avançar o slide quando o timer chega a 100%
-  useEffect(() => {
-    if (progress >= 100) {
-      setProgress(0);
-      goNext();
-    }
-  }, [progress, goNext]);
+  }, [isPlaying, slideStatus, duration, goNext]);
 
   useEffect(() => {
     const initialTimer = window.setTimeout(() => goToSlide(0), 0);
     return () => window.clearTimeout(initialTimer);
   }, [goToSlide]);
+
+  // Efeito para fechar o dropdown ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -389,23 +395,41 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
             {isPlaying ? <Pause size={16} /> : <Play size={16} />}
           </button>
 
-          {/* Seletor de Tempo de Transição */}
-          <select
-            className="ca-pres-timer-select"
-            value={duration}
-            onChange={(e) => {
-              setDuration(Number(e.target.value));
-              setProgress(0);
-            }}
-            title="Tempo de permanência em cada slide"
-            aria-label="Tempo de permanência em cada slide"
-          >
-            <option value={5}>5s</option>
-            <option value={10}>10s</option>
-            <option value={15}>15s</option>
-            <option value={30}>30s</option>
-            <option value={60}>60s</option>
-          </select>
+          {/* Seletor de Tempo de Transição Personalizado */}
+          <div className="ca-pres-dropdown-container" ref={dropdownRef}>
+            <button
+              type="button"
+              className="ca-pres-dropdown-trigger"
+              onClick={() => setIsDropdownOpen((o) => !o)}
+              title="Tempo de permanência em cada slide"
+              aria-expanded={isDropdownOpen}
+              aria-label={`Tempo atual: ${duration} segundos`}
+            >
+              <Clock size={15} />
+              <span>{duration}s</span>
+              <ChevronDown size={14} className={`ca-pres-dropdown-chevron ${isDropdownOpen ? "open" : ""}`} />
+            </button>
+
+            {isDropdownOpen && (
+              <ul className="ca-pres-dropdown-menu">
+                {[5, 10, 15, 30, 60].map((val) => (
+                  <li key={val}>
+                    <button
+                      type="button"
+                      className={`ca-pres-dropdown-item ${duration === val ? "selected" : ""}`}
+                      onClick={() => {
+                        setDuration(val);
+                        setProgress(0);
+                        setIsDropdownOpen(false);
+                      }}
+                    >
+                      {val} segundos
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
           <span className="ca-pres-counter">
             {slideIndex + 1} / {total}

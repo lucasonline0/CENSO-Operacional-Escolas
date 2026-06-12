@@ -352,21 +352,21 @@ function NavGroup({
 }
 
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
-  const [censusPage,     setCensusPage]     = useState<CensusPage | null>(null);
-  const [tab,            setTab]            = useState<Tab>("perfil");
-  const [filterStatus,   setFilterStatus]   = useState("");
-  const [search,         setSearch]         = useState("");
-  const [err,            setErr]            = useState("");
-  const [loading,        setLoading]        = useState(true);
-  const [syncing,        setSyncing]        = useState(false);
-  const [viewId,         setViewId]         = useState<number | null>(null);
-  const [collapsed,      setCollapsed]      = useState(false);
-  const [visited,        setVisited]        = useState<Set<Tab>>(() => new Set<Tab>(["perfil"]));
-  const [censusLimit,    setCensusLimit]    = useState(10);
-  const [censusPageNum,  setCensusPageNum]  = useState(1);
-  const [mobileNavOpen,  setMobileNavOpen]  = useState(false);
-  const [filters,        setFilters]        = useState<DashboardFilters>({});
-  const [filtrosOpcoes,  setFiltrosOpcoes]  = useState<FiltrosOpcoes | null>(null);
+  const [censusPage, setCensusPage] = useState<CensusPage | null>(null);
+  const [tab, setTab] = useState<Tab>("perfil");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [search, setSearch] = useState("");
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [viewId, setViewId] = useState<number | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [visited, setVisited] = useState<Set<Tab>>(() => new Set<Tab>(["perfil"]));
+  const [censusLimit, setCensusLimit] = useState(10);
+  const [censusPageNum, setCensusPageNum] = useState(1);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [filters, setFilters] = useState<DashboardFilters>({});
+  const [filtrosOpcoes, setFiltrosOpcoes] = useState<FiltrosOpcoes | null>(null);
   const [presentationMode, setPresentationMode] = useState(false);
 
   const logout = useCallback(() => { clearToken(); clearApiCache(); onLogout(); }, [onLogout]);
@@ -389,13 +389,13 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   // da aba, mas a busca roda no backend (filtra todo o recorte, não só a página).
   const loadCensus = useCallback(async (limit = censusLimit, page = censusPageNum) => {
     const p = new URLSearchParams();
-    if (filterStatus)              p.set("status", filterStatus);
-    if (filters.ano)               p.set("year", String(filters.ano));
-    if (filters.dre)               p.set("dre", filters.dre);
-    if (filters.municipio)         p.set("municipio", filters.municipio);
-    if (filters.zona)              p.set("zona", filters.zona);
+    if (filterStatus) p.set("status", filterStatus);
+    if (filters.ano) p.set("year", String(filters.ano));
+    if (filters.dre) p.set("dre", filters.dre);
+    if (filters.municipio) p.set("municipio", filters.municipio);
+    if (filters.zona) p.set("zona", filters.zona);
     if (filters.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
-    if (search)                    p.set("search", search);
+    if (search) p.set("search", search);
     p.set("limit", String(limit));
     p.set("page", String(page));
     try { setCensusPage(await apiFetch<CensusPage>(`/v1/admin/census?${p}`, token)); }
@@ -412,9 +412,9 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   }, [tab, loadCensus]);
   useEffect(() => {
     const qs = new URLSearchParams();
-    if (filters.dre)               qs.set("dre", filters.dre);
-    if (filters.municipio)         qs.set("municipio", filters.municipio);
-    if (filters.zona)              qs.set("zona", filters.zona);
+    if (filters.dre) qs.set("dre", filters.dre);
+    if (filters.municipio) qs.set("municipio", filters.municipio);
+    if (filters.zona) qs.set("zona", filters.zona);
     if (filters.regiao_integracao) qs.set("regiao_integracao", filters.regiao_integracao);
     const url = `/v1/admin/analytics/filtros/opcoes${qs.toString() ? `?${qs}` : ""}`;
     apiFetch<FiltrosOpcoes>(url, token)
@@ -545,6 +545,16 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 <MonitorPlay size={16} />
                 <span>Modo Apresentação</span>
               </button>
+              <button
+                className="ca-icon-btn"
+                title={syncing ? "Sincronizando…" : "Sync Planilha"}
+                onClick={handleSync}
+                disabled={syncing}
+              >
+                {syncing
+                  ? <Loader2 size={16} className="animate-spin" />
+                  : <CloudUpload size={16} />}
+              </button>
               <button className="ca-icon-btn" title="Mudar tema" onClick={() => setDark(!dark)}>
                 {
                   dark
@@ -663,7 +673,6 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         <PresentationMode
           onClose={() => setPresentationMode(false)}
           onNavigateTab={(tabId) => handleNav(tabId as Tab)}
-          dark={dark}
         />
       )}
     </div>

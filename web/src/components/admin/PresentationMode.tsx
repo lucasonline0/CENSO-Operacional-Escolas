@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, MonitorPlay, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Clock, Loader2, MonitorPlay, Pause, Play, X } from "lucide-react";
 
 type PresentationTab =
   | "perfil"
@@ -25,11 +25,7 @@ type PresentationSlide = {
 type PresentationModeProps = {
   onClose: () => void;
   onNavigateTab: (tabId: PresentationTab) => void;
-  dark?: boolean;
 };
-
-const RETRY_INTERVAL_MS = 150;
-const MAX_RETRY_ATTEMPTS = 8;
 
 function createSlides(
   tabId: PresentationTab,
@@ -175,11 +171,19 @@ function removeActiveSlideState() {
   });
 }
 
-export default function PresentationMode({ onClose, onNavigateTab, dark }: PresentationModeProps) {
+export default function PresentationMode({ onClose, onNavigateTab }: PresentationModeProps) {
   const [slideIndex, setSlideIndex] = useState(0);
   const [slideStatus, setSlideStatus] = useState<"idle" | "found" | "missing">("idle");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(10); // 10 segundos por padrão
+  const [progress, setProgress] = useState(0);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+
   const slideIndexRef = useRef(0);
   const retryTimerRef = useRef<number | null>(null);
+  const safetyTimeoutRef = useRef<number | null>(null);
+  const observerRef = useRef<MutationObserver | null>(null);
   const navigationTokenRef = useRef(0);
   const onNavigateTabRef = useRef(onNavigateTab);
 
@@ -194,6 +198,14 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
     if (retryTimerRef.current !== null) {
       window.clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;
+    }
+    if (safetyTimeoutRef.current !== null) {
+      window.clearTimeout(safetyTimeoutRef.current);
+      safetyTimeoutRef.current = null;
+    }
+    if (observerRef.current !== null) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
     }
   }, []);
 
@@ -218,14 +230,10 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
   }, []);
 
   const activateSlideWithRetry = useCallback((target: PresentationSlide, navigationToken: number) => {
-    let attempts = 0;
+    clearRetryTimer();
 
     const tryActivate = () => {
-      if (navigationToken !== navigationTokenRef.current) return;
-
-      attempts += 1;
       removeActiveSlideState();
-
       const element = document.querySelector<HTMLElement>(
         `[data-pres-slide="${target.contentId}"]`,
       );
@@ -236,20 +244,44 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
         applySlideZoom(element);
         retryTimerRef.current = null;
         setSlideStatus("found");
-        return;
+        return true;
       }
-
-      if (attempts < MAX_RETRY_ATTEMPTS) {
-        retryTimerRef.current = window.setTimeout(tryActivate, RETRY_INTERVAL_MS);
-        return;
-      }
-
-      retryTimerRef.current = null;
-      setSlideStatus("missing");
+      return false;
     };
 
-    retryTimerRef.current = window.setTimeout(tryActivate, RETRY_INTERVAL_MS);
-  }, [applySlideZoom]);
+    // Tenta ativar imediatamente
+    if (tryActivate()) {
+      return;
+    }
+
+    // Se não encontrou, observa mudanças no DOM (MutationObserver)
+    const observer = new MutationObserver((mutations, obs) => {
+      if (navigationToken !== navigationTokenRef.current) {
+        obs.disconnect();
+        return;
+      }
+      if (tryActivate()) {
+        obs.disconnect();
+        if (observerRef.current === obs) {
+          observerRef.current = null;
+        }
+      }
+    });
+
+    observerRef.current = observer;
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    // Timeout de segurança longo (15 segundos)
+    safetyTimeoutRef.current = window.setTimeout(() => {
+      if (navigationToken === navigationTokenRef.current) {
+        setSlideStatus((prev) => (prev === "found" ? "found" : "missing"));
+      }
+      clearRetryTimer();
+    }, 15000);
+  }, [clearRetryTimer]);
 
   const goToSlide = useCallback((nextIndex: number) => {
     const normalized = ((nextIndex % total) + total) % total;
@@ -262,6 +294,7 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
     removeActiveSlideState();
     setSlideIndex(normalized);
     setSlideStatus("idle");
+    setProgress(0); // Reinicia o progresso do timer
     onNavigateTabRef.current(target.tabId);
     activateSlideWithRetry(target, navigationToken);
   }, [activateSlideWithRetry, clearRetryTimer, total]);
@@ -275,10 +308,42 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
     [goToSlide],
   );
 
+  // Efeito para o Timer de reprodução automática
+  useEffect(() => {
+    if (!isPlaying || slideStatus !== "found") {
+      return;
+    }
+
+    const intervalMs = 50;
+    const timer = setInterval(() => {
+      setProgress((prev) => {
+        const next = prev + (intervalMs / (duration * 1000)) * 100;
+        if (next >= 100) {
+          setTimeout(goNext, 0);
+          return 0;
+        }
+        return next;
+      });
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+  }, [isPlaying, slideStatus, duration, goNext]);
+
   useEffect(() => {
     const initialTimer = window.setTimeout(() => goToSlide(0), 0);
     return () => window.clearTimeout(initialTimer);
   }, [goToSlide]);
+
+  // Efeito para fechar o dropdown ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -291,6 +356,10 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
       } else if (event.key === "ArrowLeft") {
         event.preventDefault();
         goPrev();
+      } else if (event.key === " ") {
+        // Atalho de teclado: barra de espaço para Play/Pause
+        event.preventDefault();
+        setIsPlaying((p) => !p);
       }
     };
 
@@ -334,20 +403,73 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
             <MonitorPlay size={14} />
             {slide.tabLabel}
           </span>
-          <span className="ca-pres-sep">›</span>
+          <span className="text-slate-300 font-normal select-none">/</span>
           <span className="ca-pres-title">{slide.sectionLabel}</span>
           {slide.slideTitle && (
             <>
-              <span className="ca-pres-sep">·</span>
+              <span className="text-slate-300 font-normal select-none">/</span>
               <span className="ca-pres-subtitle">{slide.slideTitle}</span>
             </>
           )}
+          {slideStatus === "idle" && (
+            <span className="ca-pres-loading ml-2">
+              <Loader2 size={13} className="animate-spin" />
+              Aguardando gráficos...
+            </span>
+          )}
           {slideStatus === "missing" && (
-            <span className="ca-pres-missing">Slide não encontrado.</span>
+            <span className="ca-pres-missing ml-2">Não encontrado</span>
           )}
         </div>
 
         <div className="ca-pres-controls">
+          {/* Botão de Play/Pause */}
+          <button
+            type="button"
+            className={`ca-pres-autoplay-btn ${isPlaying ? "active" : ""}`}
+            title={isPlaying ? "Pausar reprodução automática (Espaço)" : "Iniciar reprodução automática (Espaço)"}
+            aria-label={isPlaying ? "Pausar reprodução automática" : "Iniciar reprodução automática"}
+            onClick={() => setIsPlaying((p) => !p)}
+          >
+            {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+          </button>
+
+          {/* Seletor de Tempo de Transição Personalizado */}
+          <div className="ca-pres-dropdown-container" ref={dropdownRef}>
+            <button
+              type="button"
+              className="ca-pres-dropdown-trigger"
+              onClick={() => setIsDropdownOpen((o) => !o)}
+              title="Tempo de permanência em cada slide"
+              aria-expanded={isDropdownOpen}
+              aria-label={`Tempo atual: ${duration} segundos`}
+            >
+              <Clock size={15} />
+              <span>{duration}s</span>
+              <ChevronDown size={14} className={`ca-pres-dropdown-chevron ${isDropdownOpen ? "open" : ""}`} />
+            </button>
+
+            {isDropdownOpen && (
+              <ul className="ca-pres-dropdown-menu">
+                {[5, 10, 15, 30, 60].map((val) => (
+                  <li key={val}>
+                    <button
+                      type="button"
+                      className={`ca-pres-dropdown-item ${duration === val ? "selected" : ""}`}
+                      onClick={() => {
+                        setDuration(val);
+                        setProgress(0);
+                        setIsDropdownOpen(false);
+                      }}
+                    >
+                      {val} segundos
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           <span className="ca-pres-counter">
             {slideIndex + 1} / {total}
           </span>
@@ -380,7 +502,6 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
             <span>Fechar</span>
           </button>
         </div>
-      </header>
 
 
     </div>

@@ -6,6 +6,8 @@
 
 **Documento companheiro / fonte oficial da matriz:** [matriz-abas-e-graficos.md](matriz-abas-e-graficos.md) §5.8. Em caso de conflito sobre o estado das abas, a matriz prevalece; este documento detalha o planejamento específico da aba Gestão Financeira e Governança.
 
+**Governança de vínculo cadastral:** o tratamento dos registros PRODEP **sem match em `schools`** (95 registros), o uso da nova **`base_dige`** como fonte administrativa complementar de saneamento/sugestão de vínculo, a regra de **não substituir `schools` automaticamente** e os **status de vínculo cadastral** foram detalhados em arquivo próprio: [prodep-schools-base-dige.md](prodep-schools-base-dige.md).
+
 > **Histórico.** A aba Gestão Financeira e Governança nasceu como **placeholder institucional** (sem fetch, sem endpoint, sem view, sem dado fake) e **continua assim na UI**. Este documento não muda esse estado de implementação — ele apenas registra a passagem de "placeholder conceitual" para **planejamento ativo**, agora ancorado numa fonte administrativa externa concreta (PRODEP) somada aos dados declaratórios do censo.
 
 ---

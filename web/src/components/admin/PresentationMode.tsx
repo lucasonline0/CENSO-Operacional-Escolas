@@ -25,7 +25,6 @@ type PresentationSlide = {
 type PresentationModeProps = {
   onClose: () => void;
   onNavigateTab: (tabId: PresentationTab) => void;
-  dark?: boolean;
 };
 
 function createSlides(
@@ -174,7 +173,7 @@ function removeActiveSlideState() {
   });
 }
 
-export default function PresentationMode({ onClose, onNavigateTab, dark }: PresentationModeProps) {
+export default function PresentationMode({ onClose, onNavigateTab }: PresentationModeProps) {
   const [slideIndex, setSlideIndex] = useState(0);
   const [slideStatus, setSlideStatus] = useState<"idle" | "found" | "missing">("idle");
   const [isPlaying, setIsPlaying] = useState(false);
@@ -352,11 +351,25 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
     const previousBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
+    // Entra no modo tela cheia (Fullscreen) ao iniciar a apresentação
+    if (document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch((err) => {
+        console.warn("Não foi possível entrar no modo tela cheia:", err);
+      });
+    }
+
     return () => {
       navigationTokenRef.current += 1;
       clearRetryTimer();
       removeActiveSlideState();
       document.body.style.overflow = previousBodyOverflow;
+
+      // Sai do modo tela cheia (Fullscreen) ao fechar a apresentação
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch((err) => {
+          console.warn("Não foi possível sair do modo tela cheia:", err);
+        });
+      }
     };
   }, [clearRetryTimer]);
 
@@ -365,22 +378,26 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
       <header className="ca-pres-top">
         <div className="ca-pres-heading">
           <span className="ca-pres-kicker">
-            <MonitorPlay size={15} />
+            <MonitorPlay size={14} />
             {slide.tabLabel}
           </span>
+          <span className="text-slate-300 font-normal select-none">/</span>
           <span className="ca-pres-title">{slide.sectionLabel}</span>
-          <div className="flex items-center gap-3 mt-0.5">
-            {slide.slideTitle && <span className="ca-pres-subtitle">{slide.slideTitle}</span>}
-            {slideStatus === "idle" && (
-              <span className="ca-pres-loading">
-                <Loader2 size={13} className="animate-spin" />
-                Aguardando carregamento dos gráficos...
-              </span>
-            )}
-            {slideStatus === "missing" && (
-              <span className="ca-pres-missing">Slide não encontrado após o carregamento da aba.</span>
-            )}
-          </div>
+          {slide.slideTitle && (
+            <>
+              <span className="text-slate-300 font-normal select-none">/</span>
+              <span className="ca-pres-subtitle">{slide.slideTitle}</span>
+            </>
+          )}
+          {slideStatus === "idle" && (
+            <span className="ca-pres-loading ml-2">
+              <Loader2 size={13} className="animate-spin" />
+              Aguardando gráficos...
+            </span>
+          )}
+          {slideStatus === "missing" && (
+            <span className="ca-pres-missing ml-2">Não encontrado</span>
+          )}
         </div>
 
         <div className="ca-pres-controls">
@@ -472,14 +489,6 @@ export default function PresentationMode({ onClose, onNavigateTab, dark }: Prese
           />
         </div>
       </header>
-
-      <footer className="ca-pres-footer">
-        <img
-          className="ca-pres-footer-logo"
-          src={dark ? "/logo-horizontal-letter-white.png" : "/parceiros.png"}
-          alt="FADEP · Secretaria de Educação · Governo do Pará"
-        />
-      </footer>
     </div>
   );
 }

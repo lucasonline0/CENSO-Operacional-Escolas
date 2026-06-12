@@ -673,7 +673,6 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         <PresentationMode
           onClose={() => setPresentationMode(false)}
           onNavigateTab={(tabId) => handleNav(tabId as Tab)}
-          dark={dark}
         />
       )}
     </div>

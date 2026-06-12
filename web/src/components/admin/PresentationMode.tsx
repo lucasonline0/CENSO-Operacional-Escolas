@@ -520,8 +520,7 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
             <span>Fechar</span>
           </button>
         </div>
-
-
+      </header>
     </div>
   );
 }

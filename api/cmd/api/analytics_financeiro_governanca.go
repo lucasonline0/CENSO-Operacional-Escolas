@@ -77,16 +77,51 @@ func (f prodepFilters) args() []any {
 	}
 }
 
+// Mapeamento de caracteres acentuados → ASCII usado por translate() para
+// normalizar acentos do português SEM depender da extensão `unaccent` (que pode
+// não estar habilitada no Railway). Os dois lados precisam ter o mesmo número de
+// caracteres, como exige translate().
+const (
+	prodepAccentFrom = `ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇáàâãäéèêëíìîïóòôõöúùûüç`
+	prodepAccentTo   = `AAAAAEEEEIIIIOOOOOUUUUCaaaaaeeeeiiiiooooouuuuc`
+)
+
+// sqlNormalizeProdep devolve uma expressão SQL que normaliza `expr` para uma
+// comparação tolerante entre os valores do filtro global (UI) e os valores
+// gravados no PRODEP. A normalização: (1) remove o prefixo opcional quando
+// presente — "DRE " em dre_prodep, "RI " em ri_prodep — via regexp_replace
+// case-insensitive; (2) remove acentos comuns via translate(); (3) aplica
+// UPPER+TRIM. prefix vazio significa "não remover prefixo" (caso de município).
+//
+// É aplicada aos DOIS lados (coluna do PRODEP e parâmetro), de modo que:
+//   dre=ABAETETUBA  case com dre_prodep="DRE ABAETETUBA"
+//   ri=XINGU        case com ri_prodep="RI Xingu"
+//   municipio=ACARA case tanto com "ACARA" quanto com "Acará"
+//
+// `expr` é sempre uma expressão controlada pelo servidor (nome de coluna ou
+// placeholder posicional) — nunca entrada do usuário —, então a interpolação
+// aqui não introduz injeção; os valores da UI continuam chegando por $3/$4/$5.
+func sqlNormalizeProdep(expr, prefix string) string {
+	inner := expr
+	if prefix != "" {
+		inner = fmt.Sprintf(`regexp_replace(%s, '^\s*%s\s+', '', 'i')`, expr, prefix)
+	}
+	return fmt.Sprintf(`UPPER(TRIM(translate(%s, '%s', '%s')))`, inner, prodepAccentFrom, prodepAccentTo)
+}
+
 // prodepWhereSQL é a cláusula WHERE comum a todas as agregações. Sempre restringe
 // a usar_na_carga = true e aplica os filtros opcionais de forma parametrizada.
+// DRE, município e RI usam comparação normalizada (ver sqlNormalizeProdep) para
+// aceitar os valores do filtro global, que chegam sem prefixo "DRE "/"RI " e sem
+// acentos. Os nomes dos query params e o restante da lógica não mudam.
 // $1=ano $2=categoria $3=dre $4=municipio $5=ri $6=match_status $7=status_pc.
-const prodepWhereSQL = `
+var prodepWhereSQL = `
 	WHERE usar_na_carga = true
 	  AND ($1 = 0  OR ano = $1)
 	  AND ($2 = '' OR categoria = $2)
-	  AND ($3 = '' OR UPPER(TRIM(dre_prodep)) = UPPER(TRIM($3)))
-	  AND ($4 = '' OR UPPER(TRIM(municipio_resolvido)) = UPPER(TRIM($4)))
-	  AND ($5 = '' OR UPPER(TRIM(ri_prodep)) = UPPER(TRIM($5)))
+	  AND ($3 = '' OR ` + sqlNormalizeProdep("COALESCE(dre_prodep, '')", "DRE") + ` = ` + sqlNormalizeProdep("$3::text", "DRE") + `)
+	  AND ($4 = '' OR ` + sqlNormalizeProdep("COALESCE(municipio_resolvido, '')", "") + ` = ` + sqlNormalizeProdep("$4::text", "") + `)
+	  AND ($5 = '' OR ` + sqlNormalizeProdep("COALESCE(ri_prodep, '')", "RI") + ` = ` + sqlNormalizeProdep("$5::text", "RI") + `)
 	  AND ($6 = '' OR match_status = $6)
 	  AND ($7 = '' OR COALESCE(status_prestacao_contas, '') = $7)
 `

@@ -1368,8 +1368,10 @@
   height: 100vh;
   min-height: 0;
   padding: 74px 40px 24px;
-  gap: 0;
-  overflow: hidden;
+  gap: 20px !important;
+  overflow: auto !important;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Wrapper neutro dos filtros — não altera o layout no modo normal. */
@@ -1386,21 +1388,54 @@
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active {
   display: block !important;
   width: 100%;
-  min-height: calc(100vh - 114px);
-  max-height: calc(100vh - 114px);
-  overflow: hidden;
+  min-height: 0;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* Desativa esticar verticalmente no layout de deck */
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active > div {
+  display: block !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .grid {
+  display: grid !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .bg-white.rounded-2xl {
+  display: flex !important;
+  flex-direction: column;
+  height: auto !important;
+  min-height: 0 !important;
 }
 
 /* Tabelas extensas rolam dentro do slide, sem reativar o scroll da página. */
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active [data-pres-table-scroll="true"] {
-  max-height: calc(100vh - 190px);
+  flex: 1;
+  min-height: 0;
+  max-height: none !important;
+  height: 100%;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active [data-pres-table-scroll="true"] table {
-  font-size: 0.82rem;
+  font-size: 0.72rem !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active [data-pres-table-scroll="true"] th,
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active [data-pres-table-scroll="true"] td {
+  padding: 6px 10px !important;
+  line-height: 1.1 !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active [data-pres-table-scroll="true"] th {
+  font-size: 0.75rem !important;
 }
 
 /* Compactação restrita ao deck para manter cards e gráficos dentro da tela. */
@@ -1706,19 +1741,97 @@
   display: none !important;
 }
 
+/* Amplia responsivamente o tamanho dos gráficos no modo apresentação de forma segura */
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .flex.flex-col.items-center.gap-4.relative {
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 32px !important;
+  padding: 8px 0;
+  width: 100%;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .flex.flex-col.items-center.gap-4.relative svg {
+  width: 220px !important;
+  height: 220px !important;
+  flex-shrink: 0;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .flex.flex-col.items-center.gap-4.relative ul {
+  margin-top: 0 !important;
+  flex-grow: 1;
+  max-width: 260px;
+}
+
+/* Gráfico de barras verticais */
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .h-52 {
+  height: 208px !important;
+  min-height: 208px !important;
+  max-height: 208px !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .h-52 .flex.flex-col.items-center > div.w-full.flex.items-end {
+  height: 120px !important;
+}
+
+/* Gráfico de barras horizontais */
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .flex-1.h-6 {
+  height: 24px !important;
+}
+
 @media (max-width: 640px) {
   .censo-admin .ca-app.presenting .admin-page {
-    padding-top: 108px;
+    padding-top: 114px !important;
     padding-bottom: 20px;
-    padding-left: 20px;
-    padding-right: 20px;
+    padding-left: 16px;
+    padding-right: 16px;
   }
   .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active {
-    min-height: calc(100vh - 144px);
-    max-height: calc(100vh - 144px);
+    min-height: 0;
+    max-height: none !important;
   }
-  .censo-admin .ca-pres-top { padding: 14px 20px; gap: 14px; }
-  .censo-admin .ca-pres-title { font-size: 18px; }
+  .censo-admin .ca-pres-top {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 10px 16px !important;
+    gap: 8px !important;
+    min-height: auto !important;
+  }
+  .censo-admin .ca-pres-heading {
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    text-align: center !important;
+    gap: 6px !important;
+  }
+  .censo-admin .ca-pres-kicker {
+    font-size: 10.5px !important;
+  }
+  .censo-admin .ca-pres-title {
+    font-size: 13.5px !important;
+  }
+  .censo-admin .ca-pres-subtitle {
+    font-size: 12px !important;
+  }
+  .censo-admin .ca-pres-controls {
+    justify-content: center !important;
+    width: 100% !important;
+    gap: 8px !important;
+  }
   .censo-admin .ca-pres-close span { display: none; }
   .censo-admin .ca-pres-close { padding: 0; width: 38px; justify-content: center; }
+
+  /* Stack pie charts and legends vertically on mobile viewports */
+  .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .flex.flex-col.items-center.gap-4.relative {
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 16px !important;
+  }
+  .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .flex.flex-col.items-center.gap-4.relative svg {
+    width: 160px !important;
+    height: 160px !important;
+  }
+  .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .flex.flex-col.items-center.gap-4.relative ul {
+    max-width: 100% !important;
+    margin-top: 0 !important;
+  }
 }

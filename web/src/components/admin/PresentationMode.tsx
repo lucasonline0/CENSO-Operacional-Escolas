@@ -27,143 +27,224 @@ type PresentationModeProps = {
   onNavigateTab: (tabId: PresentationTab) => void;
 };
 
-function createSlides(
-  tabId: PresentationTab,
-  tabLabel: string,
-  sectionLabel: string,
-  entries: Array<[contentId: string, slideTitle?: string]>,
-): PresentationSlide[] {
-  return entries.map(([contentId, slideTitle]) => ({
-    id: contentId,
-    tabId,
-    tabLabel,
-    sectionLabel,
-    slideTitle,
-    contentId,
-  }));
-}
-
 const SLIDES: PresentationSlide[] = [
-  ...createSlides("perfil", "Caracterização da Rede", "Dimensão e Perfil da Rede", [
-    ["perfil-dimensao-indicadores", "Indicadores gerais"],
-    ["perfil-dimensao-distribuicao", "Distribuição das escolas"],
-    ["perfil-dimensao-matriculas", "Matrículas por porte"],
-  ]),
-  ...createSlides("perfil", "Caracterização da Rede", "Organização da Oferta e Funcionamento", [
-    ["perfil-oferta-etapas", "Etapas e modalidades"],
-    ["perfil-oferta-turnos", "Turnos de funcionamento"],
-  ]),
-  ...createSlides("perfil", "Caracterização da Rede", "Infraestrutura Educacional", [
-    ["perfil-infra-indicadores", "Indicadores de cobertura"],
-    ["perfil-infra-ambientes", "Ambientes essenciais"],
-    ["perfil-infra-media", "Média por porte"],
-  ]),
-  ...createSlides("perfil", "Caracterização da Rede", "Detalhamento por DRE", [
-    ["perfil-dre-tabela", "Tabela consolidada"],
-  ]),
+  {
+    id: "perfil-dimensao",
+    tabId: "perfil",
+    tabLabel: "Caracterização da Rede",
+    sectionLabel: "Dimensão e Perfil da Rede",
+    contentId: "perfil-dimensao-indicadores,perfil-dimensao-distribuicao,perfil-dimensao-matriculas",
+  },
+  {
+    id: "perfil-oferta",
+    tabId: "perfil",
+    tabLabel: "Caracterização da Rede",
+    sectionLabel: "Organização da Oferta e Funcionamento",
+    contentId: "perfil-oferta-etapas,perfil-oferta-turnos",
+  },
+  {
+    id: "perfil-infra",
+    tabId: "perfil",
+    tabLabel: "Caracterização da Rede",
+    sectionLabel: "Infraestrutura Educacional",
+    contentId: "perfil-infra-indicadores,perfil-infra-ambientes,perfil-infra-media",
+  },
+  {
+    id: "perfil-dre",
+    tabId: "perfil",
+    tabLabel: "Caracterização da Rede",
+    sectionLabel: "Detalhamento por DRE",
+    contentId: "perfil-dre-tabela",
+  },
 
-  ...createSlides("pessoal", "Pessoal e Gestão Escolar", "Estrutura de Gestão Escolar", [
-    ["pessoal-estrutura-resumo", "Indicadores gerais"],
-    ["pessoal-estrutura-composicao", "Composição da gestão"],
-  ]),
-  ...createSlides("pessoal", "Pessoal e Gestão Escolar", "Coordenação Pedagógica", [
-    ["pessoal-coordenacao", "Cobertura e composição"],
-  ]),
-  ...createSlides("pessoal", "Pessoal e Gestão Escolar", "Quadro de Pessoal", [
-    ["pessoal-quadro-indicadores", "Indicadores gerais"],
-    ["pessoal-quadro-distribuicao", "Distribuição por vínculo"],
-    ["pessoal-quadro-dre", "Detalhamento por DRE"],
-  ]),
+  {
+    id: "pessoal-estrutura",
+    tabId: "pessoal",
+    tabLabel: "Pessoal e Gestão Escolar",
+    sectionLabel: "Estrutura de Gestão Escolar",
+    contentId: "pessoal-estrutura-resumo,pessoal-estrutura-composicao",
+  },
+  {
+    id: "pessoal-coordenacao",
+    tabId: "pessoal",
+    tabLabel: "Pessoal e Gestão Escolar",
+    sectionLabel: "Coordenação Pedagógica",
+    contentId: "pessoal-coordenacao",
+  },
+  {
+    id: "pessoal-quadro",
+    tabId: "pessoal",
+    tabLabel: "Pessoal e Gestão Escolar",
+    sectionLabel: "Quadro de Pessoal - Visão Geral",
+    contentId: "pessoal-quadro-indicadores,pessoal-quadro-distribuicao",
+  },
+  {
+    id: "pessoal-quadro-dre-slide",
+    tabId: "pessoal",
+    tabLabel: "Pessoal e Gestão Escolar",
+    sectionLabel: "Quadro de Pessoal - Detalhamento por DRE",
+    contentId: "pessoal-quadro-dre",
+  },
 
-  ...createSlides("tecnologia", "Tecnologia e Equipamentos", "Infraestrutura Digital", [
-    ["tecnologia-digital-indicadores", "Indicadores gerais"],
-    ["tecnologia-digital-conexao", "Disponibilidade e qualidade da conexão"],
-  ]),
-  ...createSlides("tecnologia", "Tecnologia e Equipamentos", "Parque Tecnológico", [
-    ["tecnologia-parque-indicadores", "Inventário de equipamentos"],
-    ["tecnologia-parque-distribuicao", "Distribuição do parque"],
-    ["tecnologia-parque-notas", "Notas por equipamento"],
-  ]),
-  ...createSlides("tecnologia", "Tecnologia e Equipamentos", "Uso Pedagógico", [
-    ["tecnologia-pedagogico-indicadores", "Indicadores gerais"],
-    ["tecnologia-pedagogico-distribuicao", "Recursos e uso pedagógico"],
-  ]),
+  {
+    id: "tecnologia-digital",
+    tabId: "tecnologia",
+    tabLabel: "Tecnologia e Equipamentos",
+    sectionLabel: "Infraestrutura Digital",
+    contentId: "tecnologia-digital-indicadores,tecnologia-digital-conexao",
+  },
+  {
+    id: "tecnologia-parque",
+    tabId: "tecnologia",
+    tabLabel: "Tecnologia e Equipamentos",
+    sectionLabel: "Parque Tecnológico",
+    contentId: "tecnologia-parque-indicadores,tecnologia-parque-distribuicao,tecnologia-parque-notes",
+  },
+  {
+    id: "tecnologia-pedagogico",
+    tabId: "tecnologia",
+    tabLabel: "Tecnologia e Equipamentos",
+    sectionLabel: "Uso Pedagógico",
+    contentId: "tecnologia-pedagogico-indicadores,tecnologia-pedagogico-distribuicao",
+  },
 
-  ...createSlides("infraestrutura", "Infraestrutura e Segurança", "Condições Estruturais e Ambientes", [
-    ["infra-condicoes-resumo", "Indicadores gerais"],
-    ["infra-condicoes-situacao", "Situação dos prédios"],
-    ["infra-condicoes-ambientes", "Ambientes escolares"],
-  ]),
-  ...createSlides("infraestrutura", "Infraestrutura e Segurança", "Energia, Climatização e Capacidade Elétrica", [
-    ["infra-energia-distribuicao", "Energia e climatização"],
-    ["infra-energia-tabela", "Salas climatizadas"],
-  ]),
-  ...createSlides("infraestrutura", "Infraestrutura e Segurança", "Segurança Física e Patrimonial", [
-    ["infra-seguranca-indicadores", "Indicadores gerais"],
-    ["infra-seguranca-acesso", "Controle de acesso"],
-    ["infra-seguranca-iluminacao", "Iluminação e monitoramento"],
-    ["infra-seguranca-perimetro", "Proteção perimetral"],
-  ]),
+  {
+    id: "infra-condicoes",
+    tabId: "infraestrutura",
+    tabLabel: "Infraestrutura e Segurança",
+    sectionLabel: "Condições Estruturais e Ambientes",
+    contentId: "infra-condicoes-resumo,infra-condicoes-situacao,infra-condicoes-ambientes",
+  },
+  {
+    id: "infra-energia",
+    tabId: "infraestrutura",
+    tabLabel: "Infraestrutura e Segurança",
+    sectionLabel: "Energia, Climatização e Capacidade Elétrica",
+    contentId: "infra-energia-distribuicao",
+  },
+  {
+    id: "infra-energia-tabela-slide",
+    tabId: "infraestrutura",
+    tabLabel: "Infraestrutura e Segurança",
+    sectionLabel: "Salas Climatizadas por DRE",
+    contentId: "infra-energia-tabela",
+  },
+  {
+    id: "infra-seguranca",
+    tabId: "infraestrutura",
+    tabLabel: "Infraestrutura e Segurança",
+    sectionLabel: "Segurança Física e Patrimonial",
+    contentId: "infra-seguranca-indicadores,infra-seguranca-acesso,infra-seguranca-iluminacao,infra-seguranca-perimetro",
+  },
 
-  ...createSlides("merenda", "Merenda Escolar", "Oferta e Adequação da Merenda", [
-    ["merenda-oferta-resumo", "Indicadores gerais"],
-    ["merenda-oferta-graficos", "Regularidade da oferta"],
-    ["merenda-oferta-necessidades", "Qualidade e atendimento"],
-  ]),
-  ...createSlides("merenda", "Merenda Escolar", "Estrutura Física da Cozinha", [
-    ["merenda-estrutura-cozinha", "Condições da cozinha e refeitório"],
-    ["merenda-estrutura-refeitorio", "Tamanho e adequação"],
-  ]),
-  ...createSlides("merenda", "Merenda Escolar", "Equipamentos da Merenda", [
-    ["merenda-equipamentos-cards", "Inventário geral"],
-    ["merenda-equipamentos-cobertura", "Cobertura por tipo"],
-    ["merenda-equipamentos-criticidade", "Médias e criticidade"],
-    ["merenda-equipamentos-conservacao", "Estado de conservação"],
-    ["merenda-equipamentos-tabela", "Distribuição dos estados"],
-  ]),
-  ...createSlides("merenda", "Merenda Escolar", "Condições Sanitárias e Segurança", [
-    ["merenda-sanitarias-armazenamento", "Armazenamento dos alimentos"],
-    ["merenda-sanitarias-itens", "Presença de itens básicos"],
-    ["merenda-sanitarias-seguranca", "EPIs e extintores"],
-  ]),
+  {
+    id: "merenda-oferta",
+    tabId: "merenda",
+    tabLabel: "Merenda Escolar",
+    sectionLabel: "Oferta e Adequação da Merenda",
+    contentId: "merenda-oferta-resumo,merenda-oferta-graficos,merenda-oferta-necessidades",
+  },
+  {
+    id: "merenda-estrutura",
+    tabId: "merenda",
+    tabLabel: "Merenda Escolar",
+    sectionLabel: "Estrutura Física da Cozinha",
+    contentId: "merenda-estrutura-cozinha,merenda-estrutura-refeitorio",
+  },
+  {
+    id: "merenda-equipamentos",
+    tabId: "merenda",
+    tabLabel: "Merenda Escolar",
+    sectionLabel: "Equipamentos da Merenda - Visão Geral",
+    contentId: "merenda-equipamentos-cards,merenda-equipamentos-cobertura,merenda-equipamentos-criticidade,merenda-equipamentos-conservacao",
+  },
+  {
+    id: "merenda-equipamentos-tabela-slide",
+    tabId: "merenda",
+    tabLabel: "Merenda Escolar",
+    sectionLabel: "Equipamentos da Merenda - Distribuição por DRE",
+    contentId: "merenda-equipamentos-tabela",
+  },
+  {
+    id: "merenda-sanitarias",
+    tabId: "merenda",
+    tabLabel: "Merenda Escolar",
+    sectionLabel: "Condições Sanitárias e Segurança",
+    contentId: "merenda-sanitarias-armazenamento,merenda-sanitarias-itens,merenda-sanitarias-seguranca",
+  },
 
-  ...createSlides("servicos", "Serviços Terceirizados", "Visão Geral", [
-    ["servicos-visao-resumo", "Indicadores gerais"],
-    ["servicos-visao-cobertura", "Cobertura por área"],
-  ]),
-  ...createSlides("servicos", "Serviços Terceirizados", "Serviços Gerais", [
-    ["servicos-gerais-indicadores", "Quadro geral"],
-    ["servicos-gerais-distribuicao", "Vínculos e empresas"],
-  ]),
-  ...createSlides("servicos", "Serviços Terceirizados", "Portaria", [
-    ["servicos-portaria-indicadores", "Indicadores gerais"],
-    ["servicos-portaria-empresas", "Empresas prestadoras"],
-  ]),
-  ...createSlides("servicos", "Serviços Terceirizados", "Manipuladores de Alimentos", [
-    ["servicos-manipuladores-indicadores", "Quadro geral"],
-    ["servicos-manipuladores-distribuicao", "Vínculos e atendimento"],
-    ["servicos-manipuladores-empresas", "Empresas prestadoras"],
-  ]),
-  ...createSlides("servicos", "Serviços Terceirizados", "Governança e Supervisão", [
-    ["servicos-governanca-aviso", "Disponibilidade dos indicadores"],
-  ]),
+  {
+    id: "servicos-visao",
+    tabId: "servicos",
+    tabLabel: "Serviços Terceirizados",
+    sectionLabel: "Visão Geral",
+    contentId: "servicos-visao-resumo,servicos-visao-cobertura",
+  },
+  {
+    id: "servicos-gerais",
+    tabId: "servicos",
+    tabLabel: "Serviços Terceirizados",
+    sectionLabel: "Serviços Gerais",
+    contentId: "servicos-gerais-indicadores,servicos-gerais-distribuicao",
+  },
+  {
+    id: "servicos-portaria",
+    tabId: "servicos",
+    tabLabel: "Serviços Terceirizados",
+    sectionLabel: "Portaria",
+    contentId: "servicos-portaria-indicadores,servicos-portaria-empresas",
+  },
+  {
+    id: "servicos-manipuladores",
+    tabId: "servicos",
+    tabLabel: "Serviços Terceirizados",
+    sectionLabel: "Manipuladores de Alimentos",
+    contentId: "servicos-manipuladores-indicadores,servicos-manipuladores-distribuicao,servicos-manipuladores-empresas",
+  },
+  {
+    id: "servicos-governanca",
+    tabId: "servicos",
+    tabLabel: "Serviços Terceirizados",
+    sectionLabel: "Governança e Supervisão",
+    contentId: "servicos-governanca-aviso",
+  },
 
-  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Visão Geral dos Alunos", [
-    ["alunos-visao-indicadores", "Indicadores gerais"],
-  ]),
-  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Distribuição por Faixa", [
-    ["alunos-faixas-distribuicao", "Beneficiários e abandono"],
-  ]),
-  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Abandono e Risco", [
-    ["alunos-abandono-risco", "DREs com maior taxa de abandono"],
-  ]),
+  {
+    id: "alunos-visao",
+    tabId: "alunos",
+    tabLabel: "Perfil dos Alunos e Resultados",
+    sectionLabel: "Visão Geral dos Alunos",
+    contentId: "alunos-visao-indicadores",
+  },
+  {
+    id: "alunos-faixas",
+    tabId: "alunos",
+    tabLabel: "Perfil dos Alunos e Resultados",
+    sectionLabel: "Distribuição por Faixa",
+    contentId: "alunos-faixas-distribuicao",
+  },
+  {
+    id: "alunos-abandono",
+    tabId: "alunos",
+    tabLabel: "Perfil dos Alunos e Resultados",
+    sectionLabel: "Abandono e Risco",
+    contentId: "alunos-abandono-risco",
+  },
 
-  ...createSlides("saude", "Saúde Operacional", "Resumo da Saúde Operacional", [
-    ["saude-resumo-indicadores", "Indicadores gerais"],
-  ]),
-  ...createSlides("saude", "Saúde Operacional", "Escolas por Índice de Saúde", [
-    ["saude-escolas-tabela", "Tabela por escola"],
-  ]),
+  {
+    id: "saude-resumo",
+    tabId: "saude",
+    tabLabel: "Saúde Operacional",
+    sectionLabel: "Resumo da Saúde Operacional",
+    contentId: "saude-resumo-indicadores",
+  },
+  {
+    id: "saude-escolas",
+    tabId: "saude",
+    tabLabel: "Saúde Operacional",
+    sectionLabel: "Escolas por Índice de Saúde",
+    contentId: "saude-escolas-tabela",
+  },
 ];
 
 function removeActiveSlideState() {
@@ -216,13 +297,20 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
 
     const tryActivate = () => {
       removeActiveSlideState();
-      const element = document.querySelector<HTMLElement>(
-        `[data-pres-slide="${target.contentId}"]`,
-      );
+      const ids = target.contentId.split(",");
+      let foundCount = 0;
+      ids.forEach((id) => {
+        const element = document.querySelector<HTMLElement>(
+          `[data-pres-slide="${id.trim()}"]`,
+        );
+        if (element) {
+          element.classList.add("ca-pres-slide-active");
+          element.setAttribute("aria-current", "true");
+          foundCount++;
+        }
+      });
 
-      if (element) {
-        element.classList.add("ca-pres-slide-active");
-        element.setAttribute("aria-current", "true");
+      if (foundCount === ids.length) {
         setSlideStatus("found");
         return true;
       }
@@ -308,6 +396,63 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
 
     return () => clearInterval(timer);
   }, [isPlaying, slideStatus, duration, goNext]);
+
+  // Efeito para rolar automaticamente os elementos com scroll durante a reprodução automática
+  useEffect(() => {
+    if (!isPlaying || slideStatus !== "found") {
+      return;
+    }
+
+    // Busca primeiro uma tabela com scroll ativa
+    let scrollableEl = document.querySelector<HTMLElement>(
+      ".ca-pres-slide-active [data-pres-table-scroll='true']"
+    );
+
+    // Se não houver tabela com scroll, tenta rolar a página inteira (.admin-page)
+    if (!scrollableEl) {
+      scrollableEl = document.querySelector<HTMLElement>(
+        ".censo-admin .ca-app.presenting .admin-page"
+      );
+    }
+
+    if (!scrollableEl) return;
+
+    // Reinicia o scroll ao carregar o slide
+    scrollableEl.scrollTop = 0;
+
+    let animationFrameId: number;
+    let lastTime = performance.now();
+    let currentScroll = 0;
+
+    const animate = (time: number) => {
+      const deltaTime = (time - lastTime) / 1000; // segundos
+      lastTime = time;
+
+      const totalScroll = scrollableEl.scrollHeight - scrollableEl.clientHeight;
+      if (totalScroll <= 0) {
+        animationFrameId = requestAnimationFrame(animate);
+        return;
+      }
+
+      // Calcula velocidade para atingir o fim da rolagem em 85% da duração do slide
+      const scrollSpeed = totalScroll / (duration * 0.85); // pixels por segundo
+
+      currentScroll += scrollSpeed * deltaTime;
+      if (currentScroll >= totalScroll) {
+        scrollableEl.scrollTop = totalScroll;
+        return; // Chegou ao fim, encerra animação
+      }
+
+      scrollableEl.scrollTop = currentScroll;
+      animationFrameId = requestAnimationFrame(animate);
+    };
+
+    animationFrameId = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [isPlaying, slideStatus, duration]);
 
   useEffect(() => {
     const initialTimer = window.setTimeout(() => goToSlide(0), 0);

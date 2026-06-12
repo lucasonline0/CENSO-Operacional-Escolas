@@ -11,6 +11,7 @@ type PresentationTab =
   | "merenda"
   | "servicos"
   | "alunos"
+  | "governanca"
   | "saude";
 
 type PresentationSlide = {
@@ -156,6 +157,23 @@ const SLIDES: PresentationSlide[] = [
   ]),
   ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Abandono e Risco", [
     ["alunos-abandono-risco", "DREs com maior taxa de abandono"],
+  ]),
+
+  ...createSlides("governanca", "Gestão Financeira e Governança", "Visão Geral Financeira", [
+    ["financeiro-resumo-cards", "Indicadores financeiros"],
+  ]),
+  ...createSlides("governanca", "Gestão Financeira e Governança", "Execução por Ano", [
+    ["financeiro-evolucao-ano", "Evolução anual"],
+  ]),
+  ...createSlides("governanca", "Gestão Financeira e Governança", "Prestação de Contas", [
+    ["financeiro-prestacao-status", "Status de prestação de contas"],
+  ]),
+  ...createSlides("governanca", "Gestão Financeira e Governança", "Vínculo Cadastral", [
+    ["financeiro-vinculo-cadastral", "Vínculo financeiro-cadastral"],
+  ]),
+  ...createSlides("governanca", "Gestão Financeira e Governança", "Rankings de Escolas", [
+    ["financeiro-ranking-recebido", "Maiores valores recebidos"],
+    ["financeiro-ranking-reprogramado", "Maiores valores reprogramados"],
   ]),
 
   ...createSlides("saude", "Saúde Operacional", "Resumo da Saúde Operacional", [

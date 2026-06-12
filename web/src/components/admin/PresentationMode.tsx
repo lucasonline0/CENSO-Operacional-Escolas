@@ -45,26 +45,20 @@ function createSlides(
 
 const SLIDES: PresentationSlide[] = [
   ...createSlides("perfil", "Caracterização da Rede", "Dimensão e Perfil da Rede", [
-    ["perfil-dimensao-indicadores", "Indicadores gerais"],
-    ["perfil-dimensao-distribuicao", "Distribuição das escolas"],
-    ["perfil-dimensao-matriculas", "Matrículas por porte"],
+    ["perfil-dimensao-indicadores", "Indicadores, distribuição e matrículas"],
   ]),
   ...createSlides("perfil", "Caracterização da Rede", "Organização da Oferta e Funcionamento", [
-    ["perfil-oferta-etapas", "Etapas e modalidades"],
-    ["perfil-oferta-turnos", "Turnos de funcionamento"],
+    ["perfil-oferta-etapas", "Etapas, modalidades e turnos"],
   ]),
   ...createSlides("perfil", "Caracterização da Rede", "Infraestrutura Educacional", [
-    ["perfil-infra-indicadores", "Indicadores de cobertura"],
-    ["perfil-infra-ambientes", "Ambientes essenciais"],
-    ["perfil-infra-media", "Média por porte"],
+    ["perfil-infra-indicadores", "Indicadores, ambientes e média por porte"],
   ]),
   ...createSlides("perfil", "Caracterização da Rede", "Detalhamento por DRE", [
     ["perfil-dre-tabela", "Tabela consolidada"],
   ]),
 
   ...createSlides("pessoal", "Pessoal e Gestão Escolar", "Estrutura de Gestão Escolar", [
-    ["pessoal-estrutura-resumo", "Indicadores gerais"],
-    ["pessoal-estrutura-composicao", "Composição da gestão"],
+    ["pessoal-estrutura-resumo", "Indicadores e composição da gestão"],
   ]),
   ...createSlides("pessoal", "Pessoal e Gestão Escolar", "Coordenação Pedagógica", [
     ["pessoal-coordenacao", "Cobertura e composição"],
@@ -166,10 +160,14 @@ const SLIDES: PresentationSlide[] = [
   ]),
 ];
 
+// top padding (49px) + bottom padding (24px) + breathing room (16px)
+const PRES_PAGE_PADDING = 89;
+
 function removeActiveSlideState() {
   document.querySelectorAll<HTMLElement>("[data-pres-slide]").forEach((element) => {
     element.classList.remove("ca-pres-slide-active");
     element.removeAttribute("aria-current");
+    element.style.zoom = "";
   });
 }
 
@@ -211,6 +209,26 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
     }
   }, []);
 
+  const applySlideZoom = useCallback((element: HTMLElement) => {
+    const measure = () => {
+      const available = window.innerHeight - PRES_PAGE_PADDING;
+      const natural = element.scrollHeight;
+      if (natural > 0 && available > 0) {
+        element.style.zoom = (available / natural).toFixed(3);
+      }
+    };
+
+    element.style.zoom = "1";
+    requestAnimationFrame(measure);
+
+    // Re-measure after async data may have loaded (e.g. HBarChart rows)
+    window.setTimeout(() => {
+      if (!element.classList.contains("ca-pres-slide-active")) return;
+      element.style.zoom = "1";
+      requestAnimationFrame(measure);
+    }, 800);
+  }, []);
+
   const activateSlideWithRetry = useCallback((target: PresentationSlide, navigationToken: number) => {
     clearRetryTimer();
 
@@ -223,6 +241,8 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
       if (element) {
         element.classList.add("ca-pres-slide-active");
         element.setAttribute("aria-current", "true");
+        applySlideZoom(element);
+        retryTimerRef.current = null;
         setSlideStatus("found");
         return true;
       }
@@ -348,14 +368,20 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
   }, [goNext, goPrev, onClose]);
 
   useEffect(() => {
+    const handleResize = () => {
+      const active = document.querySelector<HTMLElement>("[data-pres-slide].ca-pres-slide-active");
+      if (active) applySlideZoom(active);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [applySlideZoom]);
+
+  useEffect(() => {
     const previousBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
-    // Entra no modo tela cheia (Fullscreen) ao iniciar a apresentação
-    if (document.documentElement.requestFullscreen) {
-      document.documentElement.requestFullscreen().catch((err) => {
-        console.warn("Não foi possível entrar no modo tela cheia:", err);
-      });
+    if (document.fullscreenEnabled && !document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
     }
 
     return () => {
@@ -363,12 +389,8 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
       clearRetryTimer();
       removeActiveSlideState();
       document.body.style.overflow = previousBodyOverflow;
-
-      // Sai do modo tela cheia (Fullscreen) ao fechar a apresentação
-      if (document.fullscreenElement && document.exitFullscreen) {
-        document.exitFullscreen().catch((err) => {
-          console.warn("Não foi possível sair do modo tela cheia:", err);
-        });
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
       }
     };
   }, [clearRetryTimer]);
@@ -481,14 +503,7 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
           </button>
         </div>
 
-        {/* Barra de Progresso do Timer */}
-        <div className="ca-pres-progress-bar-container">
-          <div
-            className={`ca-pres-progress-bar-fill ${slideStatus !== "found" ? "waiting" : ""}`}
-            style={{ width: `${slideStatus === "found" ? progress : 0}%` }}
-          />
-        </div>
-      </header>
+
     </div>
   );
 }

@@ -440,7 +440,7 @@ export function AbaGestaoFinanceiraGovernanca({
                   <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-200">
                     <th className="py-2 pr-3 font-semibold">Status</th>
                     <th className="py-2 px-3 font-semibold text-right">Registros</th>
-                    <th className="py-2 px-3 font-semibold text-right">Escolas</th>
+                    <th className="py-2 px-3 font-semibold text-right">Escolas com ocorrência</th>
                     <th className="py-2 px-3 font-semibold text-right">Recebido</th>
                     <th className="py-2 pl-3 font-semibold text-right">Reprogramado</th>
                   </tr>
@@ -461,6 +461,11 @@ export function AbaGestaoFinanceiraGovernanca({
           ) : (
             <NoData />
           )}
+          <p className="mt-3 text-xs text-slate-500">
+            Uma escola pode aparecer em mais de um status, pois os registros PRODEP são
+            separados por ano e categoria. Por isso, a soma das escolas por status pode
+            exceder o total de escolas do recorte.
+          </p>
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import {
   Landmark, AlertCircle, Loader2, Wallet, RefreshCcw, Percent,
   Building2, Link2, Unlink, CalendarRange, FileCheck2, Network, Trophy,
+  ShieldCheck, Users, UserCheck, AlertTriangle, Award,
 } from "lucide-react";
 import { apiFetch } from "./shared/api";
 import { C } from "./shared/constants";
@@ -89,6 +90,33 @@ type ProdepFinanceiroPayload = {
   };
 };
 
+// ── Governança Institucional (Censo, PR 1) ──────────────────────────────────
+// Payload de GET /v1/admin/analytics/financeiro-governanca/institucional.
+// Fonte: respostas concluídas do Censo (não usa `ano` nem dados PRODEP).
+
+type GovernancaIndicador = {
+  total: number;
+  denominador: number;
+  percentual: number;
+};
+
+type GovernancaInstitucionalPayload = {
+  resumo: {
+    totalEscolas: number;
+    regularizadasCEE: GovernancaIndicador;
+    conselhoConstituido: GovernancaIndicador;
+    conselhoAtivo: GovernancaIndicador;
+    conselhoParcialmenteAtivo: GovernancaIndicador;
+    governancaCompleta: GovernancaIndicador;
+    governancaCritica: GovernancaIndicador;
+  };
+  metadados: {
+    fonte: string;
+    statusRespostas: string;
+    observacao: string;
+  };
+};
+
 type AbaGestaoFinanceiraGovernancaProps = {
   token: string;
   onUnauth: () => void;
@@ -108,6 +136,18 @@ function buildFinanceiroParams(filters?: DashboardFilters): string {
   if (filters?.dre) p.set("dre", filters.dre);
   if (filters?.municipio) p.set("municipio", filters.municipio);
   if (filters?.regiao_integracao) p.set("ri", filters.regiao_integracao);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
+
+// Governança Institucional usa APENAS os filtros globais aplicáveis ao Censo:
+// dre, municipio, zona. NÃO envia `ano` (o bloco usa as respostas concluídas do
+// Censo atual) nem `ri`/filtros PRODEP — mantido separado de buildFinanceiroParams.
+function buildGovernancaInstitucionalParams(filters?: DashboardFilters): string {
+  const p = new URLSearchParams();
+  if (filters?.dre) p.set("dre", filters.dre);
+  if (filters?.municipio) p.set("municipio", filters.municipio);
+  if (filters?.zona) p.set("zona", filters.zona);
   const s = p.toString();
   return s ? `?${s}` : "";
 }
@@ -241,7 +281,11 @@ function RankingTable({ rows }: { rows: ProdepRankingEscola[] }) {
   );
 }
 
-export function AbaGestaoFinanceiraGovernanca({
+// ProdepFinanceiroBlock — bloco financeiro PRODEP (conteúdo original da aba).
+// Mantido idêntico; apenas extraído para um componente interno para que a
+// Governança Institucional (Censo) seja renderizada de forma independente,
+// sem ser ocultada pelos estados de loading/erro/vazio do PRODEP.
+function ProdepFinanceiroBlock({
   token, onUnauth, filters, onLoadComplete,
 }: AbaGestaoFinanceiraGovernancaProps) {
   const [data, setData] = useState<ProdepFinanceiroPayload | null>(null);
@@ -550,6 +594,140 @@ export function AbaGestaoFinanceiraGovernanca({
       <p data-pres-hide="true" className="text-xs text-slate-400">
         {data.metadados.observacao}
       </p>
+    </div>
+  );
+}
+
+// ── Governança Institucional (Censo, PR 1) ──────────────────────────────────
+// Bloco autônomo, com fetch/loading/erro próprios, para que apareça
+// independentemente do estado dos dados PRODEP. Fonte: respostas concluídas do
+// Censo. Filtros aplicáveis: dre, municipio, zona (nunca `ano`).
+function GovernancaInstitucionalBlock({
+  token, onUnauth, filters,
+}: {
+  token: string;
+  onUnauth: () => void;
+  filters?: DashboardFilters;
+}) {
+  const [data, setData] = useState<GovernancaInstitucionalPayload | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setData(null);
+    setError("");
+
+    const qs = buildGovernancaInstitucionalParams(filters);
+
+    apiFetch<GovernancaInstitucionalPayload>(
+      `/v1/admin/analytics/financeiro-governanca/institucional${qs}`, token,
+    )
+      .then((d) => { if (!cancelled) setData(d); })
+      .catch((e: unknown) => {
+        const msg = (e as Error).message;
+        if (msg === "UNAUTHORIZED") { if (!cancelled) onUnauth(); return; }
+        if (!cancelled) setError(msg);
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [token, onUnauth, filters]);
+
+  return (
+    <div className="space-y-4">
+      <SectionHeader id="sec-governanca-institucional" Icon={Landmark} title="Governança Institucional" />
+
+      <div data-pres-hide="true" className="flex items-center gap-2 text-xs text-sky-700">
+        <span className="inline-block w-2 h-2 rounded-full bg-sky-500" />
+        <span>Fonte: Censo Operacional · respostas concluídas</span>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12 text-slate-400">
+          <Loader2 className="animate-spin mr-2" size={20} style={{ color: C.primary }} />
+          Carregando indicadores de governança…
+        </div>
+      ) : error ? (
+        <div className="flex items-start gap-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl px-4 py-3 text-sm">
+          <AlertCircle size={16} className="shrink-0 mt-0.5" />
+          Não foi possível carregar a governança institucional: {error}
+        </div>
+      ) : !data ? (
+        <NoData />
+      ) : (
+        <div data-pres-slide="governanca-institucional-cards" className="space-y-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            <StatCard
+              label="Regularizadas no CEE/PA"
+              value={fmtInt(data.resumo.regularizadasCEE.total)}
+              Icon={ShieldCheck}
+              tone="green"
+              sub={`${fmtPct(data.resumo.regularizadasCEE.percentual)} de respostas concluídas`}
+            />
+            <StatCard
+              label="Conselho Escolar constituído"
+              value={fmtInt(data.resumo.conselhoConstituido.total)}
+              Icon={Users}
+              tone="blue"
+              sub={`${fmtPct(data.resumo.conselhoConstituido.percentual)} de respostas concluídas`}
+            />
+            <StatCard
+              label="Conselhos em funcionamento ativo"
+              value={fmtInt(data.resumo.conselhoAtivo.total)}
+              Icon={UserCheck}
+              tone="green"
+              sub={`${fmtPct(data.resumo.conselhoAtivo.percentual)} das escolas com conselho`}
+            />
+            <StatCard
+              label="Conselhos parcialmente ativos"
+              value={fmtInt(data.resumo.conselhoParcialmenteAtivo.total)}
+              Icon={AlertTriangle}
+              tone="amber"
+              sub={`${fmtPct(data.resumo.conselhoParcialmenteAtivo.percentual)} das escolas com conselho`}
+            />
+            <StatCard
+              label="Governança institucional completa"
+              value={fmtInt(data.resumo.governancaCompleta.total)}
+              Icon={Award}
+              tone="green"
+              sub={`${fmtPct(data.resumo.governancaCompleta.percentual)} de respostas concluídas`}
+            />
+            <StatCard
+              label="Governança incompleta/crítica"
+              value={fmtInt(data.resumo.governancaCritica.total)}
+              Icon={AlertTriangle}
+              tone="orange"
+              sub={`${fmtPct(data.resumo.governancaCritica.percentual)} com algum item = Não`}
+            />
+          </div>
+
+          {/* Nota metodológica do bloco */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-500 leading-relaxed">
+            Indicadores calculados a partir das respostas concluídas do Censo. O campo
+            {" "}<strong className="font-medium">&quot;Conselho ativo&quot;</strong> usa como denominador
+            apenas escolas com Conselho Escolar constituído.
+            {" "}<strong className="font-medium">Não informado</strong> não é tratado como Não.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// AbaGestaoFinanceiraGovernanca — composição da aba: Governança Institucional
+// (Censo) no topo, seguida do bloco financeiro PRODEP. Cada bloco gerencia seu
+// próprio fetch e estados, com filtros globais distintos.
+export function AbaGestaoFinanceiraGovernanca(props: AbaGestaoFinanceiraGovernancaProps) {
+  return (
+    <div className="space-y-8">
+      <GovernancaInstitucionalBlock
+        token={props.token}
+        onUnauth={props.onUnauth}
+        filters={props.filters}
+      />
+      <ProdepFinanceiroBlock {...props} />
     </div>
   );
 }

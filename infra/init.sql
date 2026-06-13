@@ -519,3 +519,52 @@ CREATE INDEX IF NOT EXISTS idx_prodep_repasses_school_id    ON prodep_repasses (
 CREATE INDEX IF NOT EXISTS idx_prodep_repasses_match_status ON prodep_repasses (match_status);
 CREATE INDEX IF NOT EXISTS idx_prodep_repasses_inep         ON prodep_repasses (codigo_inep_prodep);
 CREATE INDEX IF NOT EXISTS idx_prodep_repasses_batch        ON prodep_repasses (import_batch_id);
+
+-- =====================================================================
+-- vw_censo_governanca_institucional (espelho de
+-- infra/migrations/0016_vw_censo_governanca_institucional.sql)
+-- =====================================================================
+-- Governança Institucional (aba "Gestão Financeira e Governança", PR 1).
+-- Somente respostas concluídas. "Não informado"/vazio permanece NULL e
+-- nunca é convertido em "Não".
+-- =====================================================================
+
+CREATE OR REPLACE VIEW vw_censo_governanca_institucional AS
+WITH base AS (
+    SELECT
+        cr.id                                       AS census_id,
+        s.id                                        AS school_id,
+        s.codigo_inep,
+        s.nome_escola                               AS escola,
+        s.dre,
+        s.municipio,
+        s.zona,
+        NULLIF(cr.data->>'regularizada_cee', '')    AS regularizada_cee,
+        NULLIF(cr.data->>'conselho_escolar', '')    AS conselho_escolar,
+        NULLIF(cr.data->>'conselho_ativo', '')      AS conselho_ativo
+    FROM census_responses cr
+    JOIN schools s ON s.id = cr.school_id
+    WHERE cr.status = 'completed'
+)
+SELECT
+    census_id,
+    school_id,
+    codigo_inep,
+    escola,
+    dre,
+    municipio,
+    zona,
+    regularizada_cee,
+    conselho_escolar,
+    conselho_ativo,
+    (regularizada_cee = 'Sim')        AS is_regularizada_cee,
+    (conselho_escolar = 'Sim')        AS has_conselho_escolar,
+    (conselho_ativo = 'Sim')          AS is_conselho_ativo,
+    (conselho_ativo = 'Parcialmente') AS is_conselho_parcialmente_ativo,
+    (regularizada_cee = 'Sim'
+     AND conselho_escolar = 'Sim'
+     AND conselho_ativo = 'Sim')      AS is_governanca_completa,
+    (regularizada_cee = 'Não'
+     OR conselho_escolar = 'Não'
+     OR conselho_ativo = 'Não')       AS is_governanca_critica
+FROM base;

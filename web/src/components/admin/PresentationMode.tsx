@@ -143,14 +143,23 @@ const SLIDES: PresentationSlide[] = [
     ["servicos-governanca-aviso", "Disponibilidade dos indicadores"],
   ]),
 
-  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Visão Geral dos Alunos", [
-    ["alunos-visao-indicadores", "Indicadores gerais"],
+  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Resumo IDEB 2023", [
+    ["alunos-resumo-cards", "Indicadores gerais"],
   ]),
-  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Distribuição por Faixa", [
-    ["alunos-faixas-distribuicao", "Beneficiários e abandono"],
+  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Resultado por Etapa", [
+    ["alunos-etapa-tabela", "IDEB por etapa"],
   ]),
-  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Abandono e Risco", [
-    ["alunos-abandono-risco", "DREs com maior taxa de abandono"],
+  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Distribuição por Faixas", [
+    ["alunos-faixas-distribuicao", "Faixas de IDEB por etapa"],
+  ]),
+  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Ranking por Escola", [
+    ["alunos-ranking-escolas", "Maiores, menores e sem IDEB"],
+  ]),
+  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Resultado por DRE", [
+    ["alunos-dre-tabela", "Agregações por DRE e etapa"],
+  ]),
+  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Qualidade da Base", [
+    ["alunos-qualidade", "Indicadores de qualidade"],
   ]),
 
   ...createSlides("governanca", "Gestão Financeira e Governança", "Visão Geral Financeira", [

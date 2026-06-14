@@ -517,3 +517,105 @@ export interface FiltrosOpcoes {
   zonas: string[];
   escolas: FiltrosEscolaItem[];
 }
+
+// ── Perfil dos Alunos e Resultados — IDEB 2023 (IDEB-05) ────────────────────
+// Payload de GET /v1/admin/analytics/perfil-alunos-resultados/ideb.
+// Espelha exatamente o contrato definido em
+// api/cmd/api/analytics_perfil_alunos_ideb.go. IDEB ausente é `null`
+// (Sem IDEB divulgado), NUNCA zero.
+export interface IdebResumo {
+  ano_referencia: number;
+  total_registros: number;
+  total_escolas_inep: number;
+  registros_com_ideb: number;
+  registros_sem_ideb: number;
+  escolas_com_algum_ideb: number;
+  escolas_sem_ideb_em_qualquer_etapa: number;
+  cobertura_ideb_percentual: number;
+  registros_sem_match_schools: number;
+  ideb_medio_simples: number | null;
+  ideb_medio_ponderado: number | null;
+}
+
+export interface IdebPorEtapa {
+  etapa: string;
+  registros: number;
+  escolas: number;
+  registros_com_ideb: number;
+  registros_sem_ideb: number;
+  cobertura_ideb_percentual: number;
+  ideb_medio_simples: number | null;
+  ideb_medio_ponderado: number | null;
+  ideb_mediana: number | null;
+  ideb_min: number | null;
+  ideb_max: number | null;
+  total_avaliado: number | null;
+  percentual_avaliado_medio: number | null;
+  proficiencia_portugues_media: number | null;
+  proficiencia_matematica_media: number | null;
+  fluxo_medio: number | null;
+}
+
+export interface IdebFaixaItem {
+  etapa: string;
+  faixa: string;
+  registros: number;
+  percentual: number;
+}
+
+export interface IdebPorDre {
+  dre: string;
+  etapa: string;
+  registros: number;
+  escolas: number;
+  registros_com_ideb: number;
+  registros_sem_ideb: number;
+  ideb_medio_simples: number | null;
+  ideb_medio_ponderado: number | null;
+}
+
+export interface IdebRankingItem {
+  codigo_inep: string;
+  nome_escola_origem: string;
+  etapa: string;
+  ideb: number | null;
+  total_avaliado: number | null;
+  percentual_avaliado: number | null;
+  dre: string | null;
+  municipio: string | null;
+  status_ideb: string;
+  status_vinculo: string;
+}
+
+export interface IdebRankings {
+  maioresIdebs: IdebRankingItem[];
+  menoresIdebs: IdebRankingItem[];
+  semIdebDivulgado: IdebRankingItem[];
+  baixaParticipacao: IdebRankingItem[];
+}
+
+export interface IdebQualidade {
+  duplicidades_chave: number;
+  registros_nd_proficiencia: number;
+  percentuais_acima_100: number;
+  percentuais_abaixo_80: number;
+  registros_sem_match_schools: number;
+}
+
+export interface IdebMetadados {
+  fonte_arquivo: string;
+  fonte_metodologica: string;
+  grao: string;
+  import_batch_id: string | null;
+  observacoes: string[];
+}
+
+export interface IdebAnalytics {
+  resumo: IdebResumo;
+  porEtapa: IdebPorEtapa[];
+  distribuicaoFaixas: IdebFaixaItem[];
+  porDre: IdebPorDre[];
+  rankingEscolas: IdebRankings;
+  qualidade: IdebQualidade;
+  metadados: IdebMetadados;
+}

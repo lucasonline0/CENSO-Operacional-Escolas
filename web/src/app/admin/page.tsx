@@ -270,7 +270,17 @@ const NAV_INDICATORS: NavItem[] = [
       { label: "Governança / Supervisão", anchor: "sec-servicos-governanca" },
     ],
   },
-  { id: "alunos", label: "Perfil dos Alunos e Resultados", Icon: Activity },
+  {
+    id: "alunos", label: "Perfil dos Alunos e Resultados", Icon: Activity,
+    subItems: [
+      { label: "Resumo IDEB 2023", anchor: "sec-alunos-resumo" },
+      { label: "Resultado por Etapa", anchor: "sec-alunos-etapa" },
+      { label: "Distribuição por Faixas", anchor: "sec-alunos-faixas" },
+      { label: "Ranking por Escola", anchor: "sec-alunos-ranking" },
+      { label: "Resultado por DRE", anchor: "sec-alunos-dre" },
+      { label: "Qualidade da Base", anchor: "sec-alunos-qualidade" },
+    ],
+  },
   {
     id: "governanca", label: "Gestão Financeira e Governança", Icon: Landmark,
     subItems: [
@@ -626,7 +636,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             )}
             {visited.has("alunos") && (
               <div style={{ display: tab === "alunos" ? undefined : "none" }}>
-                <AbaPerfilAlunos token={token} onUnauth={logout} />
+                <AbaPerfilAlunos token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("governanca") && (

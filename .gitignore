@@ -35,3 +35,6 @@ key.json
 src/dev/
 
 .claude
+
+# Bases e artefatos locais de trabalho
+_local/

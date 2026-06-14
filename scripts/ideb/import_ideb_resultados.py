@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-IDEB-03A — Importador (dry-run) da base IDEB 2023 para a tabela ideb_resultados.
+IDEB — Importador da base IDEB 2023 para a tabela ideb_resultados.
 
 Este script lê a planilha oficial do IDEB 2023 (insumo local, NÃO versionado),
 valida colunas, normaliza campos, classifica status_ideb / detalhe_status_ideb,
-prepara o vínculo com schools por codigo_inep e gera um relatório de dry-run.
+resolve o vínculo com schools por codigo_inep e, em dry-run, gera um relatório.
 
 Modo padrão: --dry-run (seguro, NÃO escreve no banco).
-A carga real (--apply) é deliberadamente travada por confirmação extra e é
-escopo de um incremento POSTERIOR (IDEB-03B). Não use --apply nesta etapa.
+A carga real (--apply, habilitada no IDEB-03B) é deliberadamente protegida por
+três travas combinadas: --apply + --confirm-apply + --batch-id explícito. Sem as
+três, o script não escreve nada. A escrita usa exclusivamente
+INSERT ... ON CONFLICT (ano, codigo_inep, etapa) DO UPDATE — nunca TRUNCATE/DELETE.
 
 Regras metodológicas (docs/dashboard/perfil-alunos-resultados-ideb-2023.md e
 infra/migrations/0017_create_ideb_resultados.sql):
@@ -27,7 +29,7 @@ Exemplos de uso:
       --source _local/ideb/fontes/ideb_2023_iniciais_finais_medio.xlsx \
       --ano 2023 --dry-run
 
-  # Carga real (FUTURO — IDEB-03B; exige --confirm-apply):
+  # Carga real (IDEB-03B; exige as três travas combinadas):
   python scripts/ideb/import_ideb_resultados.py \
       --source _local/ideb/fontes/ideb_2023_iniciais_finais_medio.xlsx \
       --ano 2023 --apply --confirm-apply \
@@ -803,10 +805,12 @@ def linha_para_params(linha, ctx):
 
 
 def executar_apply(linhas, ctx, dsn):
-    """Executa a carga real (UPSERT) — RESERVADO para IDEB-03B.
+    """Executa a carga real (UPSERT) — habilitada no IDEB-03B.
 
-    Faz INSERT ... ON CONFLICT (ano, codigo_inep, etapa) DO UPDATE em transação.
-    Nunca usa TRUNCATE/DELETE. Esta função NÃO é chamada no escopo IDEB-03A.
+    Faz INSERT ... ON CONFLICT (ano, codigo_inep, etapa) DO UPDATE em uma única
+    transação (commit ao final, rollback automático em caso de erro). Nunca usa
+    TRUNCATE/DELETE e nunca altera created_at em update (apenas updated_at).
+    Só é chamada quando --apply + --confirm-apply + --batch-id estão presentes.
     """
     if not dsn:
         raise RuntimeError("--apply requer DSN de banco (DATABASE_URL/DB_DSN). Abortado.")
@@ -844,14 +848,18 @@ def parse_args(argv):
     p.add_argument(
         "--apply",
         action="store_true",
-        help="Carga real (RESERVADO para IDEB-03B). Exige também --confirm-apply.",
+        help="Carga real (UPSERT). Exige também --confirm-apply e --batch-id explícito.",
     )
     p.add_argument(
         "--confirm-apply",
         action="store_true",
         help="Confirmação explícita obrigatória para --apply.",
     )
-    p.add_argument("--batch-id", default=None, help="Identificador da carga (auditoria).")
+    p.add_argument(
+        "--batch-id",
+        default=None,
+        help="Identificador da carga (auditoria). OBRIGATÓRIO com --apply.",
+    )
     p.add_argument("--dsn", default=None, help="DSN do PostgreSQL (sobrepõe variáveis de ambiente).")
     p.add_argument(
         "--no-db",
@@ -870,21 +878,28 @@ def main(argv=None):
         args.dry_run = True
 
     if args.apply:
-        # IDEB-03A NÃO executa carga. A trava abaixo impede --apply nesta etapa.
+        # Carga real só prossegue com as TRÊS travas combinadas. Qualquer falha
+        # aqui aborta ANTES de ler a planilha e ANTES de qualquer conexão.
         if not args.confirm_apply:
             print(
                 "[ERRO] --apply exige confirmação explícita --confirm-apply.\n"
-                "       A carga real é escopo do IDEB-03B e NÃO deve ser executada agora.",
+                "       A carga real só roda com: --apply --confirm-apply --batch-id <id>.",
                 file=sys.stderr,
             )
             return 2
-        print(
-            "[ERRO] Carga real (--apply) está reservada para o incremento IDEB-03B.\n"
-            "       Esta versão do importador (IDEB-03A) não autoriza escrita no banco.\n"
-            "       Abortado por segurança.",
-            file=sys.stderr,
-        )
-        return 2
+        if not args.batch_id:
+            print(
+                "[ERRO] --apply exige --batch-id explícito (rastreabilidade/auditoria da carga).\n"
+                "       Ex.: --batch-id ideb_2023_YYYYMMDD_HHMMSS",
+                file=sys.stderr,
+            )
+            return 2
+        if args.no_db:
+            print(
+                "[ERRO] --apply é incompatível com --no-db (a carga real exige conexão).",
+                file=sys.stderr,
+            )
+            return 2
 
     # --- Validação da fonte ---
     if not os.path.isfile(args.source):
@@ -898,12 +913,13 @@ def main(argv=None):
     fonte_arquivo = os.path.basename(args.source)
     batch_id = args.batch_id or f"ideb_{args.ano}_{datetime.now():%Y%m%d_%H%M%S}"
 
+    modo_label = "apply (CARGA REAL — escreve no banco)" if args.apply else "dry-run (sem escrita)"
     print("=" * 70)
-    print("IDEB-03A — Importador (dry-run)")
+    print("IDEB — Importador IDEB 2023")
     print("=" * 70)
     print(f"Fonte ............. {args.source}")
     print(f"Ano ............... {args.ano}")
-    print(f"Modo .............. dry-run (sem escrita)")
+    print(f"Modo .............. {modo_label}")
     print(f"Batch-id .......... {batch_id}")
 
     # --- Leitura e normalização ---
@@ -947,6 +963,17 @@ def main(argv=None):
     else:
         print("DB ................ sem conexão (match real não executado)")
 
+    # Carga real exige conexão bem-sucedida para resolver o vínculo (school_id)
+    # ANTES de qualquer escrita. Sem match resolvido, nada é escrito.
+    if args.apply and not houve_conexao:
+        print(
+            "[ERRO] --apply requer conexão de banco bem-sucedida para resolver o vínculo "
+            "com schools antes da carga.\n"
+            "       Conexão indisponível; carga abortada (nada foi escrito).",
+            file=sys.stderr,
+        )
+        return 2
+
     alertas_nome = resolver_vinculo(linhas, schools_por_inep, houve_conexao)
 
     # --- Estatísticas ---
@@ -980,14 +1007,7 @@ def main(argv=None):
         "amostra": amostra_registros(linhas, 10),
     }
 
-    # --- Geração dos relatórios locais ---
-    os.makedirs(os.path.dirname(RELATORIO_MD), exist_ok=True)
-    with open(RELATORIO_MD, "w", encoding="utf-8") as f:
-        f.write(gerar_relatorio_md(ctx))
-    with open(RELATORIO_JSON, "w", encoding="utf-8") as f:
-        json.dump(gerar_relatorio_json(ctx), f, ensure_ascii=False, indent=2)
-
-    # --- Resumo no console ---
+    # --- Resumo no console (comum aos dois modos) ---
     print("-" * 70)
     print(f"Registros lidos ... {stats['total_registros']}")
     print(f"INEPs únicos ...... {stats['ineps_unicos']}")
@@ -1006,6 +1026,30 @@ def main(argv=None):
         for a in alertas:
             print(f"  - {a}")
     print("-" * 70)
+
+    # --- Carga real (apply) ---
+    if args.apply:
+        # As travas (confirm-apply, batch-id, conexão) já foram validadas acima.
+        if not dsn:
+            print("[ERRO] --apply requer DSN de banco (DATABASE_URL/DB_DSN).", file=sys.stderr)
+            return 2
+        if not _HAS_PSYCOPG:
+            print("[ERRO] --apply requer psycopg instalado.", file=sys.stderr)
+            return 2
+        print(f"Carga real ........ UPSERT (ON CONFLICT (ano, codigo_inep, etapa) DO UPDATE)")
+        print(f"Batch-id .......... {batch_id}")
+        print(f"Linhas a processar  {len(linhas)}")
+        processados = executar_apply(linhas, ctx, dsn)
+        print(f"Linhas processadas  {processados} (insert/update)")
+        print("Carga concluída. Valide as contagens read-only de pós-carga (protocolo IDEB-03B).")
+        return 0
+
+    # --- dry-run: gera relatórios locais (nenhuma escrita no banco) ---
+    os.makedirs(os.path.dirname(RELATORIO_MD), exist_ok=True)
+    with open(RELATORIO_MD, "w", encoding="utf-8") as f:
+        f.write(gerar_relatorio_md(ctx))
+    with open(RELATORIO_JSON, "w", encoding="utf-8") as f:
+        json.dump(gerar_relatorio_json(ctx), f, ensure_ascii=False, indent=2)
     print(f"Relatório MD ...... {RELATORIO_MD}")
     print(f"Relatório JSON .... {RELATORIO_JSON}")
     print("Nenhuma escrita executada no banco (dry-run).")

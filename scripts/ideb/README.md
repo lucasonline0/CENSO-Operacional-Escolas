@@ -4,9 +4,10 @@ Importador **versionado** da base oficial **IDEB 2023** (INEP) para a tabela
 `ideb_resultados` do dashboard próprio do Censo Operacional e Estrutural das
 Escolas da Rede Estadual da SEDUC/PA.
 
-Este utilitário corresponde ao incremento **IDEB-03A — Importador e dry-run**.
-Nesta etapa o script roda **somente em modo dry-run** (não escreve no banco). A
-carga real é escopo do incremento posterior **IDEB-03B**.
+Este utilitário cobre os incrementos **IDEB-03A — Importador e dry-run** e
+**IDEB-03B — apply controlado**. O modo padrão continua sendo o **dry-run**
+(não escreve no banco); a carga real (`--apply`) só roda com as três travas
+combinadas `--apply --confirm-apply --batch-id <id>`.
 
 > Referência metodológica:
 > [`docs/dashboard/perfil-alunos-resultados-ideb-2023.md`](../../docs/dashboard/perfil-alunos-resultados-ideb-2023.md)
@@ -18,9 +19,9 @@ carga real é escopo do incremento posterior **IDEB-03B**.
 2. valida as colunas esperadas (falha clara se faltar coluna);
 3. normaliza etapa, INEP e campos numéricos;
 4. classifica `status_ideb` e `detalhe_status_ideb`;
-5. prepara o vínculo com `schools` por `codigo_inep`;
-6. gera um relatório local de dry-run (Markdown + JSON);
-7. (futuro, IDEB-03B) carrega os dados via `INSERT ... ON CONFLICT DO UPDATE`.
+5. resolve o vínculo com `schools` por `codigo_inep`;
+6. em dry-run, gera um relatório local (Markdown + JSON);
+7. em apply (IDEB-03B), carrega os dados via `INSERT ... ON CONFLICT DO UPDATE`.
 
 ## Dados brutos ficam em `_local/` (NÃO versionado)
 
@@ -48,7 +49,7 @@ pip install -r scripts/ideb/requirements.txt
 
 - `openpyxl` — leitura da planilha (preserva INEP como texto).
 - `psycopg[binary]` — conexão PostgreSQL. **Opcional** no dry-run (só para
-  simular o match com `schools`); **obrigatória** para a carga real futura.
+  simular o match com `schools`); **obrigatória** para a carga real (`--apply`).
 
 Estas dependências são exclusivas deste utilitário Python — não são adicionadas
 ao backend Go nem ao frontend.
@@ -93,10 +94,10 @@ Comportamento conforme a disponibilidade de banco:
   match por `codigo_inep`, sem escrever nada;
 - **apply sem banco** → falha com mensagem clara.
 
-## Carga real futura (IDEB-03B) — NÃO executar agora
+## Carga real (IDEB-03B) — habilitada, sob travas
 
-A carga real é deliberadamente travada nesta versão. Quando autorizada
-(IDEB-03B), o fluxo previsto é:
+A carga real está habilitada, mas protegida por **três travas combinadas**. O
+fluxo é:
 
 ```bash
 python scripts/ideb/import_ideb_resultados.py \
@@ -109,9 +110,12 @@ python scripts/ideb/import_ideb_resultados.py \
 Regras de segurança da carga:
 
 - `--apply` exige confirmação explícita `--confirm-apply`;
+- `--apply` exige `--batch-id` explícito (rastreabilidade/auditoria);
+- `--apply` é incompatível com `--no-db` e exige conexão bem-sucedida (o vínculo
+  com `schools` é resolvido antes de qualquer escrita);
 - a carga usa `INSERT ... ON CONFLICT (ano, codigo_inep, etapa) DO UPDATE`;
 - **nunca** usa `TRUNCATE` nem `DELETE` amplo;
-- `created_at` não é alterado em update;
+- `created_at` não é alterado em update; apenas `updated_at` é atualizado;
 - **não rode `--apply` contra o banco compartilhado (Railway) sem autorização
   humana explícita.**
 

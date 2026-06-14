@@ -568,3 +568,126 @@ SELECT
      OR conselho_escolar = 'Não'
      OR conselho_ativo = 'Não')       AS is_governanca_critica
 FROM base;
+
+-- =====================================================================
+-- ideb_resultados — resultados oficiais do IDEB por escola (espelho de
+-- infra/migrations/0017_create_ideb_resultados.sql, sem dados)
+-- =====================================================================
+-- Fonte externa oficial: INEP — Nota Informativa IDEB 2023. Grão da tabela:
+-- 1 linha = ano × codigo_inep × etapa. codigo_inep é a chave de integração
+-- com schools e é preservado como texto; school_id é nullable (INEP pode não
+-- ter match em schools). ideb ausente ("-") é NULL, nunca 0 — ausência é
+-- cobertura/elegibilidade, não desempenho ruim. status_ideb é o status
+-- guarda-chuva executivo e detalhe_status_ideb preserva a granularidade
+-- técnica. percentual_avaliado NÃO é limitado a <= 100 (valores acima de 100
+-- na origem são preservados como alerta de qualidade). schools NÃO é alterada
+-- por esta estrutura; agregações por DRE/município são cálculo do dashboard,
+-- não IDEB oficial agregado.
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS ideb_resultados (
+    id                          SERIAL PRIMARY KEY,
+    ano                         INT NOT NULL,
+    codigo_inep                 VARCHAR(20) NOT NULL,
+    school_id                   INT NULL,
+    nome_escola_origem          VARCHAR(255) NOT NULL,
+    etapa                       VARCHAR(30) NOT NULL,
+    total_avaliado              NUMERIC(12,2) NULL,
+    percentual_avaliado         NUMERIC(8,2) NULL,
+    proficiencia_portugues      NUMERIC(8,2) NULL,
+    proficiencia_matematica     NUMERIC(8,2) NULL,
+    fluxo_indicador_rendimento  NUMERIC(6,4) NULL,
+    ideb                        NUMERIC(4,2) NULL,
+    status_ideb                 VARCHAR(30) NOT NULL,
+    detalhe_status_ideb         VARCHAR(30) NULL,
+    status_vinculo              VARCHAR(30) NOT NULL DEFAULT 'pendente_validacao',
+    fonte_arquivo               VARCHAR(255) NULL,
+    fonte_inep_url              TEXT NULL,
+    import_batch_id             VARCHAR(80) NULL,
+    created_at                  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at                  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Unicidade do grão (cria o índice único automaticamente; sem índice redundante).
+DO $$ BEGIN
+    ALTER TABLE ideb_resultados
+        ADD CONSTRAINT ideb_resultados_ano_inep_etapa_uniq
+        UNIQUE (ano, codigo_inep, etapa);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- FK nullable; ON DELETE SET NULL preserva o registro IDEB histórico.
+DO $$ BEGIN
+    ALTER TABLE ideb_resultados
+        ADD CONSTRAINT ideb_resultados_school_id_fk
+        FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE ideb_resultados
+        ADD CONSTRAINT ideb_resultados_etapa_chk
+        CHECK (etapa IN ('anos_iniciais', 'anos_finais', 'ensino_medio'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE ideb_resultados
+        ADD CONSTRAINT ideb_resultados_status_ideb_chk
+        CHECK (status_ideb IN ('com_ideb', 'sem_ideb_divulgado'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE ideb_resultados
+        ADD CONSTRAINT ideb_resultados_detalhe_status_chk
+        CHECK (detalhe_status_ideb IS NULL
+               OR detalhe_status_ideb IN ('sem_resultado', 'nd_proficiencia', 'outro'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Coerência: com_ideb => detalhe NULL; sem_ideb_divulgado => detalhe livre/NULL.
+DO $$ BEGIN
+    ALTER TABLE ideb_resultados
+        ADD CONSTRAINT ideb_resultados_status_coerencia_chk
+        CHECK (
+            (status_ideb = 'com_ideb' AND detalhe_status_ideb IS NULL)
+            OR status_ideb = 'sem_ideb_divulgado'
+        );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE ideb_resultados
+        ADD CONSTRAINT ideb_resultados_status_vinculo_chk
+        CHECK (status_vinculo IN ('match_inep', 'sem_match_inep',
+                                  'conflito_nome', 'pendente_validacao'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE ideb_resultados
+        ADD CONSTRAINT ideb_resultados_ano_chk
+        CHECK (ano >= 2005);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE ideb_resultados
+        ADD CONSTRAINT ideb_resultados_ideb_faixa_chk
+        CHECK (ideb IS NULL OR (ideb >= 0 AND ideb <= 10));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- NÃO limitar percentual_avaliado a <= 100 (valores acima de 100 são alerta).
+DO $$ BEGIN
+    ALTER TABLE ideb_resultados
+        ADD CONSTRAINT ideb_resultados_percentual_chk
+        CHECK (percentual_avaliado IS NULL OR percentual_avaliado >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+    ALTER TABLE ideb_resultados
+        ADD CONSTRAINT ideb_resultados_total_avaliado_chk
+        CHECK (total_avaliado IS NULL OR total_avaliado >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE INDEX IF NOT EXISTS idx_ideb_resultados_ano              ON ideb_resultados (ano);
+CREATE INDEX IF NOT EXISTS idx_ideb_resultados_codigo_inep      ON ideb_resultados (codigo_inep);
+CREATE INDEX IF NOT EXISTS idx_ideb_resultados_school_id        ON ideb_resultados (school_id);
+CREATE INDEX IF NOT EXISTS idx_ideb_resultados_etapa            ON ideb_resultados (etapa);
+CREATE INDEX IF NOT EXISTS idx_ideb_resultados_status_ideb      ON ideb_resultados (status_ideb);
+CREATE INDEX IF NOT EXISTS idx_ideb_resultados_status_vinculo   ON ideb_resultados (status_vinculo);
+CREATE INDEX IF NOT EXISTS idx_ideb_resultados_ano_etapa        ON ideb_resultados (ano, etapa);
+CREATE INDEX IF NOT EXISTS idx_ideb_resultados_ano_etapa_status ON ideb_resultados (ano, etapa, status_ideb);

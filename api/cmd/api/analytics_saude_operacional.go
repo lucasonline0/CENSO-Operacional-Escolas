@@ -997,10 +997,67 @@ func parseSaudeOperacionalFilters(q url.Values) saudeOperacionalFilters {
 	}
 }
 
+// saudeOperacionalDataProjectionSQL projeta, no PostgreSQL, apenas as chaves de
+// census_responses.data efetivamente lidas pelo cálculo da Saúde Operacional em
+// Go (calculateInfrastructure/Energy/Merenda/Security/People/Technology/
+// Governance + total_alunos/qtd_salas_aula). Substitui a transferência do JSONB
+// bruto e completo de cada censo concluído — o gargalo medido no diagnóstico
+// local (~91s para serializar/transferir o data inteiro de todos os censos).
+//
+// Usa `->` (e NÃO `->>`) para preservar o JSON original de cada chave: números
+// continuam números, de modo que decodeSaudeOperacionalData/parseOptionalFloat
+// seguem funcionando sem alteração. Chaves ausentes no data viram JSON null, que
+// o cálculo já trata como "não informado".
+//
+// Manter esta lista sincronizada com os campos lidos pelas funções de cálculo:
+// qualquer chave nova consumida em Go precisa ser adicionada aqui.
+const saudeOperacionalDataProjectionSQL = `jsonb_build_object(
+			'total_alunos', cr.data->'total_alunos',
+			'qtd_salas_aula', cr.data->'qtd_salas_aula',
+			'situacao_estrutura', cr.data->'situacao_estrutura',
+			'banheiros_vasos_funcionais', cr.data->'banheiros_vasos_funcionais',
+			'muro_cerca', cr.data->'muro_cerca',
+			'estrutura_climatizacao', cr.data->'estrutura_climatizacao',
+			'tipo_predio', cr.data->'tipo_predio',
+			'rede_eletrica_atende', cr.data->'rede_eletrica_atende',
+			'suporta_novos_equipamentos', cr.data->'suporta_novos_equipamentos',
+			'energia', cr.data->'energia',
+			'oferta_regular', cr.data->'oferta_regular',
+			'qualidade_merenda', cr.data->'qualidade_merenda',
+			'atende_necessidades', cr.data->'atende_necessidades',
+			'condicoes_cozinha', cr.data->'condicoes_cozinha',
+			'qtd_atende_necessidade_merenda', cr.data->'qtd_atende_necessidade_merenda',
+			'cameras_funcionamento', cr.data->'cameras_funcionamento',
+			'possui_guarita', cr.data->'possui_guarita',
+			'possui_botao_panico', cr.data->'possui_botao_panico',
+			'controle_portao', cr.data->'controle_portao',
+			'iluminacao_externa', cr.data->'iluminacao_externa',
+			'qtd_atende_necessidade_portaria', cr.data->'qtd_atende_necessidade_portaria',
+			'qtd_atende_necessidade_sg', cr.data->'qtd_atende_necessidade_sg',
+			'internet_disponivel', cr.data->'internet_disponivel',
+			'qualidade_internet', cr.data->'qualidade_internet',
+			'computadores_atendem', cr.data->'computadores_atendem',
+			'possui_projetor', cr.data->'possui_projetor',
+			'possui_direcao', cr.data->'possui_direcao',
+			'possui_secretario', cr.data->'possui_secretario',
+			'possui_coord_pedagogico', cr.data->'possui_coord_pedagogico',
+			'possui_vice_pedagogico', cr.data->'possui_vice_pedagogico',
+			'possui_vice_administrativo', cr.data->'possui_vice_administrativo',
+			'regularizada_cee', cr.data->'regularizada_cee',
+			'conselho_escolar', cr.data->'conselho_escolar',
+			'conselho_ativo', cr.data->'conselho_ativo'
+		)`
+
 // saudeOperacionalSelectSQL carrega TODAS as escolas cadastradas dentro do
 // recorte global e traz, via LEFT JOIN, o censo concluído ($1 = year). O LEFT
 // JOIN é essencial: escolas sem censo concluído continuam no resultado e são
 // classificadas como "sem_dados" pela camada de cálculo em Go.
+//
+// Em vez de devolver cr.data completo, projeta apenas as chaves usadas pelo
+// cálculo (saudeOperacionalDataProjectionSQL) para reduzir o volume transferido.
+// Para escolas sem censo concluído (cr.id IS NULL) a projeção é NULL: o código
+// retorna antes de decodificar o JSONB (ver buildSaudeOperacionalEscola), então
+// essas linhas permanecem "sem_dados" sem nenhuma transferência de data.
 //
 // Os filtros globais incidem sobre schools s (não sobre o censo), garantindo
 // que total_escolas, resumo e paginação reflitam o recorte global e que as
@@ -1021,7 +1078,7 @@ const saudeOperacionalSelectSQL = `
 		COALESCE(s.dre, ''),
 		s.zona,
 		cr.id,
-		cr.data
+		CASE WHEN cr.id IS NULL THEN NULL ELSE ` + saudeOperacionalDataProjectionSQL + ` END AS data
 	FROM schools s
 	LEFT JOIN census_responses cr
 	  ON cr.school_id = s.id

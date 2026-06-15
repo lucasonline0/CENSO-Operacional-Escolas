@@ -233,7 +233,7 @@ function SectionHeader({
 function RankingTable({ rows }: { rows: ProdepRankingEscola[] }) {
   if (rows.length === 0) return <NoData />;
   return (
-    <div className="overflow-x-auto">
+    <div data-pres-table-scroll="true" className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs uppercase tracking-wide text-slate-500 border-b border-slate-200">

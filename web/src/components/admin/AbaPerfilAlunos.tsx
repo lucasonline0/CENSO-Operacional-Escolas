@@ -402,40 +402,42 @@ export function AbaPerfilAlunos({
         borderTop
       />
       <div data-pres-slide="alunos-ranking-escolas" className="space-y-5">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 animate-fade-in-up">
-          <RankingCard
-            title="Maiores IDEBs"
-            subtitle="por etapa, IDEB divulgado"
-            Icon={TrendingUp}
-            tone="green"
-            items={rankingEscolas.maioresIdebs}
-          />
-          <RankingCard
-            title="Menores IDEBs"
-            subtitle="por etapa, IDEB divulgado"
-            Icon={TrendingDown}
-            tone="rose"
-            items={rankingEscolas.menoresIdebs}
-          />
-          <RankingCard
-            title="Sem IDEB divulgado"
-            subtitle="ausência — não é pior desempenho"
-            Icon={MinusCircle}
-            tone="amber"
-            items={rankingEscolas.semIdebDivulgado}
-            hideIdeb
-          />
+        <div data-pres-table-scroll="true" className="overflow-x-auto space-y-5">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 animate-fade-in-up">
+            <RankingCard
+              title="Maiores IDEBs"
+              subtitle="por etapa, IDEB divulgado"
+              Icon={TrendingUp}
+              tone="green"
+              items={rankingEscolas.maioresIdebs}
+            />
+            <RankingCard
+              title="Menores IDEBs"
+              subtitle="por etapa, IDEB divulgado"
+              Icon={TrendingDown}
+              tone="rose"
+              items={rankingEscolas.menoresIdebs}
+            />
+            <RankingCard
+              title="Sem IDEB divulgado"
+              subtitle="ausência — não é pior desempenho"
+              Icon={MinusCircle}
+              tone="amber"
+              items={rankingEscolas.semIdebDivulgado}
+              hideIdeb
+            />
+          </div>
+          {rankingEscolas.baixaParticipacao.length > 0 && (
+            <RankingCard
+              title="Baixa participação"
+              subtitle="percentual avaliado abaixo de 80%"
+              Icon={AlertCircle}
+              tone="orange"
+              items={rankingEscolas.baixaParticipacao}
+              showParticipacao
+            />
+          )}
         </div>
-        {rankingEscolas.baixaParticipacao.length > 0 && (
-          <RankingCard
-            title="Baixa participação"
-            subtitle="percentual avaliado abaixo de 80%"
-            Icon={AlertCircle}
-            tone="orange"
-            items={rankingEscolas.baixaParticipacao}
-            showParticipacao
-          />
-        )}
       </div>
 
       {/* ── 6. Por DRE ───────────────────────────────────────────────── */}

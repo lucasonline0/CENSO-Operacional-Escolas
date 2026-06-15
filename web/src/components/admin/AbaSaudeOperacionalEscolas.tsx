@@ -556,7 +556,7 @@ export function AbaSaudeOperacionalEscolas({
                       <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.seguranca} /></td>
                       <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.pessoal} /></td>
                       <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.tecnologia} /></td>
-                      <td className="px-3 py-3 text-center"><DimensionBadge value={null} /></td>
+                      <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.pedagogico} /></td>
                       <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.governanca} /></td>
                     </tr>
                   ))}
@@ -632,7 +632,8 @@ export function AbaSaudeOperacionalEscolas({
         <CircleHelp size={15} className="mt-0.5 shrink-0" />
         <span>
           Saúde, criticidade, status e notas dimensionais são exibidos conforme retornados pelo backend.
-          Pedagógico e Governança permanecem sem nota nesta versão.
+          As dimensões Pedagógico e Governança já estão habilitadas. Pedagógico utiliza o IDEB oficial
+          mais recente disponível na base.
         </span>
       </div>
     </div>

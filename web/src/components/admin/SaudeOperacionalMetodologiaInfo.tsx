@@ -32,6 +32,16 @@ const DIMENSOES: { nome: string; descricao: string }[] = [
     nome: "Tecnologia",
     descricao: "internet, computadores e projetores.",
   },
+  {
+    nome: "Pedagógico",
+    descricao:
+      "nota derivada do IDEB oficial mais recente disponível, convertida para escala 0–100.",
+  },
+  {
+    nome: "Governança",
+    descricao:
+      "equipe gestora, regularização institucional e conselho escolar constituído/ativo.",
+  },
 ];
 
 const PESOS_HABILITADOS: { nome: string; peso: string }[] = [
@@ -41,9 +51,6 @@ const PESOS_HABILITADOS: { nome: string; peso: string }[] = [
   { nome: "Segurança", peso: "15%" },
   { nome: "Pessoal", peso: "12%" },
   { nome: "Tecnologia", peso: "12%" },
-];
-
-const PESOS_PREVISTOS: { nome: string; peso: string }[] = [
   { nome: "Pedagógico", peso: "8%" },
   { nome: "Governança", peso: "8%" },
 ];
@@ -176,43 +183,25 @@ export default function SaudeOperacionalMetodologiaInfo() {
             <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Pesos da metodologia
             </h4>
-            <div className="mt-1 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-md bg-slate-50 p-2.5">
-                <p className="text-[11px] font-semibold text-slate-700">
-                  Habilitadas no cálculo atual
-                </p>
-                <ul className="mt-1 space-y-1">
-                  {PESOS_HABILITADOS.map((item) => (
-                    <li key={item.nome} className="flex justify-between gap-2">
-                      <span>{item.nome}</span>
-                      <span className="font-semibold text-slate-700">
-                        {item.peso}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="rounded-md bg-slate-50 p-2.5">
-                <p className="text-[11px] font-semibold text-slate-700">
-                  Previstas na metodologia
-                </p>
-                <ul className="mt-1 space-y-1">
-                  {PESOS_PREVISTOS.map((item) => (
-                    <li key={item.nome} className="flex justify-between gap-2">
-                      <span>{item.nome}</span>
-                      <span className="font-semibold text-slate-700">
-                        {item.peso}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            <div className="mt-1 rounded-md bg-slate-50 p-2.5">
+              <p className="text-[11px] font-semibold text-slate-700">
+                Habilitadas no cálculo atual
+              </p>
+              <ul className="mt-1 grid gap-x-6 gap-y-1 sm:grid-cols-2">
+                {PESOS_HABILITADOS.map((item) => (
+                  <li key={item.nome} className="flex justify-between gap-2">
+                    <span>{item.nome}</span>
+                    <span className="font-semibold text-slate-700">
+                      {item.peso}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
             <p className="mt-2 text-slate-500">
-              Os pesos da metodologia somam 100%. Nesta tela, o cálculo atual
-              considera apenas as dimensões habilitadas. Pedagógico e Governança
-              estão previstos metodologicamente, mas ainda não entram na nota
-              exibida.
+              Os pesos da metodologia somam 100% e todas as dimensões já estão
+              habilitadas no cálculo. Pedagógico é derivado do IDEB oficial,
+              convertido para a escala 0–100.
             </p>
           </section>
 
@@ -238,9 +227,9 @@ export default function SaudeOperacionalMetodologiaInfo() {
               censo e não recebem nota.
             </p>
             <p>
-              Nota metodológica: os pesos totais somam 100%. Nesta tela,
-              Pedagógico e Governança aparecem como dimensões previstas, mas
-              ainda não estão habilitadas no cálculo exibido.
+              Quando não há IDEB divulgado para a escola, a dimensão Pedagógico
+              permanece sem nota e o índice é recalculado pelos pesos
+              disponíveis — a ausência de dado oficial não vira zero.
             </p>
           </div>
         </div>

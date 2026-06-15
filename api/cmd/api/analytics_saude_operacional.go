@@ -20,7 +20,7 @@ import (
 
 const (
 	saudeOperacionalNome            = "Índice de Saúde Operacional por escola"
-	saudeOperacionalVersao          = "1.0.0"
+	saudeOperacionalVersao          = "1.1.0"
 	saudeOperacionalPageSizeDefault = 10
 )
 
@@ -31,6 +31,7 @@ var saudeOperacionalDimensoesHabilitadas = []string{
 	"seguranca",
 	"pessoal",
 	"tecnologia",
+	"governanca",
 }
 
 var saudeOperacionalPageSizes = map[int]bool{
@@ -422,13 +423,15 @@ func calculateSecurity(data map[string]any) *float64 {
 	)
 }
 
+// calculatePeople mede a suficiência de pessoal operacional/de apoio (merenda,
+// serviços gerais e portaria). As funções de gestão escolar (direção,
+// coordenação pedagógica, etc.) migraram para a dimensão Governança a partir do
+// Saúde-01B, evitando dupla contagem entre Pessoal/RH e Governança.
 func calculatePeople(data map[string]any) *float64 {
 	return meanValid(
 		scoreCategorical(data["qtd_atende_necessidade_merenda"], simNaoScores),
 		scoreCategorical(data["qtd_atende_necessidade_sg"], simNaoScores),
 		scoreCategorical(data["qtd_atende_necessidade_portaria"], simNaoScores),
-		scoreCategorical(data["possui_direcao"], simNaoScores),
-		scoreCategorical(data["possui_coord_pedagogico"], simNaoScores),
 	)
 }
 
@@ -455,6 +458,79 @@ func calculateTechnology(data map[string]any) *float64 {
 	)
 }
 
+// normalizeGovText extrai uma string do JSONB e a normaliza para comparação
+// tolerante (trim, minúsculas, sem acentos), reaproveitando normalizeSaudeSearch.
+// O segundo retorno indica se há, de fato, um valor preenchido para o campo:
+// valores ausentes, não-string ou vazios contam como "não informado".
+func normalizeGovText(value any) (string, bool) {
+	text, ok := value.(string)
+	if !ok {
+		return "", false
+	}
+	if strings.TrimSpace(text) == "" {
+		return "", false
+	}
+	return normalizeSaudeSearch(text), true
+}
+
+// calculateGovernance pontua a dimensão Governança (0–100): equipe gestora
+// (direção, secretário, coordenação pedagógica e, por regra OU, algum
+// vice-diretor), regularização institucional junto ao CEE/PA e conselho escolar
+// constituído/ativo. A comparação é case/acento-insensível.
+//
+// Se NENHUM campo candidato estiver presente no JSON, retorna nil para preservar
+// o padrão "sem dados". Se ao menos um campo existir, retorna número: respostas
+// "Não"/equivalentes/ausentes pontuam 0, mas não anulam a dimensão.
+func calculateGovernance(data map[string]any) *float64 {
+	var score float64
+	present := false
+
+	addSim := func(key string, points float64) {
+		norm, ok := normalizeGovText(data[key])
+		if !ok {
+			return
+		}
+		present = true
+		if norm == "sim" {
+			score += points
+		}
+	}
+
+	addSim("possui_direcao", 20)
+	addSim("possui_secretario", 10)
+	addSim("possui_coord_pedagogico", 10)
+
+	// Bloco de vice-diretor por regra OU: pontua se houver vice pedagógico OU
+	// administrativo. Considera-se presente se qualquer um dos campos existir.
+	vicePed, okPed := normalizeGovText(data["possui_vice_pedagogico"])
+	viceAdm, okAdm := normalizeGovText(data["possui_vice_administrativo"])
+	if okPed || okAdm {
+		present = true
+		if vicePed == "sim" || viceAdm == "sim" {
+			score += 10
+		}
+	}
+
+	addSim("regularizada_cee", 15)
+	addSim("conselho_escolar", 15)
+
+	// Conselho ativo: Sim=20, Parcialmente=10, demais (Não/vazio)=0.
+	if norm, ok := normalizeGovText(data["conselho_ativo"]); ok {
+		present = true
+		switch norm {
+		case "sim":
+			score += 20
+		case "parcialmente":
+			score += 10
+		}
+	}
+
+	if !present {
+		return nil
+	}
+	return ptrFloat(score)
+}
+
 func calculateSchoolHealth(data map[string]any) saudeOperacionalCalculation {
 	pesos := saudeOperacionalPesosMetodologia()
 	infraestrutura := calculateInfrastructure(data)
@@ -463,6 +539,7 @@ func calculateSchoolHealth(data map[string]any) saudeOperacionalCalculation {
 	seguranca := calculateSecurity(data)
 	pessoal := calculatePeople(data)
 	tecnologia := calculateTechnology(data)
+	governanca := calculateGovernance(data)
 
 	saudeRaw := weightedMeanValid(
 		weightedHealthValue{Value: infraestrutura, Weight: pesos.Infraestrutura},
@@ -471,6 +548,7 @@ func calculateSchoolHealth(data map[string]any) saudeOperacionalCalculation {
 		weightedHealthValue{Value: seguranca, Weight: pesos.Seguranca},
 		weightedHealthValue{Value: pessoal, Weight: pesos.Pessoal},
 		weightedHealthValue{Value: tecnologia, Weight: pesos.Tecnologia},
+		weightedHealthValue{Value: governanca, Weight: pesos.Governanca},
 	)
 	saude := roundOptional1(saudeRaw)
 
@@ -501,7 +579,7 @@ func calculateSchoolHealth(data map[string]any) saudeOperacionalCalculation {
 			Pessoal:        roundOptional1(pessoal),
 			Tecnologia:     roundOptional1(tecnologia),
 			Pedagogico:     nil,
-			Governanca:     nil,
+			Governanca:     roundOptional1(governanca),
 		},
 	}
 }

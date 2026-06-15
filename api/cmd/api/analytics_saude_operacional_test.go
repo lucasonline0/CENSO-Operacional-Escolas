@@ -192,9 +192,9 @@ func TestSaudeOperacionalWeights(t *testing.T) {
 	}
 
 	enabled := pesos.Infraestrutura + pesos.Energia + pesos.Merenda +
-		pesos.Seguranca + pesos.Pessoal + pesos.Tecnologia
-	if math.Abs(enabled-0.84) > 1e-12 {
-		t.Fatalf("enabled weights = %v; want 0.84", enabled)
+		pesos.Seguranca + pesos.Pessoal + pesos.Tecnologia + pesos.Governanca
+	if math.Abs(enabled-0.92) > 1e-12 {
+		t.Fatalf("enabled weights = %v; want 0.92", enabled)
 	}
 }
 
@@ -203,8 +203,8 @@ func TestSaudeOperacionalMethodologyMetadata(t *testing.T) {
 	if got.Nome != "Índice de Saúde Operacional por escola" {
 		t.Fatalf("nome = %q", got.Nome)
 	}
-	if got.Versao != "1.0.0" {
-		t.Fatalf("versao = %q; want 1.0.0", got.Versao)
+	if got.Versao != "1.1.0" {
+		t.Fatalf("versao = %q; want 1.1.0", got.Versao)
 	}
 
 	want := []string{
@@ -214,6 +214,7 @@ func TestSaudeOperacionalMethodologyMetadata(t *testing.T) {
 		"seguranca",
 		"pessoal",
 		"tecnologia",
+		"governanca",
 	}
 	if len(got.DimensoesHabilitadas) != len(want) {
 		t.Fatalf("dimensoes_habilitadas = %v; want %v", got.DimensoesHabilitadas, want)
@@ -293,7 +294,13 @@ func TestSaudeOperacionalCalculateSchoolHealth(t *testing.T) {
 		"qtd_atende_necessidade_portaria": "Sim",
 		"qtd_atende_necessidade_sg":       "Sim",
 		"possui_direcao":                  "Sim",
+		"possui_secretario":               "Sim",
 		"possui_coord_pedagogico":         "Sim",
+		"possui_vice_pedagogico":          "Sim",
+		"possui_vice_administrativo":      "Sim",
+		"regularizada_cee":                "Sim",
+		"conselho_escolar":                "Sim",
+		"conselho_ativo":                  "Sim",
 		"internet_disponivel":             "Sim",
 		"qualidade_internet":              "A internet é estável e atende plenamente às necessidades da escola",
 		"computadores_atendem":            "Sim",
@@ -318,9 +325,110 @@ func TestSaudeOperacionalCalculateSchoolHealth(t *testing.T) {
 	if got.Dimensoes.Pedagogico != nil {
 		t.Fatalf("pedagogico = %v; want nil", *got.Dimensoes.Pedagogico)
 	}
-	if got.Dimensoes.Governanca != nil {
-		t.Fatalf("governanca = %v; want nil", *got.Dimensoes.Governanca)
+	assertOptionalFloat(t, got.Dimensoes.Governanca, floatPointerForTest(100))
+}
+
+func TestCalculateGovernance(t *testing.T) {
+	tests := []struct {
+		name string
+		data map[string]any
+		want *float64
+	}{
+		{
+			name: "governanca completa",
+			data: map[string]any{
+				"possui_direcao":          "Sim",
+				"possui_secretario":       "Sim",
+				"possui_coord_pedagogico": "Sim",
+				"possui_vice_pedagogico":  "Sim",
+				"regularizada_cee":        "Sim",
+				"conselho_escolar":        "Sim",
+				"conselho_ativo":          "Sim",
+			},
+			want: floatPointerForTest(100),
+		},
+		{
+			name: "conselho parcialmente ativo",
+			data: map[string]any{
+				"possui_direcao":             "Sim",
+				"possui_secretario":          "Sim",
+				"possui_coord_pedagogico":    "Sim",
+				"possui_vice_administrativo": "Sim",
+				"regularizada_cee":           "Sim",
+				"conselho_escolar":           "Sim",
+				"conselho_ativo":             "Parcialmente",
+			},
+			want: floatPointerForTest(90),
+		},
+		{
+			name: "apenas direcao e cee",
+			data: map[string]any{
+				"possui_direcao":          "Sim",
+				"possui_secretario":       "Não",
+				"possui_coord_pedagogico": "Não",
+				"regularizada_cee":        "Sim",
+				"conselho_escolar":        "Não",
+			},
+			want: floatPointerForTest(35),
+		},
+		{
+			name: "vice por regra OU usa administrativo",
+			data: map[string]any{
+				"possui_vice_pedagogico":     "Não",
+				"possui_vice_administrativo": "Sim",
+			},
+			want: floatPointerForTest(10),
+		},
+		{
+			name: "tudo nao com variacoes de caixa e acento",
+			data: map[string]any{
+				"possui_direcao":             "nao",
+				"possui_secretario":          "NÃO",
+				"possui_coord_pedagogico":    " não ",
+				"possui_vice_pedagogico":     "Nao",
+				"possui_vice_administrativo": "não",
+				"regularizada_cee":           "Não",
+				"conselho_escolar":           "nÃo",
+				"conselho_ativo":             "Não",
+			},
+			want: floatPointerForTest(0),
+		},
+		{
+			name: "todos ausentes retorna nil",
+			data: map[string]any{
+				"situacao_estrutura": "Não necessita de reforma.",
+			},
+			want: nil,
+		},
 	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertOptionalFloat(t, calculateGovernance(tt.data), tt.want)
+		})
+	}
+}
+
+// TestCalculatePeopleExcludesGestao garante que, após o Saúde-01B, as funções de
+// gestão (direção e coordenação pedagógica) não influenciam mais Pessoal/RH, que
+// passa a medir apenas suficiência de pessoal operacional/de apoio.
+func TestCalculatePeopleExcludesGestao(t *testing.T) {
+	base := map[string]any{
+		"qtd_atende_necessidade_merenda":  "Sim",
+		"qtd_atende_necessidade_sg":       "Sim",
+		"qtd_atende_necessidade_portaria": "Sim",
+	}
+	withGestao := map[string]any{
+		"qtd_atende_necessidade_merenda":  "Sim",
+		"qtd_atende_necessidade_sg":       "Sim",
+		"qtd_atende_necessidade_portaria": "Sim",
+		"possui_direcao":                  "Não",
+		"possui_coord_pedagogico":         "Não",
+	}
+
+	assertOptionalFloat(t, calculatePeople(base), floatPointerForTest(100))
+	// "Não" em direção/coordenação não pode derrubar Pessoal/RH.
+	assertOptionalFloat(t, calculatePeople(withGestao), floatPointerForTest(100))
 }
 
 func TestSaudeOperacionalZeroAndCriticality(t *testing.T) {

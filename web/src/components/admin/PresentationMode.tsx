@@ -555,16 +555,44 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
       return;
     }
 
-    // Busca primeiro uma tabela com scroll ativa
-    let scrollableEl = document.querySelector<HTMLElement>(
-      ".ca-pres-slide-active [data-pres-table-scroll='true']"
-    );
+    let scrollableEl: HTMLElement | null = null;
+    const activeSlide = document.querySelector<HTMLElement>(".ca-pres-slide-active");
+    
+    if (activeSlide) {
+      // 1. Tenta encontrar elemento marcado com data-pres-table-scroll
+      scrollableEl = activeSlide.querySelector<HTMLElement>("[data-pres-table-scroll='true']");
+      
+      // 2. Se não achar, procura recursivamente por qualquer elemento interno com overflow vertical
+      if (!scrollableEl) {
+        const elements = activeSlide.querySelectorAll<HTMLElement>("*");
+        for (let i = 0; i < elements.length; i++) {
+          const el = elements[i];
+          const hasOverflow = el.scrollHeight > el.clientHeight + 15;
+          if (hasOverflow) {
+            const style = window.getComputedStyle(el);
+            const overflowY = style.overflowY || style.overflow || "";
+            if (
+              overflowY === "auto" ||
+              overflowY === "scroll" ||
+              el.classList.contains("overflow-auto") ||
+              el.classList.contains("overflow-y-auto")
+            ) {
+              scrollableEl = el;
+              break;
+            }
+          }
+        }
+      }
+    }
 
-    // Se não houver tabela com scroll, tenta rolar a página inteira (.admin-page)
+    // 3. Se não houver nenhum interno com scroll, tenta rolar a página inteira (.admin-page)
     if (!scrollableEl) {
-      scrollableEl = document.querySelector<HTMLElement>(
+      const adminPage = document.querySelector<HTMLElement>(
         ".censo-admin .ca-app.presenting .admin-page"
       );
+      if (adminPage && adminPage.scrollHeight > adminPage.clientHeight + 15) {
+        scrollableEl = adminPage;
+      }
     }
 
     if (!scrollableEl) return;

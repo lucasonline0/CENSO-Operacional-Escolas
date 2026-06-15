@@ -193,27 +193,46 @@ const SLIDES: PresentationSlide[] = [
     contentId: "servicos-governanca-aviso",
   },
 
-  {
-    id: "alunos-visao",
-    tabId: "alunos",
-    tabLabel: "Perfil dos Alunos e Resultados",
-    sectionLabel: "Visão Geral dos Alunos",
-    contentId: "alunos-visao-indicadores",
-  },
-  {
-    id: "alunos-faixas",
-    tabId: "alunos",
-    tabLabel: "Perfil dos Alunos e Resultados",
-    sectionLabel: "Distribuição por Faixa",
-    contentId: "alunos-faixas-distribuicao",
-  },
-  {
-    id: "alunos-abandono",
-    tabId: "alunos",
-    tabLabel: "Perfil dos Alunos e Resultados",
-    sectionLabel: "Abandono e Risco",
-    contentId: "alunos-abandono-risco",
-  },
+  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Resumo IDEB 2023", [
+    ["alunos-resumo-cards", "Indicadores gerais"],
+  ]),
+  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Resultado por Etapa", [
+    ["alunos-etapa-tabela", "IDEB por etapa"],
+  ]),
+  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Distribuição por Faixas", [
+    ["alunos-faixas-distribuicao", "Faixas de IDEB por etapa"],
+  ]),
+  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Ranking por Escola", [
+    ["alunos-ranking-escolas", "Maiores, menores e sem IDEB"],
+  ]),
+  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Resultado por DRE", [
+    ["alunos-dre-tabela", "Agregações por DRE e etapa"],
+  ]),
+  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Qualidade da Base", [
+    ["alunos-qualidade", "Indicadores de qualidade"],
+  ]),
+
+  ...createSlides("governanca", "Gestão Financeira e Governança", "Visão Geral Financeira", [
+    ["financeiro-resumo-cards", "Indicadores de repasses e despesas"],
+  ]),
+  ...createSlides("governanca", "Gestão Financeira e Governança", "Execução por Ano", [
+    ["financeiro-evolucao-ano", "Evolução histórica do programa"],
+  ]),
+  ...createSlides("governanca", "Gestão Financeira e Governança", "Status de Prestação", [
+    ["financeiro-prestacao-status", "Adimplência e regularidade das contas"],
+  ]),
+  ...createSlides("governanca", "Gestão Financeira e Governança", "Vínculo Cadastral", [
+    ["financeiro-vinculo-cadastral", "Associação com código Inep"],
+  ]),
+  ...createSlides("governanca", "Gestão Financeira e Governança", "Maiores Repasses", [
+    ["financeiro-ranking-recebido", "Escolas que mais receberam recursos"],
+  ]),
+  ...createSlides("governanca", "Gestão Financeira e Governança", "Saldos Reprogramados", [
+    ["financeiro-ranking-reprogramado", "Saldos retidos de exercícios anteriores"],
+  ]),
+  ...createSlides("governanca", "Gestão Financeira e Governança", "Conselhos Escolares", [
+    ["governanca-institucional-cards", "Indicadores de controle social"],
+  ]),
 
   {
     id: "saude-resumo",
@@ -231,8 +250,8 @@ const SLIDES: PresentationSlide[] = [
   },
 ];
 
-// top padding (49px) + bottom padding (24px) + breathing room (16px)
-const PRES_PAGE_PADDING = 89;
+// top padding (80px) + bottom padding (32px) + breathing room (16px)
+const PRES_PAGE_PADDING = 128;
 
 function removeActiveSlideState() {
   document.querySelectorAll<HTMLElement>("[data-pres-slide]").forEach((element) => {
@@ -658,7 +677,7 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
       <header className="ca-pres-top">
         <div className="ca-pres-heading">
           <span className="ca-pres-kicker">
-            <MonitorPlay size={14} />
+            <MonitorPlay size={18} />
             {slide.tabLabel}
           </span>
           <span className="text-slate-300 font-normal select-none">/</span>
@@ -671,7 +690,7 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
           )}
           {slideStatus === "idle" && (
             <span className="ca-pres-loading ml-2">
-              <Loader2 size={13} className="animate-spin" />
+              <Loader2 size={16} className="animate-spin" />
               Aguardando gráficos...
             </span>
           )}
@@ -689,7 +708,7 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
             aria-label={isPlaying ? "Pausar reprodução automática" : "Iniciar reprodução automática"}
             onClick={() => setIsPlaying((p) => !p)}
           >
-            {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+            {isPlaying ? <Pause size={18} /> : <Play size={18} />}
           </button>
 
           {/* Seletor de Tempo de Transição Personalizado */}
@@ -702,9 +721,9 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
               aria-expanded={isDropdownOpen}
               aria-label={`Tempo atual: ${duration} segundos`}
             >
-              <Clock size={15} />
+              <Clock size={17} />
               <span>{duration}s</span>
-              <ChevronDown size={14} className={`ca-pres-dropdown-chevron ${isDropdownOpen ? "open" : ""}`} />
+              <ChevronDown size={16} className={`ca-pres-dropdown-chevron ${isDropdownOpen ? "open" : ""}`} />
             </button>
 
             {isDropdownOpen && (
@@ -738,7 +757,7 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
             aria-label="Slide anterior"
             onClick={goPrev}
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={20} />
           </button>
           <button
             type="button"
@@ -747,7 +766,7 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
             aria-label="Próximo slide"
             onClick={goNext}
           >
-            <ChevronRight size={18} />
+            <ChevronRight size={20} />
           </button>
           <button
             type="button"
@@ -756,7 +775,7 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
             aria-label="Fechar apresentação"
             onClick={onClose}
           >
-            <X size={16} />
+            <X size={18} />
             <span>Fechar</span>
           </button>
         </div>

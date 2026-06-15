@@ -1367,7 +1367,7 @@
   box-sizing: border-box;
   height: 100vh;
   min-height: 0;
-  padding: 49px 40px 24px;
+  padding: 80px 64px 32px; /* Aumentado top/lateral/bottom */
   gap: 0;
   overflow: hidden;
 }
@@ -1408,49 +1408,49 @@
   height: 110px !important;
 }
 
-/* Compactação restrita ao deck para manter cards e gráficos dentro da tela. */
+/* Compactação ajustada no modo apresentação para melhor espaçamento e padding */
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .p-6 {
-  padding: 12px !important;
+  padding: 20px !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .p-5 {
-  padding: 10px !important;
+  padding: 16px !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .p-4 {
-  padding: 8px !important;
+  padding: 14px !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .gap-5 {
-  gap: 8px !important;
+  gap: 16px !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .gap-4 {
-  gap: 6px !important;
+  gap: 12px !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .gap-3 {
-  gap: 5px !important;
+  gap: 10px !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .space-y-6 > * + * {
-  margin-top: 8px !important;
+  margin-top: 16px !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .space-y-5 > * + * {
-  margin-top: 6px !important;
+  margin-top: 12px !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .space-y-4 > * + * {
-  margin-top: 5px !important;
+  margin-top: 10px !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .mb-4 {
-  margin-bottom: 6px !important;
+  margin-bottom: 12px !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .mb-5 {
-  margin-bottom: 8px !important;
+  margin-bottom: 16px !important;
 }
 
 /* ── Camada da apresentação (header + footer fixos) ────────────── */
@@ -1472,8 +1472,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  height: 48px;
-  padding: 0 32px;
+  height: 72px; /* Aumentado de 48px para 72px */
+  padding: 0 40px; /* Aumentado de 32px para 40px */
   background: var(--frame);
   border-bottom: 1px solid var(--bdr);
   box-shadow: 0 4px 16px rgba(2, 6, 23, 0.07);
@@ -1483,7 +1483,7 @@
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: 10px; /* Aumentado de 8px para 10px */
   min-width: 0;
   flex: 1;
   overflow: hidden;
@@ -1492,8 +1492,8 @@
 .censo-admin .ca-pres-kicker {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 15px;
+  gap: 8px; /* Aumentado de 6px para 8px */
+  font-size: 17px; /* Aumentado de 15px para 17px */
   font-weight: 600;
   color: var(--accent);
   white-space: nowrap;
@@ -1502,13 +1502,13 @@
 
 .censo-admin .ca-pres-sep {
   color: var(--muted);
-  font-size: 15px;
+  font-size: 17px; /* Aumentado de 15px para 17px */
   flex-shrink: 0;
   user-select: none;
 }
 
 .censo-admin .ca-pres-title {
-  font-size: 16px;
+  font-size: 19px; /* Aumentado de 16px para 19px */
   font-weight: 700;
   color: var(--ink);
   white-space: nowrap;
@@ -1517,7 +1517,7 @@
 }
 
 .censo-admin .ca-pres-subtitle {
-  font-size: 14px;
+  font-size: 16px; /* Aumentado de 14px para 16px */
   font-weight: 400;
   color: var(--muted);
   white-space: nowrap;
@@ -1550,8 +1550,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 44px; /* Aumentado de 38px para 44px */
+  height: 44px; /* Aumentado de 38px para 44px */
   background: var(--accent-soft);
   border: 1px solid var(--accent-line);
   border-radius: var(--rad-sm);
@@ -1569,14 +1569,14 @@
 .censo-admin .ca-pres-close {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  height: 38px;
-  padding: 0 14px;
+  gap: 8px; /* Aumentado de 7px para 8px */
+  height: 44px; /* Aumentado de 38px para 44px */
+  padding: 0 18px; /* Aumentado de 14px para 18px */
   background: transparent;
   border: 1px solid var(--bdr);
   border-radius: var(--rad-sm);
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 14px; /* Aumentado de 12.5px para 14px */
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
@@ -1594,8 +1594,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 44px; /* Aumentado de 38px para 44px */
+  height: 44px; /* Aumentado de 38px para 44px */
   background: var(--accent-soft);
   border: 1px solid var(--accent-line);
   border-radius: var(--rad-sm);
@@ -1624,14 +1624,14 @@
 .censo-admin .ca-pres-dropdown-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  height: 38px;
-  padding: 0 12px;
+  gap: 8px; /* Aumentado de 7px para 8px */
+  height: 44px; /* Aumentado de 38px para 44px */
+  padding: 0 16px; /* Aumentado de 12px para 16px */
   background: var(--frame);
   border: 1px solid var(--bdr);
   border-radius: var(--rad-sm);
   color: var(--ink);
-  font-size: 13.5px;
+  font-size: 14px; /* Aumentado de 13.5px para 14px */
   font-weight: 600;
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease;
@@ -1739,13 +1739,85 @@
   font-weight: 500;
 }
 
-/* Oculta as seções internas, divisores e cabeçalhos de cartões/tabelas/gráficos no modo apresentação */
-.censo-admin .ca-app.presenting [data-pres-slide] h2,
-.censo-admin .ca-app.presenting [data-pres-slide] h3,
-.censo-admin .ca-app.presenting [data-pres-slide] .px-6.py-4.border-b,
-.censo-admin .ca-app.presenting [data-pres-slide] .flex.items-center.gap-3.mb-4,
-.censo-admin .ca-app.presenting [data-pres-slide] .flex.items-center.gap-3.mb-5 {
+/* Oculta os títulos de seções repetidos (h2) no modo apresentação */
+.censo-admin .ca-app.presenting [data-pres-slide] h2 {
   display: none !important;
+}
+
+/* Mostra e estiliza cabeçalhos e títulos nos gráficos e tabelas presentes */
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active h3 {
+  display: block !important;
+  font-size: 1.15rem !important; /* Aumentado */
+  font-weight: 700 !important;
+  color: var(--ink) !important;
+  margin-bottom: 12px !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .px-6.py-4.border-b {
+  display: block !important;
+  padding: 16px 20px !important;
+  border-bottom: 1px solid var(--bdr) !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .px-6.py-4.border-b h3 {
+  margin-bottom: 0 !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .flex.items-center.gap-3.mb-4,
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .flex.items-center.gap-3.mb-5 {
+  display: flex !important;
+  margin-bottom: 16px !important;
+}
+
+/* Aumenta a fonte do conteúdo dos gráficos e tabelas */
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .text-xs {
+  font-size: 1rem !important; /* De ~12px para 16px */
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .text-sm {
+  font-size: 1.15rem !important; /* De ~14px para ~18.4px */
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .text-3xl {
+  font-size: 2.5rem !important; /* De ~30px para 40px */
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .text-xl {
+  font-size: 1.75rem !important; /* De ~20px para 28px */
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active table {
+  font-size: 1.1rem !important; /* De ~15px para ~17.6px */
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active table th {
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active svg text {
+  font-size: 120% !important; /* Aumenta textos dentro de donuts/pies */
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active ul li,
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active ul li span {
+  font-size: 1.1rem !important; /* Legenda de donut/pie charts */
+}
+
+/* Redimensiona textos muito pequenos e adiciona espaçamento em tabelas/listas de ranking */
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .text-\[11px\] {
+  font-size: 0.9rem !important; /* Aumenta de 11px para ~14.4px */
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active tr td,
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active tr th {
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active ul li {
+  padding-bottom: 8px !important;
+  margin-bottom: 6px !important;
 }
 
 @media (max-width: 640px) {

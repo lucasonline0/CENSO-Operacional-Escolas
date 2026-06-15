@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { apiFetch, sanitize } from "./shared/api";
 import { C } from "./shared/constants";
+import { ReportButton } from "./shared/ReportButton";
 import SaudeOperacionalMetodologiaInfo from "./SaudeOperacionalMetodologiaInfo";
 import type {
   SaudeOperacionalEscola,
@@ -410,6 +411,14 @@ export function AbaSaudeOperacionalEscolas({
               {payload.total_escolas.toLocaleString("pt-BR")} escolas cadastradas
             </span>
             <SaudeOperacionalMetodologiaInfo />
+          </div>
+          <div className="mt-3 flex lg:justify-end">
+            <ReportButton
+              reportId="saude-operacional-escolas"
+              token={token}
+              filters={filters}
+              onUnauth={onUnauth}
+            />
           </div>
           <p className="mt-2 text-xs text-slate-500 lg:text-right">
             Escolas sem censo concluído no ano aparecem como pendentes de censo.

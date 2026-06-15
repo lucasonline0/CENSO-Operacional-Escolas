@@ -17,6 +17,7 @@ import type {
   MerendaCondicoesSanitarias, DashboardFilters,
 } from "./shared/types";
 import { buildPostgresSourceLabel } from "./shared/sourceLabel";
+import { ReportButton } from "./shared/ReportButton";
 
 function buildFilterParams(filters?: DashboardFilters): string {
   if (!filters) return "";
@@ -327,10 +328,18 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
 
   return (
     <div className="space-y-6">
-      {/* Badge de fonte */}
-      <div data-pres-hide="true" className="flex items-center gap-2 text-xs text-emerald-700">
-        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-        <span>Fonte: {buildPostgresSourceLabel(filters)}</span>
+      {/* Badge de fonte + ação de relatório */}
+      <div data-pres-hide="true" className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-xs text-emerald-700">
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+          <span>Fonte: {buildPostgresSourceLabel(filters)}</span>
+        </div>
+        <ReportButton
+          reportId="merenda-escolar-condicoes"
+          token={token}
+          filters={filters}
+          onUnauth={onUnauth}
+        />
       </div>
 
       {/* Banners de erro parcial */}

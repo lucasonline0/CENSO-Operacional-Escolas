@@ -5,10 +5,6 @@
 export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 export const TOKEN_KEY = "censo_admin_token";
 
-// Temporário: o dashboard atual está fixado no ciclo do Censo Escolar 2026.
-// Usado como fallback de `year` quando nenhum ano é escolhido nos filtros globais.
-export const DASHBOARD_REFERENCE_YEAR = 2026;
-
 export const ZONA_COLORS: Record<string, string> = {
   "Urbana": "var(--zona-urbana)",
   "Rural": "var(--zona-rural)",

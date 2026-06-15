@@ -1367,7 +1367,7 @@
   box-sizing: border-box;
   height: 100vh;
   min-height: 0;
-  padding: 80px 64px 32px; /* Aumentado top/lateral/bottom */
+  padding: clamp(80px, 7vh, 120px) clamp(32px, 5vw, 80px) clamp(16px, 3vh, 40px);
   gap: 0;
   overflow: hidden;
 }
@@ -1404,53 +1404,53 @@
 
 /* Reduz o SVG dos donuts/pie charts no deck para que múltiplas linhas caibam na tela. */
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active svg[viewBox="0 0 100 100"] {
-  width: 110px !important;
-  height: 110px !important;
+  width: clamp(140px, 12vw, 200px) !important;
+  height: clamp(140px, 12vw, 200px) !important;
 }
 
-/* Compactação ajustada no modo apresentação para melhor espaçamento e padding */
+/* Padding e gaps internos dos cards — responsivos com clamp() */
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .p-6 {
-  padding: 20px !important;
+  padding: clamp(14px, 1.5vw, 28px) !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .p-5 {
-  padding: 16px !important;
+  padding: clamp(12px, 1.2vw, 24px) !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .p-4 {
-  padding: 14px !important;
+  padding: clamp(10px, 1vw, 20px) !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .gap-5 {
-  gap: 16px !important;
+  gap: clamp(10px, 1.2vw, 20px) !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .gap-4 {
-  gap: 12px !important;
+  gap: clamp(8px, 1vw, 16px) !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .gap-3 {
-  gap: 10px !important;
+  gap: clamp(6px, 0.8vw, 12px) !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .space-y-6 > * + * {
-  margin-top: 16px !important;
+  margin-top: clamp(10px, 1.2vw, 20px) !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .space-y-5 > * + * {
-  margin-top: 12px !important;
+  margin-top: clamp(8px, 1vw, 16px) !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .space-y-4 > * + * {
-  margin-top: 10px !important;
+  margin-top: clamp(6px, 0.8vw, 12px) !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .mb-4 {
-  margin-bottom: 12px !important;
+  margin-bottom: clamp(8px, 1vw, 16px) !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .mb-5 {
-  margin-bottom: 16px !important;
+  margin-bottom: clamp(10px, 1.2vw, 20px) !important;
 }
 
 /* ── Camada da apresentação (header + footer fixos) ────────────── */
@@ -1746,8 +1746,11 @@
 
 /* Mostra e estiliza cabeçalhos e títulos nos gráficos e tabelas presentes */
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active h3 {
-  display: block !important;
-  font-size: 1.15rem !important; /* Aumentado */
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  gap: 8px !important;
+  font-size: 1.15rem !important;
   font-weight: 700 !important;
   color: var(--ink) !important;
   margin-bottom: 12px !important;
@@ -1769,55 +1772,70 @@
   margin-bottom: 16px !important;
 }
 
-/* Aumenta a fonte do conteúdo dos gráficos e tabelas */
+/* Tipografia responsiva com clamp() — escala automaticamente com a tela */
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .text-xs {
-  font-size: 1rem !important; /* De ~12px para 16px */
+  font-size: clamp(0.8rem, 1vw, 1.1rem) !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .text-sm {
-  font-size: 1.15rem !important; /* De ~14px para ~18.4px */
+  font-size: clamp(0.9rem, 1.1vw, 1.25rem) !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .text-3xl {
-  font-size: 2.5rem !important; /* De ~30px para 40px */
+  font-size: clamp(1.8rem, 2.5vw, 3rem) !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .text-xl {
-  font-size: 1.75rem !important; /* De ~20px para 28px */
+  font-size: clamp(1.2rem, 1.8vw, 2rem) !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active table {
-  font-size: 1.1rem !important; /* De ~15px para ~17.6px */
+  font-size: clamp(0.85rem, 1vw, 1.15rem) !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active table th {
-  font-size: 1rem !important;
+  font-size: clamp(0.8rem, 0.9vw, 1.05rem) !important;
   font-weight: 700 !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active svg text {
-  font-size: 120% !important; /* Aumenta textos dentro de donuts/pies */
+  font-size: 120% !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active ul li,
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active ul li span {
-  font-size: 1.1rem !important; /* Legenda de donut/pie charts */
+  font-size: clamp(0.9rem, 1vw, 1.15rem) !important;
 }
 
-/* Redimensiona textos muito pequenos e adiciona espaçamento em tabelas/listas de ranking */
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active .text-\[11px\] {
-  font-size: 0.9rem !important; /* Aumenta de 11px para ~14.4px */
+  font-size: clamp(0.75rem, 0.8vw, 0.95rem) !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active tr td,
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active tr th {
-  padding-top: 10px !important;
-  padding-bottom: 10px !important;
+  padding-top: clamp(6px, 0.8vh, 12px) !important;
+  padding-bottom: clamp(6px, 0.8vh, 12px) !important;
 }
 
 .censo-admin .ca-app.presenting [data-pres-slide].ca-pres-slide-active ul li {
-  padding-bottom: 8px !important;
-  margin-bottom: 6px !important;
+  padding-bottom: clamp(4px, 0.6vh, 10px) !important;
+  margin-bottom: clamp(3px, 0.5vh, 8px) !important;
+}
+
+/* ── Layout específico para slides em modo apresentação ───────── */
+/* Evita quebra de linha nos rótulos do HBarChart no slide de empresas de portaria */
+.censo-admin .ca-app.presenting [data-pres-slide="servicos-portaria-empresas"].ca-pres-slide-active .shrink-0.text-right {
+  white-space: nowrap !important;
+  width: clamp(9rem, 28%, 14rem) !important;
+  font-size: clamp(0.65rem, 0.75vw, 0.85rem) !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.censo-admin .ca-app.presenting [data-pres-slide="merenda-oferta-graficos"].ca-pres-slide-active {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: clamp(10px, 1.2vw, 20px) !important;
 }
 
 @media (max-width: 640px) {

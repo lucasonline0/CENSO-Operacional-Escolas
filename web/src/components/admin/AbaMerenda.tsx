@@ -379,8 +379,7 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
       </div>
 
       </div>
-      <div data-pres-slide="merenda-oferta-graficos" className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div data-pres-slide="merenda-oferta-graficos" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
             <ClipboardList size={16} style={{ color: C.primary }} />
@@ -388,22 +387,6 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
           </h3>
           {ofertaSegments.length > 0 ? (
             <Donut segments={ofertaSegments} />
-          ) : (
-            <NoData />
-          )}
-        </div>
-      </div>
-      </div>
-
-      <div data-pres-slide="merenda-oferta-necessidades" className="space-y-6">
-      <div className="grid grid-cols-1 gap-5">
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <CheckCircle2 size={16} style={{ color: C.primary }} />
-            Qualidade da merenda
-          </h3>
-          {qualidadeRows.length > 0 ? (
-            <HBarChart rows={qualidadeRows} color={C.primary} />
           ) : (
             <NoData />
           )}
@@ -421,6 +404,18 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
         </div>
       </div>
 
+      <div data-pres-slide="merenda-oferta-necessidades" className="space-y-6">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <CheckCircle2 size={16} style={{ color: C.primary }} />
+            Qualidade da merenda
+          </h3>
+          {qualidadeRows.length > 0 ? (
+            <HBarChart rows={qualidadeRows} color={C.primary} />
+          ) : (
+            <NoData />
+          )}
+        </div>
       </div>
       {/* ── Estrutura Física da Cozinha ──────────────────────────── */}
       <div id="sec-merenda-estrutura" data-pres-hide="true" className="flex items-center gap-3 border-t border-slate-200 pt-4">

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -89,6 +90,114 @@ func (f reportFilters) describe() string {
 		parts = append(parts, "Zona: "+f.Zona)
 	}
 	return "Filtros aplicados — " + strings.Join(parts, " | ")
+}
+
+// resolveReportYearDefault resolve o ano de relatórios que dependem de respostas
+// de censo (Infraestrutura/Segurança, Merenda, ...). Diferente do relatório
+// piloto (Year = 0 ⇒ todos os anos), estes relatórios exigem um ano específico:
+// quando o filtro de ano está ausente ou inválido (Year = 0), usa o ano padrão
+// do dashboard (ano corrente), o mesmo critério da Saúde Operacional. Em
+// 2026-06-15 o ano corrente é 2026, conforme esperado pela especificação.
+func resolveReportYearDefault(f reportFilters, now time.Time) int {
+	if f.Year > 0 {
+		return f.Year
+	}
+	return now.Year()
+}
+
+// statusOperacionalPriority define a ordem de prioridade operacional usada por
+// relatórios temáticos (Infraestrutura/Segurança, Merenda): Crítico primeiro,
+// depois Atenção, Adequado e, por fim, escolas Sem dados.
+var statusOperacionalPriority = map[string]int{
+	statusOperacionalCritico:  0,
+	statusOperacionalAtencao:  1,
+	statusOperacionalAdequado: 2,
+	statusOperacionalSemDados: 3,
+}
+
+// Rótulos canônicos do Status Operacional dos relatórios temáticos.
+const (
+	statusOperacionalSemDados = "Sem dados"
+	statusOperacionalCritico  = "Crítico"
+	statusOperacionalAtencao  = "Atenção"
+	statusOperacionalAdequado = "Adequado"
+)
+
+// statusOperacionalRank devolve o peso de ordenação de um Status Operacional.
+// Um status desconhecido é jogado para o final (após "Sem dados").
+func statusOperacionalRank(status string) int {
+	if r, ok := statusOperacionalPriority[status]; ok {
+		return r
+	}
+	return len(statusOperacionalPriority)
+}
+
+// reportOperacionalRow é a linha intermediária dos relatórios temáticos: guarda
+// as chaves de ordenação (status + território) e a projeção final das células.
+type reportOperacionalRow struct {
+	Status    string
+	DRE       string
+	Municipio string
+	Escola    string
+	INEP      string
+	Cells     []any
+}
+
+// sortReportOperacional ordena, de forma estável e determinística, as linhas
+// de um relatório temático por prioridade operacional (Crítico, Atenção,
+// Adequado, Sem dados) e, em seguida, por DRE, Município, Escola e Código INEP
+// (comparação insensível a caixa e acento).
+func sortReportOperacional(rows []reportOperacionalRow) {
+	sort.SliceStable(rows, func(i, j int) bool {
+		a, b := rows[i], rows[j]
+		if ra, rb := statusOperacionalRank(a.Status), statusOperacionalRank(b.Status); ra != rb {
+			return ra < rb
+		}
+		if c := strings.Compare(normalizeSaudeSearch(a.DRE), normalizeSaudeSearch(b.DRE)); c != 0 {
+			return c < 0
+		}
+		if c := strings.Compare(normalizeSaudeSearch(a.Municipio), normalizeSaudeSearch(b.Municipio)); c != 0 {
+			return c < 0
+		}
+		if c := strings.Compare(normalizeSaudeSearch(a.Escola), normalizeSaudeSearch(b.Escola)); c != 0 {
+			return c < 0
+		}
+		return a.INEP < b.INEP
+	})
+}
+
+// reportTextCell projeta uma célula textual de relatório temático: "Sem dados"
+// quando a escola não tem censo concluído no ano, "Não informado" quando o
+// campo está vazio, e o próprio valor caso contrário.
+func reportTextCell(hasCensus bool, v string) any {
+	if !hasCensus {
+		return statusOperacionalSemDados
+	}
+	if strings.TrimSpace(v) == "" {
+		return "Não informado"
+	}
+	return v
+}
+
+// reportSemDadosOr força "Sem dados" quando não há censo; caso contrário,
+// devolve o valor já derivado (que pode incluir "Não informado").
+func reportSemDadosOr(hasCensus bool, v string) any {
+	if !hasCensus {
+		return statusOperacionalSemDados
+	}
+	return v
+}
+
+// reportIntCell projeta uma quantidade inteira opcional: "Sem dados" sem censo,
+// "Não informado" quando ausente, e o inteiro caso contrário.
+func reportIntCell(hasCensus bool, v sql.NullFloat64) any {
+	if !hasCensus {
+		return statusOperacionalSemDados
+	}
+	if !v.Valid {
+		return "Não informado"
+	}
+	return int(v.Float64)
 }
 
 // normalizeReportFormat aplica o default xlsx quando o parâmetro está
@@ -177,6 +286,16 @@ func (app *application) AdminGetReport(w http.ResponseWriter, r *http.Request) {
 		// efetivamente usado (e não "todos os anos").
 		filters.Year = resolveSaudeOperacionalReportYear(filters, time.Now())
 		rd, err = app.buildSaudeOperacionalReportData(r.Context(), def, filters)
+	case reportInfraestruturaSegurancaID:
+		// Depende de um ano de censo específico: resolve antes de gerar dados e
+		// nome do arquivo, para que ambos reflitam o ano usado (não "todos").
+		filters.Year = resolveReportYearDefault(filters, time.Now())
+		rd, err = app.buildInfraestruturaReportData(r.Context(), def, filters)
+	case reportMerendaCondicoesID:
+		// Depende de um ano de censo específico: resolve antes de gerar dados e
+		// nome do arquivo, para que ambos reflitam o ano usado (não "todos").
+		filters.Year = resolveReportYearDefault(filters, time.Now())
+		rd, err = app.buildMerendaReportData(r.Context(), def, filters)
 	default:
 		// Catálogo e dispatch desalinhados: defensivo.
 		app.errorJSON(w, fmt.Errorf("relatório %q sem implementação", def.ID), http.StatusNotFound)

@@ -26,6 +26,18 @@ const reportCensoPreenchimentoID = "censo-preenchimento-escolas"
 // aba "Saúde Operacional".
 const reportSaudeOperacionalID = "saude-operacional-escolas"
 
+// reportInfraestruturaSegurancaID é o identificador do relatório de
+// Infraestrutura, Energia e Segurança Escolar, que exporta todas as escolas do
+// recorte com os campos de prédio, energia e segurança e um Status Operacional
+// simples para priorização. Depende de um ano de censo específico.
+const reportInfraestruturaSegurancaID = "infraestrutura-seguranca-escolas"
+
+// reportMerendaCondicoesID é o identificador do relatório de Condições da
+// Merenda Escolar, que exporta todas as escolas do recorte com oferta,
+// qualidade, condições da cozinha, equipamentos e um Status Operacional simples
+// para priorização. Depende de um ano de censo específico.
+const reportMerendaCondicoesID = "merenda-escolar-condicoes"
+
 // ReportDefinition descreve os metadados de um relatório gerencial. Os
 // campos são suficientes para montar o cabeçalho do XLSX (Title), nomear
 // a aba (SheetName) e derivar o nome do arquivo (FileBase). A consulta e
@@ -54,6 +66,20 @@ var reportsCatalog = map[string]ReportDefinition{
 		Description: "Índice de Saúde Operacional por escola, com criticidade, status e notas por dimensão, para todas as escolas do recorte.",
 		SheetName:   "Saude Operacional",
 		FileBase:    "relatorio_saude_operacional_escolas",
+	},
+	reportInfraestruturaSegurancaID: {
+		ID:          reportInfraestruturaSegurancaID,
+		Title:       "Relatório de Infraestrutura, Energia e Segurança Escolar",
+		Description: "Infraestrutura, energia e segurança por escola, com Status Operacional simples para priorização, para todas as escolas do recorte.",
+		SheetName:   "Infra Segurança",
+		FileBase:    "relatorio_infraestrutura_seguranca_escolas",
+	},
+	reportMerendaCondicoesID: {
+		ID:          reportMerendaCondicoesID,
+		Title:       "Relatório de Condições da Merenda Escolar",
+		Description: "Condições da merenda escolar por escola, com oferta, qualidade, cozinha, equipamentos e Status Operacional simples para priorização, para todas as escolas do recorte.",
+		SheetName:   "Merenda Escolar",
+		FileBase:    "relatorio_merenda_escolar_condicoes",
 	},
 }
 

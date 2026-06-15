@@ -7,6 +7,7 @@ import {
   BarChart2, UsersRound, MonitorSmartphone, ShieldCheck, Utensils,
   ClipboardCheck, Activity, Landmark, Database, MapPinned,
   Menu, X, ChevronDown, HeartPulse,
+  MonitorPlay,
   Sun,
   Moon,
 } from "lucide-react";
@@ -30,6 +31,7 @@ import { AbaServicosTerceirizados } from "@/components/admin/AbaServicosTerceiri
 import { AbaGestaoFinanceiraGovernanca } from "@/components/admin/AbaGestaoFinanceiraGovernanca";
 import { AbaSaudeOperacionalEscolas } from "@/components/admin/AbaSaudeOperacionalEscolas";
 import { FiltrosGlobais } from "@/components/admin/FiltrosGlobais";
+import PresentationMode from "@/components/admin/PresentationMode";
 import type {
   CensusPage, DashboardData, DashboardFilters, FiltrosOpcoes,
 } from "@/components/admin/shared/types";
@@ -268,8 +270,27 @@ const NAV_INDICATORS: NavItem[] = [
       { label: "Governança / Supervisão", anchor: "sec-servicos-governanca" },
     ],
   },
-  { id: "alunos", label: "Perfil dos Alunos e Resultados", Icon: Activity },
-  { id: "governanca", label: "Gestão Financeira e Governança", Icon: Landmark },
+  {
+    id: "alunos", label: "Perfil dos Alunos e Resultados", Icon: Activity,
+    subItems: [
+      { label: "Resumo IDEB 2023", anchor: "sec-alunos-resumo" },
+      { label: "Resultado por Etapa", anchor: "sec-alunos-etapa" },
+      { label: "Distribuição por Faixas", anchor: "sec-alunos-faixas" },
+      { label: "Ranking por Escola", anchor: "sec-alunos-ranking" },
+      { label: "Resultado por DRE", anchor: "sec-alunos-dre" },
+      { label: "Qualidade da Base", anchor: "sec-alunos-qualidade" },
+    ],
+  },
+  {
+    id: "governanca", label: "Gestão Financeira e Governança", Icon: Landmark,
+    subItems: [
+      { label: "Visão Geral Financeira", anchor: "sec-financeiro-resumo" },
+      { label: "Execução por Ano", anchor: "sec-financeiro-evolucao" },
+      { label: "Prestação de Contas", anchor: "sec-financeiro-prestacao" },
+      { label: "Vínculo Cadastral", anchor: "sec-financeiro-vinculo" },
+      { label: "Rankings de Escolas", anchor: "sec-financeiro-rankings" },
+    ],
+  },
 ];
 
 const NAV_OPERACIONAL: NavItem[] = [
@@ -350,21 +371,22 @@ function NavGroup({
 }
 
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
-  const [censusPage,     setCensusPage]     = useState<CensusPage | null>(null);
-  const [tab,            setTab]            = useState<Tab>("perfil");
-  const [filterStatus,   setFilterStatus]   = useState("");
-  const [search,         setSearch]         = useState("");
-  const [err,            setErr]            = useState("");
-  const [loading,        setLoading]        = useState(true);
-  const [syncing,        setSyncing]        = useState(false);
-  const [viewId,         setViewId]         = useState<number | null>(null);
-  const [collapsed,      setCollapsed]      = useState(false);
-  const [visited,        setVisited]        = useState<Set<Tab>>(() => new Set<Tab>(["perfil"]));
-  const [censusLimit,    setCensusLimit]    = useState(10);
-  const [censusPageNum,  setCensusPageNum]  = useState(1);
-  const [mobileNavOpen,  setMobileNavOpen]  = useState(false);
-  const [filters,        setFilters]        = useState<DashboardFilters>({});
-  const [filtrosOpcoes,  setFiltrosOpcoes]  = useState<FiltrosOpcoes | null>(null);
+  const [censusPage, setCensusPage] = useState<CensusPage | null>(null);
+  const [tab, setTab] = useState<Tab>("perfil");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [search, setSearch] = useState("");
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [viewId, setViewId] = useState<number | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [visited, setVisited] = useState<Set<Tab>>(() => new Set<Tab>(["perfil"]));
+  const [censusLimit, setCensusLimit] = useState(10);
+  const [censusPageNum, setCensusPageNum] = useState(1);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [filters, setFilters] = useState<DashboardFilters>({});
+  const [filtrosOpcoes, setFiltrosOpcoes] = useState<FiltrosOpcoes | null>(null);
+  const [presentationMode, setPresentationMode] = useState(false);
 
   const logout = useCallback(() => { clearToken(); clearApiCache(); onLogout(); }, [onLogout]);
 
@@ -386,13 +408,13 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   // da aba, mas a busca roda no backend (filtra todo o recorte, não só a página).
   const loadCensus = useCallback(async (limit = censusLimit, page = censusPageNum) => {
     const p = new URLSearchParams();
-    if (filterStatus)              p.set("status", filterStatus);
-    if (filters.ano)               p.set("year", String(filters.ano));
-    if (filters.dre)               p.set("dre", filters.dre);
-    if (filters.municipio)         p.set("municipio", filters.municipio);
-    if (filters.zona)              p.set("zona", filters.zona);
+    if (filterStatus) p.set("status", filterStatus);
+    if (filters.ano) p.set("year", String(filters.ano));
+    if (filters.dre) p.set("dre", filters.dre);
+    if (filters.municipio) p.set("municipio", filters.municipio);
+    if (filters.zona) p.set("zona", filters.zona);
     if (filters.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
-    if (search)                    p.set("search", search);
+    if (search) p.set("search", search);
     p.set("limit", String(limit));
     p.set("page", String(page));
     try { setCensusPage(await apiFetch<CensusPage>(`/v1/admin/census?${p}`, token)); }
@@ -409,9 +431,9 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   }, [tab, loadCensus]);
   useEffect(() => {
     const qs = new URLSearchParams();
-    if (filters.dre)               qs.set("dre", filters.dre);
-    if (filters.municipio)         qs.set("municipio", filters.municipio);
-    if (filters.zona)              qs.set("zona", filters.zona);
+    if (filters.dre) qs.set("dre", filters.dre);
+    if (filters.municipio) qs.set("municipio", filters.municipio);
+    if (filters.zona) qs.set("zona", filters.zona);
     if (filters.regiao_integracao) qs.set("regiao_integracao", filters.regiao_integracao);
     const url = `/v1/admin/analytics/filtros/opcoes${qs.toString() ? `?${qs}` : ""}`;
     apiFetch<FiltrosOpcoes>(url, token)
@@ -460,7 +482,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
   return (
     <div className={`censo-admin${dark ? " dark" : ""}`}>
-      <div className={`ca-app${collapsed ? " collapsed" : ""}${mobileNavOpen ? " nav-open" : ""}`}>
+      <div className={`ca-app${collapsed ? " collapsed" : ""}${mobileNavOpen ? " nav-open" : ""}${presentationMode ? " presenting" : ""}`}>
 
         {/* Overlay da gaveta de navegação — visível apenas no mobile (CSS) */}
         <div className="ca-nav-overlay" onClick={() => setMobileNavOpen(false)} />
@@ -533,8 +555,31 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               </div>
             </div>
             <div className="ca-topbar-right">
+              <button
+                type="button"
+                className="ca-pres-launch-btn"
+                title="Modo Apresentação"
+                onClick={() => setPresentationMode(true)}
+              >
+                <MonitorPlay size={16} />
+                <span>Modo Apresentação</span>
+              </button>
+              <button
+                className="ca-icon-btn"
+                title={syncing ? "Sincronizando…" : "Sync Planilha"}
+                onClick={handleSync}
+                disabled={syncing}
+              >
+                {syncing
+                  ? <Loader2 size={16} className="animate-spin" />
+                  : <CloudUpload size={16} />}
+              </button>
               <button className="ca-icon-btn" title="Mudar tema" onClick={() => setDark(!dark)}>
-                {dark ? <Sun size={16} /> : <Moon size={16} />}
+                {
+                  dark
+                    ? <Sun size={16} />
+                    : <Moon size={16} />
+                }
               </button>
               <button className="ca-icon-btn" title="Sair" onClick={logout}>
                 <LogOut size={16} />
@@ -551,11 +596,13 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               </div>
             )}
 
-            <FiltrosGlobais
-              opcoes={filtrosOpcoes}
-              filters={filters}
-              onFiltersChange={updateFilters}
-            />
+            <div className="ca-filters-wrap">
+              <FiltrosGlobais
+                opcoes={filtrosOpcoes}
+                filters={filters}
+                onFiltersChange={updateFilters}
+              />
+            </div>
             {/* Renderiza todas as abas já visitadas. Quando volta para uma aba os dados já são carregados*/}
             {visited.has("perfil") && (
               <div style={{ display: tab === "perfil" ? undefined : "none" }}>
@@ -589,12 +636,12 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             )}
             {visited.has("alunos") && (
               <div style={{ display: tab === "alunos" ? undefined : "none" }}>
-                <AbaPerfilAlunos token={token} onUnauth={logout} />
+                <AbaPerfilAlunos token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("governanca") && (
               <div style={{ display: tab === "governanca" ? undefined : "none" }}>
-                <AbaGestaoFinanceiraGovernanca />
+                <AbaGestaoFinanceiraGovernanca token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
             {visited.has("saude") && (
@@ -639,6 +686,13 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
       {viewId !== null && (
         <JsonModal censusId={viewId} token={token} onClose={() => setViewId(null)} />
+      )}
+
+      {presentationMode && (
+        <PresentationMode
+          onClose={() => setPresentationMode(false)}
+          onNavigateTab={(tabId) => handleNav(tabId as Tab)}
+        />
       )}
     </div>
   );

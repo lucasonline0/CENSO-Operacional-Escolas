@@ -181,44 +181,45 @@ export function AbaServicosTerceirizados({
   return (
     <div className="space-y-6">
       {/* Badge de fonte */}
-      <div className="flex items-center gap-2 text-xs text-emerald-700">
+      <div data-pres-hide="true" className="flex items-center gap-2 text-xs text-emerald-700">
         <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
         <span>Fonte: {buildPostgresSourceLabel(filters)}</span>
       </div>
 
       {/* Banners de erro parcial */}
       {visaoErr && (sg || portaria || manip) && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+        <div data-pres-hide="true" className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Dados de visão geral indisponíveis ({visaoErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
       {sgErr && (visao || portaria || manip) && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+        <div data-pres-hide="true" className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Dados de serviços gerais indisponíveis ({sgErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
       {portariaErr && (visao || sg || manip) && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+        <div data-pres-hide="true" className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Dados de portaria indisponíveis ({portariaErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
       {manipErr && (visao || sg || portaria) && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+        <div data-pres-hide="true" className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>Dados de manipuladores de alimentos indisponíveis ({manipErr}). Exibindo apenas os demais blocos.</span>
         </div>
       )}
 
       {/* ── Visão Geral ──────────────────────────────────────────── */}
-      <div id="sec-servicos-visao" className="flex items-center gap-3 animate-fade-in-up">
+      <div id="sec-servicos-visao" data-pres-hide="true" className="flex items-center gap-3 animate-fade-in-up">
         <Layers size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Visão Geral</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
+      <div data-pres-slide="servicos-visao-resumo" className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in-up [animation-delay:150ms]">
         <StatCard
           label="Áreas com Terceirização"
@@ -249,7 +250,9 @@ export function AbaServicosTerceirizados({
           sub="entre escolas que informaram agentes"
         />
       </div>
+      </div>
 
+      <div data-pres-slide="servicos-visao-cobertura" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fade-in-up [animation-delay:300ms]">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
@@ -280,14 +283,16 @@ export function AbaServicosTerceirizados({
           )}
         </div>
       </div>
+      </div>
 
       {/* ── Serviços Gerais ──────────────────────────────────────── */}
-      <div id="sec-servicos-gerais" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+      <div id="sec-servicos-gerais" data-pres-hide="true" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <Users size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Serviços Gerais</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
+      <div data-pres-slide="servicos-gerais-indicadores" className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Efetivos"
@@ -318,7 +323,9 @@ export function AbaServicosTerceirizados({
           sub="média do total informado por escola"
         />
       </div>
+      </div>
 
+      <div data-pres-slide="servicos-gerais-distribuicao" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
@@ -349,14 +356,16 @@ export function AbaServicosTerceirizados({
           )}
         </div>
       </div>
+      </div>
 
       {/* ── Portaria ─────────────────────────────────────────────── */}
-      <div id="sec-servicos-portaria" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+      <div id="sec-servicos-portaria" data-pres-hide="true" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <ShieldCheck size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Portaria</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
+      <div data-pres-slide="servicos-portaria-indicadores" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <StatCard
           label="Escolas com agentes de portaria"
@@ -380,7 +389,9 @@ export function AbaServicosTerceirizados({
           sub="empresas terceirizadas mais frequentes"
         />
       </div>
+      </div>
 
+      <div data-pres-slide="servicos-portaria-empresas" className="space-y-6">
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
           <Building size={16} style={{ color: C.primary }} />
@@ -395,18 +406,20 @@ export function AbaServicosTerceirizados({
           <NoData />
         )}
       </div>
+      </div>
 
       {/* ── Manipulador de Alimentos ────────────────────────────── */}
-      <div id="sec-servicos-manipuladores" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+      <div id="sec-servicos-manipuladores" data-pres-hide="true" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <ChefHat size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Manipulador de Alimentos</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
-      <p className="text-sm text-slate-500 -mt-2">
+      <p data-pres-hide="true" className="text-sm text-slate-500 -mt-2">
         Merendeiras / manipuladores vinculados ao serviço de alimentação escolar.
       </p>
 
+      <div data-pres-slide="servicos-manipuladores-indicadores" className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
           label="Merendeiras estatutárias"
@@ -451,7 +464,9 @@ export function AbaServicosTerceirizados({
           sub="das escolas"
         />
       </div>
+      </div>
 
+      <div data-pres-slide="servicos-manipuladores-distribuicao" className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
@@ -481,6 +496,11 @@ export function AbaServicosTerceirizados({
             <NoData />
           )}
         </div>
+      </div>
+      </div>
+
+      <div data-pres-slide="servicos-manipuladores-empresas" className="space-y-6">
+      <div className="grid grid-cols-1 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm lg:col-span-2">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
             <Building size={16} style={{ color: C.primary }} />
@@ -496,14 +516,16 @@ export function AbaServicosTerceirizados({
           )}
         </div>
       </div>
+      </div>
 
       {/* ── Governança / Supervisão ──────────────────────────────── */}
-      <div id="sec-servicos-governanca" className="flex items-center gap-3 border-t border-slate-200 pt-4">
+      <div id="sec-servicos-governanca" data-pres-hide="true" className="flex items-center gap-3 border-t border-slate-200 pt-4">
         <UserCheck size={18} style={{ color: C.primary }} />
         <h2 className="font-semibold text-slate-800 text-base">Governança / Supervisão</h2>
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
+      <div data-pres-slide="servicos-governanca-aviso" className="space-y-6">
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col items-center text-center py-8">
         <div
           className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-sm mb-3"
@@ -515,6 +537,7 @@ export function AbaServicosTerceirizados({
           Dados de supervisão/governança dos serviços terceirizados ainda não estão disponíveis nos
           endpoints analíticos desta aba.
         </p>
+      </div>
       </div>
     </div>
   );

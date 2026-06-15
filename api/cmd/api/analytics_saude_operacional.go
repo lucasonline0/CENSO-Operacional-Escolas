@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -20,7 +21,7 @@ import (
 
 const (
 	saudeOperacionalNome            = "Índice de Saúde Operacional por escola"
-	saudeOperacionalVersao          = "1.0.0"
+	saudeOperacionalVersao          = "1.2.0"
 	saudeOperacionalPageSizeDefault = 10
 )
 
@@ -31,6 +32,8 @@ var saudeOperacionalDimensoesHabilitadas = []string{
 	"seguranca",
 	"pessoal",
 	"tecnologia",
+	"pedagogico",
+	"governanca",
 }
 
 var saudeOperacionalPageSizes = map[int]bool{
@@ -422,13 +425,15 @@ func calculateSecurity(data map[string]any) *float64 {
 	)
 }
 
+// calculatePeople mede a suficiência de pessoal operacional/de apoio (merenda,
+// serviços gerais e portaria). As funções de gestão escolar (direção,
+// coordenação pedagógica, etc.) migraram para a dimensão Governança a partir do
+// Saúde-01B, evitando dupla contagem entre Pessoal/RH e Governança.
 func calculatePeople(data map[string]any) *float64 {
 	return meanValid(
 		scoreCategorical(data["qtd_atende_necessidade_merenda"], simNaoScores),
 		scoreCategorical(data["qtd_atende_necessidade_sg"], simNaoScores),
 		scoreCategorical(data["qtd_atende_necessidade_portaria"], simNaoScores),
-		scoreCategorical(data["possui_direcao"], simNaoScores),
-		scoreCategorical(data["possui_coord_pedagogico"], simNaoScores),
 	)
 }
 
@@ -455,7 +460,166 @@ func calculateTechnology(data map[string]any) *float64 {
 	)
 }
 
-func calculateSchoolHealth(data map[string]any) saudeOperacionalCalculation {
+// normalizeGovText extrai uma string do JSONB e a normaliza para comparação
+// tolerante (trim, minúsculas, sem acentos), reaproveitando normalizeSaudeSearch.
+// O segundo retorno indica se há, de fato, um valor preenchido para o campo:
+// valores ausentes, não-string ou vazios contam como "não informado".
+func normalizeGovText(value any) (string, bool) {
+	text, ok := value.(string)
+	if !ok {
+		return "", false
+	}
+	if strings.TrimSpace(text) == "" {
+		return "", false
+	}
+	return normalizeSaudeSearch(text), true
+}
+
+// calculateGovernance pontua a dimensão Governança (0–100): equipe gestora
+// (direção, secretário, coordenação pedagógica e, por regra OU, algum
+// vice-diretor), regularização institucional junto ao CEE/PA e conselho escolar
+// constituído/ativo. A comparação é case/acento-insensível.
+//
+// Se NENHUM campo candidato estiver presente no JSON, retorna nil para preservar
+// o padrão "sem dados". Se ao menos um campo existir, retorna número: respostas
+// "Não"/equivalentes/ausentes pontuam 0, mas não anulam a dimensão.
+func calculateGovernance(data map[string]any) *float64 {
+	var score float64
+	present := false
+
+	addSim := func(key string, points float64) {
+		norm, ok := normalizeGovText(data[key])
+		if !ok {
+			return
+		}
+		present = true
+		if norm == "sim" {
+			score += points
+		}
+	}
+
+	addSim("possui_direcao", 20)
+	addSim("possui_secretario", 10)
+	addSim("possui_coord_pedagogico", 10)
+
+	// Bloco de vice-diretor por regra OU: pontua se houver vice pedagógico OU
+	// administrativo. Considera-se presente se qualquer um dos campos existir.
+	vicePed, okPed := normalizeGovText(data["possui_vice_pedagogico"])
+	viceAdm, okAdm := normalizeGovText(data["possui_vice_administrativo"])
+	if okPed || okAdm {
+		present = true
+		if vicePed == "sim" || viceAdm == "sim" {
+			score += 10
+		}
+	}
+
+	addSim("regularizada_cee", 15)
+	addSim("conselho_escolar", 15)
+
+	// Conselho ativo: Sim=20, Parcialmente=10, demais (Não/vazio)=0.
+	if norm, ok := normalizeGovText(data["conselho_ativo"]); ok {
+		present = true
+		switch norm {
+		case "sim":
+			score += 20
+		case "parcialmente":
+			score += 10
+		}
+	}
+
+	if !present {
+		return nil
+	}
+	return ptrFloat(score)
+}
+
+// idebPedagogicoAggregate reúne os agregados brutos de IDEB de uma escola usados
+// para derivar a dimensão Pedagógico. Mantém os dados crus (soma ponderada, peso
+// total e média simples) para que a regra de fallback seja calculável por função
+// pura, testável sem banco.
+type idebPedagogicoAggregate struct {
+	// SomaPonderada = SUM(ideb * total_avaliado) com ideb não nulo e total_avaliado > 0.
+	SomaPonderada float64
+	// TotalPeso = SUM(total_avaliado) sob a mesma condição da soma ponderada.
+	TotalPeso float64
+	// MediaSimples = AVG(ideb) com ideb não nulo; nil quando não há IDEB válido.
+	MediaSimples *float64
+}
+
+// calculatePedagogicoFromIdeb converte os agregados de IDEB de uma escola na nota
+// Pedagógico em escala 0–100 (ideb * 10):
+//   - média ponderada por total_avaliado quando há peso válido (> 0);
+//   - fallback para média simples quando há IDEB válido mas nenhum total_avaliado > 0;
+//   - nil quando não há IDEB válido — ausência de IDEB NUNCA vira zero.
+func calculatePedagogicoFromIdeb(agg idebPedagogicoAggregate) *float64 {
+	if agg.TotalPeso > 0 {
+		return ptrFloat((agg.SomaPonderada / agg.TotalPeso) * 10)
+	}
+	if agg.MediaSimples != nil {
+		return ptrFloat(*agg.MediaSimples * 10)
+	}
+	return nil
+}
+
+// saudeOperacionalPedagogicoSQL agrega ideb_resultados do ÚLTIMO ano disponível
+// (MAX(ano)) por school_id. Considera apenas registros com vínculo cadastral
+// (school_id IS NOT NULL); registros sem match em schools não contribuem para
+// nenhuma escola. A regra de conversão/fallback fica em Go
+// (calculatePedagogicoFromIdeb), por isso a query devolve os agregados crus.
+const saudeOperacionalPedagogicoSQL = `
+	WITH ultimo_ano AS (
+		SELECT MAX(ano) AS ano FROM ideb_resultados
+	)
+	SELECT
+		i.school_id,
+		COALESCE(SUM(i.ideb * i.total_avaliado) FILTER (
+			WHERE i.ideb IS NOT NULL AND i.total_avaliado > 0), 0) AS soma_ponderada,
+		COALESCE(SUM(i.total_avaliado) FILTER (
+			WHERE i.ideb IS NOT NULL AND i.total_avaliado > 0), 0) AS total_peso,
+		AVG(i.ideb) FILTER (WHERE i.ideb IS NOT NULL) AS media_simples
+	FROM ideb_resultados i
+	JOIN ultimo_ano u ON u.ano = i.ano
+	WHERE i.school_id IS NOT NULL
+	GROUP BY i.school_id
+`
+
+// loadPedagogicoPorEscola devolve a nota Pedagógico (0–100) já calculada por
+// school_id, a partir do IDEB oficial do último ano em ideb_resultados. Escolas
+// sem IDEB válido não entram no mapa — o lookup de uma chave ausente devolve nil
+// naturalmente, preservando o padrão "sem dados" da dimensão.
+func (app *application) loadPedagogicoPorEscola(ctx context.Context) (map[int]*float64, error) {
+	rows, err := app.models.Schools.DB.QueryContext(ctx, saudeOperacionalPedagogicoSQL)
+	if err != nil {
+		return nil, fmt.Errorf("consultar pedagógico/IDEB por escola: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[int]*float64)
+	for rows.Next() {
+		var (
+			schoolID      int
+			somaPonderada float64
+			totalPeso     float64
+			mediaSimples  sql.NullFloat64
+		)
+		if err := rows.Scan(&schoolID, &somaPonderada, &totalPeso, &mediaSimples); err != nil {
+			return nil, fmt.Errorf("ler pedagógico/IDEB por escola: %w", err)
+		}
+		agg := idebPedagogicoAggregate{
+			SomaPonderada: somaPonderada,
+			TotalPeso:     totalPeso,
+		}
+		if mediaSimples.Valid {
+			agg.MediaSimples = ptrFloat(mediaSimples.Float64)
+		}
+		if pedagogico := calculatePedagogicoFromIdeb(agg); pedagogico != nil {
+			out[schoolID] = pedagogico
+		}
+	}
+	return out, rows.Err()
+}
+
+func calculateSchoolHealth(data map[string]any, pedagogico *float64) saudeOperacionalCalculation {
 	pesos := saudeOperacionalPesosMetodologia()
 	infraestrutura := calculateInfrastructure(data)
 	energia := calculateEnergy(data)
@@ -463,6 +627,7 @@ func calculateSchoolHealth(data map[string]any) saudeOperacionalCalculation {
 	seguranca := calculateSecurity(data)
 	pessoal := calculatePeople(data)
 	tecnologia := calculateTechnology(data)
+	governanca := calculateGovernance(data)
 
 	saudeRaw := weightedMeanValid(
 		weightedHealthValue{Value: infraestrutura, Weight: pesos.Infraestrutura},
@@ -471,6 +636,8 @@ func calculateSchoolHealth(data map[string]any) saudeOperacionalCalculation {
 		weightedHealthValue{Value: seguranca, Weight: pesos.Seguranca},
 		weightedHealthValue{Value: pessoal, Weight: pesos.Pessoal},
 		weightedHealthValue{Value: tecnologia, Weight: pesos.Tecnologia},
+		weightedHealthValue{Value: pedagogico, Weight: pesos.Pedagogico},
+		weightedHealthValue{Value: governanca, Weight: pesos.Governanca},
 	)
 	saude := roundOptional1(saudeRaw)
 
@@ -500,8 +667,8 @@ func calculateSchoolHealth(data map[string]any) saudeOperacionalCalculation {
 			Seguranca:      roundOptional1(seguranca),
 			Pessoal:        roundOptional1(pessoal),
 			Tecnologia:     roundOptional1(tecnologia),
-			Pedagogico:     nil,
-			Governanca:     nil,
+			Pedagogico:     roundOptional1(pedagogico),
+			Governanca:     roundOptional1(governanca),
 		},
 	}
 }
@@ -531,7 +698,11 @@ func nullableTrimmedString(value sql.NullString) *string {
 	return ptrString(trimmed)
 }
 
-func buildSaudeOperacionalEscola(row saudeOperacionalDBRow) (SaudeOperacionalEscola, error) {
+// buildSaudeOperacionalEscola monta a escola do payload. O parâmetro pedagogico
+// é a nota Pedagógico (0–100) derivada do IDEB para a escola; só é aplicado
+// quando há censo concluído (a escola é, de fato, pontuada). Escolas sem censo
+// permanecem "sem_dados" com todas as dimensões nulas, mesmo que possuam IDEB.
+func buildSaudeOperacionalEscola(row saudeOperacionalDBRow, pedagogico *float64) (SaudeOperacionalEscola, error) {
 	out := SaudeOperacionalEscola{
 		SchoolID:   row.SchoolID,
 		CensusID:   nil,
@@ -555,7 +726,7 @@ func buildSaudeOperacionalEscola(row saudeOperacionalDBRow) (SaudeOperacionalEsc
 	if err != nil {
 		return SaudeOperacionalEscola{}, fmt.Errorf("decodificar JSONB do censo %d: %w", censusID, err)
 	}
-	calculation := calculateSchoolHealth(data)
+	calculation := calculateSchoolHealth(data, pedagogico)
 	out.TotalAlunos = calculation.TotalAlunos
 	out.SalasAula = calculation.SalasAula
 	out.AlunosPorSala = calculation.AlunosPorSala
@@ -826,10 +997,67 @@ func parseSaudeOperacionalFilters(q url.Values) saudeOperacionalFilters {
 	}
 }
 
+// saudeOperacionalDataProjectionSQL projeta, no PostgreSQL, apenas as chaves de
+// census_responses.data efetivamente lidas pelo cálculo da Saúde Operacional em
+// Go (calculateInfrastructure/Energy/Merenda/Security/People/Technology/
+// Governance + total_alunos/qtd_salas_aula). Substitui a transferência do JSONB
+// bruto e completo de cada censo concluído — o gargalo medido no diagnóstico
+// local (~91s para serializar/transferir o data inteiro de todos os censos).
+//
+// Usa `->` (e NÃO `->>`) para preservar o JSON original de cada chave: números
+// continuam números, de modo que decodeSaudeOperacionalData/parseOptionalFloat
+// seguem funcionando sem alteração. Chaves ausentes no data viram JSON null, que
+// o cálculo já trata como "não informado".
+//
+// Manter esta lista sincronizada com os campos lidos pelas funções de cálculo:
+// qualquer chave nova consumida em Go precisa ser adicionada aqui.
+const saudeOperacionalDataProjectionSQL = `jsonb_build_object(
+			'total_alunos', cr.data->'total_alunos',
+			'qtd_salas_aula', cr.data->'qtd_salas_aula',
+			'situacao_estrutura', cr.data->'situacao_estrutura',
+			'banheiros_vasos_funcionais', cr.data->'banheiros_vasos_funcionais',
+			'muro_cerca', cr.data->'muro_cerca',
+			'estrutura_climatizacao', cr.data->'estrutura_climatizacao',
+			'tipo_predio', cr.data->'tipo_predio',
+			'rede_eletrica_atende', cr.data->'rede_eletrica_atende',
+			'suporta_novos_equipamentos', cr.data->'suporta_novos_equipamentos',
+			'energia', cr.data->'energia',
+			'oferta_regular', cr.data->'oferta_regular',
+			'qualidade_merenda', cr.data->'qualidade_merenda',
+			'atende_necessidades', cr.data->'atende_necessidades',
+			'condicoes_cozinha', cr.data->'condicoes_cozinha',
+			'qtd_atende_necessidade_merenda', cr.data->'qtd_atende_necessidade_merenda',
+			'cameras_funcionamento', cr.data->'cameras_funcionamento',
+			'possui_guarita', cr.data->'possui_guarita',
+			'possui_botao_panico', cr.data->'possui_botao_panico',
+			'controle_portao', cr.data->'controle_portao',
+			'iluminacao_externa', cr.data->'iluminacao_externa',
+			'qtd_atende_necessidade_portaria', cr.data->'qtd_atende_necessidade_portaria',
+			'qtd_atende_necessidade_sg', cr.data->'qtd_atende_necessidade_sg',
+			'internet_disponivel', cr.data->'internet_disponivel',
+			'qualidade_internet', cr.data->'qualidade_internet',
+			'computadores_atendem', cr.data->'computadores_atendem',
+			'possui_projetor', cr.data->'possui_projetor',
+			'possui_direcao', cr.data->'possui_direcao',
+			'possui_secretario', cr.data->'possui_secretario',
+			'possui_coord_pedagogico', cr.data->'possui_coord_pedagogico',
+			'possui_vice_pedagogico', cr.data->'possui_vice_pedagogico',
+			'possui_vice_administrativo', cr.data->'possui_vice_administrativo',
+			'regularizada_cee', cr.data->'regularizada_cee',
+			'conselho_escolar', cr.data->'conselho_escolar',
+			'conselho_ativo', cr.data->'conselho_ativo'
+		)`
+
 // saudeOperacionalSelectSQL carrega TODAS as escolas cadastradas dentro do
 // recorte global e traz, via LEFT JOIN, o censo concluído ($1 = year). O LEFT
 // JOIN é essencial: escolas sem censo concluído continuam no resultado e são
 // classificadas como "sem_dados" pela camada de cálculo em Go.
+//
+// Em vez de devolver cr.data completo, projeta apenas as chaves usadas pelo
+// cálculo (saudeOperacionalDataProjectionSQL) para reduzir o volume transferido.
+// Para escolas sem censo concluído (cr.id IS NULL) a projeção é NULL: o código
+// retorna antes de decodificar o JSONB (ver buildSaudeOperacionalEscola), então
+// essas linhas permanecem "sem_dados" sem nenhuma transferência de data.
 //
 // Os filtros globais incidem sobre schools s (não sobre o censo), garantindo
 // que total_escolas, resumo e paginação reflitam o recorte global e que as
@@ -850,7 +1078,7 @@ const saudeOperacionalSelectSQL = `
 		COALESCE(s.dre, ''),
 		s.zona,
 		cr.id,
-		cr.data
+		CASE WHEN cr.id IS NULL THEN NULL ELSE ` + saudeOperacionalDataProjectionSQL + ` END AS data
 	FROM schools s
 	LEFT JOIN census_responses cr
 	  ON cr.school_id = s.id
@@ -885,6 +1113,10 @@ func buildSaudeOperacionalQuery(year int, f saudeOperacionalFilters) (string, []
 // Filtros globais opcionais: dre, municipio, zona, regiao_integracao.
 // Sem page_size: usa 10 registros por página.
 func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWriter, r *http.Request) {
+	// Instrumentação de performance (observabilidade): routeStart marca o início
+	// da rota para medir o tempo total e o de cada etapa interna. Nenhuma regra
+	// de cálculo, query, paginação, ordenação ou payload é alterada por isto.
+	routeStart := time.Now()
 	q := r.URL.Query()
 
 	year, err := parseSaudeOperacionalYear(q.Get("year"), time.Now())
@@ -930,13 +1162,45 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 	filters := parseSaudeOperacionalFilters(q)
 	query, args := buildSaudeOperacionalQuery(year, filters)
 
+	// parseMs cobre todo o parse/validação dos parâmetros e a montagem da query
+	// (etapas acima). has_* registram apenas presença/ausência dos filtros — nunca
+	// os valores em si, para não vazar termos de busca/dados nos logs.
+	parseMs := time.Since(routeStart).Milliseconds()
+	hasSearch := strings.TrimSpace(searchQuery) != ""
+	hasDRE := filters.DRE != ""
+	hasMunicipio := filters.Municipio != ""
+	hasZona := filters.Zona != ""
+	hasRegiao := filters.RegiaoIntegracao != ""
+
+	// Nota Pedagógico (IDEB) por escola, do último ano disponível em
+	// ideb_resultados. Independe do ano do censo: é o resultado oficial mais
+	// recente aplicado a cada escola pontuada.
+	pedStart := time.Now()
+	pedagogicoPorEscola, err := app.loadPedagogicoPorEscola(r.Context())
+	if err != nil {
+		app.logger.Printf("saude_operacional_perf_error: stage=load_pedagogico elapsed_ms=%d error=%q",
+			time.Since(pedStart).Milliseconds(), err.Error())
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+	pedagogicoMs := time.Since(pedStart).Milliseconds()
+
+	queryStart := time.Now()
 	dbRows, err := app.models.Schools.DB.QueryContext(r.Context(), query, args...)
 	if err != nil {
+		app.logger.Printf("saude_operacional_perf_error: stage=query elapsed_ms=%d error=%q",
+			time.Since(queryStart).Milliseconds(), err.Error())
 		app.errorJSON(w, fmt.Errorf("consultar saúde operacional das escolas: %v", err), http.StatusInternalServerError)
 		return
 	}
 	defer dbRows.Close()
+	queryMs := time.Since(queryStart).Milliseconds()
 
+	// iterateStart cobre todo o loop (scan + build). calcDuration acumula apenas o
+	// tempo de buildSaudeOperacionalEscola (decode JSONB + cálculo das dimensões),
+	// permitindo separar "iteração das linhas" de "decode/cálculo".
+	iterateStart := time.Now()
+	var calcDuration time.Duration
 	allEscolas := make([]SaudeOperacionalEscola, 0)
 	for dbRows.Next() {
 		var row saudeOperacionalDBRow
@@ -950,21 +1214,32 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 			&row.CensusID,
 			&row.Data,
 		); err != nil {
+			app.logger.Printf("saude_operacional_perf_error: stage=scan elapsed_ms=%d error=%q",
+				time.Since(iterateStart).Milliseconds(), err.Error())
 			app.errorJSON(w, fmt.Errorf("ler escola da saúde operacional: %v", err), http.StatusInternalServerError)
 			return
 		}
-		escola, err := buildSaudeOperacionalEscola(row)
+		calcStart := time.Now()
+		escola, err := buildSaudeOperacionalEscola(row, pedagogicoPorEscola[row.SchoolID])
+		calcDuration += time.Since(calcStart)
 		if err != nil {
+			app.logger.Printf("saude_operacional_perf_error: stage=build_escola elapsed_ms=%d error=%q",
+				time.Since(iterateStart).Milliseconds(), err.Error())
 			app.errorJSON(w, err, http.StatusInternalServerError)
 			return
 		}
 		allEscolas = append(allEscolas, escola)
 	}
 	if err := dbRows.Err(); err != nil {
+		app.logger.Printf("saude_operacional_perf_error: stage=rows_err elapsed_ms=%d error=%q",
+			time.Since(iterateStart).Milliseconds(), err.Error())
 		app.errorJSON(w, fmt.Errorf("iterar escolas da saúde operacional: %v", err), http.StatusInternalServerError)
 		return
 	}
+	iterateCalcMs := time.Since(iterateStart).Milliseconds()
+	calcMs := calcDuration.Milliseconds()
 
+	paginateStart := time.Now()
 	pageSlice, resumo, totalFiltrado, totalPages, page := buildSaudeOperacionalPage(
 		allEscolas,
 		searchQuery,
@@ -973,7 +1248,9 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 		page,
 		pageSize,
 	)
+	paginateMs := time.Since(paginateStart).Milliseconds()
 
+	payloadStart := time.Now()
 	out := SaudeOperacionalPayload{
 		TotalEscolas:  len(allEscolas),
 		TotalFiltrado: totalFiltrado,
@@ -988,6 +1265,17 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 	if out.Escolas == nil {
 		out.Escolas = []SaudeOperacionalEscola{}
 	}
+	payloadMs := time.Since(payloadStart).Milliseconds()
+
+	totalMs := time.Since(routeStart).Milliseconds()
+	app.logger.Printf("saude_operacional_perf: year=%d page=%d page_size=%d sort=%s direction=%s "+
+		"has_search=%t has_dre=%t has_municipio=%t has_zona=%t has_regiao=%t "+
+		"parse_ms=%d pedagogico_ms=%d query_ms=%d iterate_calc_ms=%d calc_ms=%d paginate_ms=%d payload_ms=%d total_ms=%d "+
+		"total_escolas=%d total_filtrado=%d total_pages=%d page_items=%d",
+		year, page, pageSize, sortKey, direction,
+		hasSearch, hasDRE, hasMunicipio, hasZona, hasRegiao,
+		parseMs, pedagogicoMs, queryMs, iterateCalcMs, calcMs, paginateMs, payloadMs, totalMs,
+		len(allEscolas), totalFiltrado, totalPages, len(pageSlice))
 
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: out})
 }

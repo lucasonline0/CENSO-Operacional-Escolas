@@ -204,7 +204,7 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
   return (
     <div className="space-y-6">
       {/* Indicação discreta da fonte de dados da aba. */}
-      <div className={`flex items-center gap-2 text-xs ${sourceTone === "emerald" ? "text-emerald-700" : "text-amber-700"
+      <div data-pres-hide="true" className={`flex items-center gap-2 text-xs ${sourceTone === "emerald" ? "text-emerald-700" : "text-amber-700"
         }`}>
         <span className={`inline-block w-2 h-2 rounded-full ${sourceTone === "emerald" ? "bg-emerald-500" : "bg-amber-500"
           }`} />
@@ -213,7 +213,7 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
 
       {/* Avisos detalhados de falha — só aparecem se houve fallback. */}
       {(perfilErr || dreErr) && (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm animate-fade-in">
+        <div data-pres-hide="true" className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm animate-fade-in">
           <AlertCircle size={15} className="shrink-0 mt-0.5" />
           <span>
             Indicadores via PostgreSQL parcialmente indisponíveis
@@ -225,15 +225,16 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
       )}
       {/* Se até a planilha falhou mas o PG funcionou, deixamos só um aviso suave. */}
       {sheetErr && !perfilErr && !dreErr && (
-        <div className="flex items-start gap-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl px-4 py-3 text-xs animate-fade-in">
+        <div data-pres-hide="true" className="flex items-start gap-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl px-4 py-3 text-xs animate-fade-in">
           <AlertCircle size={14} className="shrink-0 mt-0.5" />
           <span>Planilha (fallback) indisponível ({sheetErr}). Operando 100% via PostgreSQL.</span>
         </div>
       )}
 
       {/* ── Dimensão e Perfil da Rede ─────────────────────────── */}
+      <div data-pres-slide="perfil-dimensao-indicadores" className="space-y-6">
       <div id="sec-perfil-dimensao" className="animate-fade-in-up">
-        <div className="flex items-center gap-3 mb-4">
+        <div data-pres-hide="true" className="flex items-center gap-3 mb-4">
           <Building2 size={18} style={{ color: C.primary }} />
           <h2 className="font-semibold text-slate-800 text-base">Dimensão e Perfil da Rede</h2>
           <div className="flex-1 h-px bg-slate-200" />
@@ -274,8 +275,9 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
         <HBarChart rows={matriculasBar} color={C.primary} />
       </div>
 
+      </div>
       {/* ── Organização da Oferta e Funcionamento ─────────────── */}
-      <div id="sec-perfil-oferta" className="animate-fade-in-up [animation-delay:600ms]">
+      <div id="sec-perfil-oferta" data-pres-hide="true" className="animate-fade-in-up [animation-delay:600ms]">
         <div className="flex items-center gap-3 mb-4">
           <Clock size={18} style={{ color: C.primary }} />
           <h2 className="font-semibold text-slate-800 text-base">Organização da Oferta e Funcionamento</h2>
@@ -283,23 +285,23 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
         </div>
       </div>
 
-      <div className="space-y-5">
+      <div data-pres-slide="perfil-oferta-etapas" className="space-y-5">
         {ofertaErr && (
-          <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <div data-pres-hide="true" className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
             <AlertCircle size={14} /> Oferta e funcionamento indisponível: {ofertaErr}
           </div>
         )}
 
         {ofertaPg && (
-          <>
-            {/* Etapas + Modalidades */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="flex flex-col gap-5">
+              <div className="flex-1 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                <h3 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
                   <GraduationCap size={16} style={{ color: C.primary }} />
                   Escolas por Etapa Ofertada
                 </h3>
                 <Donut
+                  size={120}
                   segments={ofertaPg.etapas_ofertadas.map((e, i) => ({
                     label: e.label,
                     value: e.escolas,
@@ -310,22 +312,8 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
                   sub="registros"
                 />
               </div>
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-                  <BookOpen size={16} style={{ color: C.primary }} />
-                  Escolas por Modalidade Ofertada
-                </h3>
-                <HBarChart
-                  rows={ofertaPg.modalidades_ofertadas.map((m) => ({ label: m.label, value: m.escolas, pct: m.percentual }))}
-                  color="#2563EB"
-                />
-              </div>
-            </div>
-
-            {/* Turnos + Média por porte */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+              <div className="flex-1 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-col">
+                <h3 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
                   <Clock size={16} style={{ color: C.primary }} />
                   Distribuição de Escolas por Turno
                 </h3>
@@ -337,6 +325,18 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
                   }))}
                   label={totalEscolas.toLocaleString("pt-BR")}
                   sub="escolas"
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-5">
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                  <BookOpen size={16} style={{ color: C.primary }} />
+                  Escolas por Modalidade Ofertada
+                </h3>
+                <HBarChart
+                  rows={ofertaPg.modalidades_ofertadas.map((m) => ({ label: m.label, value: m.escolas, pct: m.percentual }))}
+                  color="#2563EB"
                 />
               </div>
               <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
@@ -353,12 +353,12 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
                 />
               </div>
             </div>
-          </>
+          </div>
         )}
       </div>
 
       {/* ── Infraestrutura Educacional ────────────────────────── */}
-      <div id="sec-perfil-infra" className="animate-fade-in-up [animation-delay:750ms]">
+      <div id="sec-perfil-infra" data-pres-hide="true" className="animate-fade-in-up [animation-delay:750ms]">
         <div className="flex items-center gap-3 mb-4">
           <LayoutGrid size={18} style={{ color: C.primary }} />
           <h2 className="font-semibold text-slate-800 text-base">Infraestrutura Educacional</h2>
@@ -372,10 +372,11 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
           </button>
           <div className="flex-1 h-px bg-slate-200" />
         </div>
+      </div>
 
-        <div className="space-y-5">
+      <div data-pres-slide="perfil-infra-indicadores" className="space-y-3">
           {infraErr && !infraPg && (
-            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+            <div data-pres-hide="true" className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
               <AlertCircle size={15} className="shrink-0 mt-0.5" />
               <span>Infraestrutura Educacional indisponível ({infraErr}).</span>
             </div>
@@ -383,9 +384,7 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
 
           {infraPg && (
             <>
-              {/* KPIs de cobertura essencial. "Total de Escolas" não é
-                repetido aqui — já consta no bloco Dimensão e Perfil da Rede. */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <StatCard
                   label="Média de Ambientes Essenciais"
                   value={infraPg.cobertura_essenciais.media_ambientes_essenciais.toLocaleString("pt-BR")}
@@ -402,10 +401,9 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
                 />
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                {/* Ranking de ambientes mais presentes */}
-                <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                  <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                  <h3 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
                     <BarChart2 size={16} style={{ color: C.primary }} />
                     Ambientes mais Presentes
                   </h3>
@@ -423,9 +421,8 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
                   )}
                 </div>
 
-                {/* Distribuição por faixa de cobertura essencial */}
-                <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                  <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                  <h3 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
                     <ShieldCheck size={16} style={{ color: C.primary }} />
                     Cobertura de Ambientes Essenciais
                   </h3>
@@ -441,9 +438,8 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
                 </div>
               </div>
 
-              {/* Média de essenciais por porte */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                <h3 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
                   <TrendingUp size={16} style={{ color: C.primary }} />
                   Média de Essenciais por Porte
                 </h3>
@@ -455,6 +451,7 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
                     barMaxWidth={120}
                     gapClass="gap-1"
                     valueInside
+                    heightClass="h-32"
                   />
                 ) : (
                   <p className="text-sm text-slate-400">Sem dados de porte.</p>
@@ -462,12 +459,12 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
               </div>
             </>
           )}
-        </div>
       </div>
 
       {/* Janela informativa — ambientes essenciais */}
       {infoOpen && (
         <div
+          data-pres-hide="true"
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 animate-fade-in"
           onClick={() => setInfoOpen(false)}
         >
@@ -510,13 +507,14 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
         </div>
       )}
 
+      <div data-pres-slide="perfil-dre-tabela" className="space-y-6">
       {/* Tabela DRE detalhada */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm animate-fade-in-up [animation-delay:900ms]">
         <div className="px-6 py-4 border-b border-slate-200 flex items-center gap-2" style={{ background: C.primaryLight }}>
           <MapPinned size={16} style={{ color: C.primary }} />
           <h3 className="font-semibold text-slate-800 text-sm">Detalhamento por DRE</h3>
         </div>
-        <div className="overflow-x-auto">
+        <div data-pres-table-scroll="true" className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
@@ -538,6 +536,7 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
             </tbody>
           </table>
         </div>
+      </div>
       </div>
     </div>
   );

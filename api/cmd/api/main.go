@@ -366,6 +366,15 @@ func (app *application) routes() http.Handler {
 			protected.Get("/admin/analytics/servicos-terceirizados/manipuladores-alimentos", app.AdminAnalyticsServicosManipuladoresAlimentos)
 			protected.Get("/admin/analytics/escolas/saude-operacional", app.AdminAnalyticsSaudeOperacionalEscolas)
 
+			// Gestão Financeira e Governança — repasses PRODEP (PR técnico 2).
+			protected.Get("/admin/analytics/financeiro-governanca/prodep", app.AdminAnalyticsFinanceiroGovernancaProdep)
+
+			// Gestão Financeira e Governança — Governança Institucional (Censo, PR 1).
+			protected.Get("/admin/analytics/financeiro-governanca/institucional", app.AdminAnalyticsFinanceiroGovernancaInstitucional)
+
+			// Perfil dos Alunos e Resultados — IDEB 2023 (IDEB-04, lê ideb_resultados).
+			protected.Get("/admin/analytics/perfil-alunos-resultados/ideb", app.AdminAnalyticsPerfilAlunosResultadosIDEB)
+
 			// Andamento do preenchimento do censo por DRE.
 			protected.Get("/admin/analytics/preenchimento/dre", app.AdminAnalyticsPreenchimentoDre)
 

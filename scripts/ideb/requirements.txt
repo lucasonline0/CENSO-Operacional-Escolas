@@ -1,0 +1,11 @@
+# Dependências do importador IDEB 2023 (scripts/ideb/import_ideb_resultados.py)
+#
+# openpyxl       -> leitura da planilha .xlsx preservando texto (INEP intacto).
+# psycopg[binary]-> conexão PostgreSQL. OPCIONAL para o dry-run (usada apenas
+#                   para simular o match com schools); OBRIGATÓRIA para a carga
+#                   real futura (--apply, IDEB-03B).
+#
+# Estas dependências são exclusivas deste utilitário Python. NÃO são adicionadas
+# ao backend Go nem ao frontend Next.js.
+openpyxl>=3.1
+psycopg[binary]>=3.1

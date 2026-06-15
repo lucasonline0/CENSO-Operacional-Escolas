@@ -564,13 +564,22 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 <MonitorPlay size={16} />
                 <span>Modo Apresentação</span>
               </button>
-
               <button
                 className="ca-icon-btn"
-                title="Mudar tema"
-                onClick={() => setDark(!dark)}
+                title={syncing ? "Sincronizando…" : "Sync Planilha"}
+                onClick={handleSync}
+                disabled={syncing}
               >
-                {dark ? <Sun size={16} /> : <Moon size={16} />}
+                {syncing
+                  ? <Loader2 size={16} className="animate-spin" />
+                  : <CloudUpload size={16} />}
+              </button>
+              <button className="ca-icon-btn" title="Mudar tema" onClick={() => setDark(!dark)}>
+                {
+                  dark
+                    ? <Sun size={16} />
+                    : <Moon size={16} />
+                }
               </button>
               <button className="ca-icon-btn" title="Sair" onClick={logout}>
                 <LogOut size={16} />

@@ -557,7 +557,7 @@ export function AbaSaudeOperacionalEscolas({
                       <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.pessoal} /></td>
                       <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.tecnologia} /></td>
                       <td className="px-3 py-3 text-center"><DimensionBadge value={null} /></td>
-                      <td className="px-3 py-3 text-center"><DimensionBadge value={null} /></td>
+                      <td className="px-3 py-3 text-center"><DimensionBadge value={escola.dimensoes.governanca} /></td>
                     </tr>
                   ))}
                 </tbody>

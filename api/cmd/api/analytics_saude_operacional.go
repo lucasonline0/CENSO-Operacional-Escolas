@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -20,7 +21,7 @@ import (
 
 const (
 	saudeOperacionalNome            = "Índice de Saúde Operacional por escola"
-	saudeOperacionalVersao          = "1.1.0"
+	saudeOperacionalVersao          = "1.2.0"
 	saudeOperacionalPageSizeDefault = 10
 )
 
@@ -31,6 +32,7 @@ var saudeOperacionalDimensoesHabilitadas = []string{
 	"seguranca",
 	"pessoal",
 	"tecnologia",
+	"pedagogico",
 	"governanca",
 }
 
@@ -531,7 +533,93 @@ func calculateGovernance(data map[string]any) *float64 {
 	return ptrFloat(score)
 }
 
-func calculateSchoolHealth(data map[string]any) saudeOperacionalCalculation {
+// idebPedagogicoAggregate reúne os agregados brutos de IDEB de uma escola usados
+// para derivar a dimensão Pedagógico. Mantém os dados crus (soma ponderada, peso
+// total e média simples) para que a regra de fallback seja calculável por função
+// pura, testável sem banco.
+type idebPedagogicoAggregate struct {
+	// SomaPonderada = SUM(ideb * total_avaliado) com ideb não nulo e total_avaliado > 0.
+	SomaPonderada float64
+	// TotalPeso = SUM(total_avaliado) sob a mesma condição da soma ponderada.
+	TotalPeso float64
+	// MediaSimples = AVG(ideb) com ideb não nulo; nil quando não há IDEB válido.
+	MediaSimples *float64
+}
+
+// calculatePedagogicoFromIdeb converte os agregados de IDEB de uma escola na nota
+// Pedagógico em escala 0–100 (ideb * 10):
+//   - média ponderada por total_avaliado quando há peso válido (> 0);
+//   - fallback para média simples quando há IDEB válido mas nenhum total_avaliado > 0;
+//   - nil quando não há IDEB válido — ausência de IDEB NUNCA vira zero.
+func calculatePedagogicoFromIdeb(agg idebPedagogicoAggregate) *float64 {
+	if agg.TotalPeso > 0 {
+		return ptrFloat((agg.SomaPonderada / agg.TotalPeso) * 10)
+	}
+	if agg.MediaSimples != nil {
+		return ptrFloat(*agg.MediaSimples * 10)
+	}
+	return nil
+}
+
+// saudeOperacionalPedagogicoSQL agrega ideb_resultados do ÚLTIMO ano disponível
+// (MAX(ano)) por school_id. Considera apenas registros com vínculo cadastral
+// (school_id IS NOT NULL); registros sem match em schools não contribuem para
+// nenhuma escola. A regra de conversão/fallback fica em Go
+// (calculatePedagogicoFromIdeb), por isso a query devolve os agregados crus.
+const saudeOperacionalPedagogicoSQL = `
+	WITH ultimo_ano AS (
+		SELECT MAX(ano) AS ano FROM ideb_resultados
+	)
+	SELECT
+		i.school_id,
+		COALESCE(SUM(i.ideb * i.total_avaliado) FILTER (
+			WHERE i.ideb IS NOT NULL AND i.total_avaliado > 0), 0) AS soma_ponderada,
+		COALESCE(SUM(i.total_avaliado) FILTER (
+			WHERE i.ideb IS NOT NULL AND i.total_avaliado > 0), 0) AS total_peso,
+		AVG(i.ideb) FILTER (WHERE i.ideb IS NOT NULL) AS media_simples
+	FROM ideb_resultados i
+	JOIN ultimo_ano u ON u.ano = i.ano
+	WHERE i.school_id IS NOT NULL
+	GROUP BY i.school_id
+`
+
+// loadPedagogicoPorEscola devolve a nota Pedagógico (0–100) já calculada por
+// school_id, a partir do IDEB oficial do último ano em ideb_resultados. Escolas
+// sem IDEB válido não entram no mapa — o lookup de uma chave ausente devolve nil
+// naturalmente, preservando o padrão "sem dados" da dimensão.
+func (app *application) loadPedagogicoPorEscola(ctx context.Context) (map[int]*float64, error) {
+	rows, err := app.models.Schools.DB.QueryContext(ctx, saudeOperacionalPedagogicoSQL)
+	if err != nil {
+		return nil, fmt.Errorf("consultar pedagógico/IDEB por escola: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[int]*float64)
+	for rows.Next() {
+		var (
+			schoolID      int
+			somaPonderada float64
+			totalPeso     float64
+			mediaSimples  sql.NullFloat64
+		)
+		if err := rows.Scan(&schoolID, &somaPonderada, &totalPeso, &mediaSimples); err != nil {
+			return nil, fmt.Errorf("ler pedagógico/IDEB por escola: %w", err)
+		}
+		agg := idebPedagogicoAggregate{
+			SomaPonderada: somaPonderada,
+			TotalPeso:     totalPeso,
+		}
+		if mediaSimples.Valid {
+			agg.MediaSimples = ptrFloat(mediaSimples.Float64)
+		}
+		if pedagogico := calculatePedagogicoFromIdeb(agg); pedagogico != nil {
+			out[schoolID] = pedagogico
+		}
+	}
+	return out, rows.Err()
+}
+
+func calculateSchoolHealth(data map[string]any, pedagogico *float64) saudeOperacionalCalculation {
 	pesos := saudeOperacionalPesosMetodologia()
 	infraestrutura := calculateInfrastructure(data)
 	energia := calculateEnergy(data)
@@ -548,6 +636,7 @@ func calculateSchoolHealth(data map[string]any) saudeOperacionalCalculation {
 		weightedHealthValue{Value: seguranca, Weight: pesos.Seguranca},
 		weightedHealthValue{Value: pessoal, Weight: pesos.Pessoal},
 		weightedHealthValue{Value: tecnologia, Weight: pesos.Tecnologia},
+		weightedHealthValue{Value: pedagogico, Weight: pesos.Pedagogico},
 		weightedHealthValue{Value: governanca, Weight: pesos.Governanca},
 	)
 	saude := roundOptional1(saudeRaw)
@@ -578,7 +667,7 @@ func calculateSchoolHealth(data map[string]any) saudeOperacionalCalculation {
 			Seguranca:      roundOptional1(seguranca),
 			Pessoal:        roundOptional1(pessoal),
 			Tecnologia:     roundOptional1(tecnologia),
-			Pedagogico:     nil,
+			Pedagogico:     roundOptional1(pedagogico),
 			Governanca:     roundOptional1(governanca),
 		},
 	}
@@ -609,7 +698,11 @@ func nullableTrimmedString(value sql.NullString) *string {
 	return ptrString(trimmed)
 }
 
-func buildSaudeOperacionalEscola(row saudeOperacionalDBRow) (SaudeOperacionalEscola, error) {
+// buildSaudeOperacionalEscola monta a escola do payload. O parâmetro pedagogico
+// é a nota Pedagógico (0–100) derivada do IDEB para a escola; só é aplicado
+// quando há censo concluído (a escola é, de fato, pontuada). Escolas sem censo
+// permanecem "sem_dados" com todas as dimensões nulas, mesmo que possuam IDEB.
+func buildSaudeOperacionalEscola(row saudeOperacionalDBRow, pedagogico *float64) (SaudeOperacionalEscola, error) {
 	out := SaudeOperacionalEscola{
 		SchoolID:   row.SchoolID,
 		CensusID:   nil,
@@ -633,7 +726,7 @@ func buildSaudeOperacionalEscola(row saudeOperacionalDBRow) (SaudeOperacionalEsc
 	if err != nil {
 		return SaudeOperacionalEscola{}, fmt.Errorf("decodificar JSONB do censo %d: %w", censusID, err)
 	}
-	calculation := calculateSchoolHealth(data)
+	calculation := calculateSchoolHealth(data, pedagogico)
 	out.TotalAlunos = calculation.TotalAlunos
 	out.SalasAula = calculation.SalasAula
 	out.AlunosPorSala = calculation.AlunosPorSala
@@ -1008,6 +1101,15 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 	filters := parseSaudeOperacionalFilters(q)
 	query, args := buildSaudeOperacionalQuery(year, filters)
 
+	// Nota Pedagógico (IDEB) por escola, do último ano disponível em
+	// ideb_resultados. Independe do ano do censo: é o resultado oficial mais
+	// recente aplicado a cada escola pontuada.
+	pedagogicoPorEscola, err := app.loadPedagogicoPorEscola(r.Context())
+	if err != nil {
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+
 	dbRows, err := app.models.Schools.DB.QueryContext(r.Context(), query, args...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("consultar saúde operacional das escolas: %v", err), http.StatusInternalServerError)
@@ -1031,7 +1133,7 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 			app.errorJSON(w, fmt.Errorf("ler escola da saúde operacional: %v", err), http.StatusInternalServerError)
 			return
 		}
-		escola, err := buildSaudeOperacionalEscola(row)
+		escola, err := buildSaudeOperacionalEscola(row, pedagogicoPorEscola[row.SchoolID])
 		if err != nil {
 			app.errorJSON(w, err, http.StatusInternalServerError)
 			return

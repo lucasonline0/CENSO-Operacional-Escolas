@@ -58,17 +58,23 @@ const SLIDES: PresentationSlide[] = [
     ["perfil-dre-tabela", "Tabela consolidada"],
   ]),
 
-  ...createSlides("pessoal", "Pessoal e Gestão Escolar", "Estrutura de Gestão Escolar", [
-    ["pessoal-estrutura-resumo", "Indicadores e composição da gestão"],
-  ]),
-  ...createSlides("pessoal", "Pessoal e Gestão Escolar", "Coordenação Pedagógica", [
-    ["pessoal-coordenacao", "Cobertura e composição"],
-  ]),
-  ...createSlides("pessoal", "Pessoal e Gestão Escolar", "Quadro de Pessoal", [
-    ["pessoal-quadro-indicadores", "Indicadores gerais"],
-    ["pessoal-quadro-distribuicao", "Distribuição por vínculo"],
-    ["pessoal-quadro-dre", "Detalhamento por DRE"],
-  ]),
+  {
+    id: "pessoal-quadro",
+    tabId: "pessoal",
+    tabLabel: "Pessoal e Gestão Escolar",
+    sectionLabel: "Quadro de Pessoal",
+    slideTitle: "Indicadores e Distribuição",
+    contentId: "pessoal-quadro-indicadores, pessoal-quadro-distribuicao",
+  },
+
+  {
+    id: "pessoal-quadro",
+    tabId: "pessoal",
+    tabLabel: "Pessoal e Gestão Escolar",
+    sectionLabel: "Quadro de Pessoal",
+    slideTitle: "Detalhamento por DRE",
+    contentId: "pessoal-quadro-dre",
+  },
 
   {
     id: "tecnologia-digital",
@@ -96,22 +102,23 @@ const SLIDES: PresentationSlide[] = [
     id: "infra-condicoes",
     tabId: "infraestrutura",
     tabLabel: "Infraestrutura e Segurança",
-    sectionLabel: "Condições Estruturais e Ambientes",
-    contentId: "infra-condicoes-resumo,infra-condicoes-situacao,infra-condicoes-ambientes",
+    sectionLabel: "Condições Estruturais",
+    contentId: "infra-condicoes-resumo,infra-condicoes-situacao",
+  },
+  {
+    id: "infra-condicoes",
+    tabId: "infraestrutura",
+    tabLabel: "Infraestrutura e Segurança",
+    sectionLabel: "Condições Estruturais",
+    slideTitle: "Ambientes e Manutenção",
+    contentId: "infra-condicoes-ambientes",
   },
   {
     id: "infra-energia",
     tabId: "infraestrutura",
     tabLabel: "Infraestrutura e Segurança",
     sectionLabel: "Energia, Climatização e Capacidade Elétrica",
-    contentId: "infra-energia-distribuicao",
-  },
-  {
-    id: "infra-energia-tabela-slide",
-    tabId: "infraestrutura",
-    tabLabel: "Infraestrutura e Segurança",
-    sectionLabel: "Salas Climatizadas por DRE",
-    contentId: "infra-energia-tabela",
+    contentId: "infra-energia-distribuicao, infra-energia-tabela",
   },
   {
     id: "infra-seguranca",
@@ -325,12 +332,9 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
       const available = window.innerHeight - PRES_PAGE_PADDING;
       const natural = element.scrollHeight;
       if (natural > 0 && available > 0) {
-        let zoom = available / natural;
-        if (zoom > 1.0) {
-          // Reduz um pouco o aumento da escala (damping) e limita a um máximo de 1.15
-          zoom = Math.min(1.15, 1.0 + (zoom - 1.0) * 0.7);
-        }
-        element.style.zoom = zoom.toFixed(3);
+        const zoom = available / natural;
+        // Só encolhe se o conteúdo for maior que a tela — CSS cuida de crescer
+        element.style.zoom = zoom < 1 ? zoom.toFixed(3) : "1";
       }
     };
 

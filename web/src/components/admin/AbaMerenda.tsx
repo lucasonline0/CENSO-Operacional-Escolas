@@ -17,6 +17,7 @@ import type {
   MerendaCondicoesSanitarias, DashboardFilters,
 } from "./shared/types";
 import { buildPostgresSourceLabel } from "./shared/sourceLabel";
+import { ReportButton } from "./shared/ReportButton";
 
 function buildFilterParams(filters?: DashboardFilters): string {
   if (!filters) return "";
@@ -327,10 +328,18 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
 
   return (
     <div className="space-y-6">
-      {/* Badge de fonte */}
-      <div data-pres-hide="true" className="flex items-center gap-2 text-xs text-emerald-700">
-        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-        <span>Fonte: {buildPostgresSourceLabel(filters)}</span>
+      {/* Badge de fonte + ação de relatório */}
+      <div data-pres-hide="true" className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-xs text-emerald-700">
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+          <span>Fonte: {buildPostgresSourceLabel(filters)}</span>
+        </div>
+        <ReportButton
+          reportId="merenda-escolar-condicoes"
+          token={token}
+          filters={filters}
+          onUnauth={onUnauth}
+        />
       </div>
 
       {/* Banners de erro parcial */}
@@ -379,8 +388,7 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
       </div>
 
       </div>
-      <div data-pres-slide="merenda-oferta-graficos" className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div data-pres-slide="merenda-oferta-graficos" className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
             <ClipboardList size={16} style={{ color: C.primary }} />
@@ -388,22 +396,6 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
           </h3>
           {ofertaSegments.length > 0 ? (
             <Donut segments={ofertaSegments} />
-          ) : (
-            <NoData />
-          )}
-        </div>
-      </div>
-      </div>
-
-      <div data-pres-slide="merenda-oferta-necessidades" className="space-y-6">
-      <div className="grid grid-cols-1 gap-5">
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
-            <CheckCircle2 size={16} style={{ color: C.primary }} />
-            Qualidade da merenda
-          </h3>
-          {qualidadeRows.length > 0 ? (
-            <HBarChart rows={qualidadeRows} color={C.primary} />
           ) : (
             <NoData />
           )}
@@ -421,6 +413,18 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
         </div>
       </div>
 
+      <div data-pres-slide="merenda-oferta-necessidades" className="space-y-6">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-800 text-sm mb-5 flex items-center gap-2">
+            <CheckCircle2 size={16} style={{ color: C.primary }} />
+            Qualidade da merenda
+          </h3>
+          {qualidadeRows.length > 0 ? (
+            <HBarChart rows={qualidadeRows} color={C.primary} />
+          ) : (
+            <NoData />
+          )}
+        </div>
       </div>
       {/* ── Estrutura Física da Cozinha ──────────────────────────── */}
       <div id="sec-merenda-estrutura" data-pres-hide="true" className="flex items-center gap-3 border-t border-slate-200 pt-4">

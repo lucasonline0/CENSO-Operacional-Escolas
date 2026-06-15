@@ -70,121 +70,165 @@ const SLIDES: PresentationSlide[] = [
     ["pessoal-quadro-dre", "Detalhamento por DRE"],
   ]),
 
-  ...createSlides("tecnologia", "Tecnologia e Equipamentos", "Infraestrutura Digital", [
-    ["tecnologia-digital-indicadores", "Indicadores gerais"],
-    ["tecnologia-digital-conexao", "Disponibilidade e qualidade da conexão"],
-  ]),
-  ...createSlides("tecnologia", "Tecnologia e Equipamentos", "Parque Tecnológico", [
-    ["tecnologia-parque-indicadores", "Inventário de equipamentos"],
-    ["tecnologia-parque-distribuicao", "Distribuição do parque"],
-    ["tecnologia-parque-notas", "Notas por equipamento"],
-  ]),
-  ...createSlides("tecnologia", "Tecnologia e Equipamentos", "Uso Pedagógico", [
-    ["tecnologia-pedagogico-indicadores", "Indicadores gerais"],
-    ["tecnologia-pedagogico-distribuicao", "Recursos e uso pedagógico"],
-  ]),
+  {
+    id: "tecnologia-digital",
+    tabId: "tecnologia",
+    tabLabel: "Tecnologia e Equipamentos",
+    sectionLabel: "Infraestrutura Digital",
+    contentId: "tecnologia-digital-indicadores,tecnologia-digital-conexao",
+  },
+  {
+    id: "tecnologia-parque",
+    tabId: "tecnologia",
+    tabLabel: "Tecnologia e Equipamentos",
+    sectionLabel: "Parque Tecnológico",
+    contentId: "tecnologia-parque-indicadores,tecnologia-parque-distribuicao,tecnologia-parque-notas",
+  },
+  {
+    id: "tecnologia-pedagogico",
+    tabId: "tecnologia",
+    tabLabel: "Tecnologia e Equipamentos",
+    sectionLabel: "Uso Pedagógico",
+    contentId: "tecnologia-pedagogico-indicadores,tecnologia-pedagogico-distribuicao",
+  },
 
-  ...createSlides("infraestrutura", "Infraestrutura e Segurança", "Condições Estruturais e Ambientes", [
-    ["infra-condicoes-resumo", "Indicadores gerais"],
-    ["infra-condicoes-situacao", "Situação dos prédios"],
-    ["infra-condicoes-ambientes", "Ambientes escolares"],
-  ]),
-  ...createSlides("infraestrutura", "Infraestrutura e Segurança", "Energia, Climatização e Capacidade Elétrica", [
-    ["infra-energia-distribuicao", "Energia e climatização"],
-    ["infra-energia-tabela", "Salas climatizadas"],
-  ]),
-  ...createSlides("infraestrutura", "Infraestrutura e Segurança", "Segurança Física e Patrimonial", [
-    ["infra-seguranca-indicadores", "Indicadores gerais"],
-    ["infra-seguranca-acesso", "Controle de acesso"],
-    ["infra-seguranca-iluminacao", "Iluminação e monitoramento"],
-    ["infra-seguranca-perimetro", "Proteção perimetral"],
-  ]),
+  {
+    id: "infra-condicoes",
+    tabId: "infraestrutura",
+    tabLabel: "Infraestrutura e Segurança",
+    sectionLabel: "Condições Estruturais e Ambientes",
+    contentId: "infra-condicoes-resumo,infra-condicoes-situacao,infra-condicoes-ambientes",
+  },
+  {
+    id: "infra-energia",
+    tabId: "infraestrutura",
+    tabLabel: "Infraestrutura e Segurança",
+    sectionLabel: "Energia, Climatização e Capacidade Elétrica",
+    contentId: "infra-energia-distribuicao",
+  },
+  {
+    id: "infra-energia-tabela-slide",
+    tabId: "infraestrutura",
+    tabLabel: "Infraestrutura e Segurança",
+    sectionLabel: "Salas Climatizadas por DRE",
+    contentId: "infra-energia-tabela",
+  },
+  {
+    id: "infra-seguranca",
+    tabId: "infraestrutura",
+    tabLabel: "Infraestrutura e Segurança",
+    sectionLabel: "Segurança Física e Patrimonial",
+    contentId: "infra-seguranca-indicadores,infra-seguranca-acesso,infra-seguranca-iluminacao,infra-seguranca-perimetro",
+  },
 
-  ...createSlides("merenda", "Merenda Escolar", "Oferta e Adequação da Merenda", [
-    ["merenda-oferta-resumo", "Indicadores gerais"],
-    ["merenda-oferta-graficos", "Regularidade da oferta"],
-    ["merenda-oferta-necessidades", "Qualidade e atendimento"],
-  ]),
-  ...createSlides("merenda", "Merenda Escolar", "Estrutura Física da Cozinha", [
-    ["merenda-estrutura-cozinha", "Condições da cozinha e refeitório"],
-    ["merenda-estrutura-refeitorio", "Tamanho e adequação"],
-  ]),
-  ...createSlides("merenda", "Merenda Escolar", "Equipamentos da Merenda", [
-    ["merenda-equipamentos-cards", "Inventário geral"],
-    ["merenda-equipamentos-cobertura", "Cobertura por tipo"],
-    ["merenda-equipamentos-criticidade", "Médias e criticidade"],
-    ["merenda-equipamentos-conservacao", "Estado de conservação"],
-    ["merenda-equipamentos-tabela", "Distribuição dos estados"],
-  ]),
-  ...createSlides("merenda", "Merenda Escolar", "Condições Sanitárias e Segurança", [
-    ["merenda-sanitarias-armazenamento", "Armazenamento dos alimentos"],
-    ["merenda-sanitarias-itens", "Presença de itens básicos"],
-    ["merenda-sanitarias-seguranca", "EPIs e extintores"],
-  ]),
+  {
+    id: "merenda-oferta",
+    tabId: "merenda",
+    tabLabel: "Merenda Escolar",
+    sectionLabel: "Oferta e Adequação da Merenda",
+    contentId: "merenda-oferta-resumo,merenda-oferta-graficos,merenda-oferta-necessidades",
+  },
+  {
+    id: "merenda-estrutura",
+    tabId: "merenda",
+    tabLabel: "Merenda Escolar",
+    sectionLabel: "Estrutura Física da Cozinha",
+    contentId: "merenda-estrutura-cozinha,merenda-estrutura-refeitorio",
+  },
+  {
+    id: "merenda-equipamentos",
+    tabId: "merenda",
+    tabLabel: "Merenda Escolar",
+    sectionLabel: "Equipamentos da Merenda - Visão Geral",
+    contentId: "merenda-equipamentos-cards,merenda-equipamentos-cobertura,merenda-equipamentos-criticidade,merenda-equipamentos-conservacao",
+  },
+  {
+    id: "merenda-equipamentos-tabela-slide",
+    tabId: "merenda",
+    tabLabel: "Merenda Escolar",
+    sectionLabel: "Equipamentos da Merenda - Distribuição por DRE",
+    contentId: "merenda-equipamentos-tabela",
+  },
+  {
+    id: "merenda-sanitarias",
+    tabId: "merenda",
+    tabLabel: "Merenda Escolar",
+    sectionLabel: "Condições Sanitárias e Segurança",
+    contentId: "merenda-sanitarias-armazenamento,merenda-sanitarias-itens,merenda-sanitarias-seguranca",
+  },
 
-  ...createSlides("servicos", "Serviços Terceirizados", "Visão Geral", [
-    ["servicos-visao-resumo", "Indicadores gerais"],
-    ["servicos-visao-cobertura", "Cobertura por área"],
-  ]),
-  ...createSlides("servicos", "Serviços Terceirizados", "Serviços Gerais", [
-    ["servicos-gerais-indicadores", "Quadro geral"],
-    ["servicos-gerais-distribuicao", "Vínculos e empresas"],
-  ]),
-  ...createSlides("servicos", "Serviços Terceirizados", "Portaria", [
-    ["servicos-portaria-indicadores", "Indicadores gerais"],
-    ["servicos-portaria-empresas", "Empresas prestadoras"],
-  ]),
-  ...createSlides("servicos", "Serviços Terceirizados", "Manipuladores de Alimentos", [
-    ["servicos-manipuladores-indicadores", "Quadro geral"],
-    ["servicos-manipuladores-distribuicao", "Vínculos e atendimento"],
-    ["servicos-manipuladores-empresas", "Empresas prestadoras"],
-  ]),
-  ...createSlides("servicos", "Serviços Terceirizados", "Governança e Supervisão", [
-    ["servicos-governanca-aviso", "Disponibilidade dos indicadores"],
-  ]),
+  {
+    id: "servicos-visao",
+    tabId: "servicos",
+    tabLabel: "Serviços Terceirizados",
+    sectionLabel: "Visão Geral",
+    contentId: "servicos-visao-resumo,servicos-visao-cobertura",
+  },
+  {
+    id: "servicos-gerais",
+    tabId: "servicos",
+    tabLabel: "Serviços Terceirizados",
+    sectionLabel: "Serviços Gerais",
+    contentId: "servicos-gerais-indicadores,servicos-gerais-distribuicao",
+  },
+  {
+    id: "servicos-portaria",
+    tabId: "servicos",
+    tabLabel: "Serviços Terceirizados",
+    sectionLabel: "Portaria",
+    contentId: "servicos-portaria-indicadores,servicos-portaria-empresas",
+  },
+  {
+    id: "servicos-manipuladores",
+    tabId: "servicos",
+    tabLabel: "Serviços Terceirizados",
+    sectionLabel: "Manipuladores de Alimentos",
+    contentId: "servicos-manipuladores-indicadores,servicos-manipuladores-distribuicao,servicos-manipuladores-empresas",
+  },
+  {
+    id: "servicos-governanca",
+    tabId: "servicos",
+    tabLabel: "Serviços Terceirizados",
+    sectionLabel: "Governança e Supervisão",
+    contentId: "servicos-governanca-aviso",
+  },
 
-  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Resumo IDEB 2023", [
-    ["alunos-resumo-cards", "Indicadores gerais"],
-  ]),
-  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Resultado por Etapa", [
-    ["alunos-etapa-tabela", "IDEB por etapa"],
-  ]),
-  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Distribuição por Faixas", [
-    ["alunos-faixas-distribuicao", "Faixas de IDEB por etapa"],
-  ]),
-  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Ranking por Escola", [
-    ["alunos-ranking-escolas", "Maiores, menores e sem IDEB"],
-  ]),
-  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Resultado por DRE", [
-    ["alunos-dre-tabela", "Agregações por DRE e etapa"],
-  ]),
-  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Qualidade da Base", [
-    ["alunos-qualidade", "Indicadores de qualidade"],
-  ]),
+  {
+    id: "alunos-visao",
+    tabId: "alunos",
+    tabLabel: "Perfil dos Alunos e Resultados",
+    sectionLabel: "Visão Geral dos Alunos",
+    contentId: "alunos-visao-indicadores",
+  },
+  {
+    id: "alunos-faixas",
+    tabId: "alunos",
+    tabLabel: "Perfil dos Alunos e Resultados",
+    sectionLabel: "Distribuição por Faixa",
+    contentId: "alunos-faixas-distribuicao",
+  },
+  {
+    id: "alunos-abandono",
+    tabId: "alunos",
+    tabLabel: "Perfil dos Alunos e Resultados",
+    sectionLabel: "Abandono e Risco",
+    contentId: "alunos-abandono-risco",
+  },
 
-  ...createSlides("governanca", "Gestão Financeira e Governança", "Visão Geral Financeira", [
-    ["financeiro-resumo-cards", "Indicadores financeiros"],
-  ]),
-  ...createSlides("governanca", "Gestão Financeira e Governança", "Execução por Ano", [
-    ["financeiro-evolucao-ano", "Evolução anual"],
-  ]),
-  ...createSlides("governanca", "Gestão Financeira e Governança", "Prestação de Contas", [
-    ["financeiro-prestacao-status", "Status de prestação de contas"],
-  ]),
-  ...createSlides("governanca", "Gestão Financeira e Governança", "Vínculo Cadastral", [
-    ["financeiro-vinculo-cadastral", "Vínculo financeiro-cadastral"],
-  ]),
-  ...createSlides("governanca", "Gestão Financeira e Governança", "Rankings de Escolas", [
-    ["financeiro-ranking-recebido", "Maiores valores recebidos"],
-    ["financeiro-ranking-reprogramado", "Maiores valores reprogramados"],
-  ]),
-
-  ...createSlides("saude", "Saúde Operacional", "Resumo da Saúde Operacional", [
-    ["saude-resumo-indicadores", "Indicadores gerais"],
-  ]),
-  ...createSlides("saude", "Saúde Operacional", "Escolas por Índice de Saúde", [
-    ["saude-escolas-tabela", "Tabela por escola"],
-  ]),
+  {
+    id: "saude-resumo",
+    tabId: "saude",
+    tabLabel: "Saúde Operacional",
+    sectionLabel: "Resumo da Saúde Operacional",
+    contentId: "saude-resumo-indicadores",
+  },
+  {
+    id: "saude-escolas",
+    tabId: "saude",
+    tabLabel: "Saúde Operacional",
+    sectionLabel: "Escolas por Índice de Saúde",
+    contentId: "saude-escolas-tabela",
+  },
 ];
 
 // top padding (49px) + bottom padding (24px) + breathing room (16px)
@@ -208,11 +252,15 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
   const dropdownRef = useRef<HTMLDivElement | null>(null);
 
   const slideIndexRef = useRef(0);
+  const transitionInProgressRef = useRef(false);
   const retryTimerRef = useRef<number | null>(null);
   const safetyTimeoutRef = useRef<number | null>(null);
+  const maxWaitTimeoutRef = useRef<number | null>(null);
   const observerRef = useRef<MutationObserver | null>(null);
   const navigationTokenRef = useRef(0);
   const onNavigateTabRef = useRef(onNavigateTab);
+  const consecutiveSkipsRef = useRef(0);
+  const durationRef = useRef(duration);
 
   const total = SLIDES.length;
   const slide = SLIDES[slideIndex];
@@ -220,6 +268,19 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
   useEffect(() => {
     onNavigateTabRef.current = onNavigateTab;
   }, [onNavigateTab]);
+
+  useEffect(() => {
+    durationRef.current = duration;
+  }, [duration]);
+
+  useEffect(() => {
+    if (slideStatus === "found" || slideStatus === "missing") {
+      const timer = setTimeout(() => {
+        transitionInProgressRef.current = false;
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [slideStatus]);
 
   const clearRetryTimer = useCallback(() => {
     if (retryTimerRef.current !== null) {
@@ -229,6 +290,10 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
     if (safetyTimeoutRef.current !== null) {
       window.clearTimeout(safetyTimeoutRef.current);
       safetyTimeoutRef.current = null;
+    }
+    if (maxWaitTimeoutRef.current !== null) {
+      window.clearTimeout(maxWaitTimeoutRef.current);
+      maxWaitTimeoutRef.current = null;
     }
     if (observerRef.current !== null) {
       observerRef.current.disconnect();
@@ -241,7 +306,12 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
       const available = window.innerHeight - PRES_PAGE_PADDING;
       const natural = element.scrollHeight;
       if (natural > 0 && available > 0) {
-        element.style.zoom = (available / natural).toFixed(3);
+        let zoom = available / natural;
+        if (zoom > 1.0) {
+          // Reduz um pouco o aumento da escala (damping) e limita a um máximo de 1.15
+          zoom = Math.min(1.15, 1.0 + (zoom - 1.0) * 0.7);
+        }
+        element.style.zoom = zoom.toFixed(3);
       }
     };
 
@@ -261,16 +331,35 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
 
     const tryActivate = () => {
       removeActiveSlideState();
-      const element = document.querySelector<HTMLElement>(
-        `[data-pres-slide="${target.contentId}"]`,
-      );
+      
+      const ids = target.contentId.split(",").map(id => id.trim());
+      const elements: HTMLElement[] = [];
+      
+      for (const id of ids) {
+        const element = document.querySelector<HTMLElement>(
+          `[data-pres-slide="${id}"]`,
+        );
+        if (element) {
+          elements.push(element);
+        }
+      }
 
-      if (element) {
-        element.classList.add("ca-pres-slide-active");
-        element.setAttribute("aria-current", "true");
-        applySlideZoom(element);
+      if (elements.length === ids.length) {
+        elements.forEach((element) => {
+          element.classList.add("ca-pres-slide-active");
+          element.setAttribute("aria-current", "true");
+          applySlideZoom(element);
+        });
         retryTimerRef.current = null;
         setSlideStatus("found");
+        if (maxWaitTimeoutRef.current !== null) {
+          window.clearTimeout(maxWaitTimeoutRef.current);
+          maxWaitTimeoutRef.current = null;
+        }
+        if (safetyTimeoutRef.current !== null) {
+          window.clearTimeout(safetyTimeoutRef.current);
+          safetyTimeoutRef.current = null;
+        }
         return true;
       }
       return false;
@@ -301,20 +390,67 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
       subtree: true,
     });
 
-    // Timeout de segurança longo (15 segundos)
-    safetyTimeoutRef.current = window.setTimeout(() => {
-      if (navigationToken === navigationTokenRef.current) {
-        setSlideStatus((prev) => (prev === "found" ? "found" : "missing"));
+    // Helper para verificar se a aba de trás ainda está carregando dados da API
+    const isTabLoading = () => {
+      const loaders = document.querySelectorAll(".animate-spin");
+      for (let i = 0; i < loaders.length; i++) {
+        if (!loaders[i].closest(".ca-pres-shell")) {
+          return true;
+        }
       }
-      clearRetryTimer();
-    }, 15000);
-  }, [clearRetryTimer]);
+      const adminPage = document.querySelector(".admin-page");
+      if (adminPage) {
+        const text = adminPage.textContent || "";
+        if (text.includes("Carregando")) {
+          return true;
+        }
+      }
+      return false;
+    };
 
-  const goToSlide = useCallback((nextIndex: number) => {
+    // Timeout de segurança (5 segundos)
+    const checkAndSetStatus = () => {
+      if (navigationToken !== navigationTokenRef.current) {
+        return;
+      }
+      // Se ainda está carregando os dados na aba, aguarda mais 1 segundo e checa novamente
+      if (isTabLoading()) {
+        safetyTimeoutRef.current = window.setTimeout(checkAndSetStatus, 1000);
+        return;
+      }
+      setSlideStatus((prev) => (prev === "found" ? "found" : "missing"));
+      clearRetryTimer();
+    };
+
+    safetyTimeoutRef.current = window.setTimeout(checkAndSetStatus, 5000);
+
+    // Timeout de limite máximo: o dobro do tempo selecionado (duration * 2)
+    const maxWaitTimeMs = durationRef.current * 2 * 1000;
+    maxWaitTimeoutRef.current = window.setTimeout(() => {
+      if (navigationToken !== navigationTokenRef.current) {
+        return;
+      }
+      setSlideStatus((prev) => {
+        if (prev !== "found") {
+          console.warn(`Tempo limite de carregamento excedido (${durationRef.current * 2}s). Avançando.`);
+          return "missing";
+        }
+        return "found";
+      });
+      clearRetryTimer();
+    }, maxWaitTimeMs);
+  }, [applySlideZoom, clearRetryTimer]);
+
+  const goToSlide = useCallback((nextIndex: number, isAutoSkip = false) => {
     const normalized = ((nextIndex % total) + total) % total;
     const target = SLIDES[normalized];
     const navigationToken = navigationTokenRef.current + 1;
 
+    if (!isAutoSkip) {
+      consecutiveSkipsRef.current = 0;
+    }
+
+    transitionInProgressRef.current = true;
     navigationTokenRef.current = navigationToken;
     slideIndexRef.current = normalized;
     clearRetryTimer();
@@ -326,26 +462,36 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
     activateSlideWithRetry(target, navigationToken);
   }, [activateSlideWithRetry, clearRetryTimer, total]);
 
-  const goNext = useCallback(
-    () => goToSlide(slideIndexRef.current + 1),
-    [goToSlide],
-  );
-  const goPrev = useCallback(
-    () => goToSlide(slideIndexRef.current - 1),
-    [goToSlide],
-  );
+  const goNext = useCallback(() => {
+    if (transitionInProgressRef.current) return;
+    goToSlide(slideIndexRef.current + 1);
+  }, [goToSlide]);
+
+  const goPrev = useCallback(() => {
+    if (transitionInProgressRef.current) return;
+    goToSlide(slideIndexRef.current - 1);
+  }, [goToSlide]);
 
   // Efeito para o Timer de reprodução automática
   useEffect(() => {
-    if (!isPlaying || slideStatus !== "found") {
+    if (!isPlaying) {
+      return;
+    }
+
+    if (slideStatus !== "found") {
       return;
     }
 
     const intervalMs = 50;
-    const timer = setInterval(() => {
+    let timer: any = null;
+
+    timer = setInterval(() => {
       setProgress((prev) => {
         const next = prev + (intervalMs / (duration * 1000)) * 100;
         if (next >= 100) {
+          if (timer) {
+            clearInterval(timer);
+          }
           setTimeout(goNext, 0);
           return 0;
         }
@@ -353,8 +499,93 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
       });
     }, intervalMs);
 
-    return () => clearInterval(timer);
-  }, [isPlaying, slideStatus, duration, goNext]);
+    return () => {
+      if (timer) {
+        clearInterval(timer);
+      }
+    };
+  }, [isPlaying, slideStatus, duration, goNext, slideIndex]);
+
+  // Efeito para resetar a trava de transição com debounce
+  useEffect(() => {
+    if (slideStatus === "found" || slideStatus === "missing") {
+      const timer = setTimeout(() => {
+        transitionInProgressRef.current = false;
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [slideStatus, slideIndex]);
+
+  // Efeito para pular automaticamente para o próximo slide se este não for encontrado (missing)
+  useEffect(() => {
+    if (slideStatus === "missing") {
+      consecutiveSkipsRef.current += 1;
+      if (consecutiveSkipsRef.current >= total) {
+        console.warn("Todos os slides estão indisponíveis.");
+        return;
+      }
+      goToSlide(slideIndexRef.current + 1, true);
+    } else if (slideStatus === "found") {
+      consecutiveSkipsRef.current = 0;
+    }
+  }, [slideStatus, goToSlide, total]);
+
+  // Efeito para rolar automaticamente os elementos com scroll durante a reprodução automática
+  useEffect(() => {
+    if (!isPlaying || slideStatus !== "found") {
+      return;
+    }
+
+    // Busca primeiro uma tabela com scroll ativa
+    let scrollableEl = document.querySelector<HTMLElement>(
+      ".ca-pres-slide-active [data-pres-table-scroll='true']"
+    );
+
+    // Se não houver tabela com scroll, tenta rolar a página inteira (.admin-page)
+    if (!scrollableEl) {
+      scrollableEl = document.querySelector<HTMLElement>(
+        ".censo-admin .ca-app.presenting .admin-page"
+      );
+    }
+
+    if (!scrollableEl) return;
+
+    // Reinicia o scroll ao carregar o slide
+    scrollableEl.scrollTop = 0;
+
+    let animationFrameId: number;
+    let lastTime = performance.now();
+    let currentScroll = 0;
+
+    const animate = (time: number) => {
+      const deltaTime = (time - lastTime) / 1000; // segundos
+      lastTime = time;
+
+      const totalScroll = scrollableEl.scrollHeight - scrollableEl.clientHeight;
+      if (totalScroll <= 0) {
+        animationFrameId = requestAnimationFrame(animate);
+        return;
+      }
+
+      // Calcula velocidade para atingir o fim da rolagem em 85% da duração do slide
+      const scrollSpeed = totalScroll / (duration * 0.85); // pixels por segundo
+
+      currentScroll += scrollSpeed * deltaTime;
+      if (currentScroll >= totalScroll) {
+        scrollableEl.scrollTop = totalScroll;
+        return; // Chegou ao fim, encerra animação
+      }
+
+      scrollableEl.scrollTop = currentScroll;
+      animationFrameId = requestAnimationFrame(animate);
+    };
+
+    animationFrameId = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [isPlaying, slideStatus, duration, slideIndex]);
 
   useEffect(() => {
     const initialTimer = window.setTimeout(() => goToSlide(0), 0);
@@ -408,7 +639,7 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
     document.body.style.overflow = "hidden";
 
     if (document.fullscreenEnabled && !document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
+      document.documentElement.requestFullscreen().catch(() => { });
     }
 
     return () => {
@@ -417,7 +648,7 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
       removeActiveSlideState();
       document.body.style.overflow = previousBodyOverflow;
       if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
+        document.exitFullscreen().catch(() => { });
       }
     };
   }, [clearRetryTimer]);
@@ -528,6 +759,14 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
             <X size={16} />
             <span>Fechar</span>
           </button>
+        </div>
+
+        {/* Barra de Progresso do Timer */}
+        <div className="ca-pres-progress-bar-container">
+          <div
+            className={`ca-pres-progress-bar-fill ${slideStatus !== "found" ? "waiting" : ""}`}
+            style={{ width: `${slideStatus === "found" ? progress : 0}%` }}
+          />
         </div>
       </header>
     </div>

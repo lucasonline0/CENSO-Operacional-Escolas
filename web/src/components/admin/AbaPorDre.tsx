@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { AlertCircle, Loader2, MapPinned } from "lucide-react";
 import { apiFetch } from "./shared/api";
 import { C } from "./shared/constants";
+import { ReportButton } from "./shared/ReportButton";
 import type { DashboardFilters, PreenchimentoDrePayload } from "./shared/types";
 
 const ENDPOINT_BASE = "/v1/admin/analytics/preenchimento/dre";
@@ -125,6 +126,14 @@ export function AbaPorDre({
           <p className="text-[11px] text-slate-400 mt-1.5">
             Município, Região de Integração e Zona reduzem o conjunto de escolas antes do agrupamento por DRE.
           </p>
+        </div>
+        <div className="ml-auto shrink-0">
+          <ReportButton
+            reportId="censo-preenchimento-escolas"
+            token={token}
+            filters={filters}
+            onUnauth={onUnauth}
+          />
         </div>
       </div>
 

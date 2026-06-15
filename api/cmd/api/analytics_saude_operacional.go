@@ -1056,6 +1056,10 @@ func buildSaudeOperacionalQuery(year int, f saudeOperacionalFilters) (string, []
 // Filtros globais opcionais: dre, municipio, zona, regiao_integracao.
 // Sem page_size: usa 10 registros por página.
 func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWriter, r *http.Request) {
+	// Instrumentação de performance (observabilidade): routeStart marca o início
+	// da rota para medir o tempo total e o de cada etapa interna. Nenhuma regra
+	// de cálculo, query, paginação, ordenação ou payload é alterada por isto.
+	routeStart := time.Now()
 	q := r.URL.Query()
 
 	year, err := parseSaudeOperacionalYear(q.Get("year"), time.Now())
@@ -1101,22 +1105,45 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 	filters := parseSaudeOperacionalFilters(q)
 	query, args := buildSaudeOperacionalQuery(year, filters)
 
+	// parseMs cobre todo o parse/validação dos parâmetros e a montagem da query
+	// (etapas acima). has_* registram apenas presença/ausência dos filtros — nunca
+	// os valores em si, para não vazar termos de busca/dados nos logs.
+	parseMs := time.Since(routeStart).Milliseconds()
+	hasSearch := strings.TrimSpace(searchQuery) != ""
+	hasDRE := filters.DRE != ""
+	hasMunicipio := filters.Municipio != ""
+	hasZona := filters.Zona != ""
+	hasRegiao := filters.RegiaoIntegracao != ""
+
 	// Nota Pedagógico (IDEB) por escola, do último ano disponível em
 	// ideb_resultados. Independe do ano do censo: é o resultado oficial mais
 	// recente aplicado a cada escola pontuada.
+	pedStart := time.Now()
 	pedagogicoPorEscola, err := app.loadPedagogicoPorEscola(r.Context())
 	if err != nil {
+		app.logger.Printf("saude_operacional_perf_error: stage=load_pedagogico elapsed_ms=%d error=%q",
+			time.Since(pedStart).Milliseconds(), err.Error())
 		app.errorJSON(w, err, http.StatusInternalServerError)
 		return
 	}
+	pedagogicoMs := time.Since(pedStart).Milliseconds()
 
+	queryStart := time.Now()
 	dbRows, err := app.models.Schools.DB.QueryContext(r.Context(), query, args...)
 	if err != nil {
+		app.logger.Printf("saude_operacional_perf_error: stage=query elapsed_ms=%d error=%q",
+			time.Since(queryStart).Milliseconds(), err.Error())
 		app.errorJSON(w, fmt.Errorf("consultar saúde operacional das escolas: %v", err), http.StatusInternalServerError)
 		return
 	}
 	defer dbRows.Close()
+	queryMs := time.Since(queryStart).Milliseconds()
 
+	// iterateStart cobre todo o loop (scan + build). calcDuration acumula apenas o
+	// tempo de buildSaudeOperacionalEscola (decode JSONB + cálculo das dimensões),
+	// permitindo separar "iteração das linhas" de "decode/cálculo".
+	iterateStart := time.Now()
+	var calcDuration time.Duration
 	allEscolas := make([]SaudeOperacionalEscola, 0)
 	for dbRows.Next() {
 		var row saudeOperacionalDBRow
@@ -1130,21 +1157,32 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 			&row.CensusID,
 			&row.Data,
 		); err != nil {
+			app.logger.Printf("saude_operacional_perf_error: stage=scan elapsed_ms=%d error=%q",
+				time.Since(iterateStart).Milliseconds(), err.Error())
 			app.errorJSON(w, fmt.Errorf("ler escola da saúde operacional: %v", err), http.StatusInternalServerError)
 			return
 		}
+		calcStart := time.Now()
 		escola, err := buildSaudeOperacionalEscola(row, pedagogicoPorEscola[row.SchoolID])
+		calcDuration += time.Since(calcStart)
 		if err != nil {
+			app.logger.Printf("saude_operacional_perf_error: stage=build_escola elapsed_ms=%d error=%q",
+				time.Since(iterateStart).Milliseconds(), err.Error())
 			app.errorJSON(w, err, http.StatusInternalServerError)
 			return
 		}
 		allEscolas = append(allEscolas, escola)
 	}
 	if err := dbRows.Err(); err != nil {
+		app.logger.Printf("saude_operacional_perf_error: stage=rows_err elapsed_ms=%d error=%q",
+			time.Since(iterateStart).Milliseconds(), err.Error())
 		app.errorJSON(w, fmt.Errorf("iterar escolas da saúde operacional: %v", err), http.StatusInternalServerError)
 		return
 	}
+	iterateCalcMs := time.Since(iterateStart).Milliseconds()
+	calcMs := calcDuration.Milliseconds()
 
+	paginateStart := time.Now()
 	pageSlice, resumo, totalFiltrado, totalPages, page := buildSaudeOperacionalPage(
 		allEscolas,
 		searchQuery,
@@ -1153,7 +1191,9 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 		page,
 		pageSize,
 	)
+	paginateMs := time.Since(paginateStart).Milliseconds()
 
+	payloadStart := time.Now()
 	out := SaudeOperacionalPayload{
 		TotalEscolas:  len(allEscolas),
 		TotalFiltrado: totalFiltrado,
@@ -1168,6 +1208,17 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 	if out.Escolas == nil {
 		out.Escolas = []SaudeOperacionalEscola{}
 	}
+	payloadMs := time.Since(payloadStart).Milliseconds()
+
+	totalMs := time.Since(routeStart).Milliseconds()
+	app.logger.Printf("saude_operacional_perf: year=%d page=%d page_size=%d sort=%s direction=%s "+
+		"has_search=%t has_dre=%t has_municipio=%t has_zona=%t has_regiao=%t "+
+		"parse_ms=%d pedagogico_ms=%d query_ms=%d iterate_calc_ms=%d calc_ms=%d paginate_ms=%d payload_ms=%d total_ms=%d "+
+		"total_escolas=%d total_filtrado=%d total_pages=%d page_items=%d",
+		year, page, pageSize, sortKey, direction,
+		hasSearch, hasDRE, hasMunicipio, hasZona, hasRegiao,
+		parseMs, pedagogicoMs, queryMs, iterateCalcMs, calcMs, paginateMs, payloadMs, totalMs,
+		len(allEscolas), totalFiltrado, totalPages, len(pageSlice))
 
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: out})
 }

@@ -192,9 +192,9 @@ func TestSaudeOperacionalWeights(t *testing.T) {
 	}
 
 	enabled := pesos.Infraestrutura + pesos.Energia + pesos.Merenda +
-		pesos.Seguranca + pesos.Pessoal + pesos.Tecnologia + pesos.Governanca
-	if math.Abs(enabled-0.92) > 1e-12 {
-		t.Fatalf("enabled weights = %v; want 0.92", enabled)
+		pesos.Seguranca + pesos.Pessoal + pesos.Tecnologia + pesos.Pedagogico + pesos.Governanca
+	if math.Abs(enabled-1) > 1e-12 {
+		t.Fatalf("enabled weights = %v; want 1.00", enabled)
 	}
 }
 
@@ -203,8 +203,8 @@ func TestSaudeOperacionalMethodologyMetadata(t *testing.T) {
 	if got.Nome != "Índice de Saúde Operacional por escola" {
 		t.Fatalf("nome = %q", got.Nome)
 	}
-	if got.Versao != "1.1.0" {
-		t.Fatalf("versao = %q; want 1.1.0", got.Versao)
+	if got.Versao != "1.2.0" {
+		t.Fatalf("versao = %q; want 1.2.0", got.Versao)
 	}
 
 	want := []string{
@@ -214,6 +214,7 @@ func TestSaudeOperacionalMethodologyMetadata(t *testing.T) {
 		"seguranca",
 		"pessoal",
 		"tecnologia",
+		"pedagogico",
 		"governanca",
 	}
 	if len(got.DimensoesHabilitadas) != len(want) {
@@ -309,7 +310,8 @@ func TestSaudeOperacionalCalculateSchoolHealth(t *testing.T) {
 		"qtd_salas_aula":                  json.Number("12"),
 	}
 
-	got := calculateSchoolHealth(data)
+	// Com Pedagógico 100 e todas as demais dimensões 100, a Saúde permanece 100.
+	got := calculateSchoolHealth(data, floatPointerForTest(100))
 	assertOptionalFloat(t, got.Saude, floatPointerForTest(100))
 	assertOptionalFloat(t, got.Criticidade, floatPointerForTest(0))
 	assertOptionalFloat(t, got.AlunosPorSala, floatPointerForTest(25))
@@ -322,10 +324,52 @@ func TestSaudeOperacionalCalculateSchoolHealth(t *testing.T) {
 	if got.SalasAula == nil || *got.SalasAula != 12 {
 		t.Fatalf("salas_aula = %v; want 12", got.SalasAula)
 	}
-	if got.Dimensoes.Pedagogico != nil {
-		t.Fatalf("pedagogico = %v; want nil", *got.Dimensoes.Pedagogico)
-	}
+	assertOptionalFloat(t, got.Dimensoes.Pedagogico, floatPointerForTest(100))
 	assertOptionalFloat(t, got.Dimensoes.Governanca, floatPointerForTest(100))
+
+	// Sem IDEB (pedagogico nil), a dimensão fica nula e não derruba a Saúde:
+	// renormaliza pelos pesos das demais dimensões, mantendo 100.
+	semIdeb := calculateSchoolHealth(data, nil)
+	assertOptionalFloat(t, semIdeb.Saude, floatPointerForTest(100))
+	if semIdeb.Dimensoes.Pedagogico != nil {
+		t.Fatalf("pedagogico = %v; want nil", *semIdeb.Dimensoes.Pedagogico)
+	}
+}
+
+func TestCalculatePedagogicoFromIdeb(t *testing.T) {
+	tests := []struct {
+		name string
+		agg  idebPedagogicoAggregate
+		want *float64
+	}{
+		{
+			name: "uma etapa: IDEB 4.8 vira 48.0",
+			agg:  idebPedagogicoAggregate{SomaPonderada: 4.8 * 50, TotalPeso: 50, MediaSimples: floatPointerForTest(4.8)},
+			want: floatPointerForTest(48),
+		},
+		{
+			name: "multiplas etapas usam media ponderada por total_avaliado",
+			// IDEB 5.0 (peso 100) e 6.0 (peso 300): (5*100 + 6*300)/400 = 5.75 -> 57.5
+			agg:  idebPedagogicoAggregate{SomaPonderada: 5.0*100 + 6.0*300, TotalPeso: 400, MediaSimples: floatPointerForTest(5.5)},
+			want: floatPointerForTest(57.5),
+		},
+		{
+			name: "fallback para media simples quando nao ha total_avaliado > 0",
+			agg:  idebPedagogicoAggregate{SomaPonderada: 0, TotalPeso: 0, MediaSimples: floatPointerForTest(5.0)},
+			want: floatPointerForTest(50),
+		},
+		{
+			name: "sem IDEB valido retorna nil (nunca zero)",
+			agg:  idebPedagogicoAggregate{SomaPonderada: 0, TotalPeso: 0, MediaSimples: nil},
+			want: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertOptionalFloat(t, calculatePedagogicoFromIdeb(tt.agg), tt.want)
+		})
+	}
 }
 
 func TestCalculateGovernance(t *testing.T) {
@@ -434,7 +478,7 @@ func TestCalculatePeopleExcludesGestao(t *testing.T) {
 func TestSaudeOperacionalZeroAndCriticality(t *testing.T) {
 	got := calculateSchoolHealth(map[string]any{
 		"rede_eletrica_atende": "Não",
-	})
+	}, nil)
 
 	assertOptionalFloat(t, got.Dimensoes.Energia, floatPointerForTest(0))
 	assertOptionalFloat(t, got.Saude, floatPointerForTest(0))
@@ -480,7 +524,7 @@ func TestSaudeOperacionalMetricParsing(t *testing.T) {
 	got := calculateSchoolHealth(map[string]any{
 		"total_alunos":   10,
 		"qtd_salas_aula": 0,
-	})
+	}, nil)
 	if got.AlunosPorSala != nil {
 		t.Fatalf("alunos_por_sala with zero rooms = %v; want nil", *got.AlunosPorSala)
 	}
@@ -488,13 +532,15 @@ func TestSaudeOperacionalMetricParsing(t *testing.T) {
 	got = calculateSchoolHealth(map[string]any{
 		"total_alunos":   10.5,
 		"qtd_salas_aula": 2,
-	})
+	}, nil)
 	if got.TotalAlunos != nil || got.AlunosPorSala != nil {
 		t.Fatalf("fractional student count should remain invalid: total=%v ratio=%v", got.TotalAlunos, got.AlunosPorSala)
 	}
 }
 
 func TestSaudeOperacionalSchoolWithoutCensus(t *testing.T) {
+	// Mesmo recebendo uma nota Pedagógico (IDEB existe), escola sem censo concluído
+	// permanece sem_dados com todas as dimensões nulas.
 	escola, err := buildSaudeOperacionalEscola(saudeOperacionalDBRow{
 		SchoolID:   10,
 		CodigoINEP: sql.NullString{String: "12345678", Valid: true},
@@ -503,7 +549,7 @@ func TestSaudeOperacionalSchoolWithoutCensus(t *testing.T) {
 		DRE:        "DRE 1",
 		Zona:       sql.NullString{},
 		CensusID:   sql.NullInt64{},
-	})
+	}, floatPointerForTest(75))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -531,7 +577,7 @@ func TestSaudeOperacionalPayloadSerializesNull(t *testing.T) {
 		SchoolID: 1,
 		Escola:   "Escola",
 		CensusID: sql.NullInt64{},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

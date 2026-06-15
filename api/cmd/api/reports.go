@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -170,6 +171,12 @@ func (app *application) AdminGetReport(w http.ResponseWriter, r *http.Request) {
 	switch def.ID {
 	case reportCensoPreenchimentoID:
 		rd, err = app.buildCensoPreenchimentoReportData(r.Context(), def, filters)
+	case reportSaudeOperacionalID:
+		// Saúde Operacional depende de um ano de censo específico. Resolve o ano
+		// antes de gerar dados e nome do arquivo, para que ambos reflitam o ano
+		// efetivamente usado (e não "todos os anos").
+		filters.Year = resolveSaudeOperacionalReportYear(filters, time.Now())
+		rd, err = app.buildSaudeOperacionalReportData(r.Context(), def, filters)
 	default:
 		// Catálogo e dispatch desalinhados: defensivo.
 		app.errorJSON(w, fmt.Errorf("relatório %q sem implementação", def.ID), http.StatusNotFound)

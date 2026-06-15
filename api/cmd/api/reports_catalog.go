@@ -20,6 +20,12 @@ package main
 // acompanhamento do preenchimento do censo.
 const reportCensoPreenchimentoID = "censo-preenchimento-escolas"
 
+// reportSaudeOperacionalID é o identificador do relatório de Índice de Saúde
+// Operacional por escola, que exporta todas as escolas do recorte com índice,
+// criticidade, status e notas por dimensão, reaproveitando a metodologia da
+// aba "Saúde Operacional".
+const reportSaudeOperacionalID = "saude-operacional-escolas"
+
 // ReportDefinition descreve os metadados de um relatório gerencial. Os
 // campos são suficientes para montar o cabeçalho do XLSX (Title), nomear
 // a aba (SheetName) e derivar o nome do arquivo (FileBase). A consulta e
@@ -41,6 +47,13 @@ var reportsCatalog = map[string]ReportDefinition{
 		Description: "Acompanhamento nominal do preenchimento do censo por escola, incluindo escolas ainda pendentes.",
 		SheetName:   "Preenchimento Censo",
 		FileBase:    "relatorio_censo_preenchimento_escolas",
+	},
+	reportSaudeOperacionalID: {
+		ID:          reportSaudeOperacionalID,
+		Title:       "Relatório de Índice de Saúde Operacional por Escola",
+		Description: "Índice de Saúde Operacional por escola, com criticidade, status e notas por dimensão, para todas as escolas do recorte.",
+		SheetName:   "Saude Operacional",
+		FileBase:    "relatorio_saude_operacional_escolas",
 	},
 }
 

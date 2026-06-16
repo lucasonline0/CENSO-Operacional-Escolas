@@ -387,6 +387,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const [filters, setFilters] = useState<DashboardFilters>({});
   const [filtrosOpcoes, setFiltrosOpcoes] = useState<FiltrosOpcoes | null>(null);
   const [presentationMode, setPresentationMode] = useState(false);
+  const [showMobilePresAlert, setShowMobilePresAlert] = useState(false);
 
   const logout = useCallback(() => { clearToken(); clearApiCache(); onLogout(); }, [onLogout]);
 
@@ -557,9 +558,15 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             <div className="ca-topbar-right">
               <button
                 type="button"
-                className="ca-pres-launch-btn"
+                className="ca-pres-launch-btn ca-pres-mobile-disabled z-10"
                 title="Modo Apresentação"
-                onClick={() => setPresentationMode(true)}
+                onClick={() => {
+                  if (window.innerWidth < 768) {
+                    setShowMobilePresAlert(true);
+                  } else {
+                    setPresentationMode(true);
+                  }
+                }}
               >
                 <MonitorPlay size={16} />
                 <span>Modo Apresentação</span>
@@ -683,6 +690,31 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
           onClose={() => setPresentationMode(false)}
           onNavigateTab={(tabId) => handleNav(tabId as Tab)}
         />
+      )}
+
+      {showMobilePresAlert && (
+        <div className="ca-mobile-pres-overlay" onClick={() => setShowMobilePresAlert(false)}>
+          <div className="ca-mobile-pres-popup" onClick={(e) => e.stopPropagation()}>
+            <div className="ca-mobile-pres-popup-icon">
+              <MonitorPlay size={32} />
+            </div>
+            <h3>Funcionalidade indisponível</h3>
+            <p>
+              O <strong>Modo Apresentação</strong> está disponível apenas em
+              <strong> desktops</strong> ou <strong>tablets</strong>.
+            </p>
+            <p className="ca-mobile-pres-hint">
+              Acesse pelo computador ou tablet para utilizar este recurso.
+            </p>
+            <button
+              type="button"
+              className="ca-mobile-pres-popup-btn"
+              onClick={() => setShowMobilePresAlert(false)}
+            >
+              Entendi
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -583,6 +583,23 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
           }
         }
       }
+
+      // Novo: Se não achar nos descendentes, verifica se o próprio activeSlide tem overflow e scroll habilitado
+      if (!scrollableEl) {
+        const hasOverflow = activeSlide.scrollHeight > activeSlide.clientHeight + 15;
+        if (hasOverflow) {
+          const style = window.getComputedStyle(activeSlide);
+          const overflowY = style.overflowY || style.overflow || "";
+          if (
+            overflowY === "auto" ||
+            overflowY === "scroll" ||
+            activeSlide.classList.contains("overflow-auto") ||
+            activeSlide.classList.contains("overflow-y-auto")
+          ) {
+            scrollableEl = activeSlide;
+          }
+        }
+      }
     }
 
     // 3. Se não houver nenhum interno com scroll, tenta rolar a página inteira (.admin-page)
@@ -597,12 +614,9 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
 
     if (!scrollableEl) return;
 
-    // Reinicia o scroll ao carregar o slide
-    scrollableEl.scrollTop = 0;
-
     let animationFrameId: number;
     let lastTime = performance.now();
-    let currentScroll = 0;
+    let currentScroll = scrollableEl.scrollTop;
 
     const animate = (time: number) => {
       const deltaTime = (time - lastTime) / 1000; // segundos
@@ -612,6 +626,11 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
       if (totalScroll <= 0) {
         animationFrameId = requestAnimationFrame(animate);
         return;
+      }
+
+      // Sincroniza se o usuário fez scroll manual para evitar "combate" entre o mouse e a animação
+      if (Math.abs(scrollableEl.scrollTop - currentScroll) > 5) {
+        currentScroll = scrollableEl.scrollTop;
       }
 
       // Calcula velocidade para atingir o fim da rolagem em 85% da duração do slide
@@ -633,6 +652,54 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
       cancelAnimationFrame(animationFrameId);
     };
   }, [isPlaying, slideStatus, duration, slideIndex]);
+
+  // Efeito separado para garantir o reset da rolagem ao trocar de slide
+  // (independente de estar no modo automático/reprodução ativa ou manual)
+  useEffect(() => {
+    if (slideStatus !== "found") {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const activeSlide = document.querySelector<HTMLElement>(".ca-pres-slide-active");
+      if (activeSlide) {
+        // Reset scroll de tabelas
+        const tableScrolls = activeSlide.querySelectorAll<HTMLElement>("[data-pres-table-scroll='true']");
+        tableScrolls.forEach(el => {
+          el.scrollTop = 0;
+          el.scrollLeft = 0;
+        });
+
+        // Reset scroll de outros elementos internos com overflow
+        const elements = activeSlide.querySelectorAll<HTMLElement>("*");
+        elements.forEach((el) => {
+          const style = window.getComputedStyle(el);
+          const overflowY = style.overflowY || style.overflow || "";
+          if (
+            overflowY === "auto" ||
+            overflowY === "scroll" ||
+            el.classList.contains("overflow-auto") ||
+            el.classList.contains("overflow-y-auto")
+          ) {
+            el.scrollTop = 0;
+          }
+        });
+
+        // Reset scroll do próprio slide
+        activeSlide.scrollTop = 0;
+      }
+
+      // Reset scroll do container da página inteira
+      const adminPage = document.querySelector<HTMLElement>(
+        ".censo-admin .ca-app.presenting .admin-page"
+      );
+      if (adminPage) {
+        adminPage.scrollTop = 0;
+      }
+    }, 50);
+
+    return () => clearTimeout(timer);
+  }, [slideIndex, slideStatus]);
 
   useEffect(() => {
     const initialTimer = window.setTimeout(() => goToSlide(0), 0);

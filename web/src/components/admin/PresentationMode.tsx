@@ -743,6 +743,18 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [goNext, goPrev, onClose]);
 
+  // Controla o scroll do mouse: desabilita durante reprodução automática
+  useEffect(() => {
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+    };
+
+    if (isPlaying) {
+      window.addEventListener("wheel", handleWheel, { passive: false });
+      return () => window.removeEventListener("wheel", handleWheel);
+    }
+  }, [isPlaying]);
+
   useEffect(() => {
     const handleResize = () => {
       const active = document.querySelector<HTMLElement>("[data-pres-slide].ca-pres-slide-active");

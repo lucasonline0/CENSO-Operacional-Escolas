@@ -380,6 +380,10 @@ func (app *application) routes() http.Handler {
 
 			// Filtros globais do dashboard.
 			protected.Get("/admin/analytics/filtros/opcoes", app.AdminAnalyticsFiltrosOpcoes)
+
+			// Relatórios gerenciais por aba (XLSX). Camada extensível; o
+			// report_id é resolvido contra reportsCatalog.
+			protected.Get("/admin/reports/{report_id}", app.AdminGetReport)
 		})
 	})
 

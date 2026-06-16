@@ -1108,6 +1108,102 @@ func buildSaudeOperacionalQuery(year int, f saudeOperacionalFilters) (string, []
 	}
 }
 
+// saudeOperacionalDatasetTimings carrega a medição por etapa do carregamento
+// base da Saúde Operacional (pedagógico, query e iteração/cálculo). Permite que
+// o handler analítico preserve o log de performance existente mesmo após a
+// extração de buildSaudeOperacionalDataset.
+type saudeOperacionalDatasetTimings struct {
+	PedagogicoMs  int64
+	QueryMs       int64
+	IterateCalcMs int64
+	CalcMs        int64
+}
+
+// buildSaudeOperacionalDataset concentra o carregamento e o cálculo base de
+// TODAS as escolas do recorte (filtros globais) para um dado ano de censo,
+// devolvendo as escolas já pontuadas (saúde, criticidade, status e dimensões) e
+// a medição por etapa. NÃO filtra por busca, não ordena e não pagina — essas
+// responsabilidades permanecem em quem consome o dataset:
+//   - o endpoint analítico aplica busca/ordenação/paginação para a tela;
+//   - o relatório gerencial exporta todas as escolas do recorte.
+//
+// Mantém a instrumentação de erro por etapa (saude_operacional_perf_error) e a
+// regra de cálculo das dimensões intacta — a lógica de pontuação não é
+// duplicada em nenhum dos consumidores.
+func (app *application) buildSaudeOperacionalDataset(
+	ctx context.Context,
+	year int,
+	filters saudeOperacionalFilters,
+) ([]SaudeOperacionalEscola, saudeOperacionalDatasetTimings, error) {
+	var timings saudeOperacionalDatasetTimings
+
+	// Nota Pedagógico (IDEB) por escola, do último ano disponível em
+	// ideb_resultados. Independe do ano do censo: é o resultado oficial mais
+	// recente aplicado a cada escola pontuada.
+	pedStart := time.Now()
+	pedagogicoPorEscola, err := app.loadPedagogicoPorEscola(ctx)
+	if err != nil {
+		app.logger.Printf("saude_operacional_perf_error: stage=load_pedagogico elapsed_ms=%d error=%q",
+			time.Since(pedStart).Milliseconds(), err.Error())
+		return nil, timings, err
+	}
+	timings.PedagogicoMs = time.Since(pedStart).Milliseconds()
+
+	query, args := buildSaudeOperacionalQuery(year, filters)
+
+	queryStart := time.Now()
+	dbRows, err := app.models.Schools.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		app.logger.Printf("saude_operacional_perf_error: stage=query elapsed_ms=%d error=%q",
+			time.Since(queryStart).Milliseconds(), err.Error())
+		return nil, timings, fmt.Errorf("consultar saúde operacional das escolas: %v", err)
+	}
+	defer dbRows.Close()
+	timings.QueryMs = time.Since(queryStart).Milliseconds()
+
+	// iterateStart cobre todo o loop (scan + build). calcDuration acumula apenas o
+	// tempo de buildSaudeOperacionalEscola (decode JSONB + cálculo das dimensões),
+	// permitindo separar "iteração das linhas" de "decode/cálculo".
+	iterateStart := time.Now()
+	var calcDuration time.Duration
+	allEscolas := make([]SaudeOperacionalEscola, 0)
+	for dbRows.Next() {
+		var row saudeOperacionalDBRow
+		if err := dbRows.Scan(
+			&row.SchoolID,
+			&row.CodigoINEP,
+			&row.Escola,
+			&row.Municipio,
+			&row.DRE,
+			&row.Zona,
+			&row.CensusID,
+			&row.Data,
+		); err != nil {
+			app.logger.Printf("saude_operacional_perf_error: stage=scan elapsed_ms=%d error=%q",
+				time.Since(iterateStart).Milliseconds(), err.Error())
+			return nil, timings, fmt.Errorf("ler escola da saúde operacional: %v", err)
+		}
+		calcStart := time.Now()
+		escola, err := buildSaudeOperacionalEscola(row, pedagogicoPorEscola[row.SchoolID])
+		calcDuration += time.Since(calcStart)
+		if err != nil {
+			app.logger.Printf("saude_operacional_perf_error: stage=build_escola elapsed_ms=%d error=%q",
+				time.Since(iterateStart).Milliseconds(), err.Error())
+			return nil, timings, err
+		}
+		allEscolas = append(allEscolas, escola)
+	}
+	if err := dbRows.Err(); err != nil {
+		app.logger.Printf("saude_operacional_perf_error: stage=rows_err elapsed_ms=%d error=%q",
+			time.Since(iterateStart).Milliseconds(), err.Error())
+		return nil, timings, fmt.Errorf("iterar escolas da saúde operacional: %v", err)
+	}
+	timings.IterateCalcMs = time.Since(iterateStart).Milliseconds()
+	timings.CalcMs = calcDuration.Milliseconds()
+
+	return allEscolas, timings, nil
+}
+
 // AdminAnalyticsSaudeOperacionalEscolas retorna escolas com índice de saúde operacional.
 // Parâmetros opcionais: year, page, page_size, search, sort, direction.
 // Filtros globais opcionais: dre, municipio, zona, regiao_integracao.
@@ -1160,11 +1256,10 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 	}
 
 	filters := parseSaudeOperacionalFilters(q)
-	query, args := buildSaudeOperacionalQuery(year, filters)
 
-	// parseMs cobre todo o parse/validação dos parâmetros e a montagem da query
-	// (etapas acima). has_* registram apenas presença/ausência dos filtros — nunca
-	// os valores em si, para não vazar termos de busca/dados nos logs.
+	// parseMs cobre todo o parse/validação dos parâmetros (etapas acima). has_*
+	// registram apenas presença/ausência dos filtros — nunca os valores em si,
+	// para não vazar termos de busca/dados nos logs.
 	parseMs := time.Since(routeStart).Milliseconds()
 	hasSearch := strings.TrimSpace(searchQuery) != ""
 	hasDRE := filters.DRE != ""
@@ -1172,72 +1267,18 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 	hasZona := filters.Zona != ""
 	hasRegiao := filters.RegiaoIntegracao != ""
 
-	// Nota Pedagógico (IDEB) por escola, do último ano disponível em
-	// ideb_resultados. Independe do ano do censo: é o resultado oficial mais
-	// recente aplicado a cada escola pontuada.
-	pedStart := time.Now()
-	pedagogicoPorEscola, err := app.loadPedagogicoPorEscola(r.Context())
+	// Carregamento e cálculo base de todas as escolas do recorte. A função
+	// reaproveitável também alimenta o relatório gerencial de Saúde Operacional;
+	// o handler segue responsável por busca, ordenação e paginação.
+	allEscolas, timings, err := app.buildSaudeOperacionalDataset(r.Context(), year, filters)
 	if err != nil {
-		app.logger.Printf("saude_operacional_perf_error: stage=load_pedagogico elapsed_ms=%d error=%q",
-			time.Since(pedStart).Milliseconds(), err.Error())
 		app.errorJSON(w, err, http.StatusInternalServerError)
 		return
 	}
-	pedagogicoMs := time.Since(pedStart).Milliseconds()
-
-	queryStart := time.Now()
-	dbRows, err := app.models.Schools.DB.QueryContext(r.Context(), query, args...)
-	if err != nil {
-		app.logger.Printf("saude_operacional_perf_error: stage=query elapsed_ms=%d error=%q",
-			time.Since(queryStart).Milliseconds(), err.Error())
-		app.errorJSON(w, fmt.Errorf("consultar saúde operacional das escolas: %v", err), http.StatusInternalServerError)
-		return
-	}
-	defer dbRows.Close()
-	queryMs := time.Since(queryStart).Milliseconds()
-
-	// iterateStart cobre todo o loop (scan + build). calcDuration acumula apenas o
-	// tempo de buildSaudeOperacionalEscola (decode JSONB + cálculo das dimensões),
-	// permitindo separar "iteração das linhas" de "decode/cálculo".
-	iterateStart := time.Now()
-	var calcDuration time.Duration
-	allEscolas := make([]SaudeOperacionalEscola, 0)
-	for dbRows.Next() {
-		var row saudeOperacionalDBRow
-		if err := dbRows.Scan(
-			&row.SchoolID,
-			&row.CodigoINEP,
-			&row.Escola,
-			&row.Municipio,
-			&row.DRE,
-			&row.Zona,
-			&row.CensusID,
-			&row.Data,
-		); err != nil {
-			app.logger.Printf("saude_operacional_perf_error: stage=scan elapsed_ms=%d error=%q",
-				time.Since(iterateStart).Milliseconds(), err.Error())
-			app.errorJSON(w, fmt.Errorf("ler escola da saúde operacional: %v", err), http.StatusInternalServerError)
-			return
-		}
-		calcStart := time.Now()
-		escola, err := buildSaudeOperacionalEscola(row, pedagogicoPorEscola[row.SchoolID])
-		calcDuration += time.Since(calcStart)
-		if err != nil {
-			app.logger.Printf("saude_operacional_perf_error: stage=build_escola elapsed_ms=%d error=%q",
-				time.Since(iterateStart).Milliseconds(), err.Error())
-			app.errorJSON(w, err, http.StatusInternalServerError)
-			return
-		}
-		allEscolas = append(allEscolas, escola)
-	}
-	if err := dbRows.Err(); err != nil {
-		app.logger.Printf("saude_operacional_perf_error: stage=rows_err elapsed_ms=%d error=%q",
-			time.Since(iterateStart).Milliseconds(), err.Error())
-		app.errorJSON(w, fmt.Errorf("iterar escolas da saúde operacional: %v", err), http.StatusInternalServerError)
-		return
-	}
-	iterateCalcMs := time.Since(iterateStart).Milliseconds()
-	calcMs := calcDuration.Milliseconds()
+	pedagogicoMs := timings.PedagogicoMs
+	queryMs := timings.QueryMs
+	iterateCalcMs := timings.IterateCalcMs
+	calcMs := timings.CalcMs
 
 	paginateStart := time.Now()
 	pageSlice, resumo, totalFiltrado, totalPages, page := buildSaudeOperacionalPage(

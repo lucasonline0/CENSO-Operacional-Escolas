@@ -550,8 +550,8 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 <Menu size={18} strokeWidth={1.8} />
               </button>
               <img
-                src="/brasao-para.png"
-                alt="Brasão do Estado do Pará"
+                src={dark ? "/logo-horizontal-letter-white.png" : "/parceiros.png"}
+                alt="FADEP · Secretaria de Educação · Governo do Pará"
                 className="ca-topbar-logo"
               />
               <div className="ca-crumbs">

@@ -653,6 +653,20 @@
   gap: 12px;
   min-width: 0;
 }
+
+/* Logo institucional horizontal (FADEP · SEDUC · Governo do Pará).
+   Mesma imagem usada no rodapé, com variante dark/light. */
+.censo-admin .ca-topbar-logo {
+  height: 36px;
+  width: auto;
+  max-width: 320px;
+  object-fit: contain;
+  flex-shrink: 0;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+  opacity: 0.95;
+}
 /* Botões mobile-only — ocultos por padrão, revelados no @media. */
 .censo-admin .ca-mobile-menu-btn,
 .censo-admin .ca-drawer-close {
@@ -1286,6 +1300,7 @@
   /* ── Topbar com hambúrguer ────────────────────────────────── */
   .censo-admin .ca-mobile-menu-btn { display: flex; }
   .censo-admin .ca-topbar { padding: 12px 14px; gap: 10px; }
+  .censo-admin .ca-topbar-logo { height: 28px; max-width: 180px; }
   .censo-admin .ca-crumbs { font-size: 13px; min-width: 0; }
   .censo-admin .ca-crumbs span:not(.cur) { display: none; }
   .censo-admin .ca-crumbs .cur {

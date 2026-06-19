@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertCircle,
@@ -13,9 +13,11 @@ import {
   CircleAlert,
   CircleCheck,
   CircleHelp,
+  Filter,
   HeartPulse,
   Loader2,
   Search,
+  X,
 } from "lucide-react";
 import { apiFetch, sanitize } from "./shared/api";
 import { C } from "./shared/constants";
@@ -26,6 +28,7 @@ import type {
   SaudeOperacionalPayload,
   SaudeOperacionalStatus,
   DashboardFilters,
+  FiltrosOpcoes,
 } from "./shared/types";
 
 const ENDPOINT_BASE = "/v1/admin/analytics/escolas/saude-operacional";
@@ -53,6 +56,28 @@ type SortKey =
   | "tecnologia"
   | "pedagogico"
   | "governanca";
+
+// Filtros locais da aba: NÃO interferem nos filtros globais nem nos cards de
+// resumo. "todos"/"todas" desligam o filtro correspondente e não são enviados
+// ao backend.
+type LocalStatusFilter = "todos" | SaudeOperacionalStatus;
+type LocalCriticidadeFilter = "todas" | "alta" | "media" | "baixa" | "sem_dados";
+
+const LOCAL_STATUS_OPTIONS: { value: LocalStatusFilter; label: string }[] = [
+  { value: "todos", label: "Todos" },
+  { value: "saudavel", label: "Saudável" },
+  { value: "atencao", label: "Atenção" },
+  { value: "critica", label: "Crítica" },
+  { value: "sem_dados", label: "Sem dados" },
+];
+
+const LOCAL_CRITICIDADE_OPTIONS: { value: LocalCriticidadeFilter; label: string }[] = [
+  { value: "todas", label: "Todas" },
+  { value: "alta", label: "Alta criticidade" },
+  { value: "media", label: "Média criticidade" },
+  { value: "baixa", label: "Baixa criticidade" },
+  { value: "sem_dados", label: "Sem dados" },
+];
 
 type SummaryTone = "blue" | "green" | "amber" | "rose" | "slate" | "purple";
 
@@ -121,6 +146,8 @@ function buildEndpoint(
   page: number,
   pageSize: PageSizeOption,
   search: string,
+  localStatus: LocalStatusFilter,
+  localCriticidade: LocalCriticidadeFilter,
   filters?: DashboardFilters,
 ): string {
   const params = new URLSearchParams({
@@ -135,7 +162,47 @@ function buildEndpoint(
   if (filters?.municipio)         params.set("municipio", filters.municipio);
   if (filters?.zona)              params.set("zona", filters.zona);
   if (filters?.regiao_integracao) params.set("regiao_integracao", filters.regiao_integracao);
+  if (localStatus !== "todos")      params.set("status", localStatus);
+  if (localCriticidade !== "todas") params.set("criticidade_faixa", localCriticidade);
   return `${ENDPOINT_BASE}?${params.toString()}`;
+}
+
+function FilterSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string | number | undefined;
+  options: (string | number)[];
+  onChange: (v: string) => void;
+}) {
+  const hasValue = value !== undefined && value !== "";
+  return (
+    <div className="flex flex-col gap-0.5">
+      <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+        {label}
+      </label>
+      <select
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        className={`rounded-lg border py-1.5 pl-2.5 pr-7 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+          hasValue
+            ? "border-blue-300 bg-blue-50 font-semibold text-blue-800"
+            : "border-slate-200 bg-white text-slate-700"
+        }`}
+        style={{ minWidth: 140 }}
+      >
+        <option value="">Todos</option>
+        {options.map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 }
 
 function SummaryCard({
@@ -267,10 +334,14 @@ export function AbaSaudeOperacionalEscolas({
   token,
   onUnauth,
   filters,
+  opcoes,
+  onFiltersChange,
 }: {
   token: string;
   onUnauth: () => void;
   filters?: DashboardFilters;
+  opcoes?: FiltrosOpcoes | null;
+  onFiltersChange?: (f: DashboardFilters) => void;
 }) {
   const [payload, setPayload] = useState<SaudeOperacionalPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -282,6 +353,12 @@ export function AbaSaudeOperacionalEscolas({
   const [pageSize, setPageSize] = useState<PageSizeOption>(10);
   const [searchInput, setSearchInput] = useState("");
   const [serverSearch, setServerSearch] = useState("");
+  const [localStatus, setLocalStatus] = useState<LocalStatusFilter>("todos");
+  const [localCriticidade, setLocalCriticidade] = useState<LocalCriticidadeFilter>("todas");
+  const hasLocalFilters = useMemo(
+    () => localStatus !== "todos" || localCriticidade !== "todas",
+    [localStatus, localCriticidade],
+  );
 
   // Debounce: aguarda 400ms após o usuário parar de digitar antes de buscar.
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -331,10 +408,65 @@ export function AbaSaudeOperacionalEscolas({
     setPage(nextPage);
   }
 
+  function handleLocalStatusChange(value: LocalStatusFilter) {
+    if (value === localStatus) return;
+    setLoading(true);
+    setLocalStatus(value);
+    setPage(1);
+  }
+
+  function handleLocalCriticidadeChange(value: LocalCriticidadeFilter) {
+    if (value === localCriticidade) return;
+    setLoading(true);
+    setLocalCriticidade(value);
+    setPage(1);
+  }
+
+  function setGlobalFilter(key: keyof DashboardFilters, raw: string) {
+    if (!onFiltersChange) return;
+    const next: DashboardFilters = { ...(filters ?? {}) };
+    if (raw === "") {
+      delete next[key];
+    } else if (key === "ano") {
+      next.ano = Number(raw);
+    } else {
+      (next as Record<string, string>)[key] = raw;
+    }
+    onFiltersChange(next);
+  }
+
+  const activeGlobalCount = useMemo(
+    () => (filters ? Object.values(filters).filter((v) => v !== undefined && v !== "").length : 0),
+    [filters],
+  );
+  const activeLocalCount =
+    (localStatus !== "todos" ? 1 : 0) + (localCriticidade !== "todas" ? 1 : 0);
+  const totalActiveCount = activeGlobalCount + activeLocalCount;
+
+  function clearAllFilters() {
+    if (totalActiveCount === 0) return;
+    setLoading(true);
+    if (onFiltersChange && activeGlobalCount > 0) onFiltersChange({});
+    if (activeLocalCount > 0) {
+      setLocalStatus("todos");
+      setLocalCriticidade("todas");
+    }
+    setPage(1);
+  }
+
   useEffect(() => {
     let cancelled = false;
 
-    const url = buildEndpoint(sortKey, sortDir, page, pageSize, serverSearch, filters);
+    const url = buildEndpoint(
+      sortKey,
+      sortDir,
+      page,
+      pageSize,
+      serverSearch,
+      localStatus,
+      localCriticidade,
+      filters,
+    );
 
     apiFetch<SaudeOperacionalPayload>(url, token)
       .then((data) => {
@@ -358,7 +490,7 @@ export function AbaSaudeOperacionalEscolas({
     return () => {
       cancelled = true;
     };
-  }, [token, onUnauth, sortKey, sortDir, page, pageSize, serverSearch, filters]);
+  }, [token, onUnauth, sortKey, sortDir, page, pageSize, serverSearch, localStatus, localCriticidade, filters]);
 
   if (loading && payload === null) {
     return (
@@ -425,6 +557,105 @@ export function AbaSaudeOperacionalEscolas({
           </p>
         </div>
       </header>
+
+      <div
+        data-pres-hide="true"
+        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
+      >
+        <div className="mb-2.5 flex items-center gap-2">
+          <Filter size={14} style={{ color: C.primary }} />
+          <span className="text-xs font-semibold text-slate-600">Filtros</span>
+          {totalActiveCount > 0 && (
+            <span
+              className="flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold text-white"
+              style={{ background: C.primary }}
+            >
+              {totalActiveCount}
+            </span>
+          )}
+          {totalActiveCount > 0 && (
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            >
+              <X size={12} />
+              Limpar filtros
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-end gap-3">
+          <FilterSelect
+            label="Ano de referência"
+            value={filters?.ano}
+            options={opcoes?.anos ?? []}
+            onChange={(v) => setGlobalFilter("ano", v)}
+          />
+          <FilterSelect
+            label="Região de Integração"
+            value={filters?.regiao_integracao}
+            options={opcoes?.regioes_integracao ?? []}
+            onChange={(v) => setGlobalFilter("regiao_integracao", v)}
+          />
+          <FilterSelect
+            label="DRE"
+            value={filters?.dre}
+            options={opcoes?.dres ?? []}
+            onChange={(v) => setGlobalFilter("dre", v)}
+          />
+          <FilterSelect
+            label="Município"
+            value={filters?.municipio}
+            options={opcoes?.municipios ?? []}
+            onChange={(v) => setGlobalFilter("municipio", v)}
+          />
+          <FilterSelect
+            label="Zona"
+            value={filters?.zona}
+            options={opcoes?.zonas ?? []}
+            onChange={(v) => setGlobalFilter("zona", v)}
+          />
+          <div className="flex flex-col gap-0.5">
+            <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              Status
+            </label>
+            <select
+              value={localStatus}
+              onChange={(event) => handleLocalStatusChange(event.target.value as LocalStatusFilter)}
+              className={`rounded-lg border py-1.5 pl-2.5 pr-7 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                localStatus !== "todos"
+                  ? "border-blue-300 bg-blue-50 font-semibold text-blue-800"
+                  : "border-slate-200 bg-white text-slate-700"
+              }`}
+              style={{ minWidth: 140 }}
+            >
+              {LOCAL_STATUS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              Criticidade
+            </label>
+            <select
+              value={localCriticidade}
+              onChange={(event) => handleLocalCriticidadeChange(event.target.value as LocalCriticidadeFilter)}
+              className={`rounded-lg border py-1.5 pl-2.5 pr-7 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                localCriticidade !== "todas"
+                  ? "border-blue-300 bg-blue-50 font-semibold text-blue-800"
+                  : "border-slate-200 bg-white text-slate-700"
+              }`}
+              style={{ minWidth: 160 }}
+            >
+              {LOCAL_CRITICIDADE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
 
       <div data-pres-slide="saude-resumo-indicadores" className="space-y-6">
       <div id="sec-saude-resumo" className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
@@ -576,8 +807,14 @@ export function AbaSaudeOperacionalEscolas({
             {payload.escolas.length === 0 && (
               <div className="border-t border-slate-100 px-6 py-12 text-center">
                 <Search size={24} className="mx-auto mb-2 text-slate-300" />
-                <p className="text-sm font-medium text-slate-600">Nenhuma escola encontrada.</p>
-                <p className="mt-1 text-xs text-slate-400">Tente outro termo de busca.</p>
+                <p className="text-sm font-medium text-slate-600">
+                  Nenhuma escola encontrada para o recorte atual.
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  {hasLocalFilters
+                    ? "Ajuste os filtros da aba ou limpe-os para ampliar o resultado."
+                    : "Tente outro termo de busca."}
+                </p>
               </div>
             )}
 

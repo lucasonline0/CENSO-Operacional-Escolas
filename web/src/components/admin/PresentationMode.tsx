@@ -340,6 +340,11 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
 
   const applySlideZoom = useCallback((element: HTMLElement) => {
     const measure = () => {
+      // Se o slide já não está mais ativo (modo apresentação fechado entre
+      // o agendamento do rAF e sua execução — caso típico ao sair via Esc,
+      // que dispara resize antes do fullscreenchange) abortamos para não
+      // re-aplicar zoom sobre um conteúdo que já voltou ao tamanho normal.
+      if (!element.classList.contains("ca-pres-slide-active")) return;
       const available = window.innerHeight - PRES_PAGE_PADDING;
       const natural = element.scrollHeight;
       if (natural > 0 && available > 0) {

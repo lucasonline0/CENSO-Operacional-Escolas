@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertCircle,
@@ -13,9 +13,11 @@ import {
   CircleAlert,
   CircleCheck,
   CircleHelp,
+  Filter,
   HeartPulse,
   Loader2,
   Search,
+  X,
 } from "lucide-react";
 import { apiFetch, sanitize } from "./shared/api";
 import { C } from "./shared/constants";
@@ -53,6 +55,28 @@ type SortKey =
   | "tecnologia"
   | "pedagogico"
   | "governanca";
+
+// Filtros locais da aba: NÃO interferem nos filtros globais nem nos cards de
+// resumo. "todos"/"todas" desligam o filtro correspondente e não são enviados
+// ao backend.
+type LocalStatusFilter = "todos" | SaudeOperacionalStatus;
+type LocalCriticidadeFilter = "todas" | "alta" | "media" | "baixa" | "sem_dados";
+
+const LOCAL_STATUS_OPTIONS: { value: LocalStatusFilter; label: string }[] = [
+  { value: "todos", label: "Todos" },
+  { value: "saudavel", label: "Saudável" },
+  { value: "atencao", label: "Atenção" },
+  { value: "critica", label: "Crítica" },
+  { value: "sem_dados", label: "Sem dados" },
+];
+
+const LOCAL_CRITICIDADE_OPTIONS: { value: LocalCriticidadeFilter; label: string }[] = [
+  { value: "todas", label: "Todas" },
+  { value: "alta", label: "Alta criticidade" },
+  { value: "media", label: "Média criticidade" },
+  { value: "baixa", label: "Baixa criticidade" },
+  { value: "sem_dados", label: "Sem dados" },
+];
 
 type SummaryTone = "blue" | "green" | "amber" | "rose" | "slate" | "purple";
 
@@ -121,6 +145,8 @@ function buildEndpoint(
   page: number,
   pageSize: PageSizeOption,
   search: string,
+  localStatus: LocalStatusFilter,
+  localCriticidade: LocalCriticidadeFilter,
   filters?: DashboardFilters,
 ): string {
   const params = new URLSearchParams({
@@ -135,6 +161,8 @@ function buildEndpoint(
   if (filters?.municipio)         params.set("municipio", filters.municipio);
   if (filters?.zona)              params.set("zona", filters.zona);
   if (filters?.regiao_integracao) params.set("regiao_integracao", filters.regiao_integracao);
+  if (localStatus !== "todos")      params.set("status", localStatus);
+  if (localCriticidade !== "todas") params.set("criticidade_faixa", localCriticidade);
   return `${ENDPOINT_BASE}?${params.toString()}`;
 }
 
@@ -282,6 +310,12 @@ export function AbaSaudeOperacionalEscolas({
   const [pageSize, setPageSize] = useState<PageSizeOption>(10);
   const [searchInput, setSearchInput] = useState("");
   const [serverSearch, setServerSearch] = useState("");
+  const [localStatus, setLocalStatus] = useState<LocalStatusFilter>("todos");
+  const [localCriticidade, setLocalCriticidade] = useState<LocalCriticidadeFilter>("todas");
+  const hasLocalFilters = useMemo(
+    () => localStatus !== "todos" || localCriticidade !== "todas",
+    [localStatus, localCriticidade],
+  );
 
   // Debounce: aguarda 400ms após o usuário parar de digitar antes de buscar.
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -331,10 +365,41 @@ export function AbaSaudeOperacionalEscolas({
     setPage(nextPage);
   }
 
+  function handleLocalStatusChange(value: LocalStatusFilter) {
+    if (value === localStatus) return;
+    setLoading(true);
+    setLocalStatus(value);
+    setPage(1);
+  }
+
+  function handleLocalCriticidadeChange(value: LocalCriticidadeFilter) {
+    if (value === localCriticidade) return;
+    setLoading(true);
+    setLocalCriticidade(value);
+    setPage(1);
+  }
+
+  function handleClearLocalFilters() {
+    if (!hasLocalFilters) return;
+    setLoading(true);
+    setLocalStatus("todos");
+    setLocalCriticidade("todas");
+    setPage(1);
+  }
+
   useEffect(() => {
     let cancelled = false;
 
-    const url = buildEndpoint(sortKey, sortDir, page, pageSize, serverSearch, filters);
+    const url = buildEndpoint(
+      sortKey,
+      sortDir,
+      page,
+      pageSize,
+      serverSearch,
+      localStatus,
+      localCriticidade,
+      filters,
+    );
 
     apiFetch<SaudeOperacionalPayload>(url, token)
       .then((data) => {
@@ -358,7 +423,7 @@ export function AbaSaudeOperacionalEscolas({
     return () => {
       cancelled = true;
     };
-  }, [token, onUnauth, sortKey, sortDir, page, pageSize, serverSearch, filters]);
+  }, [token, onUnauth, sortKey, sortDir, page, pageSize, serverSearch, localStatus, localCriticidade, filters]);
 
   if (loading && payload === null) {
     return (
@@ -469,6 +534,57 @@ export function AbaSaudeOperacionalEscolas({
       </div>
       </div>
 
+      <div
+        data-pres-hide="true"
+        className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-4 shadow-sm"
+      >
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <Filter size={13} className="text-slate-400" />
+            Filtros da aba
+            <span className="font-normal text-slate-400 normal-case tracking-normal">
+              · refinam apenas esta tabela
+            </span>
+          </div>
+          {hasLocalFilters && (
+            <button
+              type="button"
+              onClick={handleClearLocalFilters}
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+            >
+              <X size={12} />
+              Limpar filtros da aba
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1 text-xs text-slate-600">
+            <span className="font-medium text-slate-700">Status</span>
+            <select
+              value={localStatus}
+              onChange={(event) => handleLocalStatusChange(event.target.value as LocalStatusFilter)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+              {LOCAL_STATUS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-slate-600">
+            <span className="font-medium text-slate-700">Criticidade</span>
+            <select
+              value={localCriticidade}
+              onChange={(event) => handleLocalCriticidadeChange(event.target.value as LocalCriticidadeFilter)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+              {LOCAL_CRITICIDADE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </div>
+
       <div data-pres-hide="true" className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full sm:max-w-md">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -576,8 +692,14 @@ export function AbaSaudeOperacionalEscolas({
             {payload.escolas.length === 0 && (
               <div className="border-t border-slate-100 px-6 py-12 text-center">
                 <Search size={24} className="mx-auto mb-2 text-slate-300" />
-                <p className="text-sm font-medium text-slate-600">Nenhuma escola encontrada.</p>
-                <p className="mt-1 text-xs text-slate-400">Tente outro termo de busca.</p>
+                <p className="text-sm font-medium text-slate-600">
+                  Nenhuma escola encontrada para o recorte atual.
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  {hasLocalFilters
+                    ? "Ajuste os filtros da aba ou limpe-os para ampliar o resultado."
+                    : "Tente outro termo de busca."}
+                </p>
               </div>
             )}
 

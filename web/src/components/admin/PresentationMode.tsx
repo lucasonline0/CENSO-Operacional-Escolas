@@ -291,6 +291,7 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
   const observerRef = useRef<MutationObserver | null>(null);
   const navigationTokenRef = useRef(0);
   const onNavigateTabRef = useRef(onNavigateTab);
+  const onCloseRef = useRef(onClose);
   const consecutiveSkipsRef = useRef(0);
   const durationRef = useRef(duration);
 
@@ -300,6 +301,10 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
   useEffect(() => {
     onNavigateTabRef.current = onNavigateTab;
   }, [onNavigateTab]);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     durationRef.current = duration;
@@ -815,7 +820,23 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
       document.documentElement.requestFullscreen().catch(() => { });
     }
 
+    // O navegador intercepta o Esc para sair do fullscreen antes do
+    // nosso listener de keydown receber o evento. Para que Esc também
+    // feche o modo apresentação, escutamos a saída do fullscreen.
+    // unmounting evita disparar onClose durante a própria limpeza
+    // (quando nós mesmos chamamos exitFullscreen).
+    let unmounting = false;
+    const handleFullscreenChange = () => {
+      if (unmounting) return;
+      if (!document.fullscreenElement) {
+        onCloseRef.current();
+      }
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+
     return () => {
+      unmounting = true;
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
       navigationTokenRef.current += 1;
       clearRetryTimer();
       removeActiveSlideState();

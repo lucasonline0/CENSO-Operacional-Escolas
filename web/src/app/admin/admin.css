@@ -653,6 +653,22 @@
   gap: 12px;
   min-width: 0;
 }
+
+/* Brasão institucional compacto. Posicionado antes do breadcrumb,
+   acompanha tanto light quanto dark mode sem precisar de variantes. */
+.censo-admin .ca-topbar-logo {
+  height: 32px;
+  width: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.censo-admin.dark .ca-topbar-logo {
+  /* Brasão tem fundo transparente e cores próprias — não inverter. */
+  filter: none;
+}
 /* Botões mobile-only — ocultos por padrão, revelados no @media. */
 .censo-admin .ca-mobile-menu-btn,
 .censo-admin .ca-drawer-close {
@@ -1286,6 +1302,7 @@
   /* ── Topbar com hambúrguer ────────────────────────────────── */
   .censo-admin .ca-mobile-menu-btn { display: flex; }
   .censo-admin .ca-topbar { padding: 12px 14px; gap: 10px; }
+  .censo-admin .ca-topbar-logo { height: 26px; width: 26px; }
   .censo-admin .ca-crumbs { font-size: 13px; min-width: 0; }
   .censo-admin .ca-crumbs span:not(.cur) { display: none; }
   .censo-admin .ca-crumbs .cur {

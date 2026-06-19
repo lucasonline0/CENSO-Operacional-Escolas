@@ -549,6 +549,11 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               >
                 <Menu size={18} strokeWidth={1.8} />
               </button>
+              <img
+                src="/brasao-para.png"
+                alt="Brasão do Estado do Pará"
+                className="ca-topbar-logo"
+              />
               <div className="ca-crumbs">
                 <span>Painel SEDUC</span>
                 <span className="sep">/</span>

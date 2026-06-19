@@ -1621,7 +1621,7 @@
   pointer-events: none; /* a camada não bloqueia o conteúdo; só os controles. */
 }
 
-/* Header fixo no topo — agora só com logo + título do slide. */
+/* Header fixo no topo — sempre visível (logo institucional + título). */
 .censo-admin .ca-pres-top {
   pointer-events: auto;
   position: fixed;
@@ -1631,29 +1631,30 @@
   display: flex;
   align-items: center;
   gap: 20px;
-  height: 64px;
+  height: 72px;
   padding: 0 32px;
   background: var(--frame);
   border-bottom: 1px solid var(--bdr);
   box-shadow: 0 4px 16px rgba(2, 6, 23, 0.07);
-  transition: transform 0.25s ease, opacity 0.2s ease;
 }
 
-/* Logo institucional no topo do modo apresentação.
-   Usa a mesma imagem do rodapé/topbar. */
+/* Logo institucional no canto direito do header — mesma imagem do
+   rodapé/topbar, em tamanho maior para boa legibilidade no telão. */
 .censo-admin .ca-pres-logo {
-  height: 36px;
+  height: 52px;
   width: auto;
-  max-width: 260px;
+  max-width: 360px;
   object-fit: contain;
   flex-shrink: 0;
+  margin-left: auto;
   display: block;
   user-select: none;
   -webkit-user-drag: none;
   opacity: 0.95;
 }
 
-/* Barra inferior fixa com todos os controles. */
+/* Barra inferior fixa com todos os controles — anima suavemente para
+   fora da tela quando ocultada (auto-hide ou clique manual). */
 .censo-admin .ca-pres-bottom {
   pointer-events: auto;
   position: fixed;
@@ -1668,18 +1669,18 @@
   background: var(--frame);
   border-top: 1px solid var(--bdr);
   box-shadow: 0 -4px 16px rgba(2, 6, 23, 0.07);
-  transition: transform 0.25s ease, opacity 0.2s ease;
+  transform: translateY(0);
+  opacity: 1;
+  transition:
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.3s ease-out;
+  will-change: transform, opacity;
 }
 
-/* Estado ocultado (auto-hide ou manual): desliza top e bottom para fora
-   da tela mantendo o conteúdo principal visível. */
-.censo-admin .ca-pres-shell.controls-hidden .ca-pres-top {
-  transform: translateY(-100%);
-  opacity: 0;
-  pointer-events: none;
-}
+/* Estado ocultado: somente a barra inferior desliza para baixo.
+   A barra superior permanece fixa para identificação institucional. */
 .censo-admin .ca-pres-shell.controls-hidden .ca-pres-bottom {
-  transform: translateY(100%);
+  transform: translateY(calc(100% + 8px));
   opacity: 0;
   pointer-events: none;
 }
@@ -2107,7 +2108,7 @@
     /* height/zoom gerenciados via JS */
   }
   .censo-admin .ca-pres-top { padding: 0 14px; gap: 10px; height: 56px; }
-  .censo-admin .ca-pres-logo { height: 28px; max-width: 160px; }
+  .censo-admin .ca-pres-logo { height: 36px; max-width: 180px; }
   .censo-admin .ca-pres-kicker { font-size: 12px; }
   .censo-admin .ca-pres-title { font-size: 13px; }
   .censo-admin .ca-pres-bottom { height: 60px; padding: 0 10px; gap: 6px; }

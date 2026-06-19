@@ -836,11 +836,6 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
       aria-label="Modo Apresentação"
     >
       <header className="ca-pres-top">
-        <img
-          src="/parceiros.png"
-          alt="FADEP · Secretaria de Educação · Governo do Pará"
-          className="ca-pres-logo"
-        />
         <div className="ca-pres-heading">
           <span className="ca-pres-kicker">
             <MonitorPlay size={18} />
@@ -864,6 +859,12 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
             <span className="ca-pres-missing ml-2">Não encontrado</span>
           )}
         </div>
+
+        <img
+          src="/parceiros.png"
+          alt="FADEP · Secretaria de Educação · Governo do Pará"
+          className="ca-pres-logo"
+        />
 
         {/* Barra de Progresso do Timer */}
         <div className="ca-pres-progress-bar-container">

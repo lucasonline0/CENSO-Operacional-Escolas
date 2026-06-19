@@ -549,11 +549,6 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               >
                 <Menu size={18} strokeWidth={1.8} />
               </button>
-              <img
-                src={dark ? "/logo-horizontal-letter-white.png" : "/parceiros.png"}
-                alt="FADEP · Secretaria de Educação · Governo do Pará"
-                className="ca-topbar-logo"
-              />
               <div className="ca-crumbs">
                 <span>Painel SEDUC</span>
                 <span className="sep">/</span>
@@ -561,6 +556,11 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               </div>
             </div>
             <div className="ca-topbar-right">
+              <img
+                src={dark ? "/logo-horizontal-letter-white.png" : "/parceiros.png"}
+                alt="FADEP · Secretaria de Educação · Governo do Pará"
+                className="ca-topbar-logo"
+              />
               <button
                 type="button"
                 className="ca-pres-launch-btn ca-pres-mobile-disabled z-10"

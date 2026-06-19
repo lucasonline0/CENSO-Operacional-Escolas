@@ -48,7 +48,11 @@ As implementações devem seguir as seguintes premissas:
 
 ---
 
-## 3. Frente 1 — Filtro local na aba Saúde Operacional
+## 3. Frente 1 — Filtro local na aba Saúde Operacional — CONCLUÍDA
+
+> **Status:** ✅ Concluída em 2026-06-19.
+>
+> Implementação inicial (filtros locais de status e criticidade) entregue no commit `375e8d0`. Em seguida, na revisão de UX, os filtros globais e locais foram **unificados em um único painel** posicionado entre o cabeçalho "Indicador operacional" e os cards de resumo (commit `d02f4b3`, branch `feat/saude-operacional-filtros-locais`). O painel agrega Ano de referência, Região de Integração, DRE, Município, Zona, Status e Criticidade, com botão único "Limpar filtros" e contador agregado. O `FiltrosGlobais` do topo é ocultado especificamente quando a aba Saúde Operacional está ativa — comportamento das demais abas preservado.
 
 ### 3.1. Objetivo
 
@@ -461,35 +465,29 @@ A implementação será considerada concluída quando:
 
 ## 7. Ordem recomendada dos PRs
 
-### PR 1 — Documentação
+### PR 1 — Documentação ✅
 
-Criar este documento em:
+Documento criado em `docs/plano-ajustes-ux-dashboard-censo.md`.
 
-```text
-docs/plano-ajustes-ux-dashboard-censo.md
-```
+### PR 2 — Filtros locais em Saúde Operacional ✅
 
-Sem alteração de código.
+Filtros de status e criticidade implementados (`375e8d0`) e posteriormente unificados com os filtros globais em um único painel específico da aba (`d02f4b3`).
 
-### PR 2 — Filtros locais em Saúde Operacional
+### PR 3 — Logo institucional na topbar 🔜 (próximo)
 
-Implementar filtros de status e criticidade na aba Saúde Operacional.
+Adicionar logo compacta no canto esquerdo da topbar (antes do breadcrumb), respeitando dark/light mode. Menor escopo e maior retorno institucional imediato — escolhido como próximo PR para destravar uma vitória rápida antes do esforço maior da tabela piloto.
 
-### PR 3 — Tabela piloto em Infraestrutura e Segurança
+### PR 4 — Modo apresentação: logo + controles inferiores + ocultação
 
-Criar o padrão de tabela e validar em uma aba.
+Inserir logo no topo do modo apresentação, mover controles para a parte inferior e permitir ocultar/auto-ocultar controles. PR isolado, sem dependência de backend.
 
-### PR 4+ — Tabelas nas demais abas
+### PR 5 — Tabela piloto em Infraestrutura e Segurança
 
-Replicar progressivamente o padrão validado.
+Implementar o padrão de tabela escola a escola na aba Infraestrutura, criando endpoint backend dedicado (`GET /v1/admin/analytics/infraestrutura/escolas`) e um componente reutilizável `AdminDataTable` no frontend.
 
-### PR separado — Modo apresentação
+### PR 6+ — Replicação progressiva nas demais abas
 
-Adicionar logo, reorganizar controles e permitir ocultação.
-
-### PR separado — Logo na topbar
-
-Adicionar logo compacta na tela principal.
+Replicar o padrão validado nas abas restantes (Pessoal, Tecnologia, Merenda, Serviços Terceirizados, Perfil de Alunos, Governança), um PR por aba.
 
 ---
 
@@ -549,12 +547,12 @@ git push --force
 
 As quatro frentes são complementares, mas não devem ser implementadas juntas.
 
-A prioridade recomendada é:
+A prioridade atual (atualizada em 2026-06-19, após conclusão da Frente 1) é:
 
-1. filtros locais em Saúde Operacional;
-2. tabela piloto em Infraestrutura e Segurança;
-3. modo apresentação;
-4. logo na topbar;
+1. ✅ filtros locais em Saúde Operacional — concluída e unificada com o filtro global da aba;
+2. logo institucional na topbar — escopo menor, ganho institucional imediato;
+3. modo apresentação — logo, controles inferiores e ocultação;
+4. tabela piloto em Infraestrutura e Segurança — exige backend + componente reutilizável;
 5. replicação gradual das tabelas nas demais abas.
 
-Essa ordem reduz risco, permite validação rápida pela gestão e evita um PR grande com mudanças simultâneas em UX, backend, frontend e identidade visual.
+A ordem foi reorganizada para entregar primeiro as melhorias de identidade visual (topbar e modo apresentação), que são mudanças isoladas e de baixo risco, antes de partir para a tabela piloto, que demanda backend novo e componente reutilizável.

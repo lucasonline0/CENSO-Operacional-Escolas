@@ -593,13 +593,15 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               </div>
             )}
 
-            <div className="ca-filters-wrap">
-              <FiltrosGlobais
-                opcoes={filtrosOpcoes}
-                filters={filters}
-                onFiltersChange={updateFilters}
-              />
-            </div>
+            {tab !== "saude" && (
+              <div className="ca-filters-wrap">
+                <FiltrosGlobais
+                  opcoes={filtrosOpcoes}
+                  filters={filters}
+                  onFiltersChange={updateFilters}
+                />
+              </div>
+            )}
             {/* Renderiza todas as abas já visitadas. Quando volta para uma aba os dados já são carregados*/}
             {visited.has("perfil") && (
               <div style={{ display: tab === "perfil" ? undefined : "none" }}>
@@ -643,7 +645,13 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             )}
             {visited.has("saude") && (
               <div style={{ display: tab === "saude" ? undefined : "none" }}>
-                <AbaSaudeOperacionalEscolas token={token} onUnauth={logout} filters={filters} />
+                <AbaSaudeOperacionalEscolas
+                  token={token}
+                  onUnauth={logout}
+                  filters={filters}
+                  opcoes={filtrosOpcoes}
+                  onFiltersChange={updateFilters}
+                />
               </div>
             )}
 

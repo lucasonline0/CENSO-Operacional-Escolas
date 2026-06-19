@@ -28,6 +28,7 @@ import type {
   SaudeOperacionalPayload,
   SaudeOperacionalStatus,
   DashboardFilters,
+  FiltrosOpcoes,
 } from "./shared/types";
 
 const ENDPOINT_BASE = "/v1/admin/analytics/escolas/saude-operacional";
@@ -166,6 +167,44 @@ function buildEndpoint(
   return `${ENDPOINT_BASE}?${params.toString()}`;
 }
 
+function FilterSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string | number | undefined;
+  options: (string | number)[];
+  onChange: (v: string) => void;
+}) {
+  const hasValue = value !== undefined && value !== "";
+  return (
+    <div className="flex flex-col gap-0.5">
+      <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+        {label}
+      </label>
+      <select
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        className={`rounded-lg border py-1.5 pl-2.5 pr-7 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+          hasValue
+            ? "border-blue-300 bg-blue-50 font-semibold text-blue-800"
+            : "border-slate-200 bg-white text-slate-700"
+        }`}
+        style={{ minWidth: 140 }}
+      >
+        <option value="">Todos</option>
+        {options.map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function SummaryCard({
   label,
   value,
@@ -295,10 +334,14 @@ export function AbaSaudeOperacionalEscolas({
   token,
   onUnauth,
   filters,
+  opcoes,
+  onFiltersChange,
 }: {
   token: string;
   onUnauth: () => void;
   filters?: DashboardFilters;
+  opcoes?: FiltrosOpcoes | null;
+  onFiltersChange?: (f: DashboardFilters) => void;
 }) {
   const [payload, setPayload] = useState<SaudeOperacionalPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -379,11 +422,35 @@ export function AbaSaudeOperacionalEscolas({
     setPage(1);
   }
 
-  function handleClearLocalFilters() {
-    if (!hasLocalFilters) return;
+  function setGlobalFilter(key: keyof DashboardFilters, raw: string) {
+    if (!onFiltersChange) return;
+    const next: DashboardFilters = { ...(filters ?? {}) };
+    if (raw === "") {
+      delete next[key];
+    } else if (key === "ano") {
+      next.ano = Number(raw);
+    } else {
+      (next as Record<string, string>)[key] = raw;
+    }
+    onFiltersChange(next);
+  }
+
+  const activeGlobalCount = useMemo(
+    () => (filters ? Object.values(filters).filter((v) => v !== undefined && v !== "").length : 0),
+    [filters],
+  );
+  const activeLocalCount =
+    (localStatus !== "todos" ? 1 : 0) + (localCriticidade !== "todas" ? 1 : 0);
+  const totalActiveCount = activeGlobalCount + activeLocalCount;
+
+  function clearAllFilters() {
+    if (totalActiveCount === 0) return;
     setLoading(true);
-    setLocalStatus("todos");
-    setLocalCriticidade("todas");
+    if (onFiltersChange && activeGlobalCount > 0) onFiltersChange({});
+    if (activeLocalCount > 0) {
+      setLocalStatus("todos");
+      setLocalCriticidade("todas");
+    }
     setPage(1);
   }
 
@@ -491,6 +558,105 @@ export function AbaSaudeOperacionalEscolas({
         </div>
       </header>
 
+      <div
+        data-pres-hide="true"
+        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
+      >
+        <div className="mb-2.5 flex items-center gap-2">
+          <Filter size={14} style={{ color: C.primary }} />
+          <span className="text-xs font-semibold text-slate-600">Filtros</span>
+          {totalActiveCount > 0 && (
+            <span
+              className="flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold text-white"
+              style={{ background: C.primary }}
+            >
+              {totalActiveCount}
+            </span>
+          )}
+          {totalActiveCount > 0 && (
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            >
+              <X size={12} />
+              Limpar filtros
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-end gap-3">
+          <FilterSelect
+            label="Ano de referência"
+            value={filters?.ano}
+            options={opcoes?.anos ?? []}
+            onChange={(v) => setGlobalFilter("ano", v)}
+          />
+          <FilterSelect
+            label="Região de Integração"
+            value={filters?.regiao_integracao}
+            options={opcoes?.regioes_integracao ?? []}
+            onChange={(v) => setGlobalFilter("regiao_integracao", v)}
+          />
+          <FilterSelect
+            label="DRE"
+            value={filters?.dre}
+            options={opcoes?.dres ?? []}
+            onChange={(v) => setGlobalFilter("dre", v)}
+          />
+          <FilterSelect
+            label="Município"
+            value={filters?.municipio}
+            options={opcoes?.municipios ?? []}
+            onChange={(v) => setGlobalFilter("municipio", v)}
+          />
+          <FilterSelect
+            label="Zona"
+            value={filters?.zona}
+            options={opcoes?.zonas ?? []}
+            onChange={(v) => setGlobalFilter("zona", v)}
+          />
+          <div className="flex flex-col gap-0.5">
+            <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              Status
+            </label>
+            <select
+              value={localStatus}
+              onChange={(event) => handleLocalStatusChange(event.target.value as LocalStatusFilter)}
+              className={`rounded-lg border py-1.5 pl-2.5 pr-7 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                localStatus !== "todos"
+                  ? "border-blue-300 bg-blue-50 font-semibold text-blue-800"
+                  : "border-slate-200 bg-white text-slate-700"
+              }`}
+              style={{ minWidth: 140 }}
+            >
+              {LOCAL_STATUS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              Criticidade
+            </label>
+            <select
+              value={localCriticidade}
+              onChange={(event) => handleLocalCriticidadeChange(event.target.value as LocalCriticidadeFilter)}
+              className={`rounded-lg border py-1.5 pl-2.5 pr-7 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                localCriticidade !== "todas"
+                  ? "border-blue-300 bg-blue-50 font-semibold text-blue-800"
+                  : "border-slate-200 bg-white text-slate-700"
+              }`}
+              style={{ minWidth: 160 }}
+            >
+              {LOCAL_CRITICIDADE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
       <div data-pres-slide="saude-resumo-indicadores" className="space-y-6">
       <div id="sec-saude-resumo" className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         <SummaryCard
@@ -532,57 +698,6 @@ export function AbaSaudeOperacionalEscolas({
           sub="Escolas com nota"
         />
       </div>
-      </div>
-
-      <div
-        data-pres-hide="true"
-        className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-4 shadow-sm"
-      >
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <Filter size={13} className="text-slate-400" />
-            Filtros da aba
-            <span className="font-normal text-slate-400 normal-case tracking-normal">
-              · refinam apenas esta tabela
-            </span>
-          </div>
-          {hasLocalFilters && (
-            <button
-              type="button"
-              onClick={handleClearLocalFilters}
-              className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
-            >
-              <X size={12} />
-              Limpar filtros da aba
-            </button>
-          )}
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1 text-xs text-slate-600">
-            <span className="font-medium text-slate-700">Status</span>
-            <select
-              value={localStatus}
-              onChange={(event) => handleLocalStatusChange(event.target.value as LocalStatusFilter)}
-              className="w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              {LOCAL_STATUS_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-slate-600">
-            <span className="font-medium text-slate-700">Criticidade</span>
-            <select
-              value={localCriticidade}
-              onChange={(event) => handleLocalCriticidadeChange(event.target.value as LocalCriticidadeFilter)}
-              className="w-full rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              {LOCAL_CRITICIDADE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </label>
-        </div>
       </div>
 
       <div data-pres-hide="true" className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">

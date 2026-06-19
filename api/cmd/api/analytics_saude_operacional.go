@@ -914,6 +914,121 @@ func parseSaudeOperacionalDirection(raw string) (string, error) {
 	return direction, nil
 }
 
+// saudeOperacionalLocalFilters representa os filtros de aba (locais) aplicados
+// somente sobre a visualização da tabela. NÃO interferem nos filtros globais
+// (dre, municipio, zona, regiao_integracao) nem no resumo agregado mostrado nos
+// cards: o resumo continua refletindo o recorte global + busca textual, de modo
+// que o painel de cards permanece como referência mesmo enquanto o usuário
+// filtra a tabela por status/criticidade.
+type saudeOperacionalLocalFilters struct {
+	Status           string
+	CriticidadeFaixa string
+}
+
+// IsActive informa se há ao menos um filtro local ativo. Útil para curto-circuitar
+// a iteração quando o filtro local é "todos/todas".
+func (f saudeOperacionalLocalFilters) IsActive() bool {
+	return f.Status != "" || f.CriticidadeFaixa != ""
+}
+
+var saudeOperacionalStatusValidos = map[string]bool{
+	"saudavel":  true,
+	"atencao":   true,
+	"critica":   true,
+	"sem_dados": true,
+}
+
+var saudeOperacionalCriticidadeFaixasValidas = map[string]bool{
+	"alta":      true,
+	"media":     true,
+	"baixa":     true,
+	"sem_dados": true,
+}
+
+// Faixas de criticidade alinhadas aos thresholds dos status para manter a UX
+// consistente com o farol da escola:
+//   - Alta:  criticidade > 50   (escola com status "critica",  saude < 50)
+//   - Média: 30 < criticidade <= 50 (status "atencao",  50 <= saude < 70)
+//   - Baixa: criticidade <= 30  (status "saudavel", saude >= 70)
+//   - Sem dados: criticidade ausente (status "sem_dados")
+//
+// A redundância com o filtro de status é intencional: o gestor pode usar
+// indistintamente o conceito de farol ou o de criticidade. Os dois filtros são
+// combinados por interseção (AND).
+const (
+	saudeCriticidadeAltaMin  = 50.0
+	saudeCriticidadeMediaMin = 30.0
+)
+
+// parseSaudeOperacionalLocalFilters lê os filtros de aba da query string e
+// valida os enums permitidos. Strings vazias significam "filtro desativado" — a
+// ausência dos parâmetros é tratada exatamente como "todos/todas" no frontend.
+func parseSaudeOperacionalLocalFilters(q url.Values) (saudeOperacionalLocalFilters, error) {
+	status := strings.TrimSpace(q.Get("status"))
+	if status != "" && !saudeOperacionalStatusValidos[status] {
+		return saudeOperacionalLocalFilters{}, fmt.Errorf(
+			"status inválido: use saudavel, atencao, critica ou sem_dados",
+		)
+	}
+	faixa := strings.TrimSpace(q.Get("criticidade_faixa"))
+	if faixa != "" && !saudeOperacionalCriticidadeFaixasValidas[faixa] {
+		return saudeOperacionalLocalFilters{}, fmt.Errorf(
+			"criticidade_faixa inválida: use alta, media, baixa ou sem_dados",
+		)
+	}
+	return saudeOperacionalLocalFilters{Status: status, CriticidadeFaixa: faixa}, nil
+}
+
+// classifyCriticidadeFaixa converte a criticidade numérica em rótulo de faixa.
+// Mantém a mesma classificação usada por matchesSaudeLocalFilters para evitar
+// divergência entre filtro e exibição (caso a faixa venha a ser exposta no
+// payload no futuro).
+func classifyCriticidadeFaixa(criticidade *float64) string {
+	if criticidade == nil {
+		return "sem_dados"
+	}
+	switch {
+	case *criticidade > saudeCriticidadeAltaMin:
+		return "alta"
+	case *criticidade > saudeCriticidadeMediaMin:
+		return "media"
+	default:
+		return "baixa"
+	}
+}
+
+// matchesSaudeLocalFilters aplica os filtros de aba a uma única escola. Os
+// filtros são combinados por AND e tratam string vazia como "ignorar".
+func matchesSaudeLocalFilters(e SaudeOperacionalEscola, f saudeOperacionalLocalFilters) bool {
+	if f.Status != "" && e.Status != f.Status {
+		return false
+	}
+	if f.CriticidadeFaixa != "" && classifyCriticidadeFaixa(e.Criticidade) != f.CriticidadeFaixa {
+		return false
+	}
+	return true
+}
+
+// filterSaudeOperacionalByLocal devolve um novo slice com as escolas que
+// satisfazem os filtros de aba. Quando nenhum filtro está ativo, devolve uma
+// cópia rasa do slice de entrada para preservar a semântica de "função pura"
+// (callers não devem reescrever o slice de origem).
+func filterSaudeOperacionalByLocal(
+	escolas []SaudeOperacionalEscola,
+	f saudeOperacionalLocalFilters,
+) []SaudeOperacionalEscola {
+	if !f.IsActive() {
+		return append([]SaudeOperacionalEscola(nil), escolas...)
+	}
+	filtered := make([]SaudeOperacionalEscola, 0, len(escolas))
+	for _, e := range escolas {
+		if matchesSaudeLocalFilters(e, f) {
+			filtered = append(filtered, e)
+		}
+	}
+	return filtered
+}
+
 func filterSaudeOperacionalEscolas(
 	escolas []SaudeOperacionalEscola,
 	searchQuery string,
@@ -939,9 +1054,17 @@ func filterSaudeOperacionalEscolas(
 	return filtered
 }
 
+// buildSaudeOperacionalPage aplica busca → resumo → filtros locais → ordenação
+// → paginação sobre o universo já recortado pelos filtros globais. O resumo é
+// calculado SOMENTE sobre o recorte global + busca textual, ignorando os
+// filtros de aba (status/criticidade), para que o painel de cards continue
+// servindo como referência mesmo enquanto a tabela é refinada por status ou
+// criticidade. totalFiltrado, por sua vez, reflete o que efetivamente compõe a
+// tabela após todos os filtros — incluindo os de aba.
 func buildSaudeOperacionalPage(
 	allEscolas []SaudeOperacionalEscola,
 	searchQuery string,
+	localFilters saudeOperacionalLocalFilters,
 	sortKey string,
 	direction string,
 	page int,
@@ -953,12 +1076,14 @@ func buildSaudeOperacionalPage(
 	totalPages int,
 	currentPage int,
 ) {
-	filtered := filterSaudeOperacionalEscolas(allEscolas, searchQuery)
+	searched := filterSaudeOperacionalEscolas(allEscolas, searchQuery)
+	resumo = buildSaudeResumo(searched)
+
+	filtered := filterSaudeOperacionalByLocal(searched, localFilters)
 	sort.SliceStable(filtered, func(i, j int) bool {
 		return compareSaudeEscola(filtered[i], filtered[j], sortKey, direction) < 0
 	})
 
-	resumo = buildSaudeResumo(filtered)
 	totalFiltrado = len(filtered)
 	if totalFiltrado == 0 {
 		return []SaudeOperacionalEscola{}, resumo, 0, 0, 1
@@ -1257,6 +1382,12 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 
 	filters := parseSaudeOperacionalFilters(q)
 
+	localFilters, err := parseSaudeOperacionalLocalFilters(q)
+	if err != nil {
+		app.errorJSON(w, err, http.StatusBadRequest)
+		return
+	}
+
 	// parseMs cobre todo o parse/validação dos parâmetros (etapas acima). has_*
 	// registram apenas presença/ausência dos filtros — nunca os valores em si,
 	// para não vazar termos de busca/dados nos logs.
@@ -1266,6 +1397,8 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 	hasMunicipio := filters.Municipio != ""
 	hasZona := filters.Zona != ""
 	hasRegiao := filters.RegiaoIntegracao != ""
+	hasLocalStatus := localFilters.Status != ""
+	hasLocalCriticidade := localFilters.CriticidadeFaixa != ""
 
 	// Carregamento e cálculo base de todas as escolas do recorte. A função
 	// reaproveitável também alimenta o relatório gerencial de Saúde Operacional;
@@ -1284,6 +1417,7 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 	pageSlice, resumo, totalFiltrado, totalPages, page := buildSaudeOperacionalPage(
 		allEscolas,
 		searchQuery,
+		localFilters,
 		sortKey,
 		direction,
 		page,
@@ -1311,10 +1445,12 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 	totalMs := time.Since(routeStart).Milliseconds()
 	app.logger.Printf("saude_operacional_perf: year=%d page=%d page_size=%d sort=%s direction=%s "+
 		"has_search=%t has_dre=%t has_municipio=%t has_zona=%t has_regiao=%t "+
+		"has_local_status=%t has_local_criticidade=%t "+
 		"parse_ms=%d pedagogico_ms=%d query_ms=%d iterate_calc_ms=%d calc_ms=%d paginate_ms=%d payload_ms=%d total_ms=%d "+
 		"total_escolas=%d total_filtrado=%d total_pages=%d page_items=%d",
 		year, page, pageSize, sortKey, direction,
 		hasSearch, hasDRE, hasMunicipio, hasZona, hasRegiao,
+		hasLocalStatus, hasLocalCriticidade,
 		parseMs, pedagogicoMs, queryMs, iterateCalcMs, calcMs, paginateMs, payloadMs, totalMs,
 		len(allEscolas), totalFiltrado, totalPages, len(pageSlice))
 

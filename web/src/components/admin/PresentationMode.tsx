@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, Clock, Loader2, MonitorPlay, Pause, Play, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Clock, Eye, EyeOff, Loader2, MonitorPlay, Pause, Play, X } from "lucide-react";
 
 type PresentationTab =
   | "perfil"
@@ -257,8 +257,11 @@ const SLIDES: PresentationSlide[] = [
   },
 ];
 
-// top padding (80px) + bottom padding (32px) + breathing room (16px)
-const PRES_PAGE_PADDING = 128;
+// top padding (~80px header) + bottom padding (~80px footer) + breathing room (16px)
+const PRES_PAGE_PADDING = 176;
+
+// Tempo (ms) sem atividade do mouse antes de ocultar a barra de controles.
+const CONTROLS_AUTO_HIDE_MS = 4000;
 
 function removeActiveSlideState() {
   document.querySelectorAll<HTMLElement>("[data-pres-slide]").forEach((element) => {
@@ -275,7 +278,10 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
   const [duration, setDuration] = useState(10); // 10 segundos por padrão
   const [progress, setProgress] = useState(0);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const [controlsManualHidden, setControlsManualHidden] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
+  const autoHideTimerRef = useRef<number | null>(null);
 
   const slideIndexRef = useRef(0);
   const transitionInProgressRef = useRef(false);
@@ -285,6 +291,7 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
   const observerRef = useRef<MutationObserver | null>(null);
   const navigationTokenRef = useRef(0);
   const onNavigateTabRef = useRef(onNavigateTab);
+  const onCloseRef = useRef(onClose);
   const consecutiveSkipsRef = useRef(0);
   const durationRef = useRef(duration);
 
@@ -294,6 +301,10 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
   useEffect(() => {
     onNavigateTabRef.current = onNavigateTab;
   }, [onNavigateTab]);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     durationRef.current = duration;
@@ -721,6 +732,43 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Auto-ocultação dos controles após período sem atividade do mouse.
+  // O usuário pode forçar a ocultação manual via botão; nesse caso não
+  // reaparece com mousemove (apenas com clique no próprio botão).
+  useEffect(() => {
+    const clearTimer = () => {
+      if (autoHideTimerRef.current !== null) {
+        window.clearTimeout(autoHideTimerRef.current);
+        autoHideTimerRef.current = null;
+      }
+    };
+
+    const scheduleHide = () => {
+      clearTimer();
+      autoHideTimerRef.current = window.setTimeout(() => {
+        setControlsVisible(false);
+      }, CONTROLS_AUTO_HIDE_MS);
+    };
+
+    const handleActivity = () => {
+      if (controlsManualHidden) return;
+      setControlsVisible(true);
+      scheduleHide();
+    };
+
+    scheduleHide();
+    window.addEventListener("mousemove", handleActivity);
+    window.addEventListener("keydown", handleActivity);
+    window.addEventListener("touchstart", handleActivity);
+
+    return () => {
+      clearTimer();
+      window.removeEventListener("mousemove", handleActivity);
+      window.removeEventListener("keydown", handleActivity);
+      window.removeEventListener("touchstart", handleActivity);
+    };
+  }, [controlsManualHidden]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -772,7 +820,23 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
       document.documentElement.requestFullscreen().catch(() => { });
     }
 
+    // O navegador intercepta o Esc para sair do fullscreen antes do
+    // nosso listener de keydown receber o evento. Para que Esc também
+    // feche o modo apresentação, escutamos a saída do fullscreen.
+    // unmounting evita disparar onClose durante a própria limpeza
+    // (quando nós mesmos chamamos exitFullscreen).
+    let unmounting = false;
+    const handleFullscreenChange = () => {
+      if (unmounting) return;
+      if (!document.fullscreenElement) {
+        onCloseRef.current();
+      }
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+
     return () => {
+      unmounting = true;
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
       navigationTokenRef.current += 1;
       clearRetryTimer();
       removeActiveSlideState();
@@ -783,8 +847,15 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
     };
   }, [clearRetryTimer]);
 
+  const isHidden = !controlsVisible || controlsManualHidden;
+
   return (
-    <div className="ca-pres-shell" role="dialog" aria-modal="true" aria-label="Modo Apresentação">
+    <div
+      className={`ca-pres-shell${isHidden ? " controls-hidden" : ""}`}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Modo Apresentação"
+    >
       <header className="ca-pres-top">
         <div className="ca-pres-heading">
           <span className="ca-pres-kicker">
@@ -810,8 +881,33 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
           )}
         </div>
 
+        <img
+          src="/parceiros.png"
+          alt="FADEP · Secretaria de Educação · Governo do Pará"
+          className="ca-pres-logo"
+        />
+
+        {/* Barra de Progresso do Timer */}
+        <div className="ca-pres-progress-bar-container">
+          <div
+            className={`ca-pres-progress-bar-fill ${slideStatus !== "found" ? "waiting" : ""}`}
+            style={{ width: `${slideStatus === "found" ? progress : 0}%` }}
+          />
+        </div>
+      </header>
+
+      <footer className="ca-pres-bottom">
         <div className="ca-pres-controls">
-          {/* Botão de Play/Pause */}
+          <button
+            type="button"
+            className="ca-pres-nav-btn"
+            title="Slide anterior (←)"
+            aria-label="Slide anterior"
+            onClick={goPrev}
+          >
+            <ChevronLeft size={20} />
+          </button>
+
           <button
             type="button"
             className={`ca-pres-autoplay-btn ${isPlaying ? "active" : ""}`}
@@ -822,7 +918,21 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
             {isPlaying ? <Pause size={18} /> : <Play size={18} />}
           </button>
 
-          {/* Seletor de Tempo de Transição Personalizado */}
+          <button
+            type="button"
+            className="ca-pres-nav-btn"
+            title="Próximo slide (→)"
+            aria-label="Próximo slide"
+            onClick={goNext}
+          >
+            <ChevronRight size={20} />
+          </button>
+
+          <span className="ca-pres-counter">
+            {slideIndex + 1} / {total}
+          </span>
+
+          {/* Seletor de Tempo de Transição */}
           <div className="ca-pres-dropdown-container" ref={dropdownRef}>
             <button
               type="button"
@@ -838,7 +948,7 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
             </button>
 
             {isDropdownOpen && (
-              <ul className="ca-pres-dropdown-menu">
+              <ul className="ca-pres-dropdown-menu ca-pres-dropdown-menu--up">
                 {[5, 10, 15, 30, 60].map((val) => (
                   <li key={val}>
                     <button
@@ -858,31 +968,20 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
             )}
           </div>
 
-          <span className="ca-pres-counter">
-            {slideIndex + 1} / {total}
-          </span>
           <button
             type="button"
-            className="ca-pres-nav-btn"
-            title="Slide anterior"
-            aria-label="Slide anterior"
-            onClick={goPrev}
+            className="ca-pres-toggle-btn"
+            title={controlsManualHidden ? "Mostrar controles" : "Ocultar controles"}
+            aria-label={controlsManualHidden ? "Mostrar controles" : "Ocultar controles"}
+            onClick={() => setControlsManualHidden((h) => !h)}
           >
-            <ChevronLeft size={20} />
+            {controlsManualHidden ? <Eye size={18} /> : <EyeOff size={18} />}
           </button>
-          <button
-            type="button"
-            className="ca-pres-nav-btn"
-            title="Próximo slide"
-            aria-label="Próximo slide"
-            onClick={goNext}
-          >
-            <ChevronRight size={20} />
-          </button>
+
           <button
             type="button"
             className="ca-pres-close"
-            title="Fechar apresentação"
+            title="Fechar apresentação (Esc)"
             aria-label="Fechar apresentação"
             onClick={onClose}
           >
@@ -890,15 +989,20 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
             <span>Fechar</span>
           </button>
         </div>
+      </footer>
 
-        {/* Barra de Progresso do Timer */}
-        <div className="ca-pres-progress-bar-container">
-          <div
-            className={`ca-pres-progress-bar-fill ${slideStatus !== "found" ? "waiting" : ""}`}
-            style={{ width: `${slideStatus === "found" ? progress : 0}%` }}
-          />
-        </div>
-      </header>
+      {/* Botão flutuante para reexibir controles quando ocultos manualmente */}
+      {controlsManualHidden && (
+        <button
+          type="button"
+          className="ca-pres-reveal-btn"
+          title="Mostrar controles"
+          aria-label="Mostrar controles"
+          onClick={() => setControlsManualHidden(false)}
+        >
+          <Eye size={18} />
+        </button>
+      )}
     </div>
   );
 }

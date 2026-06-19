@@ -782,6 +782,7 @@ func TestSaudeOperacionalFilteredSummaryAndPagination(t *testing.T) {
 	pageItems, resumo, totalFiltrado, totalPages, currentPage := buildSaudeOperacionalPage(
 		allEscolas,
 		"CASTANHAL",
+		saudeOperacionalLocalFilters{},
 		"criticidade",
 		"desc",
 		2,
@@ -827,6 +828,7 @@ func TestSaudeOperacionalZeroIsNotNullAndSemDadosSortsLast(t *testing.T) {
 	pageItems, resumo, totalFiltrado, _, _ := buildSaudeOperacionalPage(
 		escolas,
 		"",
+		saudeOperacionalLocalFilters{},
 		"saude",
 		"asc",
 		1,
@@ -1007,6 +1009,7 @@ func TestSaudeOperacionalEmptyRecorte(t *testing.T) {
 	pageItems, resumo, totalFiltrado, totalPages, currentPage := buildSaudeOperacionalPage(
 		[]SaudeOperacionalEscola{},
 		"",
+		saudeOperacionalLocalFilters{},
 		"criticidade",
 		"desc",
 		1,
@@ -1047,6 +1050,7 @@ func TestSaudeOperacionalRecorteResumoEPaginacao(t *testing.T) {
 	pageItems, resumo, totalFiltrado, totalPages, currentPage := buildSaudeOperacionalPage(
 		universo,
 		"",
+		saudeOperacionalLocalFilters{},
 		"criticidade",
 		"desc",
 		1,
@@ -1074,7 +1078,7 @@ func TestSaudeOperacionalRecorteResumoEPaginacao(t *testing.T) {
 	}
 
 	// Busca textual refina dentro do recorte global.
-	_, resumoBusca, totalBusca, _, _ := buildSaudeOperacionalPage(universo, "Alfa", "criticidade", "desc", 1, 10)
+	_, resumoBusca, totalBusca, _, _ := buildSaudeOperacionalPage(universo, "Alfa", saudeOperacionalLocalFilters{}, "criticidade", "desc", 1, 10)
 	if totalBusca != 1 || resumoBusca.Saudaveis != 1 {
 		t.Fatalf("busca dentro do recorte: total=%d resumo=%+v; want 1 escola saudável", totalBusca, resumoBusca)
 	}
@@ -1102,4 +1106,260 @@ func floatPointerForTest(value float64) *float64 {
 
 func intPointerForTest(value int) *int {
 	return &value
+}
+
+// --- Filtros locais de aba (status, criticidade_faixa) ---
+
+// TestSaudeOperacionalParseLocalFilters cobre a leitura e validação dos filtros
+// de aba: valores válidos passam, espaços em branco viram ausência e valores
+// inválidos retornam erro 400 (mensagem amigável ao gestor).
+func TestSaudeOperacionalParseLocalFilters(t *testing.T) {
+	t.Run("ambos vazios", func(t *testing.T) {
+		got, err := parseSaudeOperacionalLocalFilters(url.Values{})
+		if err != nil {
+			t.Fatalf("err = %v; want nil", err)
+		}
+		if got.IsActive() {
+			t.Fatalf("filtros vazios não deveriam estar ativos: %+v", got)
+		}
+	})
+
+	t.Run("status crítica e faixa alta", func(t *testing.T) {
+		q := url.Values{"status": {"critica"}, "criticidade_faixa": {"alta"}}
+		got, err := parseSaudeOperacionalLocalFilters(q)
+		if err != nil || got.Status != "critica" || got.CriticidadeFaixa != "alta" {
+			t.Fatalf("parse = %+v err=%v; want critica/alta", got, err)
+		}
+	})
+
+	t.Run("status com espaços é tratado como ausência", func(t *testing.T) {
+		q := url.Values{"status": {"   "}}
+		got, err := parseSaudeOperacionalLocalFilters(q)
+		if err != nil || got.Status != "" {
+			t.Fatalf("parse = %+v err=%v; want status vazio", got, err)
+		}
+	})
+
+	for _, invalid := range []string{"Critica", "CRITICA", "indefinido", "sem dados"} {
+		t.Run("status inválido "+invalid, func(t *testing.T) {
+			q := url.Values{"status": {invalid}}
+			if _, err := parseSaudeOperacionalLocalFilters(q); err == nil {
+				t.Fatalf("status %q deveria falhar", invalid)
+			}
+		})
+	}
+
+	for _, invalid := range []string{"ALTA", "altíssima", "1"} {
+		t.Run("faixa inválida "+invalid, func(t *testing.T) {
+			q := url.Values{"criticidade_faixa": {invalid}}
+			if _, err := parseSaudeOperacionalLocalFilters(q); err == nil {
+				t.Fatalf("criticidade_faixa %q deveria falhar", invalid)
+			}
+		})
+	}
+}
+
+// TestSaudeOperacionalClassifyCriticidadeFaixa fixa as bordas de cada faixa para
+// proteger a regra que alinha faixa e status: > 50 alta, > 30 e <= 50 média,
+// caso contrário baixa; nil vira sem_dados.
+func TestSaudeOperacionalClassifyCriticidadeFaixa(t *testing.T) {
+	cases := []struct {
+		name        string
+		criticidade *float64
+		want        string
+	}{
+		{"alta acima de 50", floatPointerForTest(50.1), "alta"},
+		{"alta caso extremo", floatPointerForTest(100), "alta"},
+		{"media na borda 50", floatPointerForTest(50), "media"},
+		{"media acima de 30", floatPointerForTest(30.1), "media"},
+		{"baixa na borda 30", floatPointerForTest(30), "baixa"},
+		{"baixa caso zero", floatPointerForTest(0), "baixa"},
+		{"sem dados", nil, "sem_dados"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := classifyCriticidadeFaixa(tc.criticidade); got != tc.want {
+				t.Fatalf("classifyCriticidadeFaixa(%v) = %q; want %q", tc.criticidade, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestSaudeOperacionalLocalFilterStatus garante que o filtro por status restringe
+// a tabela à categoria escolhida, deixando as demais fora — sem alterar o
+// resumo (recorte global + busca).
+func TestSaudeOperacionalLocalFilterStatus(t *testing.T) {
+	universo := []SaudeOperacionalEscola{
+		{SchoolID: 1, Escola: "Alfa", Saude: floatPointerForTest(80), Criticidade: floatPointerForTest(20), Status: "saudavel"},
+		{SchoolID: 2, Escola: "Beta", Saude: floatPointerForTest(60), Criticidade: floatPointerForTest(40), Status: "atencao"},
+		{SchoolID: 3, Escola: "Gama", Saude: floatPointerForTest(40), Criticidade: floatPointerForTest(60), Status: "critica"},
+		{SchoolID: 4, Escola: "Delta", Status: "sem_dados"},
+	}
+
+	page, resumo, total, _, _ := buildSaudeOperacionalPage(
+		universo,
+		"",
+		saudeOperacionalLocalFilters{Status: "critica"},
+		"criticidade",
+		"desc",
+		1,
+		10,
+	)
+	if total != 1 || len(page) != 1 || page[0].SchoolID != 3 {
+		t.Fatalf("page = %+v total=%d; want apenas Gama", page, total)
+	}
+	if resumo.Saudaveis != 1 || resumo.Atencao != 1 || resumo.Criticas != 1 || resumo.SemDados != 1 {
+		t.Fatalf("resumo = %+v; deveria refletir o universo inteiro (1/1/1/1)", resumo)
+	}
+
+	// sem_dados também é filtrável.
+	page2, _, total2, _, _ := buildSaudeOperacionalPage(
+		universo,
+		"",
+		saudeOperacionalLocalFilters{Status: "sem_dados"},
+		"criticidade",
+		"desc",
+		1,
+		10,
+	)
+	if total2 != 1 || page2[0].SchoolID != 4 {
+		t.Fatalf("sem_dados = %+v total=%d; want apenas Delta", page2, total2)
+	}
+}
+
+// TestSaudeOperacionalLocalFilterCriticidade cobre as três faixas de criticidade
+// e a opção sem_dados, confirmando que a tabela é restringida sem alterar o
+// resumo agregado.
+func TestSaudeOperacionalLocalFilterCriticidade(t *testing.T) {
+	universo := []SaudeOperacionalEscola{
+		{SchoolID: 1, Escola: "Alfa", Saude: floatPointerForTest(80), Criticidade: floatPointerForTest(20), Status: "saudavel"},
+		{SchoolID: 2, Escola: "Beta", Saude: floatPointerForTest(60), Criticidade: floatPointerForTest(40), Status: "atencao"},
+		{SchoolID: 3, Escola: "Gama", Saude: floatPointerForTest(40), Criticidade: floatPointerForTest(60), Status: "critica"},
+		{SchoolID: 4, Escola: "Delta", Status: "sem_dados"},
+	}
+
+	cases := []struct {
+		faixa      string
+		wantIDs    []int
+		wantTotal  int
+		wantResumo SaudeOperacionalResumo
+	}{
+		{
+			faixa: "alta", wantIDs: []int{3}, wantTotal: 1,
+			wantResumo: SaudeOperacionalResumo{Saudaveis: 1, Atencao: 1, Criticas: 1, SemDados: 1, SaudeMedia: floatPointerForTest(60)},
+		},
+		{
+			faixa: "media", wantIDs: []int{2}, wantTotal: 1,
+			wantResumo: SaudeOperacionalResumo{Saudaveis: 1, Atencao: 1, Criticas: 1, SemDados: 1, SaudeMedia: floatPointerForTest(60)},
+		},
+		{
+			faixa: "baixa", wantIDs: []int{1}, wantTotal: 1,
+			wantResumo: SaudeOperacionalResumo{Saudaveis: 1, Atencao: 1, Criticas: 1, SemDados: 1, SaudeMedia: floatPointerForTest(60)},
+		},
+		{
+			faixa: "sem_dados", wantIDs: []int{4}, wantTotal: 1,
+			wantResumo: SaudeOperacionalResumo{Saudaveis: 1, Atencao: 1, Criticas: 1, SemDados: 1, SaudeMedia: floatPointerForTest(60)},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.faixa, func(t *testing.T) {
+			page, resumo, total, _, _ := buildSaudeOperacionalPage(
+				universo,
+				"",
+				saudeOperacionalLocalFilters{CriticidadeFaixa: tc.faixa},
+				"criticidade",
+				"desc",
+				1,
+				10,
+			)
+			if total != tc.wantTotal || len(page) != len(tc.wantIDs) {
+				t.Fatalf("faixa %q: total=%d page=%+v; want total=%d ids=%+v", tc.faixa, total, page, tc.wantTotal, tc.wantIDs)
+			}
+			for i, id := range tc.wantIDs {
+				if page[i].SchoolID != id {
+					t.Fatalf("faixa %q: page[%d]=%d; want %d", tc.faixa, i, page[i].SchoolID, id)
+				}
+			}
+			if resumo.Saudaveis != tc.wantResumo.Saudaveis ||
+				resumo.Atencao != tc.wantResumo.Atencao ||
+				resumo.Criticas != tc.wantResumo.Criticas ||
+				resumo.SemDados != tc.wantResumo.SemDados {
+				t.Fatalf("faixa %q: resumo = %+v; want %+v", tc.faixa, resumo, tc.wantResumo)
+			}
+			assertOptionalFloat(t, resumo.SaudeMedia, tc.wantResumo.SaudeMedia)
+		})
+	}
+}
+
+// TestSaudeOperacionalLocalFilterCombinado garante que status e criticidade_faixa
+// combinados aplicam interseção (AND). Status "atencao" + faixa "alta" não casa
+// com nenhuma escola, então a tabela vai vazia mas o resumo permanece coerente.
+func TestSaudeOperacionalLocalFilterCombinado(t *testing.T) {
+	universo := []SaudeOperacionalEscola{
+		{SchoolID: 1, Escola: "Alfa", Saude: floatPointerForTest(80), Criticidade: floatPointerForTest(20), Status: "saudavel"},
+		{SchoolID: 2, Escola: "Beta", Saude: floatPointerForTest(60), Criticidade: floatPointerForTest(40), Status: "atencao"},
+		{SchoolID: 3, Escola: "Gama", Saude: floatPointerForTest(40), Criticidade: floatPointerForTest(60), Status: "critica"},
+	}
+
+	page, resumo, total, totalPages, currentPage := buildSaudeOperacionalPage(
+		universo,
+		"",
+		saudeOperacionalLocalFilters{Status: "atencao", CriticidadeFaixa: "alta"},
+		"criticidade",
+		"desc",
+		1,
+		10,
+	)
+	if total != 0 || len(page) != 0 {
+		t.Fatalf("page=%+v total=%d; want vazio (AND não casa)", page, total)
+	}
+	if totalPages != 0 || currentPage != 1 {
+		t.Fatalf("paginação vazia: pages=%d current=%d; want 0/1", totalPages, currentPage)
+	}
+	if resumo.Saudaveis != 1 || resumo.Atencao != 1 || resumo.Criticas != 1 {
+		t.Fatalf("resumo = %+v; deveria refletir o universo inteiro", resumo)
+	}
+
+	// Status que casa com a faixa: critica + alta = 1 escola.
+	page2, _, total2, _, _ := buildSaudeOperacionalPage(
+		universo,
+		"",
+		saudeOperacionalLocalFilters{Status: "critica", CriticidadeFaixa: "alta"},
+		"criticidade",
+		"desc",
+		1,
+		10,
+	)
+	if total2 != 1 || page2[0].SchoolID != 3 {
+		t.Fatalf("critica+alta = %+v total=%d; want apenas Gama", page2, total2)
+	}
+}
+
+// TestSaudeOperacionalLocalFilterComBuscaTextual confirma que busca textual e
+// filtros locais se combinam: a busca refina o universo (e o resumo) e o filtro
+// local refina a tabela final.
+func TestSaudeOperacionalLocalFilterComBuscaTextual(t *testing.T) {
+	universo := []SaudeOperacionalEscola{
+		{SchoolID: 1, Escola: "Escola Alfa", Municipio: "Castanhal", Saude: floatPointerForTest(80), Criticidade: floatPointerForTest(20), Status: "saudavel"},
+		{SchoolID: 2, Escola: "Escola Beta", Municipio: "Castanhal", Saude: floatPointerForTest(40), Criticidade: floatPointerForTest(60), Status: "critica"},
+		{SchoolID: 3, Escola: "Escola Gama", Municipio: "Belém", Saude: floatPointerForTest(40), Criticidade: floatPointerForTest(60), Status: "critica"},
+	}
+
+	page, resumo, total, _, _ := buildSaudeOperacionalPage(
+		universo,
+		"Castanhal",
+		saudeOperacionalLocalFilters{Status: "critica"},
+		"criticidade",
+		"desc",
+		1,
+		10,
+	)
+	if total != 1 || page[0].SchoolID != 2 {
+		t.Fatalf("page=%+v total=%d; want apenas Beta (Castanhal+critica)", page, total)
+	}
+	// Resumo agora reflete apenas as escolas de Castanhal (a busca refinou o universo).
+	if resumo.Saudaveis != 1 || resumo.Criticas != 1 || resumo.Atencao != 0 || resumo.SemDados != 0 {
+		t.Fatalf("resumo após busca = %+v; want 1 saudável + 1 crítica", resumo)
+	}
 }

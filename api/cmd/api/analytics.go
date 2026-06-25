@@ -1093,9 +1093,9 @@ const caracterizacaoEscolasSelectSQL = `
 		COALESCE(NULLIF(TRIM(s.nome_escola), ''), 'Sem nome')           AS nome_escola,
 		(cr.id IS NOT NULL)                                             AS has_censo,
 		COALESCE(cr.data->>'total_alunos', '')                          AS total_alunos,
-		COALESCE(NULLIF(s.turnos::text, ''), '')                        AS turnos_texto,
-		COALESCE(NULLIF(s.etapas::text, ''), '')                        AS etapas_texto,
-		COALESCE(NULLIF(s.modalidades::text, ''), '')                   AS modalidades_texto
+		COALESCE(NULLIF(s.turnos, ''), '')                              AS turnos_texto,
+		COALESCE(NULLIF(s.etapas_ofertadas, ''), '')                    AS etapas_texto,
+		COALESCE(NULLIF(s.modalidades_ofertadas, ''), '')               AS modalidades_texto
 	FROM schools s
 	LEFT JOIN census_responses cr
 		ON cr.school_id = s.id AND cr.year = $1 AND cr.status = 'completed'

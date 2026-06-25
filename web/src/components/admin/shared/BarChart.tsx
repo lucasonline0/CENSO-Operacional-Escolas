@@ -169,7 +169,7 @@ export function HBarChart({
             onMouseMove={(e) => setHovered({ label: r.label, value: r.value, pct: pctText, x: e.clientX, y: e.clientY })}
             onMouseLeave={() => setHovered(null)}
           >
-            <span className="shrink-0 text-right text-slate-500 text-xs transition-colors group-hover:text-slate-900 group-hover:font-medium" style={{ width: labelWidth }}>{r.label}</span>
+            <span className="shrink-0 text-right text-slate-500 text-xs transition-colors group-hover:text-slate-900 group-hover:font-medium whitespace-nowrap" style={{ minWidth: labelWidth }}>{r.label}</span>
             <div className="flex-1 h-6 bg-slate-100 rounded relative overflow-hidden transition-transform group-hover:scale-[1.01] group-hover:translate-x-1">
               <div
                 className="h-full rounded transition-all duration-300 hover:opacity-90 cursor-pointer group-hover:brightness-110"

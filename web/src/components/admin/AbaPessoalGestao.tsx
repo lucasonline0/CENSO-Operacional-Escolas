@@ -316,8 +316,7 @@ export function AbaPessoalGestao({
       </div>
 
       <div data-pres-slide="pessoal-coordenacao" className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
             <Layers size={16} style={{ color: C.primary }} />
             Coordenação por área
@@ -331,8 +330,6 @@ export function AbaPessoalGestao({
             <NoData />
           )}
         </div>
-      </div>
-
       </div>
       {/* ── Quadro de Pessoal ────────────────────────────────────── */}
       <div id="sec-pessoal-quadro" data-pres-hide="true" className="flex items-center gap-3 border-t border-slate-200 pt-4">

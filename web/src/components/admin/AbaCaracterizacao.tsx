@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import {
   Building2, MapPinned, AlertCircle, Loader2,
   TrendingUp, Users, GraduationCap, BarChart2, Clock, BookOpen,
@@ -15,8 +15,9 @@ import { HBarChart, VBarChart } from "./shared/BarChart";
 import type {
   CaracterizacaoPerfilPg, CaracterizacaoDREPg, SheetMetrics,
   CaracterizacaoOfertaFuncionamento, CaracterizacaoInfraEducacionalPg,
-  DashboardFilters,
+  DashboardFilters, CaracterizacaoEscolaRow, EscolasPayload,
 } from "./shared/types";
+import { AdminDataTable, type DataTableColumn } from "./shared/AdminDataTable";
 
 function buildFilterParams(filters?: DashboardFilters): string {
   if (!filters) return "";
@@ -47,6 +48,28 @@ const FAIXA_COBERTURA_COLORS: Record<string, string> = {
   "Sem essenciais informados": "#94A3B8",
 };
 
+const CARACT_ESCOLAS_SORT_KEYS = ["escola", "dre", "municipio", "zona", "total_alunos", "porte"] as const;
+type CaractEscolasSortKey = (typeof CARACT_ESCOLAS_SORT_KEYS)[number];
+
+const CARACT_ESCOLAS_COLUMNS: DataTableColumn<CaracterizacaoEscolaRow>[] = [
+  { key: "nome_escola",  label: "Escola",       sortable: true },
+  { key: "codigo_inep",  label: "INEP"                         },
+  { key: "dre",          label: "DRE",          sortable: true },
+  { key: "municipio",    label: "Município",    sortable: true },
+  { key: "zona",         label: "Zona",         sortable: true },
+  { key: "porte",        label: "Porte",        sortable: true },
+  { key: "total_alunos", label: "Total Alunos", sortable: true, align: "right" },
+  { key: "turnos_texto", label: "Turnos"                        },
+  { key: "etapas_texto", label: "Etapas"                        },
+  {
+    key: "has_censo",
+    label: "Censo",
+    render: (row) => row.has_censo
+      ? <span className="inline-flex rounded-md border px-2 py-0.5 text-[11px] font-semibold bg-emerald-50 text-emerald-700 border-emerald-200">Preenchido</span>
+      : <span className="inline-flex rounded-md border px-2 py-0.5 text-[11px] font-semibold bg-slate-100 text-slate-600 border-slate-200">Sem dados</span>,
+  },
+];
+
 export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string; onUnauth: () => void; filters?: DashboardFilters }) {
   // Fase 2B.1: a aba "Caracterização da Rede" passa a consumir PostgreSQL via
   // /v1/admin/analytics/caracterizacao/perfil e /caracterizacao/dre. Os dados
@@ -65,6 +88,16 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
   const [loading,   setLoading]   = useState(true);
   // Janela informativa explicando quais ambientes são essenciais.
   const [infoOpen, setInfoOpen] = useState(false);
+
+  // Estado da tabela escola-a-escola
+  const [escolasData,    setEscolasData]    = useState<EscolasPayload<CaracterizacaoEscolaRow> | null>(null);
+  const [escolasLoading, setEscolasLoading] = useState(true);
+  const [escolasError,   setEscolasError]   = useState("");
+  const [esPage,     setEsPage]     = useState(1);
+  const [esPageSize, setEsPageSize] = useState(10);
+  const [esSortKey,  setEsSortKey]  = useState<CaractEscolasSortKey>("escola");
+  const [esSortDir,  setEsSortDir]  = useState<"asc" | "desc">("asc");
+  const [esSearch,   setEsSearch]   = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -106,6 +139,49 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
 
     return () => { cancelled = true; };
   }, [token, onUnauth, filters]);
+
+  // useEffect separado para a tabela escola-a-escola
+  const handleEsSort = useCallback((key: string) => {
+    setEsSortDir((d) => esSortKey === key ? (d === "asc" ? "desc" : "asc") : "asc");
+    setEsSortKey(key as CaractEscolasSortKey);
+    setEsPage(1);
+  }, [esSortKey]);
+
+  const handleEsSearch = useCallback((q: string) => {
+    setEsSearch(q);
+    setEsPage(1);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setEscolasLoading(true);
+    setEscolasError("");
+
+    const p = new URLSearchParams();
+    if (filters?.ano)               p.set("year",              String(filters.ano));
+    if (filters?.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
+    if (filters?.dre)               p.set("dre",               filters.dre);
+    if (filters?.municipio)         p.set("municipio",         filters.municipio);
+    if (filters?.zona)              p.set("zona",              filters.zona);
+    if (esSearch.trim())            p.set("q",                 esSearch.trim());
+    p.set("page",      String(esPage));
+    p.set("page_size", String(esPageSize));
+    p.set("sort",      esSortKey);
+    p.set("direction", esSortDir);
+
+    apiFetch<EscolasPayload<CaracterizacaoEscolaRow>>(
+      `/v1/admin/analytics/caracterizacao/escolas?${p.toString()}`, token,
+    )
+      .then((d) => { if (!cancelled) { setEscolasData(d); setEscolasError(""); } })
+      .catch((e: unknown) => {
+        const msg = (e as Error).message;
+        if (msg === "UNAUTHORIZED") { if (!cancelled) onUnauth(); return; }
+        if (!cancelled) setEscolasError(msg);
+      })
+      .finally(() => { if (!cancelled) setEscolasLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [token, onUnauth, filters, esPage, esPageSize, esSortKey, esSortDir, esSearch]);
 
   if (loading) return (
     <div className="flex items-center justify-center py-24 text-slate-400">
@@ -537,6 +613,29 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
           </table>
         </div>
       </div>
+      </div>
+
+      {/* Tabela escola-a-escola — oculta no modo apresentação */}
+      <div data-pres-hide="true">
+        <AdminDataTable<CaracterizacaoEscolaRow>
+          title="Caracterização da Rede — Escola a Escola"
+          columns={CARACT_ESCOLAS_COLUMNS}
+          rows={escolasData?.escolas ?? []}
+          keyField="codigo_inep"
+          totalEscolas={escolasData?.total_escolas ?? 0}
+          totalFiltrado={escolasData?.total_filtrado ?? 0}
+          page={escolasData?.page ?? esPage}
+          pageSize={escolasData?.page_size ?? esPageSize}
+          totalPages={escolasData?.total_pages ?? 1}
+          sortKey={esSortKey}
+          sortDir={esSortDir}
+          loading={escolasLoading}
+          error={escolasError}
+          onSort={handleEsSort}
+          onPage={setEsPage}
+          onPageSize={(s) => { setEsPageSize(s); setEsPage(1); }}
+          onSearch={handleEsSearch}
+        />
       </div>
     </div>
   );

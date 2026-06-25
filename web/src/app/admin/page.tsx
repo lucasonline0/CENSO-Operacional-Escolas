@@ -68,114 +68,109 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
   }
 
   return (
-    <div className="censo-admin login-shell">
-      <div className="ca-login-frame">
+    <div className="censo-admin">
+      <main className="login">
 
-        {/* ── Left: institutional identity ── */}
-        <aside className="ca-identity">
-          <div className="ca-id-top">
-            <div className="ca-id-brasao">
-              <img src="/brasao-para.png" alt="Brasão do Estado do Pará" />
+        {/* ── Left: institutional panel ── */}
+        <div className="login__left">
+          <div className="login__left-circle login__left-circle--lg" aria-hidden="true" />
+          <div className="login__left-circle login__left-circle--sm" aria-hidden="true" />
+          <div className="login__left-inner">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              className="login__left-logo"
+              src="/parceiros.png"
+              alt="FADEP · Secretaria de Educação · Governo do Pará"
+            />
+            <div className="login__left-brand">
+              <h1 className="login__left-title">Censo SEDUC</h1>
+              <p className="login__left-subtitle">Operacional e Estrutural</p>
             </div>
-            <div className="ca-id-org">
-              <div className="ot1">Censo Operacional</div>
-              <div className="ot2">SEDUC · Pará</div>
-            </div>
           </div>
-
-          <div className="ca-id-eyebrow-row">
-            <span className="ca-id-badge">Painel Administrativo</span>
-            <span className="ca-id-eyebrow">Censo Escolar 2026</span>
-          </div>
-
-          <h1 className="ca-id-title">
-            Acesso ao painel de gestão da rede estadual.
-          </h1>
-
-          <div className="ca-id-footer">
-            <span className="ca-dot" />
-            Sistema ativo · dados atualizados
-          </div>
-        </aside>
+        </div>
 
         {/* ── Right: form ── */}
-        <section className="ca-form-side">
-          <div className="ca-form-wrap">
-            <div>
-              <div className="ca-form-eyebrow">Acesso administrativo</div>
-              <h2 className="ca-form-title">Entrar no painel</h2>
-              <p className="ca-form-sub">Utilize suas credenciais institucionais da SEDUC‑PA.</p>
+        <div className="login__right">
+          <div className="login__form-wrapper">
+            <div className="login__form-header">
+              <span className="login__mobile-app">Censo SEDUC</span>
+              <h2 className="login__heading">Entrar no painel</h2>
+              <p className="login__subheading">Utilize suas credenciais institucionais da SEDUC‑PA.</p>
             </div>
 
-            <form className="ca-lform" onSubmit={submit} noValidate>
+            <form className="login__form" onSubmit={submit} noValidate>
               {/* Usuário */}
-              <div className="ca-lfield">
-                <label className="ca-lfield-label" htmlFor="u">Usuário</label>
-                <div className="ca-linput">
-                  <UserIcon size={16} className="ca-linput-icon" />
+              <label className="login__field">
+                <span className="login__label">Usuário</span>
+                <div className="login__input-wrap">
+                  <span className="login__input-icon" aria-hidden="true">
+                    <svg viewBox="0 0 20 20" fill="none">
+                      <circle cx="10" cy="7" r="3.25" stroke="currentColor" strokeWidth="1.5"/>
+                      <path d="M3 17c0-3.314 3.134-6 7-6s7 2.686 7 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                  </span>
                   <input
-                    id="u" type="text" autoComplete="username" maxLength={64}
+                    type="text" autoComplete="username" maxLength={64}
+                    className="login__input login__input--icon"
                     disabled={loading || blocked} value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="admin_seduc_pa" required
                   />
                 </div>
-              </div>
+              </label>
 
               {/* Senha */}
-              <div className="ca-lfield">
-                <label className="ca-lfield-label" htmlFor="pw">Senha</label>
-                <div className="ca-linput">
-                  <Lock size={16} className="ca-linput-icon" />
+              <label className="login__field">
+                <span className="login__label">Senha de acesso</span>
+                <div className="login__input-wrap">
+                  <span className="login__input-icon" aria-hidden="true">
+                    <svg viewBox="0 0 20 20" fill="none">
+                      <rect x="4" y="9" width="12" height="8" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+                      <path d="M7 9V6.5a3 3 0 0 1 6 0V9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                  </span>
                   <input
-                    id="pw" type={showPwd ? "text" : "password"}
+                    type={showPwd ? "text" : "password"}
                     autoComplete="current-password" maxLength={128}
+                    className="login__input login__input--icon"
                     disabled={loading || blocked} value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••••••" required
                   />
                   <button
-                    type="button" className="ca-linput-suffix"
+                    type="button" className="login__input-toggle" tabIndex={-1}
                     aria-label={showPwd ? "Ocultar senha" : "Mostrar senha"}
                     onClick={() => setShowPwd((v) => !v)}
                   >
-                    {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                      <path d="M2 10s3.2-5 8-5 8 5 8 5-3.2 5-8 5-8-5-8-5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                      <circle cx="10" cy="10" r="2.25" stroke="currentColor" strokeWidth="1.5"/>
+                      {showPwd && <line x1="3" y1="3" x2="17" y2="17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>}
+                    </svg>
                   </button>
                 </div>
-              </div>
+              </label>
 
-              {/* Checkbox row */}
-              <div className="ca-checkbox-row">
-                <label className="ca-lcheckbox">
-                  <input type="checkbox" name="remember" />
-                  <span>Manter sessão ativa</span>
-                </label>
-                <span className="ca-session-note">Sessão expira em 2 horas</span>
-              </div>
+              {error && <p className="login__error">{error}</p>}
+              {blocked && <p className="login__warning">Muitas tentativas. Aguarde alguns minutos.</p>}
 
-              {error && (
-                <div className="ca-login-error">
-                  <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-                  {error}
-                </div>
-              )}
-              {blocked && (
-                <div className="ca-login-warn">
-                  <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-                  Muitas tentativas. Aguarde alguns minutos.
-                </div>
-              )}
-
-              <button type="submit" className="ca-submit-btn" disabled={loading || blocked}>
-                {status === "auth" ? <><Loader2 size={15} className="animate-spin" />Autenticando…</>
-                  : status === "prefetch" ? <><Loader2 size={15} className="animate-spin" />Carregando painel…</>
-                    : <>Entrar no painel <ArrowRight size={14} /></>}
+              <button type="submit" className="login__button" disabled={loading || blocked}>
+                {loading ? (
+                  <><Loader2 size={16} className="animate-spin" />{status === "auth" ? "Autenticando…" : "Carregando painel…"}</>
+                ) : (
+                  <>
+                    Entrar no painel
+                    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className="login__button-arrow">
+                      <path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </>
+                )}
               </button>
             </form>
           </div>
-        </section>
+        </div>
 
-      </div>
+      </main>
     </div>
   );
 }

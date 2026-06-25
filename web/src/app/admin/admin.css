@@ -1050,11 +1050,65 @@
 .censo-admin .login__error   { background:#fdecea; color:#d92d20; }
 
 /* ── Login responsive ─────────────────────────────────────── */
+/* tablet / landscape phone: painel esquerdo vira banner horizontal compacto */
 @media (max-width: 860px) {
-  .censo-admin .login { grid-template-columns: 1fr; }
-  .censo-admin .login__left { display: none; }
-  .censo-admin .login__right { border-radius: 12px; }
+  .censo-admin .login {
+    padding: 10px;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .censo-admin .login__left {
+    border-radius: 12px 12px 0 0;
+    padding: 24px 32px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+  }
+  .censo-admin .login__left-inner {
+    flex-direction: row;
+    align-items: center;
+    gap: 20px;
+  }
+  .censo-admin .login__left-logo {
+    transform: none;
+    max-width: 150px;
+  }
+  .censo-admin .login__left-brand { text-align: left; }
+  .censo-admin .login__left-title { font-size: 20px; }
+  .censo-admin .login__left-subtitle { font-size: 10px; }
+  .censo-admin .login__right {
+    border-radius: 0 0 12px 12px;
+    padding: 36px 32px 40px;
+    align-items: flex-start;
+  }
+  .censo-admin .login__form-wrapper { max-width: 100%; }
+}
+
+/* phone portrait: painel esquerdo some, label mobile aparece no form */
+@media (max-width: 540px) {
+  .censo-admin .login {
+    padding: 0;
+    min-height: 100svh;
+    grid-template-rows: auto 1fr;
+  }
+  .censo-admin .login__left {
+    border-radius: 0;
+    padding: 20px 24px;
+    gap: 16px;
+  }
+  .censo-admin .login__left-inner { gap: 14px; }
+  .censo-admin .login__left-logo { max-width: 120px; }
+  .censo-admin .login__left-title { font-size: 17px; }
+  .censo-admin .login__left-subtitle { display: none; }
+  .censo-admin .login__right {
+    border-radius: 0;
+    padding: 28px 20px 40px;
+  }
   .censo-admin .login__mobile-app { display: block; }
+  .censo-admin .login__heading { font-size: 22px; }
+  /* font-size 16px previne zoom automático no iOS ao focar inputs */
+  .censo-admin .login__input { font-size: 16px; }
 }
 
 /* ── Responsive ──────────────────────────────────────────── */

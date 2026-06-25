@@ -130,12 +130,12 @@ export function HBarChart({
   rows,
   unit = "",
   color = C.primary,
-  labelWidth = "5rem",
   rowGap = "0.5rem",
 }: {
   rows: { label: string; value: number; pct?: number; display?: string; trailing?: string }[];
   unit?: string;
   color?: string;
+  /** @deprecated use the auto grid layout — kept for API compat */
   labelWidth?: string;
   rowGap?: string;
 }) {
@@ -145,8 +145,19 @@ export function HBarChart({
   const showPct = rows.some((r) => r.pct !== undefined);
   const showTrailing = rows.some((r) => r.trailing !== undefined);
 
+  const extraCols = (showPct || showTrailing) ? " 3rem" : "";
+
   return (
-    <div className="flex flex-col w-full relative" style={{ gap: rowGap }}>
+    <div
+      className="w-full relative"
+      style={{
+        display: "grid",
+        gridTemplateColumns: `max-content 1fr${extraCols}`,
+        rowGap,
+        columnGap: "0.75rem",
+        alignItems: "center",
+      }}
+    >
       <ChartTooltip
         active={!!hovered}
         label={hovered?.label ?? ""}
@@ -158,40 +169,50 @@ export function HBarChart({
       />
       {rows.map((r) => {
         const barWidth = (r.value / max) * 100;
-        // Se a row já tiver pct, usa ela. Senão, calcula sobre o total do gráfico.
         const pctVal = r.pct ?? (total > 0 ? (r.value / total) * 100 : undefined);
         const pctText = pctVal !== undefined ? pctVal.toFixed(1) : undefined;
+        const handlers = {
+          onMouseMove: (e: React.MouseEvent) => setHovered({ label: r.label, value: r.value, pct: pctText, x: e.clientX, y: e.clientY }),
+          onMouseLeave: () => setHovered(null),
+        };
 
         return (
-          <div
-            key={r.label}
-            className="flex items-center gap-3 text-sm group cursor-default"
-            onMouseMove={(e) => setHovered({ label: r.label, value: r.value, pct: pctText, x: e.clientX, y: e.clientY })}
-            onMouseLeave={() => setHovered(null)}
-          >
-            <span className="shrink-0 text-right text-slate-500 text-xs transition-colors group-hover:text-slate-900 group-hover:font-medium whitespace-nowrap" style={{ minWidth: labelWidth }}>{r.label}</span>
-            <div className="flex-1 h-6 bg-slate-100 rounded relative overflow-hidden transition-transform group-hover:scale-[1.01] group-hover:translate-x-1">
+          <React.Fragment key={r.label}>
+            {/* Label — largura automática pelo grid (max-content da coluna) */}
+            <span
+              className="text-right text-slate-500 text-xs whitespace-nowrap transition-colors hover:text-slate-900 hover:font-medium cursor-default"
+              {...handlers}
+            >
+              {r.label}
+            </span>
+
+            {/* Barra */}
+            <div
+              className="h-6 bg-slate-100 rounded relative overflow-hidden transition-transform hover:scale-[1.01] cursor-default"
+              {...handlers}
+            >
               <div
-                className="h-full rounded transition-all duration-300 hover:opacity-90 cursor-pointer group-hover:brightness-110"
+                className="h-full rounded transition-all duration-300"
                 style={{ width: `${barWidth}%`, background: color }}
               />
-              <span className="absolute inset-0 flex items-center px-2 text-xs font-semibold text-white mix-blend-luminosity pointer-events-none group-hover:scale-105 transition-transform origin-left">
+              <span className="absolute inset-0 flex items-center px-2 text-xs font-semibold text-white mix-blend-luminosity pointer-events-none">
                 {r.display ?? `${r.value.toLocaleString("pt-BR")}${unit}`}
               </span>
-              {/* Overlay de brilho no hover */}
-              <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+              <div className="absolute inset-0 bg-white/5 opacity-0 hover:opacity-100 transition-opacity pointer-events-none" />
             </div>
+
+            {/* Coluna extra (pct ou trailing) */}
             {showPct && (
-              <span className="w-12 shrink-0 text-right text-xs text-slate-500 tabular-nums group-hover:text-slate-900 group-hover:font-bold transition-colors">
+              <span className="text-right text-xs text-slate-500 tabular-nums whitespace-nowrap hover:text-slate-900 hover:font-bold transition-colors cursor-default" {...handlers}>
                 {r.pct !== undefined ? `${r.pct.toFixed(1)}%` : ""}
               </span>
             )}
-            {showTrailing && (
-              <span className="w-12 shrink-0 text-right text-slate-500 text-xs tabular-nums group-hover:text-slate-900 transition-colors">
+            {showTrailing && !showPct && (
+              <span className="text-right text-slate-500 text-xs tabular-nums whitespace-nowrap hover:text-slate-900 transition-colors cursor-default" {...handlers}>
                 {r.trailing}
               </span>
             )}
-          </div>
+          </React.Fragment>
         );
       })}
     </div>

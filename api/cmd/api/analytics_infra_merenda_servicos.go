@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"sort"
+	"strings"
 )
 
 // round1 arredonda para 1 casa decimal (percentuais/médias calculados em Go).
@@ -1338,4 +1340,550 @@ func (app *application) AdminAnalyticsServicosManipuladoresAlimentos(w http.Resp
 	}
 
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: out})
+}
+
+// =========================================================================
+// Tabelas escola-a-escola — Infraestrutura, Merenda, Serviços Terceirizados
+// =========================================================================
+
+// InfraEscolaRow é uma linha da tabela escola-a-escola de Infraestrutura e Segurança.
+type InfraEscolaRow struct {
+	CodigoINEP           string `json:"codigo_inep"`
+	NomeEscola           string `json:"nome_escola"`
+	DRE                  string `json:"dre"`
+	Municipio            string `json:"municipio"`
+	Zona                 string `json:"zona"`
+	RegiaoIntegracao     string `json:"regiao_integracao"`
+	HasCenso             bool   `json:"has_censo"`
+	TipoPredio           string `json:"tipo_predio"`
+	SituacaoEstrutura    string `json:"situacao_estrutura"`
+	Energia              string `json:"energia"`
+	RedeEletricaAtende   string `json:"rede_eletrica_atende"`
+	PossuiGuarita        string `json:"possui_guarita"`
+	CamerasFuncionamento string `json:"cameras_funcionamento"`
+	PossuiBotaoPanico    string `json:"possui_botao_panico"`
+	MuroCerca            string `json:"muro_cerca"`
+	PlanoEvacuacao       string `json:"plano_evacuacao"`
+	StatusOperacional    string `json:"status_operacional"`
+}
+
+// InfraEscolasPayload é o envelope de resposta de GET /admin/analytics/infraestrutura/escolas.
+type InfraEscolasPayload struct {
+	TotalEscolas  int              `json:"total_escolas"`
+	TotalFiltrado int              `json:"total_filtrado"`
+	Page          int              `json:"page"`
+	PageSize      int              `json:"page_size"`
+	TotalPages    int              `json:"total_pages"`
+	AnoReferencia int              `json:"ano_referencia"`
+	Escolas       []InfraEscolaRow `json:"escolas"`
+}
+
+var infraEscolasValidSort = map[string]bool{
+	"escola": true, "dre": true, "municipio": true, "zona": true,
+	"tipo_predio": true, "situacao_estrutura": true, "energia": true, "status": true,
+}
+
+func infraEscolaSortVal(r InfraEscolaRow, key string) string {
+	switch key {
+	case "dre":
+		return r.DRE
+	case "municipio":
+		return r.Municipio
+	case "zona":
+		return r.Zona
+	case "tipo_predio":
+		return r.TipoPredio
+	case "situacao_estrutura":
+		return r.SituacaoEstrutura
+	case "energia":
+		return r.Energia
+	case "status":
+		return r.StatusOperacional
+	default:
+		return r.NomeEscola
+	}
+}
+
+// AdminAnalyticsInfraEscolas retorna a listagem escola-a-escola de infraestrutura e
+// segurança com busca textual, ordenação e paginação server-side.
+// Parâmetros: year, dre, municipio, zona, regiao_integracao, q, page, page_size, sort, direction.
+func (app *application) AdminAnalyticsInfraEscolas(w http.ResponseWriter, r *http.Request) {
+	f := parseAnalyticsFilters(r)
+	q := r.URL.Query()
+	search := strings.ToUpper(strings.TrimSpace(q.Get("q")))
+	pageSize := parseEscolasPageSize(q.Get("page_size"))
+	page := parseEscolasPage(q.Get("page"))
+	sortKey := q.Get("sort")
+	if !infraEscolasValidSort[sortKey] {
+		sortKey = "escola"
+	}
+	direction := parseEscolasDirection(q.Get("direction"))
+
+	ctx := r.Context()
+	dbRows, err := app.models.Schools.DB.QueryContext(ctx, infraestruturaSelectSQL,
+		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("infra escolas: %w", err), http.StatusInternalServerError)
+		return
+	}
+	defer dbRows.Close()
+
+	all := make([]InfraEscolaRow, 0)
+	for dbRows.Next() {
+		var rr infraReportRow
+		if err := dbRows.Scan(
+			&rr.Regiao, &rr.DRE, &rr.Municipio, &rr.Zona, &rr.INEP, &rr.Escola,
+			&rr.HasCensus,
+			&rr.TipoPredio, &rr.SituacaoEstrutura, &rr.RedeEletricaAtende, &rr.SuportaNovosEquip,
+			&rr.Energia, &rr.EstruturaClimatizacao, &rr.SalasClimatizadas, &rr.QtdSalasAula,
+			&rr.PossuiGuarita, &rr.BotaoPanico, &rr.Cameras, &rr.ControlePortao,
+			&rr.IluminacaoExterna, &rr.MuroCerca, &rr.PlanoEvacuacao, &rr.PoliticaBullying,
+		); err != nil {
+			app.errorJSON(w, fmt.Errorf("ler infra escola: %w", err), http.StatusInternalServerError)
+			return
+		}
+		all = append(all, InfraEscolaRow{
+			CodigoINEP:           rr.INEP,
+			NomeEscola:           rr.Escola,
+			DRE:                  rr.DRE,
+			Municipio:            rr.Municipio,
+			Zona:                 rr.Zona,
+			RegiaoIntegracao:     rr.Regiao,
+			HasCenso:             rr.HasCensus,
+			TipoPredio:           rr.TipoPredio,
+			SituacaoEstrutura:    rr.SituacaoEstrutura,
+			Energia:              rr.Energia,
+			RedeEletricaAtende:   rr.RedeEletricaAtende,
+			PossuiGuarita:        rr.PossuiGuarita,
+			CamerasFuncionamento: rr.Cameras,
+			PossuiBotaoPanico:    rr.BotaoPanico,
+			MuroCerca:            rr.MuroCerca,
+			PlanoEvacuacao:       rr.PlanoEvacuacao,
+			StatusOperacional:    classifyInfraStatus(rr),
+		})
+	}
+	if err := dbRows.Err(); err != nil {
+		app.errorJSON(w, fmt.Errorf("iterar infra escolas: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	totalEscolas := len(all)
+	var filtered []InfraEscolaRow
+	if search == "" {
+		filtered = all
+	} else {
+		filtered = make([]InfraEscolaRow, 0, len(all))
+		for _, e := range all {
+			if strings.Contains(strings.ToUpper(e.NomeEscola), search) || strings.Contains(e.CodigoINEP, search) {
+				filtered = append(filtered, e)
+			}
+		}
+	}
+
+	sort.SliceStable(filtered, func(i, j int) bool {
+		vi := strings.ToUpper(infraEscolaSortVal(filtered[i], sortKey))
+		vj := strings.ToUpper(infraEscolaSortVal(filtered[j], sortKey))
+		if direction == "desc" {
+			return vi > vj
+		}
+		return vi < vj
+	})
+
+	totalFiltrado := len(filtered)
+	totalPages := 1
+	if totalFiltrado > 0 {
+		totalPages = (totalFiltrado + pageSize - 1) / pageSize
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+	if page < 1 {
+		page = 1
+	}
+	offset := (page - 1) * pageSize
+	end := offset + pageSize
+	if end > totalFiltrado {
+		end = totalFiltrado
+	}
+	pageSlice := []InfraEscolaRow{}
+	if totalFiltrado > 0 {
+		pageSlice = filtered[offset:end]
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: InfraEscolasPayload{
+		TotalEscolas:  totalEscolas,
+		TotalFiltrado: totalFiltrado,
+		Page:          page,
+		PageSize:      pageSize,
+		TotalPages:    totalPages,
+		AnoReferencia: f.Year,
+		Escolas:       pageSlice,
+	}})
+}
+
+// ----- Merenda Escolar -------------------------------------------------------
+
+// MerendaEscolaRow é uma linha da tabela escola-a-escola de Merenda Escolar.
+type MerendaEscolaRow struct {
+	CodigoINEP                 string `json:"codigo_inep"`
+	NomeEscola                 string `json:"nome_escola"`
+	DRE                        string `json:"dre"`
+	Municipio                  string `json:"municipio"`
+	Zona                       string `json:"zona"`
+	RegiaoIntegracao           string `json:"regiao_integracao"`
+	HasCenso                   bool   `json:"has_censo"`
+	OfertaRegular              string `json:"oferta_regular"`
+	QualidadeMerenda           string `json:"qualidade_merenda"`
+	PossuiRefeitorio           string `json:"possui_refeitorio"`
+	CondicoesCozinha           string `json:"condicoes_cozinha"`
+	QtdFreezers                string `json:"qtd_freezers"`
+	QtdGeladeiras              string `json:"qtd_geladeiras"`
+	QtdFogoes                  string `json:"qtd_fogoes"`
+	QtdFornos                  string `json:"qtd_fornos"`
+	EmpresaTerceirizadaMerenda string `json:"empresa_terceirizada_merenda"`
+}
+
+// MerendaEscolasPayload é o envelope de resposta de GET /admin/analytics/merenda/escolas.
+type MerendaEscolasPayload struct {
+	TotalEscolas  int                `json:"total_escolas"`
+	TotalFiltrado int                `json:"total_filtrado"`
+	Page          int                `json:"page"`
+	PageSize      int                `json:"page_size"`
+	TotalPages    int                `json:"total_pages"`
+	AnoReferencia int                `json:"ano_referencia"`
+	Escolas       []MerendaEscolaRow `json:"escolas"`
+}
+
+const merendaEscolasSelectSQL = `
+	SELECT
+		COALESCE(ri.regiao_de_integracao, '')                            AS regiao_integracao,
+		COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado')              AS dre,
+		COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado')        AS municipio,
+		COALESCE(NULLIF(TRIM(s.zona), ''), '')                          AS zona,
+		COALESCE(s.codigo_inep, '')                                     AS codigo_inep,
+		COALESCE(NULLIF(TRIM(s.nome_escola), ''), 'Sem nome')           AS nome_escola,
+		(cr.id IS NOT NULL)                                             AS has_censo,
+		COALESCE(NULLIF(cr.data->>'oferta_regular', ''), '')            AS oferta_regular,
+		COALESCE(NULLIF(cr.data->>'qualidade_merenda', ''), '')         AS qualidade_merenda,
+		COALESCE(NULLIF(cr.data->>'possui_refeitorio', ''), '')         AS possui_refeitorio,
+		COALESCE(NULLIF(cr.data->>'condicoes_cozinha', ''), '')         AS condicoes_cozinha,
+		COALESCE(cr.data->>'qtd_freezers', '')                          AS qtd_freezers,
+		COALESCE(cr.data->>'qtd_geladeiras', '')                        AS qtd_geladeiras,
+		COALESCE(cr.data->>'qtd_fogoes', '')                            AS qtd_fogoes,
+		COALESCE(cr.data->>'qtd_fornos', '')                            AS qtd_fornos,
+		COALESCE(NULLIF(cr.data->>'empresa_terceirizada_merenda', ''), '') AS empresa_terceirizada_merenda
+	FROM schools s
+	LEFT JOIN census_responses cr
+		ON cr.school_id = s.id AND cr.year = $1 AND cr.status = 'completed'
+	LEFT JOIN reg_integracao ri ON UPPER(TRIM(ri.municipio)) = UPPER(TRIM(s.municipio))
+	WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
+	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
+	  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
+	        SELECT UPPER(TRIM(municipio))
+	        FROM reg_integracao
+	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
+	      ))
+	ORDER BY UPPER(TRIM(s.dre)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
+`
+
+var merendaEscolasValidSort = map[string]bool{
+	"escola": true, "dre": true, "municipio": true, "zona": true,
+	"oferta_regular": true, "qualidade_merenda": true, "possui_refeitorio": true,
+}
+
+func merendaEscolaSortVal(r MerendaEscolaRow, key string) string {
+	switch key {
+	case "dre":
+		return r.DRE
+	case "municipio":
+		return r.Municipio
+	case "zona":
+		return r.Zona
+	case "oferta_regular":
+		return r.OfertaRegular
+	case "qualidade_merenda":
+		return r.QualidadeMerenda
+	case "possui_refeitorio":
+		return r.PossuiRefeitorio
+	default:
+		return r.NomeEscola
+	}
+}
+
+// AdminAnalyticsMerendaEscolas retorna a listagem escola-a-escola de Merenda Escolar.
+func (app *application) AdminAnalyticsMerendaEscolas(w http.ResponseWriter, r *http.Request) {
+	f := parseAnalyticsFilters(r)
+	q := r.URL.Query()
+	search := strings.ToUpper(strings.TrimSpace(q.Get("q")))
+	pageSize := parseEscolasPageSize(q.Get("page_size"))
+	page := parseEscolasPage(q.Get("page"))
+	sortKey := q.Get("sort")
+	if !merendaEscolasValidSort[sortKey] {
+		sortKey = "escola"
+	}
+	direction := parseEscolasDirection(q.Get("direction"))
+
+	ctx := r.Context()
+	dbRows, err := app.models.Schools.DB.QueryContext(ctx, merendaEscolasSelectSQL,
+		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("merenda escolas: %w", err), http.StatusInternalServerError)
+		return
+	}
+	defer dbRows.Close()
+
+	all := make([]MerendaEscolaRow, 0)
+	for dbRows.Next() {
+		var e MerendaEscolaRow
+		if err := dbRows.Scan(
+			&e.RegiaoIntegracao, &e.DRE, &e.Municipio, &e.Zona, &e.CodigoINEP, &e.NomeEscola,
+			&e.HasCenso,
+			&e.OfertaRegular, &e.QualidadeMerenda, &e.PossuiRefeitorio, &e.CondicoesCozinha,
+			&e.QtdFreezers, &e.QtdGeladeiras, &e.QtdFogoes, &e.QtdFornos,
+			&e.EmpresaTerceirizadaMerenda,
+		); err != nil {
+			app.errorJSON(w, fmt.Errorf("ler merenda escola: %w", err), http.StatusInternalServerError)
+			return
+		}
+		all = append(all, e)
+	}
+	if err := dbRows.Err(); err != nil {
+		app.errorJSON(w, fmt.Errorf("iterar merenda escolas: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	totalEscolas := len(all)
+	var filtered []MerendaEscolaRow
+	if search == "" {
+		filtered = all
+	} else {
+		filtered = make([]MerendaEscolaRow, 0, len(all))
+		for _, e := range all {
+			if strings.Contains(strings.ToUpper(e.NomeEscola), search) || strings.Contains(e.CodigoINEP, search) {
+				filtered = append(filtered, e)
+			}
+		}
+	}
+
+	sort.SliceStable(filtered, func(i, j int) bool {
+		vi := strings.ToUpper(merendaEscolaSortVal(filtered[i], sortKey))
+		vj := strings.ToUpper(merendaEscolaSortVal(filtered[j], sortKey))
+		if direction == "desc" {
+			return vi > vj
+		}
+		return vi < vj
+	})
+
+	totalFiltrado := len(filtered)
+	totalPages := 1
+	if totalFiltrado > 0 {
+		totalPages = (totalFiltrado + pageSize - 1) / pageSize
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+	if page < 1 {
+		page = 1
+	}
+	offset := (page - 1) * pageSize
+	end := offset + pageSize
+	if end > totalFiltrado {
+		end = totalFiltrado
+	}
+	pageSlice := []MerendaEscolaRow{}
+	if totalFiltrado > 0 {
+		pageSlice = filtered[offset:end]
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: MerendaEscolasPayload{
+		TotalEscolas:  totalEscolas,
+		TotalFiltrado: totalFiltrado,
+		Page:          page,
+		PageSize:      pageSize,
+		TotalPages:    totalPages,
+		AnoReferencia: f.Year,
+		Escolas:       pageSlice,
+	}})
+}
+
+// ----- Serviços Terceirizados ------------------------------------------------
+
+// ServicosEscolaRow é uma linha da tabela escola-a-escola de Serviços Terceirizados.
+type ServicosEscolaRow struct {
+	CodigoINEP                  string `json:"codigo_inep"`
+	NomeEscola                  string `json:"nome_escola"`
+	DRE                         string `json:"dre"`
+	Municipio                   string `json:"municipio"`
+	Zona                        string `json:"zona"`
+	RegiaoIntegracao            string `json:"regiao_integracao"`
+	HasCenso                    bool   `json:"has_censo"`
+	EmpresaTerceirizadaPortaria string `json:"empresa_terceirizada_portaria"`
+	QtdAgentesPortaria          string `json:"qtd_agentes_portaria"`
+	EmpresaTerceirizadaSG       string `json:"empresa_terceirizada_sg"`
+	EmpresaTerceirizadaMerenda  string `json:"empresa_terceirizada_merenda"`
+	AvaliacaoPortaria           string `json:"avaliacao_portaria"`
+	AvaliacaoLimpeza            string `json:"avaliacao_limpeza"`
+}
+
+// ServicosEscolasPayload é o envelope de resposta de GET /admin/analytics/servicos-terceirizados/escolas.
+type ServicosEscolasPayload struct {
+	TotalEscolas  int                 `json:"total_escolas"`
+	TotalFiltrado int                 `json:"total_filtrado"`
+	Page          int                 `json:"page"`
+	PageSize      int                 `json:"page_size"`
+	TotalPages    int                 `json:"total_pages"`
+	AnoReferencia int                 `json:"ano_referencia"`
+	Escolas       []ServicosEscolaRow `json:"escolas"`
+}
+
+const servicosEscolasSelectSQL = `
+	SELECT
+		COALESCE(ri.regiao_de_integracao, '')                                 AS regiao_integracao,
+		COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado')                   AS dre,
+		COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado')              AS municipio,
+		COALESCE(NULLIF(TRIM(s.zona), ''), '')                                AS zona,
+		COALESCE(s.codigo_inep, '')                                           AS codigo_inep,
+		COALESCE(NULLIF(TRIM(s.nome_escola), ''), 'Sem nome')                 AS nome_escola,
+		(cr.id IS NOT NULL)                                                   AS has_censo,
+		COALESCE(NULLIF(cr.data->>'empresa_terceirizada_portaria', ''), '')   AS empresa_terceirizada_portaria,
+		COALESCE(cr.data->>'qtd_agentes_portaria', '')                        AS qtd_agentes_portaria,
+		COALESCE(NULLIF(cr.data->>'empresa_terceirizada_sg', ''), '')         AS empresa_terceirizada_sg,
+		COALESCE(NULLIF(cr.data->>'empresa_terceirizada_merenda', ''), '')    AS empresa_terceirizada_merenda,
+		COALESCE(NULLIF(cr.data->>'avaliacao_portaria', ''), '')              AS avaliacao_portaria,
+		COALESCE(NULLIF(cr.data->>'avaliacao_limpeza', ''), '')               AS avaliacao_limpeza
+	FROM schools s
+	LEFT JOIN census_responses cr
+		ON cr.school_id = s.id AND cr.year = $1 AND cr.status = 'completed'
+	LEFT JOIN reg_integracao ri ON UPPER(TRIM(ri.municipio)) = UPPER(TRIM(s.municipio))
+	WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
+	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
+	  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
+	        SELECT UPPER(TRIM(municipio))
+	        FROM reg_integracao
+	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
+	      ))
+	ORDER BY UPPER(TRIM(s.dre)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
+`
+
+var servicosEscolasValidSort = map[string]bool{
+	"escola": true, "dre": true, "municipio": true, "zona": true,
+	"empresa_portaria": true, "empresa_sg": true, "empresa_merenda": true,
+}
+
+func servicosEscolaSortVal(r ServicosEscolaRow, key string) string {
+	switch key {
+	case "dre":
+		return r.DRE
+	case "municipio":
+		return r.Municipio
+	case "zona":
+		return r.Zona
+	case "empresa_portaria":
+		return r.EmpresaTerceirizadaPortaria
+	case "empresa_sg":
+		return r.EmpresaTerceirizadaSG
+	case "empresa_merenda":
+		return r.EmpresaTerceirizadaMerenda
+	default:
+		return r.NomeEscola
+	}
+}
+
+// AdminAnalyticsServicosTerceirizadosEscolas retorna a listagem escola-a-escola
+// de Serviços Terceirizados.
+func (app *application) AdminAnalyticsServicosTerceirizadosEscolas(w http.ResponseWriter, r *http.Request) {
+	f := parseAnalyticsFilters(r)
+	q := r.URL.Query()
+	search := strings.ToUpper(strings.TrimSpace(q.Get("q")))
+	pageSize := parseEscolasPageSize(q.Get("page_size"))
+	page := parseEscolasPage(q.Get("page"))
+	sortKey := q.Get("sort")
+	if !servicosEscolasValidSort[sortKey] {
+		sortKey = "escola"
+	}
+	direction := parseEscolasDirection(q.Get("direction"))
+
+	ctx := r.Context()
+	dbRows, err := app.models.Schools.DB.QueryContext(ctx, servicosEscolasSelectSQL,
+		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("servicos escolas: %w", err), http.StatusInternalServerError)
+		return
+	}
+	defer dbRows.Close()
+
+	all := make([]ServicosEscolaRow, 0)
+	for dbRows.Next() {
+		var e ServicosEscolaRow
+		if err := dbRows.Scan(
+			&e.RegiaoIntegracao, &e.DRE, &e.Municipio, &e.Zona, &e.CodigoINEP, &e.NomeEscola,
+			&e.HasCenso,
+			&e.EmpresaTerceirizadaPortaria, &e.QtdAgentesPortaria,
+			&e.EmpresaTerceirizadaSG, &e.EmpresaTerceirizadaMerenda,
+			&e.AvaliacaoPortaria, &e.AvaliacaoLimpeza,
+		); err != nil {
+			app.errorJSON(w, fmt.Errorf("ler servicos escola: %w", err), http.StatusInternalServerError)
+			return
+		}
+		all = append(all, e)
+	}
+	if err := dbRows.Err(); err != nil {
+		app.errorJSON(w, fmt.Errorf("iterar servicos escolas: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	totalEscolas := len(all)
+	var filtered []ServicosEscolaRow
+	if search == "" {
+		filtered = all
+	} else {
+		filtered = make([]ServicosEscolaRow, 0, len(all))
+		for _, e := range all {
+			if strings.Contains(strings.ToUpper(e.NomeEscola), search) || strings.Contains(e.CodigoINEP, search) {
+				filtered = append(filtered, e)
+			}
+		}
+	}
+
+	sort.SliceStable(filtered, func(i, j int) bool {
+		vi := strings.ToUpper(servicosEscolaSortVal(filtered[i], sortKey))
+		vj := strings.ToUpper(servicosEscolaSortVal(filtered[j], sortKey))
+		if direction == "desc" {
+			return vi > vj
+		}
+		return vi < vj
+	})
+
+	totalFiltrado := len(filtered)
+	totalPages := 1
+	if totalFiltrado > 0 {
+		totalPages = (totalFiltrado + pageSize - 1) / pageSize
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+	if page < 1 {
+		page = 1
+	}
+	offset := (page - 1) * pageSize
+	end := offset + pageSize
+	if end > totalFiltrado {
+		end = totalFiltrado
+	}
+	pageSlice := []ServicosEscolaRow{}
+	if totalFiltrado > 0 {
+		pageSlice = filtered[offset:end]
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: ServicosEscolasPayload{
+		TotalEscolas:  totalEscolas,
+		TotalFiltrado: totalFiltrado,
+		Page:          page,
+		PageSize:      pageSize,
+		TotalPages:    totalPages,
+		AnoReferencia: f.Year,
+		Escolas:       pageSlice,
+	}})
 }

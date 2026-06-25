@@ -233,3 +233,31 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: out})
 }
+
+// parseEscolasPageSize valida o parâmetro page_size para endpoints /escolas.
+// Valores permitidos: 10, 50, 100, 1000. Default: 10.
+func parseEscolasPageSize(raw string) int {
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || (n != 10 && n != 50 && n != 100 && n != 1000) {
+		return 10
+	}
+	return n
+}
+
+// parseEscolasPage valida o parâmetro page (>=1). Default: 1.
+func parseEscolasPage(raw string) int {
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n < 1 {
+		return 1
+	}
+	return n
+}
+
+// parseEscolasDirection valida o parâmetro direction para endpoints /escolas.
+// Valores aceitos: "asc" e "desc". Default: "asc".
+func parseEscolasDirection(raw string) string {
+	if strings.TrimSpace(raw) == "desc" {
+		return "desc"
+	}
+	return "asc"
+}

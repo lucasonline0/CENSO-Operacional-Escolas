@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"sort"
+	"strconv"
+	"strings"
 )
 
 // =====================================================================
@@ -1024,4 +1027,207 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 	}
 
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: out})
+}
+
+// =========================================================================
+// Tabela escola-a-escola — Caracterização da Rede
+// =========================================================================
+
+// computePorteEscola classifica o porte da escola pelo total de alunos.
+// Mesmos intervalos usados em vw_censo_enriquecida.
+func computePorteEscola(totalAlunosStr string) string {
+	n, err := strconv.Atoi(strings.TrimSpace(totalAlunosStr))
+	if err != nil || n < 0 {
+		return "Sem dados"
+	}
+	switch {
+	case n <= 50:
+		return "0-50"
+	case n <= 150:
+		return "50-150"
+	case n <= 300:
+		return "150-300"
+	case n <= 500:
+		return "300-500"
+	case n <= 1000:
+		return "500-1000"
+	default:
+		return "1000+"
+	}
+}
+
+// CaracterizacaoEscolaRow é uma linha da tabela escola-a-escola de Caracterização da Rede.
+type CaracterizacaoEscolaRow struct {
+	CodigoINEP       string `json:"codigo_inep"`
+	NomeEscola       string `json:"nome_escola"`
+	DRE              string `json:"dre"`
+	Municipio        string `json:"municipio"`
+	Zona             string `json:"zona"`
+	RegiaoIntegracao string `json:"regiao_integracao"`
+	HasCenso         bool   `json:"has_censo"`
+	TotalAlunos      string `json:"total_alunos"`
+	Porte            string `json:"porte"`
+	TurnosTexto      string `json:"turnos_texto"`
+	EtapasTexto      string `json:"etapas_texto"`
+	ModalidadesTexto string `json:"modalidades_texto"`
+}
+
+// CaracterizacaoEscolasPayload é o envelope de resposta de GET /admin/analytics/caracterizacao/escolas.
+type CaracterizacaoEscolasPayload struct {
+	TotalEscolas  int                       `json:"total_escolas"`
+	TotalFiltrado int                       `json:"total_filtrado"`
+	Page          int                       `json:"page"`
+	PageSize      int                       `json:"page_size"`
+	TotalPages    int                       `json:"total_pages"`
+	AnoReferencia int                       `json:"ano_referencia"`
+	Escolas       []CaracterizacaoEscolaRow `json:"escolas"`
+}
+
+const caracterizacaoEscolasSelectSQL = `
+	SELECT
+		COALESCE(ri.regiao_de_integracao, '')                            AS regiao_integracao,
+		COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado')              AS dre,
+		COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado')        AS municipio,
+		COALESCE(NULLIF(TRIM(s.zona), ''), '')                          AS zona,
+		COALESCE(s.codigo_inep, '')                                     AS codigo_inep,
+		COALESCE(NULLIF(TRIM(s.nome_escola), ''), 'Sem nome')           AS nome_escola,
+		(cr.id IS NOT NULL)                                             AS has_censo,
+		COALESCE(cr.data->>'total_alunos', '')                          AS total_alunos,
+		COALESCE(NULLIF(s.turnos::text, ''), '')                        AS turnos_texto,
+		COALESCE(NULLIF(s.etapas::text, ''), '')                        AS etapas_texto,
+		COALESCE(NULLIF(s.modalidades::text, ''), '')                   AS modalidades_texto
+	FROM schools s
+	LEFT JOIN census_responses cr
+		ON cr.school_id = s.id AND cr.year = $1 AND cr.status = 'completed'
+	LEFT JOIN reg_integracao ri ON UPPER(TRIM(ri.municipio)) = UPPER(TRIM(s.municipio))
+	WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
+	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
+	  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
+	        SELECT UPPER(TRIM(municipio))
+	        FROM reg_integracao
+	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
+	      ))
+	ORDER BY UPPER(TRIM(s.dre)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
+`
+
+var caracterizacaoEscolasValidSort = map[string]bool{
+	"escola": true, "dre": true, "municipio": true, "zona": true,
+	"total_alunos": true, "porte": true,
+}
+
+func caracterizacaoEscolaSortVal(r CaracterizacaoEscolaRow, key string) string {
+	switch key {
+	case "dre":
+		return r.DRE
+	case "municipio":
+		return r.Municipio
+	case "zona":
+		return r.Zona
+	case "total_alunos":
+		return fmt.Sprintf("%020s", r.TotalAlunos)
+	case "porte":
+		return r.Porte
+	default:
+		return r.NomeEscola
+	}
+}
+
+// AdminAnalyticsCaracterizacaoEscolas retorna a listagem escola-a-escola de Caracterização da Rede.
+func (app *application) AdminAnalyticsCaracterizacaoEscolas(w http.ResponseWriter, r *http.Request) {
+	f := parseAnalyticsFilters(r)
+	q := r.URL.Query()
+	search := strings.ToUpper(strings.TrimSpace(q.Get("q")))
+	pageSize := parseEscolasPageSize(q.Get("page_size"))
+	page := parseEscolasPage(q.Get("page"))
+	sortKey := q.Get("sort")
+	if !caracterizacaoEscolasValidSort[sortKey] {
+		sortKey = "escola"
+	}
+	direction := parseEscolasDirection(q.Get("direction"))
+
+	ctx := r.Context()
+	dbRows, err := app.models.Schools.DB.QueryContext(ctx, caracterizacaoEscolasSelectSQL,
+		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("caracterizacao escolas: %w", err), http.StatusInternalServerError)
+		return
+	}
+	defer dbRows.Close()
+
+	all := make([]CaracterizacaoEscolaRow, 0)
+	for dbRows.Next() {
+		var e CaracterizacaoEscolaRow
+		if err := dbRows.Scan(
+			&e.RegiaoIntegracao, &e.DRE, &e.Municipio, &e.Zona, &e.CodigoINEP, &e.NomeEscola,
+			&e.HasCenso,
+			&e.TotalAlunos, &e.TurnosTexto, &e.EtapasTexto, &e.ModalidadesTexto,
+		); err != nil {
+			app.errorJSON(w, fmt.Errorf("ler caracterizacao escola: %w", err), http.StatusInternalServerError)
+			return
+		}
+		e.Porte = computePorteEscola(e.TotalAlunos)
+		if !e.HasCenso {
+			e.TotalAlunos = ""
+			e.Porte = "Sem dados"
+		}
+		all = append(all, e)
+	}
+	if err := dbRows.Err(); err != nil {
+		app.errorJSON(w, fmt.Errorf("iterar caracterizacao escolas: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	totalEscolas := len(all)
+	var filtered []CaracterizacaoEscolaRow
+	if search == "" {
+		filtered = all
+	} else {
+		filtered = make([]CaracterizacaoEscolaRow, 0, len(all))
+		for _, e := range all {
+			if strings.Contains(strings.ToUpper(e.NomeEscola), search) || strings.Contains(e.CodigoINEP, search) {
+				filtered = append(filtered, e)
+			}
+		}
+	}
+
+	sort.SliceStable(filtered, func(i, j int) bool {
+		vi := strings.ToUpper(caracterizacaoEscolaSortVal(filtered[i], sortKey))
+		vj := strings.ToUpper(caracterizacaoEscolaSortVal(filtered[j], sortKey))
+		if direction == "desc" {
+			return vi > vj
+		}
+		return vi < vj
+	})
+
+	totalFiltrado := len(filtered)
+	totalPages := 1
+	if totalFiltrado > 0 {
+		totalPages = (totalFiltrado + pageSize - 1) / pageSize
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+	if page < 1 {
+		page = 1
+	}
+	offset := (page - 1) * pageSize
+	end := offset + pageSize
+	if end > totalFiltrado {
+		end = totalFiltrado
+	}
+	pageSlice := []CaracterizacaoEscolaRow{}
+	if totalFiltrado > 0 {
+		pageSlice = filtered[offset:end]
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: CaracterizacaoEscolasPayload{
+		TotalEscolas:  totalEscolas,
+		TotalFiltrado: totalFiltrado,
+		Page:          page,
+		PageSize:      pageSize,
+		TotalPages:    totalPages,
+		AnoReferencia: f.Year,
+		Escolas:       pageSlice,
+	}})
 }

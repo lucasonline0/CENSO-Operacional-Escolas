@@ -366,6 +366,14 @@ func (app *application) routes() http.Handler {
 			protected.Get("/admin/analytics/servicos-terceirizados/manipuladores-alimentos", app.AdminAnalyticsServicosManipuladoresAlimentos)
 			protected.Get("/admin/analytics/escolas/saude-operacional", app.AdminAnalyticsSaudeOperacionalEscolas)
 
+			// tabelas escola-a-escola para todas as abas analíticas
+			protected.Get("/admin/analytics/infraestrutura/escolas", app.AdminAnalyticsInfraEscolas)
+			protected.Get("/admin/analytics/merenda/escolas", app.AdminAnalyticsMerendaEscolas)
+			protected.Get("/admin/analytics/servicos-terceirizados/escolas", app.AdminAnalyticsServicosTerceirizadosEscolas)
+			protected.Get("/admin/analytics/pessoal-gestao/escolas", app.AdminAnalyticsPessoalEscolas)
+			protected.Get("/admin/analytics/tecnologia/escolas", app.AdminAnalyticsTecnologiaEscolas)
+			protected.Get("/admin/analytics/caracterizacao/escolas", app.AdminAnalyticsCaracterizacaoEscolas)
+
 			// Gestão Financeira e Governança — repasses PRODEP (PR técnico 2).
 			protected.Get("/admin/analytics/financeiro-governanca/prodep", app.AdminAnalyticsFinanceiroGovernancaProdep)
 

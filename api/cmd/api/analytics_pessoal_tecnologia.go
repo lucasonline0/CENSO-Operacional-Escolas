@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -684,4 +686,367 @@ func (app *application) AdminAnalyticsTecnologiaUso(w http.ResponseWriter, r *ht
 	}
 
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: out})
+}
+
+// =========================================================================
+// Tabelas escola-a-escola — Pessoal e Gestão Escolar, Tecnologia
+// =========================================================================
+
+// PessoalEscolaRow é uma linha da tabela escola-a-escola de Pessoal e Gestão Escolar.
+type PessoalEscolaRow struct {
+	CodigoINEP                    string `json:"codigo_inep"`
+	NomeEscola                    string `json:"nome_escola"`
+	DRE                           string `json:"dre"`
+	Municipio                     string `json:"municipio"`
+	Zona                          string `json:"zona"`
+	RegiaoIntegracao              string `json:"regiao_integracao"`
+	HasCenso                      bool   `json:"has_censo"`
+	NomeDiretor                   string `json:"nome_diretor"`
+	PossuiDirecao                 string `json:"possui_direcao"`
+	PossuiCoordPedagogico         string `json:"possui_coord_pedagogico"`
+	QtdProfessoresEfetivos        string `json:"qtd_professores_efetivos"`
+	QtdProfessoresTemporarios     string `json:"qtd_professores_temporarios"`
+	QtdServidoresAdministrativos  string `json:"qtd_servidores_administrativos"`
+}
+
+// PessoalEscolasPayload é o envelope de resposta de GET /admin/analytics/pessoal-gestao/escolas.
+type PessoalEscolasPayload struct {
+	TotalEscolas  int                `json:"total_escolas"`
+	TotalFiltrado int                `json:"total_filtrado"`
+	Page          int                `json:"page"`
+	PageSize      int                `json:"page_size"`
+	TotalPages    int                `json:"total_pages"`
+	AnoReferencia int                `json:"ano_referencia"`
+	Escolas       []PessoalEscolaRow `json:"escolas"`
+}
+
+const pessoalEscolasSelectSQL = `
+	SELECT
+		COALESCE(ri.regiao_de_integracao, '')                                 AS regiao_integracao,
+		COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado')                   AS dre,
+		COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado')              AS municipio,
+		COALESCE(NULLIF(TRIM(s.zona), ''), '')                                AS zona,
+		COALESCE(s.codigo_inep, '')                                           AS codigo_inep,
+		COALESCE(NULLIF(TRIM(s.nome_escola), ''), 'Sem nome')                 AS nome_escola,
+		(cr.id IS NOT NULL)                                                   AS has_censo,
+		COALESCE(NULLIF(TRIM(s.nome_diretor), ''), '')                        AS nome_diretor,
+		COALESCE(NULLIF(cr.data->>'possui_direcao', ''), '')                  AS possui_direcao,
+		COALESCE(NULLIF(cr.data->>'possui_coord_pedagogico', ''), '')         AS possui_coord_pedagogico,
+		COALESCE(cr.data->>'qtd_professores_efetivos', '')                    AS qtd_professores_efetivos,
+		COALESCE(cr.data->>'qtd_professores_temporarios', '')                 AS qtd_professores_temporarios,
+		COALESCE(cr.data->>'qtd_servidores_administrativos', '')              AS qtd_servidores_administrativos
+	FROM schools s
+	LEFT JOIN census_responses cr
+		ON cr.school_id = s.id AND cr.year = $1 AND cr.status = 'completed'
+	LEFT JOIN reg_integracao ri ON UPPER(TRIM(ri.municipio)) = UPPER(TRIM(s.municipio))
+	WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
+	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
+	  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
+	        SELECT UPPER(TRIM(municipio))
+	        FROM reg_integracao
+	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
+	      ))
+	ORDER BY UPPER(TRIM(s.dre)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
+`
+
+var pessoalEscolasValidSort = map[string]bool{
+	"escola": true, "dre": true, "municipio": true, "zona": true,
+	"diretor": true, "possui_direcao": true,
+}
+
+func pessoalEscolaSortVal(r PessoalEscolaRow, key string) string {
+	switch key {
+	case "dre":
+		return r.DRE
+	case "municipio":
+		return r.Municipio
+	case "zona":
+		return r.Zona
+	case "diretor":
+		return r.NomeDiretor
+	case "possui_direcao":
+		return r.PossuiDirecao
+	default:
+		return r.NomeEscola
+	}
+}
+
+// AdminAnalyticsPessoalEscolas retorna a listagem escola-a-escola de Pessoal e Gestão Escolar.
+func (app *application) AdminAnalyticsPessoalEscolas(w http.ResponseWriter, r *http.Request) {
+	f := parseAnalyticsFilters(r)
+	q := r.URL.Query()
+	search := strings.ToUpper(strings.TrimSpace(q.Get("q")))
+	pageSize := parseEscolasPageSize(q.Get("page_size"))
+	page := parseEscolasPage(q.Get("page"))
+	sortKey := q.Get("sort")
+	if !pessoalEscolasValidSort[sortKey] {
+		sortKey = "escola"
+	}
+	direction := parseEscolasDirection(q.Get("direction"))
+
+	ctx := r.Context()
+	dbRows, err := app.models.Schools.DB.QueryContext(ctx, pessoalEscolasSelectSQL,
+		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("pessoal escolas: %w", err), http.StatusInternalServerError)
+		return
+	}
+	defer dbRows.Close()
+
+	all := make([]PessoalEscolaRow, 0)
+	for dbRows.Next() {
+		var e PessoalEscolaRow
+		if err := dbRows.Scan(
+			&e.RegiaoIntegracao, &e.DRE, &e.Municipio, &e.Zona, &e.CodigoINEP, &e.NomeEscola,
+			&e.HasCenso,
+			&e.NomeDiretor, &e.PossuiDirecao, &e.PossuiCoordPedagogico,
+			&e.QtdProfessoresEfetivos, &e.QtdProfessoresTemporarios, &e.QtdServidoresAdministrativos,
+		); err != nil {
+			app.errorJSON(w, fmt.Errorf("ler pessoal escola: %w", err), http.StatusInternalServerError)
+			return
+		}
+		all = append(all, e)
+	}
+	if err := dbRows.Err(); err != nil {
+		app.errorJSON(w, fmt.Errorf("iterar pessoal escolas: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	totalEscolas := len(all)
+	var filtered []PessoalEscolaRow
+	if search == "" {
+		filtered = all
+	} else {
+		filtered = make([]PessoalEscolaRow, 0, len(all))
+		for _, e := range all {
+			if strings.Contains(strings.ToUpper(e.NomeEscola), search) || strings.Contains(e.CodigoINEP, search) {
+				filtered = append(filtered, e)
+			}
+		}
+	}
+
+	sort.SliceStable(filtered, func(i, j int) bool {
+		vi := strings.ToUpper(pessoalEscolaSortVal(filtered[i], sortKey))
+		vj := strings.ToUpper(pessoalEscolaSortVal(filtered[j], sortKey))
+		if direction == "desc" {
+			return vi > vj
+		}
+		return vi < vj
+	})
+
+	totalFiltrado := len(filtered)
+	totalPages := 1
+	if totalFiltrado > 0 {
+		totalPages = (totalFiltrado + pageSize - 1) / pageSize
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+	if page < 1 {
+		page = 1
+	}
+	offset := (page - 1) * pageSize
+	end := offset + pageSize
+	if end > totalFiltrado {
+		end = totalFiltrado
+	}
+	pageSlice := []PessoalEscolaRow{}
+	if totalFiltrado > 0 {
+		pageSlice = filtered[offset:end]
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: PessoalEscolasPayload{
+		TotalEscolas:  totalEscolas,
+		TotalFiltrado: totalFiltrado,
+		Page:          page,
+		PageSize:      pageSize,
+		TotalPages:    totalPages,
+		AnoReferencia: f.Year,
+		Escolas:       pageSlice,
+	}})
+}
+
+// ----- Tecnologia e Equipamentos --------------------------------------------
+
+// TecnologiaEscolaRow é uma linha da tabela escola-a-escola de Tecnologia e Equipamentos.
+type TecnologiaEscolaRow struct {
+	CodigoINEP         string `json:"codigo_inep"`
+	NomeEscola         string `json:"nome_escola"`
+	DRE                string `json:"dre"`
+	Municipio          string `json:"municipio"`
+	Zona               string `json:"zona"`
+	RegiaoIntegracao   string `json:"regiao_integracao"`
+	HasCenso           bool   `json:"has_censo"`
+	InternetDisponivel string `json:"internet_disponivel"`
+	ProvedorInternet   string `json:"provedor_internet"`
+	QualidadeInternet  string `json:"qualidade_internet"`
+	QtdDesktopAlunos   string `json:"qtd_desktop_alunos"`
+	QtdNotebooks       string `json:"qtd_notebooks"`
+	QtdChromebooks     string `json:"qtd_chromebooks"`
+	PossuiProjetor     string `json:"possui_projetor"`
+	PossuiLousaDigital string `json:"possui_lousa_digital"`
+}
+
+// TecnologiaEscolasPayload é o envelope de resposta de GET /admin/analytics/tecnologia/escolas.
+type TecnologiaEscolasPayload struct {
+	TotalEscolas  int                   `json:"total_escolas"`
+	TotalFiltrado int                   `json:"total_filtrado"`
+	Page          int                   `json:"page"`
+	PageSize      int                   `json:"page_size"`
+	TotalPages    int                   `json:"total_pages"`
+	AnoReferencia int                   `json:"ano_referencia"`
+	Escolas       []TecnologiaEscolaRow `json:"escolas"`
+}
+
+const tecnologiaEscolasSelectSQL = `
+	SELECT
+		COALESCE(ri.regiao_de_integracao, '')                            AS regiao_integracao,
+		COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado')              AS dre,
+		COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado')        AS municipio,
+		COALESCE(NULLIF(TRIM(s.zona), ''), '')                          AS zona,
+		COALESCE(s.codigo_inep, '')                                     AS codigo_inep,
+		COALESCE(NULLIF(TRIM(s.nome_escola), ''), 'Sem nome')           AS nome_escola,
+		(cr.id IS NOT NULL)                                             AS has_censo,
+		COALESCE(NULLIF(cr.data->>'internet_disponivel', ''), '')       AS internet_disponivel,
+		COALESCE(NULLIF(cr.data->>'provedor_internet', ''), '')         AS provedor_internet,
+		COALESCE(NULLIF(cr.data->>'qualidade_internet', ''), '')        AS qualidade_internet,
+		COALESCE(cr.data->>'qtd_desktop_alunos', '')                    AS qtd_desktop_alunos,
+		COALESCE(cr.data->>'qtd_notebooks', '')                         AS qtd_notebooks,
+		COALESCE(cr.data->>'qtd_chromebooks', '')                       AS qtd_chromebooks,
+		COALESCE(NULLIF(cr.data->>'possui_projetor', ''), '')           AS possui_projetor,
+		COALESCE(NULLIF(cr.data->>'possui_lousa_digital', ''), '')      AS possui_lousa_digital
+	FROM schools s
+	LEFT JOIN census_responses cr
+		ON cr.school_id = s.id AND cr.year = $1 AND cr.status = 'completed'
+	LEFT JOIN reg_integracao ri ON UPPER(TRIM(ri.municipio)) = UPPER(TRIM(s.municipio))
+	WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
+	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
+	  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
+	        SELECT UPPER(TRIM(municipio))
+	        FROM reg_integracao
+	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
+	      ))
+	ORDER BY UPPER(TRIM(s.dre)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
+`
+
+var tecnologiaEscolasValidSort = map[string]bool{
+	"escola": true, "dre": true, "municipio": true, "zona": true,
+	"internet": true, "provedor": true, "qualidade": true,
+}
+
+func tecnologiaEscolaSortVal(r TecnologiaEscolaRow, key string) string {
+	switch key {
+	case "dre":
+		return r.DRE
+	case "municipio":
+		return r.Municipio
+	case "zona":
+		return r.Zona
+	case "internet":
+		return r.InternetDisponivel
+	case "provedor":
+		return r.ProvedorInternet
+	case "qualidade":
+		return r.QualidadeInternet
+	default:
+		return r.NomeEscola
+	}
+}
+
+// AdminAnalyticsTecnologiaEscolas retorna a listagem escola-a-escola de Tecnologia e Equipamentos.
+func (app *application) AdminAnalyticsTecnologiaEscolas(w http.ResponseWriter, r *http.Request) {
+	f := parseAnalyticsFilters(r)
+	q := r.URL.Query()
+	search := strings.ToUpper(strings.TrimSpace(q.Get("q")))
+	pageSize := parseEscolasPageSize(q.Get("page_size"))
+	page := parseEscolasPage(q.Get("page"))
+	sortKey := q.Get("sort")
+	if !tecnologiaEscolasValidSort[sortKey] {
+		sortKey = "escola"
+	}
+	direction := parseEscolasDirection(q.Get("direction"))
+
+	ctx := r.Context()
+	dbRows, err := app.models.Schools.DB.QueryContext(ctx, tecnologiaEscolasSelectSQL,
+		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("tecnologia escolas: %w", err), http.StatusInternalServerError)
+		return
+	}
+	defer dbRows.Close()
+
+	all := make([]TecnologiaEscolaRow, 0)
+	for dbRows.Next() {
+		var e TecnologiaEscolaRow
+		if err := dbRows.Scan(
+			&e.RegiaoIntegracao, &e.DRE, &e.Municipio, &e.Zona, &e.CodigoINEP, &e.NomeEscola,
+			&e.HasCenso,
+			&e.InternetDisponivel, &e.ProvedorInternet, &e.QualidadeInternet,
+			&e.QtdDesktopAlunos, &e.QtdNotebooks, &e.QtdChromebooks,
+			&e.PossuiProjetor, &e.PossuiLousaDigital,
+		); err != nil {
+			app.errorJSON(w, fmt.Errorf("ler tecnologia escola: %w", err), http.StatusInternalServerError)
+			return
+		}
+		all = append(all, e)
+	}
+	if err := dbRows.Err(); err != nil {
+		app.errorJSON(w, fmt.Errorf("iterar tecnologia escolas: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	totalEscolas := len(all)
+	var filtered []TecnologiaEscolaRow
+	if search == "" {
+		filtered = all
+	} else {
+		filtered = make([]TecnologiaEscolaRow, 0, len(all))
+		for _, e := range all {
+			if strings.Contains(strings.ToUpper(e.NomeEscola), search) || strings.Contains(e.CodigoINEP, search) {
+				filtered = append(filtered, e)
+			}
+		}
+	}
+
+	sort.SliceStable(filtered, func(i, j int) bool {
+		vi := strings.ToUpper(tecnologiaEscolaSortVal(filtered[i], sortKey))
+		vj := strings.ToUpper(tecnologiaEscolaSortVal(filtered[j], sortKey))
+		if direction == "desc" {
+			return vi > vj
+		}
+		return vi < vj
+	})
+
+	totalFiltrado := len(filtered)
+	totalPages := 1
+	if totalFiltrado > 0 {
+		totalPages = (totalFiltrado + pageSize - 1) / pageSize
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+	if page < 1 {
+		page = 1
+	}
+	offset := (page - 1) * pageSize
+	end := offset + pageSize
+	if end > totalFiltrado {
+		end = totalFiltrado
+	}
+	pageSlice := []TecnologiaEscolaRow{}
+	if totalFiltrado > 0 {
+		pageSlice = filtered[offset:end]
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: TecnologiaEscolasPayload{
+		TotalEscolas:  totalEscolas,
+		TotalFiltrado: totalFiltrado,
+		Page:          page,
+		PageSize:      pageSize,
+		TotalPages:    totalPages,
+		AnoReferencia: f.Year,
+		Escolas:       pageSlice,
+	}})
 }

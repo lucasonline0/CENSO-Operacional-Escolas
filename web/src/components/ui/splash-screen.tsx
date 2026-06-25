@@ -49,9 +49,9 @@ export function SplashScreen() {
         </p>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="https://cdn.brandfetch.io/idFonMAIBN/w/220/h/50/theme/light/logo.png?c=1bxid64Mup7aczewSAYMX&t=1693264504552"
-          alt="Governo do Pará"
-          className="h-12 w-auto"
+          src="/parceiros.png"
+          alt="FADEP · Secretaria de Educação · Governo do Pará"
+          className="h-10 w-auto"
         />
       </div>
     </div>

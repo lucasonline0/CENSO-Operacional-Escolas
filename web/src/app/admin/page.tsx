@@ -79,7 +79,7 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               className="login__left-logo"
-              src="/parceiros.png"
+              src="/logo-horizontal-letter-white.png"
               alt="FADEP · Secretaria de Educação · Governo do Pará"
             />
             <div className="login__left-brand">

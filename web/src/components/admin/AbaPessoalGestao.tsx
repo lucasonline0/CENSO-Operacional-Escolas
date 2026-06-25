@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   UsersRound, AlertCircle, Loader2, GraduationCap, BookOpen,
   Briefcase, UserCheck, Users, ClipboardList, MapPinned, Layers,
@@ -12,8 +12,10 @@ import { Donut } from "./shared/Donut";
 import { HBarChart } from "./shared/BarChart";
 import type {
   PessoalEstrutura, PessoalCoordenacao, QuadroPessoal, DashboardFilters,
+  PessoalEscolaRow, EscolasPayload,
 } from "./shared/types";
 import { buildPostgresSourceLabel } from "./shared/sourceLabel";
+import { AdminDataTable, type DataTableColumn } from "./shared/AdminDataTable";
 
 function buildFilterParams(filters?: DashboardFilters): string {
   if (!filters) return "";
@@ -49,6 +51,30 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
   );
 }
 
+const PESSOAL_ESCOLAS_SORT_KEYS = ["escola", "dre", "municipio", "zona", "diretor"] as const;
+type PessoalEscolasSortKey = (typeof PESSOAL_ESCOLAS_SORT_KEYS)[number];
+
+const PESSOAL_ESCOLAS_COLUMNS: DataTableColumn<PessoalEscolaRow>[] = [
+  { key: "nome_escola",                  label: "Escola",           sortable: true },
+  { key: "codigo_inep",                  label: "INEP"                             },
+  { key: "dre",                          label: "DRE",              sortable: true },
+  { key: "municipio",                    label: "Município",        sortable: true },
+  { key: "zona",                         label: "Zona",             sortable: true },
+  { key: "nome_diretor",                 label: "Diretor",          sortable: true },
+  { key: "possui_direcao",               label: "Direção"                          },
+  { key: "possui_coord_pedagogico",      label: "Coord. Pedagógico"                },
+  { key: "qtd_professores_efetivos",     label: "Prof. Efetivos",   align: "right" },
+  { key: "qtd_professores_temporarios",  label: "Prof. Temporários",align: "right" },
+  { key: "qtd_servidores_administrativos", label: "Serv. Adm.",     align: "right" },
+  {
+    key: "has_censo",
+    label: "Censo",
+    render: (row) => row.has_censo
+      ? <span className="inline-flex rounded-md border px-2 py-0.5 text-[11px] font-semibold bg-emerald-50 text-emerald-700 border-emerald-200">Preenchido</span>
+      : <span className="inline-flex rounded-md border px-2 py-0.5 text-[11px] font-semibold bg-slate-100 text-slate-600 border-slate-200">Sem dados</span>,
+  },
+];
+
 export function AbaPessoalGestao({
   token, onUnauth, filters,
 }: AbaPessoalGestaoProps) {
@@ -59,6 +85,16 @@ export function AbaPessoalGestao({
   const [coordenacaoErr, setCoordenacaoErr] = useState("");
   const [quadroErr,      setQuadroErr]      = useState("");
   const [loading,        setLoading]        = useState(true);
+
+  // Estado da tabela escola-a-escola
+  const [escolasData,    setEscolasData]    = useState<EscolasPayload<PessoalEscolaRow> | null>(null);
+  const [escolasLoading, setEscolasLoading] = useState(true);
+  const [escolasError,   setEscolasError]   = useState("");
+  const [esPage,     setEsPage]     = useState(1);
+  const [esPageSize, setEsPageSize] = useState(10);
+  const [esSortKey,  setEsSortKey]  = useState<PessoalEscolasSortKey>("escola");
+  const [esSortDir,  setEsSortDir]  = useState<"asc" | "desc">("asc");
+  const [esSearch,   setEsSearch]   = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -98,6 +134,49 @@ export function AbaPessoalGestao({
 
     return () => { cancelled = true; };
   }, [token, onUnauth, filters]);
+
+  // useEffect separado para a tabela escola-a-escola
+  const handleEsSort = useCallback((key: string) => {
+    setEsSortDir((d) => esSortKey === key ? (d === "asc" ? "desc" : "asc") : "asc");
+    setEsSortKey(key as PessoalEscolasSortKey);
+    setEsPage(1);
+  }, [esSortKey]);
+
+  const handleEsSearch = useCallback((q: string) => {
+    setEsSearch(q);
+    setEsPage(1);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setEscolasLoading(true);
+    setEscolasError("");
+
+    const p = new URLSearchParams();
+    if (filters?.ano)               p.set("year",              String(filters.ano));
+    if (filters?.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
+    if (filters?.dre)               p.set("dre",               filters.dre);
+    if (filters?.municipio)         p.set("municipio",         filters.municipio);
+    if (filters?.zona)              p.set("zona",              filters.zona);
+    if (esSearch.trim())            p.set("q",                 esSearch.trim());
+    p.set("page",      String(esPage));
+    p.set("page_size", String(esPageSize));
+    p.set("sort",      esSortKey);
+    p.set("direction", esSortDir);
+
+    apiFetch<EscolasPayload<PessoalEscolaRow>>(
+      `/v1/admin/analytics/pessoal-gestao/escolas?${p.toString()}`, token,
+    )
+      .then((d) => { if (!cancelled) { setEscolasData(d); setEscolasError(""); } })
+      .catch((e: unknown) => {
+        const msg = (e as Error).message;
+        if (msg === "UNAUTHORIZED") { if (!cancelled) onUnauth(); return; }
+        if (!cancelled) setEscolasError(msg);
+      })
+      .finally(() => { if (!cancelled) setEscolasLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [token, onUnauth, filters, esPage, esPageSize, esSortKey, esSortDir, esSearch]);
 
   if (loading) {
     return (
@@ -371,6 +450,29 @@ export function AbaPessoalGestao({
           </div>
         </div>
       )}
+      </div>
+
+      {/* Tabela escola-a-escola — oculta no modo apresentação */}
+      <div data-pres-hide="true">
+        <AdminDataTable<PessoalEscolaRow>
+          title="Pessoal e Gestão Escolar — Escola a Escola"
+          columns={PESSOAL_ESCOLAS_COLUMNS}
+          rows={escolasData?.escolas ?? []}
+          keyField="codigo_inep"
+          totalEscolas={escolasData?.total_escolas ?? 0}
+          totalFiltrado={escolasData?.total_filtrado ?? 0}
+          page={escolasData?.page ?? esPage}
+          pageSize={escolasData?.page_size ?? esPageSize}
+          totalPages={escolasData?.total_pages ?? 1}
+          sortKey={esSortKey}
+          sortDir={esSortDir}
+          loading={escolasLoading}
+          error={escolasError}
+          onSort={handleEsSort}
+          onPage={setEsPage}
+          onPageSize={(s) => { setEsPageSize(s); setEsPage(1); }}
+          onSearch={handleEsSearch}
+        />
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ShieldCheck, Building2, AlertCircle, Loader2,
   Camera, DoorClosed, Lightbulb, Siren, MapPinned, Layers, Home,
@@ -13,9 +13,11 @@ import { Donut } from "./shared/Donut";
 import { HBarChart } from "./shared/BarChart";
 import type {
   InfraCondicoes, InfraSeguranca, InfraEnergia, DashboardFilters,
+  InfraEscolaRow, EscolasPayload,
 } from "./shared/types";
 import { buildPostgresSourceLabel } from "./shared/sourceLabel";
 import { ReportButton } from "./shared/ReportButton";
+import { AdminDataTable, type DataTableColumn } from "./shared/AdminDataTable";
 
 function buildFilterParams(filters?: DashboardFilters): string {
   if (!filters) return "";
@@ -48,6 +50,44 @@ function NoData({ msg = "Sem dados disponíveis para este indicador." }: { msg?:
   );
 }
 
+const INFRA_ESCOLAS_SORT_KEYS = ["escola", "dre", "municipio", "zona", "status"] as const;
+type InfraEscolasSortKey = (typeof INFRA_ESCOLAS_SORT_KEYS)[number];
+
+const STATUS_OPERACIONAL_COLORS: Record<string, string> = {
+  "Adequado":    "bg-emerald-50 text-emerald-700 border-emerald-200",
+  "Em atenção":  "bg-amber-50 text-amber-700 border-amber-200",
+  "Crítico":     "bg-rose-50 text-rose-700 border-rose-200",
+  "Sem dados":   "bg-slate-100 text-slate-600 border-slate-200",
+};
+
+const INFRA_ESCOLAS_COLUMNS: DataTableColumn<InfraEscolaRow>[] = [
+  { key: "nome_escola",         label: "Escola",          sortable: true  },
+  { key: "codigo_inep",         label: "INEP"                             },
+  { key: "dre",                 label: "DRE",             sortable: true  },
+  { key: "municipio",           label: "Município",       sortable: true  },
+  { key: "zona",                label: "Zona",            sortable: true  },
+  { key: "tipo_predio",         label: "Tipo de Prédio"                   },
+  { key: "situacao_estrutura",  label: "Sit. Estrutura"                   },
+  { key: "energia",             label: "Energia"                          },
+  { key: "possui_guarita",      label: "Guarita"                          },
+  { key: "cameras_funcionamento", label: "Câmeras"                        },
+  { key: "possui_botao_panico", label: "Botão Pânico"                     },
+  { key: "plano_evacuacao",     label: "Plano Evacuação"                  },
+  {
+    key: "status_operacional",
+    label: "Status",
+    sortable: true,
+    render: (row) => {
+      const cls = STATUS_OPERACIONAL_COLORS[row.status_operacional] ?? STATUS_OPERACIONAL_COLORS["Sem dados"];
+      return (
+        <span className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${cls}`}>
+          {row.status_operacional || "Sem dados"}
+        </span>
+      );
+    },
+  },
+];
+
 export function AbaInfraestruturaSeguranca({
   token, onUnauth, filters,
 }: AbaInfraestruturaSegurancaProps) {
@@ -57,6 +97,16 @@ export function AbaInfraestruturaSeguranca({
   const [condErr,   setCondErr]   = useState("");
   const [segErr,    setSegErr]    = useState("");
   const [loading,   setLoading]   = useState(true);
+
+  // Estado da tabela escola-a-escola
+  const [escolasData,    setEscolasData]    = useState<EscolasPayload<InfraEscolaRow> | null>(null);
+  const [escolasLoading, setEscolasLoading] = useState(true);
+  const [escolasError,   setEscolasError]   = useState("");
+  const [esPage,     setEsPage]     = useState(1);
+  const [esPageSize, setEsPageSize] = useState(10);
+  const [esSortKey,  setEsSortKey]  = useState<InfraEscolasSortKey>("escola");
+  const [esSortDir,  setEsSortDir]  = useState<"asc" | "desc">("asc");
+  const [esSearch,   setEsSearch]   = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -93,6 +143,49 @@ export function AbaInfraestruturaSeguranca({
 
     return () => { cancelled = true; };
   }, [token, onUnauth, filters]);
+
+  // useEffect separado para a tabela escola-a-escola (não interfere no loading dos cards)
+  const handleEsSort = useCallback((key: string) => {
+    setEsSortDir((d) => esSortKey === key ? (d === "asc" ? "desc" : "asc") : "asc");
+    setEsSortKey(key as InfraEscolasSortKey);
+    setEsPage(1);
+  }, [esSortKey]);
+
+  const handleEsSearch = useCallback((q: string) => {
+    setEsSearch(q);
+    setEsPage(1);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setEscolasLoading(true);
+    setEscolasError("");
+
+    const p = new URLSearchParams();
+    if (filters?.ano)              p.set("year",              String(filters.ano));
+    if (filters?.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
+    if (filters?.dre)              p.set("dre",               filters.dre);
+    if (filters?.municipio)        p.set("municipio",         filters.municipio);
+    if (filters?.zona)             p.set("zona",              filters.zona);
+    if (esSearch.trim())           p.set("q",                 esSearch.trim());
+    p.set("page",      String(esPage));
+    p.set("page_size", String(esPageSize));
+    p.set("sort",      esSortKey);
+    p.set("direction", esSortDir);
+
+    apiFetch<EscolasPayload<InfraEscolaRow>>(
+      `/v1/admin/analytics/infraestrutura/escolas?${p.toString()}`, token,
+    )
+      .then((d) => { if (!cancelled) { setEscolasData(d); setEscolasError(""); } })
+      .catch((e: unknown) => {
+        const msg = (e as Error).message;
+        if (msg === "UNAUTHORIZED") { if (!cancelled) onUnauth(); return; }
+        if (!cancelled) setEscolasError(msg);
+      })
+      .finally(() => { if (!cancelled) setEscolasLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [token, onUnauth, filters, esPage, esPageSize, esSortKey, esSortDir, esSearch]);
 
   if (loading) {
     return (
@@ -495,6 +588,29 @@ export function AbaInfraestruturaSeguranca({
           )}
         </div>
       </div>
+      </div>
+
+      {/* Tabela escola-a-escola — oculta no modo apresentação */}
+      <div data-pres-hide="true">
+        <AdminDataTable<InfraEscolaRow>
+          title="Infraestrutura e Segurança — Escola a Escola"
+          columns={INFRA_ESCOLAS_COLUMNS}
+          rows={escolasData?.escolas ?? []}
+          keyField="codigo_inep"
+          totalEscolas={escolasData?.total_escolas ?? 0}
+          totalFiltrado={escolasData?.total_filtrado ?? 0}
+          page={escolasData?.page ?? esPage}
+          pageSize={escolasData?.page_size ?? esPageSize}
+          totalPages={escolasData?.total_pages ?? 1}
+          sortKey={esSortKey}
+          sortDir={esSortDir}
+          loading={escolasLoading}
+          error={escolasError}
+          onSort={handleEsSort}
+          onPage={setEsPage}
+          onPageSize={(s) => { setEsPageSize(s); setEsPage(1); }}
+          onSearch={handleEsSearch}
+        />
       </div>
     </div>
   );

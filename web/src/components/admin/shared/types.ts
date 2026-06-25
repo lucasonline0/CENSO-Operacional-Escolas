@@ -619,3 +619,87 @@ export interface IdebAnalytics {
   qualidade: IdebQualidade;
   metadados: IdebMetadados;
 }
+
+// ── Tabelas escola-a-escola — payloads dos 6 novos endpoints /escolas ────────
+
+export interface EscolasBaseRow {
+  codigo_inep: string;
+  nome_escola: string;
+  dre: string;
+  municipio: string;
+  zona: string;
+  regiao_integracao: string;
+  has_censo: boolean;
+}
+
+export interface EscolasPayload<T extends EscolasBaseRow> {
+  total_escolas: number;
+  total_filtrado: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  ano_referencia: number;
+  escolas: T[];
+}
+
+export interface InfraEscolaRow extends EscolasBaseRow {
+  tipo_predio: string;
+  situacao_estrutura: string;
+  energia: string;
+  rede_eletrica_atende: string;
+  possui_guarita: string;
+  cameras_funcionamento: string;
+  possui_botao_panico: string;
+  muro_cerca: string;
+  plano_evacuacao: string;
+  status_operacional: string;
+}
+
+export interface MerendaEscolaRow extends EscolasBaseRow {
+  oferta_regular: string;
+  qualidade_merenda: string;
+  possui_refeitorio: string;
+  condicoes_cozinha: string;
+  qtd_freezers: string;
+  qtd_geladeiras: string;
+  qtd_fogoes: string;
+  qtd_fornos: string;
+  empresa_terceirizada_merenda: string;
+}
+
+export interface ServicosEscolaRow extends EscolasBaseRow {
+  empresa_terceirizada_portaria: string;
+  qtd_agentes_portaria: string;
+  empresa_terceirizada_sg: string;
+  empresa_terceirizada_merenda: string;
+  avaliacao_portaria: string;
+  avaliacao_limpeza: string;
+}
+
+export interface PessoalEscolaRow extends EscolasBaseRow {
+  nome_diretor: string;
+  possui_direcao: string;
+  possui_coord_pedagogico: string;
+  qtd_professores_efetivos: string;
+  qtd_professores_temporarios: string;
+  qtd_servidores_administrativos: string;
+}
+
+export interface TecnologiaEscolaRow extends EscolasBaseRow {
+  internet_disponivel: string;
+  provedor_internet: string;
+  qualidade_internet: string;
+  qtd_desktop_alunos: string;
+  qtd_notebooks: string;
+  qtd_chromebooks: string;
+  possui_projetor: string;
+  possui_lousa_digital: string;
+}
+
+export interface CaracterizacaoEscolaRow extends EscolasBaseRow {
+  total_alunos: string;
+  porte: string;
+  turnos_texto: string;
+  etapas_texto: string;
+  modalidades_texto: string;
+}

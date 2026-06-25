@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Utensils, AlertCircle, Loader2, CheckCircle2, Users,
   Snowflake, Refrigerator, Flame, Microwave, GlassWater,
@@ -15,9 +15,11 @@ import { HBarChart } from "./shared/BarChart";
 import type {
   MerendaOferta, MerendaEquipamentos, EquipTotais,
   MerendaCondicoesSanitarias, DashboardFilters,
+  MerendaEscolaRow, EscolasPayload,
 } from "./shared/types";
 import { buildPostgresSourceLabel } from "./shared/sourceLabel";
 import { ReportButton } from "./shared/ReportButton";
+import { AdminDataTable, type DataTableColumn } from "./shared/AdminDataTable";
 
 function buildFilterParams(filters?: DashboardFilters): string {
   if (!filters) return "";
@@ -161,6 +163,33 @@ function StackedConservationBar({
   );
 }
 
+const MERENDA_ESCOLAS_SORT_KEYS = ["escola", "dre", "municipio", "zona", "oferta", "qualidade"] as const;
+type MerendaEscolasSortKey = (typeof MERENDA_ESCOLAS_SORT_KEYS)[number];
+
+const MERENDA_ESCOLAS_COLUMNS: DataTableColumn<MerendaEscolaRow>[] = [
+  { key: "nome_escola",                  label: "Escola",         sortable: true },
+  { key: "codigo_inep",                  label: "INEP"                           },
+  { key: "dre",                          label: "DRE",            sortable: true },
+  { key: "municipio",                    label: "Município",      sortable: true },
+  { key: "zona",                         label: "Zona",           sortable: true },
+  { key: "oferta_regular",               label: "Oferta Regular", sortable: true },
+  { key: "qualidade_merenda",            label: "Qualidade",      sortable: true },
+  { key: "possui_refeitorio",            label: "Refeitório"                     },
+  { key: "condicoes_cozinha",            label: "Cond. Cozinha"                  },
+  { key: "qtd_freezers",                 label: "Freezers",       align: "right" },
+  { key: "qtd_geladeiras",               label: "Geladeiras",     align: "right" },
+  { key: "qtd_fogoes",                   label: "Fogões",         align: "right" },
+  { key: "qtd_fornos",                   label: "Fornos",         align: "right" },
+  { key: "empresa_terceirizada_merenda", label: "Empresa Merenda"                },
+  {
+    key: "has_censo",
+    label: "Censo",
+    render: (row) => row.has_censo
+      ? <span className="inline-flex rounded-md border px-2 py-0.5 text-[11px] font-semibold bg-emerald-50 text-emerald-700 border-emerald-200">Preenchido</span>
+      : <span className="inline-flex rounded-md border px-2 py-0.5 text-[11px] font-semibold bg-slate-100 text-slate-600 border-slate-200">Sem dados</span>,
+  },
+];
+
 export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
   const [oferta,     setOferta]     = useState<MerendaOferta | null>(null);
   const [equip,      setEquip]      = useState<MerendaEquipamentos | null>(null);
@@ -169,6 +198,16 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
   const [equipErr,   setEquipErr]   = useState("");
   const [sanitErr,   setSanitErr]   = useState("");
   const [loading,    setLoading]    = useState(true);
+
+  // Estado da tabela escola-a-escola
+  const [escolasData,    setEscolasData]    = useState<EscolasPayload<MerendaEscolaRow> | null>(null);
+  const [escolasLoading, setEscolasLoading] = useState(true);
+  const [escolasError,   setEscolasError]   = useState("");
+  const [esPage,     setEsPage]     = useState(1);
+  const [esPageSize, setEsPageSize] = useState(10);
+  const [esSortKey,  setEsSortKey]  = useState<MerendaEscolasSortKey>("escola");
+  const [esSortDir,  setEsSortDir]  = useState<"asc" | "desc">("asc");
+  const [esSearch,   setEsSearch]   = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -202,6 +241,49 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
 
     return () => { cancelled = true; };
   }, [token, onUnauth, filters]);
+
+  // useEffect separado para a tabela escola-a-escola
+  const handleEsSort = useCallback((key: string) => {
+    setEsSortDir((d) => esSortKey === key ? (d === "asc" ? "desc" : "asc") : "asc");
+    setEsSortKey(key as MerendaEscolasSortKey);
+    setEsPage(1);
+  }, [esSortKey]);
+
+  const handleEsSearch = useCallback((q: string) => {
+    setEsSearch(q);
+    setEsPage(1);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setEscolasLoading(true);
+    setEscolasError("");
+
+    const p = new URLSearchParams();
+    if (filters?.ano)               p.set("year",              String(filters.ano));
+    if (filters?.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
+    if (filters?.dre)               p.set("dre",               filters.dre);
+    if (filters?.municipio)         p.set("municipio",         filters.municipio);
+    if (filters?.zona)              p.set("zona",              filters.zona);
+    if (esSearch.trim())            p.set("q",                 esSearch.trim());
+    p.set("page",      String(esPage));
+    p.set("page_size", String(esPageSize));
+    p.set("sort",      esSortKey);
+    p.set("direction", esSortDir);
+
+    apiFetch<EscolasPayload<MerendaEscolaRow>>(
+      `/v1/admin/analytics/merenda/escolas?${p.toString()}`, token,
+    )
+      .then((d) => { if (!cancelled) { setEscolasData(d); setEscolasError(""); } })
+      .catch((e: unknown) => {
+        const msg = (e as Error).message;
+        if (msg === "UNAUTHORIZED") { if (!cancelled) onUnauth(); return; }
+        if (!cancelled) setEscolasError(msg);
+      })
+      .finally(() => { if (!cancelled) setEscolasLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [token, onUnauth, filters, esPage, esPageSize, esSortKey, esSortDir, esSearch]);
 
   if (loading) {
     return (
@@ -702,6 +784,29 @@ export function AbaMerenda({ token, onUnauth, filters }: AbaMerendaProps) {
           )}
         </div>
       </div>
+      </div>
+
+      {/* Tabela escola-a-escola — oculta no modo apresentação */}
+      <div data-pres-hide="true">
+        <AdminDataTable<MerendaEscolaRow>
+          title="Merenda Escolar — Escola a Escola"
+          columns={MERENDA_ESCOLAS_COLUMNS}
+          rows={escolasData?.escolas ?? []}
+          keyField="codigo_inep"
+          totalEscolas={escolasData?.total_escolas ?? 0}
+          totalFiltrado={escolasData?.total_filtrado ?? 0}
+          page={escolasData?.page ?? esPage}
+          pageSize={escolasData?.page_size ?? esPageSize}
+          totalPages={escolasData?.total_pages ?? 1}
+          sortKey={esSortKey}
+          sortDir={esSortDir}
+          loading={escolasLoading}
+          error={escolasError}
+          onSort={handleEsSort}
+          onPage={setEsPage}
+          onPageSize={(s) => { setEsPageSize(s); setEsPage(1); }}
+          onSearch={handleEsSearch}
+        />
       </div>
     </div>
   );

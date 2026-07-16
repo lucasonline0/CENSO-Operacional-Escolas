@@ -265,8 +265,8 @@ export function AbaInfraestruturaSeguranca({
             <Zap size={16} style={{ color: C.primary }} />
             Rede elétrica atende a demanda?
           </h3>
-          {energia && energia.dist_rede_eletrica_atende.length > 0 ? (
-            <Donut segments={energia.dist_rede_eletrica_atende.map((s, i) => ({
+          {energia && energia?.dist_rede_eletrica_atende?.length > 0 ? (
+            <Donut segments={energia?.dist_rede_eletrica_atende.map((s, i) => ({
               label: s.valor,
               value: s.escolas,
               color: PORTE_COLORS[i % PORTE_COLORS.length] ?? "#94A3B8",
@@ -280,7 +280,7 @@ export function AbaInfraestruturaSeguranca({
             <Sparkles size={16} style={{ color: C.primary }} />
             Estrutura permite climatizar salas?
           </h3>
-          {energia && energia.dist_estrutura_climatizacao.length > 0 ? (
+          {energia && energia?.dist_estrutura_climatizacao?.length > 0 ? (
             <Donut segments={energia.dist_estrutura_climatizacao.map((s, i) => ({
               label: s.valor,
               value: s.escolas,
@@ -295,7 +295,7 @@ export function AbaInfraestruturaSeguranca({
             <Lightbulb size={16} style={{ color: C.primary }} />
             Climatização das salas de aula
           </h3>
-          {energia && energia.dist_climatizacao_salas.length > 0 ? (
+          {energia && energia?.dist_climatizacao_salas?.length > 0 ? (
             <Donut segments={energia.dist_climatizacao_salas.map((s, i) => ({
               label: s.valor,
               value: s.escolas,

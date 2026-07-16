@@ -5,6 +5,7 @@ import {
   Landmark, AlertCircle, Loader2, Wallet, RefreshCcw, Percent,
   Building2, Link2, Unlink, CalendarRange, FileCheck2, Network, Trophy,
   ShieldCheck, Users, UserCheck, AlertTriangle, Award,
+  ArrowUp, ArrowDown, ArrowUpDown,
 } from "lucide-react";
 import { apiFetch } from "./shared/api";
 import { C } from "./shared/constants";
@@ -231,7 +232,40 @@ function SectionHeader({
 }
 
 function RankingTable({ rows }: { rows: ProdepRankingEscola[] }) {
+  const [sortKey, setSortKey] = useState<keyof ProdepRankingEscola | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | 'normal'>('normal');
+
   if (rows.length === 0) return <NoData />;
+
+  const handleSort = (key: keyof ProdepRankingEscola) => {
+    if (sortKey === key) {
+      if (sortDirection === 'normal') setSortDirection('desc');
+      else if (sortDirection === 'desc') setSortDirection('asc');
+      else {
+        setSortDirection('normal');
+        setSortKey(null);
+      }
+    } else {
+      setSortKey(key);
+      setSortDirection('desc');
+    }
+  };
+
+  const sortedRows = [...rows].sort((a, b) => {
+    if (sortDirection === 'normal' || !sortKey) return 0;
+    const valA = a[sortKey] ?? 0;
+    const valB = b[sortKey] ?? 0;
+    if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+    if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const renderSortIcon = (key: keyof ProdepRankingEscola) => {
+    if (sortKey !== key || sortDirection === 'normal') return <ArrowUpDown size={14} className="inline ml-1 text-slate-300" />;
+    if (sortDirection === 'asc') return <ArrowUp size={14} className="inline ml-1 text-slate-600" />;
+    return <ArrowDown size={14} className="inline ml-1 text-slate-600" />;
+  };
+
   return (
     <div data-pres-table-scroll="true" className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -241,13 +275,19 @@ function RankingTable({ rows }: { rows: ProdepRankingEscola[] }) {
             <th className="py-2 px-3 font-semibold">Município</th>
             <th className="py-2 px-3 font-semibold">DRE</th>
             <th className="py-2 px-3 font-semibold">Vínculo</th>
-            <th className="py-2 px-3 font-semibold text-right">Recebido</th>
-            <th className="py-2 px-3 font-semibold text-right">Reprogramado</th>
-            <th className="py-2 pl-3 font-semibold text-right">%</th>
+            <th className="py-2 px-3 font-semibold text-right cursor-pointer hover:bg-slate-50 select-none transition-colors group" onClick={() => handleSort('totalRecebido')}>
+              <div className="flex items-center justify-end gap-1">Recebido <span className="group-hover:text-slate-400 transition-colors">{renderSortIcon('totalRecebido')}</span></div>
+            </th>
+            <th className="py-2 px-3 font-semibold text-right cursor-pointer hover:bg-slate-50 select-none transition-colors group" onClick={() => handleSort('totalReprogramado')}>
+              <div className="flex items-center justify-end gap-1">Reprogramado <span className="group-hover:text-slate-400 transition-colors">{renderSortIcon('totalReprogramado')}</span></div>
+            </th>
+            <th className="py-2 pl-3 font-semibold text-right cursor-pointer hover:bg-slate-50 select-none transition-colors group" onClick={() => handleSort('percentualReprogramado')}>
+              <div className="flex items-center justify-end gap-1">% <span className="group-hover:text-slate-400 transition-colors">{renderSortIcon('percentualReprogramado')}</span></div>
+            </th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
+          {sortedRows.map((r) => (
             <tr
               key={r.codigoInepProdep}
               className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
@@ -471,7 +511,6 @@ function ProdepFinanceiroBlock({
       <div data-pres-slide="financeiro-prestacao-status" className="space-y-4">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
-            <FileCheck2 size={16} style={{ color: C.primary }} />
             Distribuição por status de prestação de contas
           </h3>
           <p className="text-xs text-slate-400 mb-5">
@@ -519,7 +558,6 @@ function ProdepFinanceiroBlock({
       <div data-pres-slide="financeiro-vinculo-cadastral" className="space-y-4">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
-            <Network size={16} style={{ color: C.primary }} />
             Distribuição por vínculo financeiro-cadastral
           </h3>
           <p className="text-xs text-slate-400 mb-5">
@@ -568,26 +606,12 @@ function ProdepFinanceiroBlock({
       <div data-pres-slide="financeiro-ranking-recebido" className="space-y-4">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
-            <Trophy size={16} style={{ color: C.primary }} />
-            Top escolas por valor recebido
+            Escolas por valor recebido
           </h3>
           <p className="text-xs text-slate-400 mb-5">
             Maiores volumes de repasse recebido por escola (chave INEP PRODEP).
           </p>
           <RankingTable rows={data.topEscolasPorRecebido} />
-        </div>
-      </div>
-
-      <div data-pres-slide="financeiro-ranking-reprogramado" className="space-y-4">
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 text-sm mb-1 flex items-center gap-2">
-            <RefreshCcw size={16} style={{ color: C.primary }} />
-            Top escolas por valor reprogramado
-          </h3>
-          <p className="text-xs text-slate-400 mb-5">
-            Maiores saldos reprogramados por escola (chave INEP PRODEP).
-          </p>
-          <RankingTable rows={data.topEscolasPorReprogramado} />
         </div>
       </div>
 

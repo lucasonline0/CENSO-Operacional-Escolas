@@ -12,6 +12,7 @@ import { C } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import type { DashboardFilters } from "./shared/types";
 import { ReportButton } from "./shared/ReportButton";
+import { RankingGovernancaTable } from "./RankingGovernancaTable";
 
 // =========================================================================
 // Gestão Financeira e Governança — aba PRODEP (PR técnico 3)
@@ -737,6 +738,21 @@ function GovernancaInstitucionalBlock({
           </div>
         </div>
       )}
+
+      {/* ── Classificação de Governança Institucional ── */}
+      <SectionHeader id="sec-ranking-governanca" Icon={Award} title="Classificação de Governança Institucional" borderTop />
+      
+      <div data-pres-slide="ranking-governanca" className="space-y-4">
+        <div className="mb-2 text-sm text-slate-500">
+          Esta classificação soma 1 ponto para cada indicador atendido: Conselho Escolar Constituído, Conselho Ativo, Regularização no CEE, Grêmio Estudantil Ativo e Prestação de Contas PRODEP. 
+          Escolas com 4 a 5 pontos são <strong className="font-medium text-emerald-700">Excelentes</strong>, 2 a 3 pontos são <strong className="font-medium text-amber-700">Regulares</strong> e menos de 2 pontos são <strong className="font-medium text-rose-700">Críticas</strong>.
+        </div>
+        <RankingGovernancaTable
+          token={token}
+          onUnauth={onUnauth}
+          filters={filters}
+        />
+      </div>
     </div>
   );
 }

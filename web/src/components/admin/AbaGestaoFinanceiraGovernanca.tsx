@@ -11,6 +11,7 @@ import { apiFetch } from "./shared/api";
 import { C } from "./shared/constants";
 import { StatCard } from "./shared/StatCard";
 import type { DashboardFilters } from "./shared/types";
+import { ReportButton } from "./shared/ReportButton";
 
 // =========================================================================
 // Gestão Financeira e Governança — aba PRODEP (PR técnico 3)
@@ -746,6 +747,16 @@ function GovernancaInstitucionalBlock({
 export function AbaGestaoFinanceiraGovernanca(props: AbaGestaoFinanceiraGovernancaProps) {
   return (
     <div className="space-y-8">
+      {/* Botão de relatório gerencial */}
+      <div data-pres-hide="true" className="flex items-center justify-end">
+        <ReportButton
+          reportId="financeiro-governanca-escolas"
+          token={props.token}
+          filters={props.filters}
+          onUnauth={props.onUnauth}
+        />
+      </div>
+
       <GovernancaInstitucionalBlock
         token={props.token}
         onUnauth={props.onUnauth}

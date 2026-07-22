@@ -296,6 +296,8 @@ func (app *application) AdminGetReport(w http.ResponseWriter, r *http.Request) {
 		// nome do arquivo, para que ambos reflitam o ano usado (não "todos").
 		filters.Year = resolveReportYearDefault(filters, time.Now())
 		rd, err = app.buildMerendaReportData(r.Context(), def, filters)
+	case reportFinanceiroGovernancaID:
+		rd, err = app.buildFinanceiroGovernancaReportData(r.Context(), def, filters)
 	default:
 		// Catálogo e dispatch desalinhados: defensivo.
 		app.errorJSON(w, fmt.Errorf("relatório %q sem implementação", def.ID), http.StatusNotFound)

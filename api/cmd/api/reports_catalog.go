@@ -38,6 +38,11 @@ const reportInfraestruturaSegurancaID = "infraestrutura-seguranca-escolas"
 // para priorização. Depende de um ano de censo específico.
 const reportMerendaCondicoesID = "merenda-escolar-condicoes"
 
+// reportFinanceiroGovernancaID é o identificador do relatório de Gestão Financeira e Governança,
+// que exporta os repasses do PRODEP e as informações de Governança Institucional (Conselho Escolar,
+// regularização CEE).
+const reportFinanceiroGovernancaID = "financeiro-governanca-escolas"
+
 // ReportDefinition descreve os metadados de um relatório gerencial. Os
 // campos são suficientes para montar o cabeçalho do XLSX (Title), nomear
 // a aba (SheetName) e derivar o nome do arquivo (FileBase). A consulta e
@@ -80,6 +85,13 @@ var reportsCatalog = map[string]ReportDefinition{
 		Description: "Condições da merenda escolar por escola, com oferta, qualidade, cozinha, equipamentos e Status Operacional simples para priorização, para todas as escolas do recorte.",
 		SheetName:   "Merenda Escolar",
 		FileBase:    "relatorio_merenda_escolar_condicoes",
+	},
+	reportFinanceiroGovernancaID: {
+		ID:          reportFinanceiroGovernancaID,
+		Title:       "Relatório de Gestão Financeira e Governança",
+		Description: "Panorama detalhado de Gestão Financeira (repasses PRODEP) e Governança Institucional (Conselho Escolar, regularização CEE).",
+		SheetName:   "Financeiro e Governança",
+		FileBase:    "relatorio_financeiro_governanca_escolas",
 	},
 }
 

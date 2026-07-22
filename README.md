@@ -8,12 +8,12 @@ O objetivo principal deste software é prover uma interface segura e robusta par
 
 ### Principais Funcionalidades
 
-* **Coleta de Dados em Etapas:** Segmentação do censo em 14 seções lógicas para redução de carga cognitiva e melhoria da experiência do usuário.
-* **Salvamento de Rascunho:** Capacidade de persistência parcial de dados, permitindo o preenchimento assíncrono.
-* **Validação Robusta:** Verificação de integridade de dados em múltiplas camadas utilizando Zod.
-* **Integração com Ecossistema Google:** Sincronização e exportação de dados automatizada utilizando as APIs do Google Drive e Google Sheets.
-* **Geração de Relatórios:** Suporte para exportação de dados do censo para formato PDF (via jsPDF).
-* **Segurança:** Autenticação robusta, proteção contra ataques comuns da web e validação de requisições com CORS configurado.
+- **Coleta de Dados em Etapas:** Segmentação do censo em 14 seções lógicas para redução de carga cognitiva e melhoria da experiência do usuário.
+- **Salvamento de Rascunho:** Capacidade de persistência parcial de dados, permitindo o preenchimento assíncrono.
+- **Validação Robusta:** Verificação de integridade de dados em múltiplas camadas utilizando Zod.
+- **Integração com Ecossistema Google:** Sincronização e exportação de dados automatizada utilizando as APIs do Google Drive e Google Sheets.
+- **Geração de Relatórios:** Suporte para exportação de dados do censo para formato PDF (via jsPDF).
+- **Segurança:** Autenticação robusta, proteção contra ataques comuns da web e validação de requisições com CORS configurado.
 
 ## Arquitetura Técnica
 
@@ -21,29 +21,29 @@ O projeto segue a estrutura de **Monorepo**, consolidando frontend, backend e in
 
 ### Tecnologias Utilizadas
 
-**Backend (Go 1.24)**
-* *Roteamento:* Chi (Múltiplas rotas, middlewares customizados e alta performance)
-* *Banco de Dados:* Driver PGX estrito com `database/sql` (sem ORM, garantindo performance bruta e controle sobre as queries)
-* *Integrações:* APIs do Google Drive/Sheets e manipulação nativa de Excel (`excelize`)
+- **Backend (Go 1.24)**
+  - _Roteamento:_ Chi (Múltiplas rotas, middlewares customizados e alta performance)
+  - _Banco de Dados:_ Driver PGX estrito com `database/sql` (sem ORM, garantindo performance bruta e controle sobre as queries)
+  - _Integrações:_ APIs do Google Drive/Sheets e manipulação nativa de Excel (`excelize`)
 
-**Frontend (React 19 & Next.js 16)**
-* *Framework:* Next.js (App Router)
-* *Linguagem:* TypeScript (Tipagem estática estrita)
-* *Estilização & UI:* Tailwind CSS v3, Radix UI Primitives e Lucide Icons
-* *Gerenciamento de Formulários:* React Hook Form + Zod (Schema Validation)
+- **Frontend (React 19 & Next.js 16)**
+  - _Framework:_ Next.js (App Router)
+  - _Linguagem:_ TypeScript (Tipagem estática estrita)
+  - _Estilização & UI:_ Tailwind CSS v3, Radix UI Primitives e Lucide Icons
+  - _Gerenciamento de Formulários:_ React Hook Form + Zod (Schema Validation)
 
-**Banco de Dados & Infraestrutura**
-* *SGBD:* PostgreSQL 16
-* *Gerenciamento de Banco Visual:* Adminer
-* *Orquestração:* Docker & Docker Compose
+- **Banco de Dados & Infraestrutura**
+  - _SGBD:_ PostgreSQL 16
+  - _Gerenciamento de Banco Visual:_ Adminer
+  - _Orquestração:_ Docker & Docker Compose
 
 ### Estrutura de Diretórios
 
 A organização do código segue a separação de responsabilidades e princípios de Clean Architecture:
 
-* `/api`: Contém todo o código-fonte do servidor Backend em Go (`cmd`, `internal/models`, `internal/services`, etc.).
-* `/web`: Contém a aplicação web Frontend em Next.js.
-* `/infra`: Arquivos de configuração de infraestrutura (`docker-compose.yml`, `init.sql` e variáveis de ambiente).
+- `/api`: Contém todo o código-fonte do servidor Backend em Go (`cmd`, `internal/models`, `internal/services`, etc.).
+- `/web`: Contém a aplicação web Frontend em Next.js.
+- `/infra`: Arquivos de configuração de infraestrutura (`docker-compose.yml`, `init.sql` e variáveis de ambiente).
 
 ## Como Executar Localmente
 
@@ -51,14 +51,15 @@ A organização do código segue a separação de responsabilidades e princípio
 
 Antes de iniciar, certifique-se de ter instalado:
 
-* **Go 1.24** ou superior ([https://go.dev/dl](https://go.dev/dl))
-* **Node.js 20+** com npm ([https://nodejs.org](https://nodejs.org))
-* **Docker** e **Docker Compose** ([https://www.docker.com](https://www.docker.com))
-* **Git** para clonar o repositório
+- **Go 1.24** ou superior ([https://go.dev/dl](https://go.dev/dl))
+- **Node.js 20+** com npm ([https://nodejs.org](https://nodejs.org))
+- **Docker** e **Docker Compose** ([https://www.docker.com](https://www.docker.com))
+- **Git** para clonar o repositório
 
 ### Passo 1: Configurar Variáveis de Ambiente
 
 #### 1.1 Copiar arquivo de exemplo
+
 ```bash
 cd infra
 cp .env.example .env
@@ -120,7 +121,8 @@ go run ./cmd/genpasswd/main.go
 Você será solicitado a inserir uma senha. O programa exibirá o hash bcrypt. **Copie este hash e substitua o valor de `ADMIN_PASSWORD_HASH` no arquivo `.env`**.
 
 Exemplo de saída:
-```
+
+```text
 Enter password: senha123
 Password hash: $2a$10$abcdefghijklmnopqrstuvwxyz...
 ```
@@ -133,15 +135,18 @@ docker-compose up -d
 ```
 
 Verifique se os containers estão rodando:
+
 ```bash
 docker-compose ps
 ```
 
 Você deve ver dois containers em execução:
+
 - `postgres` (porta 5432)
 - `adminer` (porta 8080)
 
 **Acessar Adminer (interface visual do banco):**
+
 - URL: [http://localhost:8080](http://localhost:8080)
 - Sistema: PostgreSQL
 - Servidor: postgres
@@ -160,19 +165,22 @@ go run ./cmd/api/main.go
 ```
 
 Você deve ver uma mensagem similar:
-```
+
+```text
 [INFO] Iniciando sincronização de sheets em segundo plano...
 [INFO] Servidor iniciado na porta 8000
 ```
 
 **Verificar se a API está rodando:**
+
 ```bash
 curl http://localhost:8000/v1/health
 ```
 
 Resposta esperada:
+
 ```json
-{"status":"ok"}
+{ "status": "ok" }
 ```
 
 ### Passo 4: Iniciar o Frontend (Next.js)
@@ -188,7 +196,8 @@ npm run dev        # Inicia servidor de desenvolvimento
 A aplicação estará disponível em: [http://localhost:3000](http://localhost:3000)
 
 Você deve ver uma mensagem similar:
-```
+
+```bash
 ▲ Next.js 16.0.0
   - Local:        http://localhost:3000
   - Environments: .env.local
@@ -209,28 +218,28 @@ Quando todos os serviços estiverem rodando:
 
 ### Variáveis de Banco de Dados
 
-| Variável | Descrição | Padrão | Exemplo |
-|----------|-----------|--------|---------|
-| `DB_HOST` | Host do PostgreSQL | localhost | postgres |
-| `DB_PORT` | Porta do PostgreSQL | 5432 | 5432 |
-| `DB_USER` | Usuário do banco | - | censo_user |
-| `DB_PASSWORD` | Senha do banco | - | senha_segura_123 |
-| `DB_NAME` | Nome do banco | - | censo_operacional |
+| Variável      | Descrição           | Padrão    | Exemplo           |
+| ------------- | ------------------- | --------- | ----------------- |
+| `DB_HOST`     | Host do PostgreSQL  | localhost | postgres          |
+| `DB_PORT`     | Porta do PostgreSQL | 5432      | 5432              |
+| `DB_USER`     | Usuário do banco    | -         | censo_user        |
+| `DB_PASSWORD` | Senha do banco      | -         | senha_segura_123  |
+| `DB_NAME`     | Nome do banco       | -         | censo_operacional |
 
 ### Variáveis da API Go
 
-| Variável | Descrição | Padrão | Obrigatória |
-|----------|-----------|--------|-----------|
-| `PORT` | Porta da API | 8000 | Não |
-| `ADMIN_PASSWORD_HASH` | Hash bcrypt da senha admin | - | Sim |
-| `ADMIN_JWT_SECRET` | Chave para assinar JWTs | - | Sim |
-| `CORS_ALLOWED_ORIGINS` | Origins permitidas (comma-separated) | - | Não |
+| Variável               | Descrição                            | Padrão | Obrigatória |
+| ---------------------- | ------------------------------------ | ------ | ----------- |
+| `PORT`                 | Porta da API                         | 8000   | Não         |
+| `ADMIN_PASSWORD_HASH`  | Hash bcrypt da senha admin           | -      | Sim         |
+| `ADMIN_JWT_SECRET`     | Chave para assinar JWTs              | -      | Sim         |
+| `CORS_ALLOWED_ORIGINS` | Origins permitidas (comma-separated) | -      | Não         |
 
 ### Variáveis do Frontend
 
-| Variável | Descrição | Padrão | Obrigatória |
-|----------|-----------|--------|-----------|
-| `NEXT_PUBLIC_API_URL` | URL base da API | http://localhost:8000 | Não |
+| Variável              | Descrição       | Padrão                  | Obrigatória |
+| --------------------- | --------------- | ----------------------- | ----------- |
+| `NEXT_PUBLIC_API_URL` | URL base da API | <http://localhost:8000> | Não         |
 
 ### Integração Google (Opcional)
 
@@ -320,7 +329,7 @@ docker-compose down -v
 
 ## Estrutura de Diretórios
 
-```
+```text
 CENSO-Operacional-Escolas/
 ├── api/                          # Backend Go
 │   ├── cmd/
@@ -352,7 +361,7 @@ CENSO-Operacional-Escolas/
 
 ## Fluxo de Dados
 
-```
+```text
 ┌─────────────────────────────────────┐
 │  Diretores Escolares                │
 │  (Interface Next.js - Port 3000)    │
@@ -395,6 +404,7 @@ CENSO-Operacional-Escolas/
 
 - **Frontend:** Automático ao editar arquivos em `/web/src`
 - **Backend:** Recomenda-se usar `air` ou reiniciar manualmente:
+
   ```bash
   go install github.com/cosmtrek/air@latest
   cd api && air
@@ -403,9 +413,11 @@ CENSO-Operacional-Escolas/
 ### Debug de Requisições
 
 Use o Adminer para inspecionar dados:
+
 - [http://localhost:8080](http://localhost:8080)
 
 Ou use ferramentas como:
+
 - **cURL**: `curl http://localhost:8000/v1/health`
 - **Postman**: [https://www.postman.com](https://www.postman.com)
 - **VS Code REST Client**: Extensão REST Client
@@ -435,20 +447,26 @@ docker-compose up -d
 ### Erro: "EADDRINUSE: address already in use :::3000"
 
 - A porta 3000 está ocupada. Identifique qual processo está usando:
+
   ```bash
   # No Windows
   netstat -ano | findstr :3000
+
   ```
+
 - Encerre o processo ou rode em outra porta: `PORT=3001 npm run dev`
 
 ### Erro: "database connection failed"
 
 - Verifique se PostgreSQL está rodando:
+
   ```bash
   docker-compose ps
   ```
+
 - Confirme as credenciais no `.env`
 - Tente reconectar:
+
   ```bash
   docker-compose down
   docker-compose up -d
@@ -465,6 +483,7 @@ docker-compose up -d
 ## Deploy em Produção
 
 Para informações sobre deploy em produção, veja:
+
 - Documentação de CI/CD (se disponível)
 - Configurações de Railway ou outro serviço de hospedagem
 - Variáveis de ambiente sensíveis devem usar um gerenciador de secrets

@@ -763,6 +763,16 @@ function GovernancaInstitucionalBlock({
 export function AbaGestaoFinanceiraGovernanca(props: AbaGestaoFinanceiraGovernancaProps) {
   return (
     <div className="space-y-8">
+      {/* Botão de relatório gerencial */}
+      <div data-pres-hide="true" className="flex items-center justify-end">
+        <ReportButton
+          reportId="financeiro-governanca-escolas"
+          token={props.token}
+          filters={props.filters}
+          onUnauth={props.onUnauth}
+        />
+      </div>
+
       <GovernancaInstitucionalBlock
         token={props.token}
         onUnauth={props.onUnauth}

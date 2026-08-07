@@ -114,6 +114,7 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
                     className="login__input login__input--icon"
                     disabled={loading || blocked} value={username}
                     onChange={(e) => setUsername(e.target.value)}
+                    placeholder="admin_seduc_pa" required
                   />
                 </div>
               </label>

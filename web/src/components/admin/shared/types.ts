@@ -496,6 +496,8 @@ export interface DashboardFilters {
   dre?: string;
   municipio?: string;
   zona?: string;
+  school_id?: number;
+  codigo_inep?: string;
 }
 
 // Filtros globais do dashboard.
@@ -513,7 +515,7 @@ export interface FiltrosOpcoes {
   anos: number[];
   regioes_integracao: string[];
   dres: string[];
-  municipios: string[];
+  municipios: string[]; 
   zonas: string[];
   escolas: FiltrosEscolaItem[];
 }

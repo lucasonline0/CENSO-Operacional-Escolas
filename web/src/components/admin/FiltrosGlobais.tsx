@@ -1,11 +1,153 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Filter, X } from "lucide-react";
 import { C } from "./shared/constants";
-import type { DashboardFilters, FiltrosOpcoes } from "./shared/types";
+import type { DashboardFilters, FiltrosOpcoes, FiltrosEscolaItem } from "./shared/types";
 
 const EMPTY: DashboardFilters = {};
+
+function SchoolSelect({
+  label,
+  value,
+  escolas = [],
+  onChange,
+}: {
+  label: string;
+  value: number | undefined;
+  escolas: FiltrosEscolaItem[];
+  onChange: (v: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selected = escolas.find((e) => Number(e.school_id) === Number(value));
+  const [query, setQuery] = useState(selected?.nome_escola ?? "");
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+  if (value === undefined || value === null) {
+    setQuery("");
+  } else if (selected) {
+    setQuery(selected.nome_escola);
+  }
+}, [value, selected]);
+
+  React.useEffect(() => {
+    setQuery(selected?.nome_escola ?? "");
+  }, [value, selected]);
+
+  React.useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = escolas.filter((e) => {
+    const nome = (e?.nome_escola || "").toLowerCase();
+    const inep = e?.codigo_inep || "";
+    const term = query.toLowerCase();
+
+    return nome.includes(term) || inep.includes(term);
+  });
+
+  return (
+    <div ref={containerRef} className="relative flex flex-col gap-0.5" style={{ minWidth: 240 }}>
+      <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+        {label}
+      </label>
+
+      <div className="relative flex items-center">
+        <input
+          type="text"
+          placeholder="Todas"
+          value={query}
+          onFocus={() => setIsOpen(true)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setIsOpen(true);
+
+            if (!e.target.value.trim()) {
+              onChange("");
+            }
+          }}
+          className={`w-full rounded-lg border py-1.5 pl-2.5 pr-7 text-xs outline-none focus:ring-2 focus:ring-blue-400 ${
+            value
+              ? "border-blue-300 bg-blue-50 font-semibold text-blue-800"
+              : "border-slate-200 bg-white text-slate-700"
+          }`}
+        />
+
+        {query && (
+          <button
+            type="button"
+            onClick={() => {
+              setQuery("");
+              onChange("");
+              setIsOpen(false);
+            }}
+            className="absolute right-2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 z-50 mt-1 w-96 max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg flex flex-col gap-0.5">
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault(); 
+              onChange("");
+              setQuery("");
+              setIsOpen(false);
+            }}
+            className="w-full rounded px-2.5 py-1.5 text-left text-xs font-medium text-slate-500 hover:bg-slate-100"
+          >
+            Todas
+          </button>
+
+          {filtered.length === 0 ? (
+            <div className="px-2.5 py-2 text-xs text-slate-400 text-center">
+              Nenhuma escola encontrada
+            </div>
+          ) : (
+            filtered.map((e) => {
+              const isSelected = Number(e.school_id) === Number(value);
+              return (
+                <button
+                  key={e.school_id}
+                  type="button"
+                  onMouseDown={(eEvent) => {
+                    eEvent.preventDefault();
+                    onChange(String(e.school_id));
+                    setQuery(e.nome_escola);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full rounded px-2.5 py-1.5 text-left text-xs transition-colors ${
+                    isSelected
+                      ? "bg-blue-50 font-bold text-blue-700"
+                      : "text-slate-800 hover:bg-slate-100 hover:text-slate-900"
+                  }`}
+                >
+                  <div className="truncate">{e.nome_escola}</div>
+                  {e.codigo_inep && (
+                    <div className="text-[10px] text-slate-400 truncate">
+                      INEP: {e.codigo_inep}
+                    </div>
+                  )}
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function FilterSelect({
   label,
@@ -15,7 +157,7 @@ function FilterSelect({
 }: {
   label: string;
   value: string | number | undefined;
-  options: (string | number)[];
+  options: (string | number | { label: string; value: string | number })[];
   onChange: (v: string) => void;
 }) {
   const hasValue = value !== undefined && value !== "";
@@ -35,11 +177,15 @@ function FilterSelect({
         style={{ minWidth: 140 }}
       >
         <option value="">Todos</option>
-        {options.map((opt) => (
-          <option key={opt} value={opt}>
-            {opt}
-          </option>
-        ))}
+        {options.map((opt, index) => {
+          const optValue = typeof opt === "object" ? opt.value : opt;
+          const optLabel = typeof opt === "object" ? opt.label : opt;
+          return (
+            <option key={index} value={optValue}>
+              {optLabel}
+            </option> 
+          );  
+        })}
       </select>
     </div>
   );
@@ -59,15 +205,40 @@ export function FiltrosGlobais({
     [filters],
   );
 
+  // Lista de códigos INEP (sem nulos ou duplicatas)
+
+  const inepOptions = useMemo(() => {
+
+  if (!opcoes?.escolas) return [];
+
+  const list = opcoes.escolas
+
+  .map((e) => e.codigo_inep)
+
+  .filter((inep): inep is string => Boolean(inep));
+
+  return Array.from(new Set(list));
+
+  }, [opcoes]);
+
   function set(key: keyof DashboardFilters, raw: string) {
     const next = { ...filters };
     if (raw === "") {
       delete next[key];
-    } else if (key === "ano") {
-      next.ano = Number(raw);
+    } else if (key === "ano" || key === "school_id") {
+      next[key] = Number(raw);
     } else {
       (next as Record<string, string>)[key] = raw;
     }
+
+    if (key === "school_id" && raw !== "") {
+      delete next.codigo_inep;
+    }
+
+    if (key === "codigo_inep" && raw !== "") {
+      delete next.school_id;
+    }
+
     onFiltersChange(next);
   }
 
@@ -134,6 +305,12 @@ export function FiltrosGlobais({
           options={opcoes?.zonas ?? []}
           onChange={(v) => set("zona", v)}
         />
+        <SchoolSelect
+          label="Nome da Escola"
+          value={filters.school_id}
+          escolas={opcoes?.escolas ?? []}
+          onChange={(v) => set("school_id", v)}
+        />
       </div>
 
       {/* Tags dos filtros ativos */}
@@ -153,6 +330,14 @@ export function FiltrosGlobais({
           )}
           {filters.zona && (
             <ActiveTag label={`Zona: ${filters.zona}`} onRemove={() => set("zona", "")} />
+          )}
+          {filters.school_id && (
+            <ActiveTag
+              label={`Escola: ${
+                opcoes?.escolas.find((e) => e.school_id === filters.school_id)?.nome_escola ?? filters.school_id
+              }`}
+              onRemove={() => set("school_id", "")}
+            />
           )}
         </div>
       )}

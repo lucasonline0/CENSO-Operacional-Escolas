@@ -57,10 +57,10 @@ const indiceGovernancaSelectSQL = `
 		COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado') AS dre,
 		COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado') AS municipio,
 		(cr.census_id IS NOT NULL) AS has_censo,
-		(cr.data->>'conselho_escolar' = 'Sim') AS conselho_escolar,
-		(cr.data->>'conselho_ativo' = 'Sim') AS conselho_ativo,
-		(cr.data->>'regularizada_cee' = 'Sim') AS regularizada_cee,
-		(cr.data->>'gremio_estudantil' = 'Sim') AS gremio_estudantil,
+		COALESCE(cr.data->>'conselho_escolar' = 'Sim', false) AS conselho_escolar,
+		COALESCE(cr.data->>'conselho_ativo' = 'Sim', false) AS conselho_ativo,
+		COALESCE(cr.data->>'regularizada_cee' = 'Sim', false) AS regularizada_cee,
+		COALESCE(cr.data->>'gremio_estudantil' = 'Sim', false) AS gremio_estudantil,
 		COALESCE(p.prestacao_contas_ok, false) AS prestacao_contas_ok
 	FROM schools s
 	LEFT JOIN latest_census cr ON cr.school_id = s.id

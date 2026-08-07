@@ -35,6 +35,10 @@ type IndiceGovernancaPayload struct {
 	Escolas      []IndiceGovernancaEscola `json:"escolas"`
 }
 
+func (app *application) writeIndiceGovernancaPayload(w http.ResponseWriter, payload IndiceGovernancaPayload) error {
+	return app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: payload})
+}
+
 const indiceGovernancaSelectSQL = `
 	WITH prodep_agg AS (
 		SELECT
@@ -168,5 +172,7 @@ func (app *application) AdminAnalyticsGovernancaIndiceEscolas(w http.ResponseWri
 		Escolas:      escolas,
 	}
 
-	app.writeJSON(w, http.StatusOK, payload)
+	if err := app.writeIndiceGovernancaPayload(w, payload); err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao serializar indice de governanca: %w", err), http.StatusInternalServerError)
+	}
 }

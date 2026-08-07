@@ -161,7 +161,7 @@ Abra um novo terminal na raiz do projeto:
 ```bash
 cd api
 go mod download    # Baixa as dependências
-go run ./cmd/api
+go run ./cmd/api/main.go
 ```
 
 Você deve ver uma mensagem similar:

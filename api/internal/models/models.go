@@ -8,37 +8,37 @@ import (
 )
 
 type School struct {
-	ID               int             `json:"id"`
-	Nome             string          `json:"nome_escola"`
-	INEP             string          `json:"codigo_inep"`
-	Municipio        string          `json:"municipio"`
-	Dre              string          `json:"dre"`      
-	Zona             string          `json:"zona"`     
-	Endereco         string          `json:"endereco"` 
-	CNPJ             string          `json:"cnpj"` 
-	Telefone         string          `json:"telefone_institucional"`
-	Email            string          `json:"email"`
-	CEP              string          `json:"cep"`
-	NomeDiretor      string          `json:"nome_diretor"`
-	MatriculaDiretor string          `json:"matricula_diretor"`
-	ContatoDiretor   string          `json:"contato_diretor"`
-	
-	Turnos               json.RawMessage `json:"turnos"` 
+	ID               int    `json:"id"`
+	Nome             string `json:"nome_escola"`
+	INEP             string `json:"codigo_inep"`
+	Municipio        string `json:"municipio"`
+	Dre              string `json:"dre"`
+	Zona             string `json:"zona"`
+	Endereco         string `json:"endereco"`
+	CNPJ             string `json:"cnpj"`
+	Telefone         string `json:"telefone_institucional"`
+	Email            string `json:"email"`
+	CEP              string `json:"cep"`
+	NomeDiretor      string `json:"nome_diretor"`
+	MatriculaDiretor string `json:"matricula_diretor"`
+	ContatoDiretor   string `json:"contato_diretor"`
+
+	Turnos               json.RawMessage `json:"turnos"`
 	EtapasOfertadas      json.RawMessage `json:"etapas_ofertadas"`
 	ModalidadesOfertadas json.RawMessage `json:"modalidades_ofertadas"`
 
-	CreatedAt        time.Time       `json:"created_at"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type CensusResponse struct {
-	ID             int             `json:"id"`
-	SchoolID       int             `json:"school_id"`
-	Year           int             `json:"year"`
-	Status         string          `json:"status"`
-	Data           json.RawMessage `json:"data"`
-	SheetSyncedAt  *time.Time      `json:"sheet_synced_at,omitempty"`
-	CreatedAt      time.Time       `json:"created_at"`
-	UpdatedAt      time.Time       `json:"updated_at"`
+	ID            int             `json:"id"`
+	SchoolID      int             `json:"school_id"`
+	Year          int             `json:"year"`
+	Status        string          `json:"status"`
+	Data          json.RawMessage `json:"data"`
+	SheetSyncedAt *time.Time      `json:"sheet_synced_at,omitempty"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
 }
 
 type SchoolModel struct {
@@ -50,14 +50,16 @@ type CensusModel struct {
 }
 
 type Models struct {
-	Schools SchoolModel
-	Census  CensusModel
+	Schools    SchoolModel
+	Census     CensusModel
+	AdminUsers AdminUserModel
 }
 
 func NewModels(db *sql.DB) Models {
 	return Models{
-		Schools: SchoolModel{DB: db},
-		Census:  CensusModel{DB: db},
+		Schools:    SchoolModel{DB: db},
+		Census:     CensusModel{DB: db},
+		AdminUsers: AdminUserModel{DB: db},
 	}
 }
 
@@ -78,18 +80,18 @@ func (m *SchoolModel) Insert(school School) (int, error) {
 			    nome_diretor = $10, matricula_diretor = $11, contato_diretor = $12,
 			    turnos = $13, etapas_ofertadas = $14, modalidades_ofertadas = $15
 			WHERE id = $16`
-		
-		_, errUpdate := m.DB.ExecContext(context.Background(), queryUpdate, 
-			school.Nome, school.Municipio, school.Dre, school.Zona, school.Endereco, 
+
+		_, errUpdate := m.DB.ExecContext(context.Background(), queryUpdate,
+			school.Nome, school.Municipio, school.Dre, school.Zona, school.Endereco,
 			school.CNPJ, school.Telefone, school.Email, school.CEP,
 			school.NomeDiretor, school.MatriculaDiretor, school.ContatoDiretor,
 			turnos, etapas, modalidades,
 			existingID)
-		
+
 		if errUpdate != nil {
 			return 0, errUpdate
 		}
-		
+
 		return existingID, nil
 	}
 
@@ -104,11 +106,11 @@ func (m *SchoolModel) Insert(school School) (int, error) {
 		RETURNING id`
 
 	var id int
-	err = m.DB.QueryRowContext(context.Background(), stmt, 
-		school.Nome, 
-		school.INEP, 
+	err = m.DB.QueryRowContext(context.Background(), stmt,
+		school.Nome,
+		school.INEP,
 		school.Municipio,
-		school.Dre, 
+		school.Dre,
 		school.Zona,
 		school.Endereco,
 		school.CNPJ,
@@ -144,7 +146,7 @@ func (m *SchoolModel) Get(id int) (*School, error) {
 	var turnos, etapas, modalidades string
 
 	err := m.DB.QueryRowContext(context.Background(), query, id).Scan(
-		&s.ID, &s.Nome, &s.INEP, &s.Municipio, &s.Dre, &s.Zona, &s.Endereco, 
+		&s.ID, &s.Nome, &s.INEP, &s.Municipio, &s.Dre, &s.Zona, &s.Endereco,
 		&s.CNPJ, &s.Telefone, &s.Email, &s.CEP,
 		&s.NomeDiretor, &s.MatriculaDiretor, &s.ContatoDiretor,
 		&turnos, &etapas, &modalidades,
@@ -155,9 +157,15 @@ func (m *SchoolModel) Get(id int) (*School, error) {
 		return nil, err
 	}
 
-	if turnos != "" { s.Turnos = json.RawMessage([]byte(turnos)) }
-	if etapas != "" { s.EtapasOfertadas = json.RawMessage([]byte(etapas)) }
-	if modalidades != "" { s.ModalidadesOfertadas = json.RawMessage([]byte(modalidades)) }
+	if turnos != "" {
+		s.Turnos = json.RawMessage([]byte(turnos))
+	}
+	if etapas != "" {
+		s.EtapasOfertadas = json.RawMessage([]byte(etapas))
+	}
+	if modalidades != "" {
+		s.ModalidadesOfertadas = json.RawMessage([]byte(modalidades))
+	}
 
 	return &s, nil
 }
@@ -183,7 +191,7 @@ func (m *SchoolModel) GetAll() ([]*School, error) {
 		var s School
 		var turnos, etapas, modalidades string
 		err := rows.Scan(
-			&s.ID, &s.Nome, &s.INEP, &s.Municipio, &s.Dre, &s.Zona, &s.Endereco, 
+			&s.ID, &s.Nome, &s.INEP, &s.Municipio, &s.Dre, &s.Zona, &s.Endereco,
 			&s.CNPJ, &s.Telefone, &s.Email, &s.CEP,
 			&s.NomeDiretor, &s.MatriculaDiretor, &s.ContatoDiretor,
 			&turnos, &etapas, &modalidades,
@@ -192,11 +200,17 @@ func (m *SchoolModel) GetAll() ([]*School, error) {
 		if err != nil {
 			return nil, err
 		}
-		
-		if turnos != "" { s.Turnos = json.RawMessage([]byte(turnos)) }
-		if etapas != "" { s.EtapasOfertadas = json.RawMessage([]byte(etapas)) }
-		if modalidades != "" { s.ModalidadesOfertadas = json.RawMessage([]byte(modalidades)) }
-		
+
+		if turnos != "" {
+			s.Turnos = json.RawMessage([]byte(turnos))
+		}
+		if etapas != "" {
+			s.EtapasOfertadas = json.RawMessage([]byte(etapas))
+		}
+		if modalidades != "" {
+			s.ModalidadesOfertadas = json.RawMessage([]byte(modalidades))
+		}
+
 		schools = append(schools, &s)
 	}
 

@@ -17,7 +17,7 @@ type PessoalEstrutura struct {
 
 // PessoalCoordenacao é o payload de GET /v1/admin/analytics/pessoal-gestao/coordenacao.
 type PessoalCoordenacao struct {
-	PorArea       []CategoricStat `json:"por_area"`
+	PorArea        []CategoricStat `json:"por_area"`
 	CoberturaMedia float64         `json:"cobertura_media"`
 }
 
@@ -238,12 +238,12 @@ type QuadroPessoalDRE struct {
 }
 
 type QuadroPessoal struct {
-	TotalEfetivos        float64              `json:"total_professores_efetivos"`
-	TotalTemporarios     float64              `json:"total_professores_temporarios"`
-	TotalAdministrativos float64              `json:"total_servidores_administrativos"`
-	TotalReadaptados     float64              `json:"total_professores_readaptados"`
-	MediaPorEscola       QuadroPessoalMedias  `json:"media_por_escola"`
-	PorDRE               []QuadroPessoalDRE   `json:"por_dre"`
+	TotalEfetivos        float64             `json:"total_professores_efetivos"`
+	TotalTemporarios     float64             `json:"total_professores_temporarios"`
+	TotalAdministrativos float64             `json:"total_servidores_administrativos"`
+	TotalReadaptados     float64             `json:"total_professores_readaptados"`
+	MediaPorEscola       QuadroPessoalMedias `json:"media_por_escola"`
+	PorDRE               []QuadroPessoalDRE  `json:"por_dre"`
 }
 
 // AdminAnalyticsPessoalQuadro retorna indicadores quantitativos do quadro de pessoal.
@@ -350,20 +350,20 @@ type MediaEquipamentoStat struct {
 }
 
 type TecnologiaInfra struct {
-	EscolasComInternet         int64                    `json:"escolas_com_internet"`
-	PercentualInternet         float64                  `json:"percentual_internet"`
-	DisponibilidadeInternet    []CategoricStat          `json:"disponibilidade_internet"`
-	PorProvedor                []CategoricStat          `json:"por_provedor"`
-	PorQualidade               []CategoricStat          `json:"por_qualidade"`
-	TotalDesktopsAdm           float64                  `json:"total_desktops_adm"`
-	TotalDesktopsAlunos        float64                  `json:"total_desktops_alunos"`
-	TotalNotebooks             float64                  `json:"total_notebooks"`
-	TotalChromebooks           float64                  `json:"total_chromebooks"`
-	MediaEquipamentos          []MediaEquipamentoStat   `json:"media_equipamentos_por_escola"`
-	EscolasComInoperantes      int64                    `json:"escolas_com_computadores_inoperantes"`
-	TotalInoperantes           float64                  `json:"total_computadores_inoperantes"`
-	PercentualAtendeDemanda    float64                  `json:"percentual_computadores_atendem"`
-	ComputadoresAtendemDemanda []CategoricStat          `json:"computadores_atendem_demanda"`
+	EscolasComInternet         int64                  `json:"escolas_com_internet"`
+	PercentualInternet         float64                `json:"percentual_internet"`
+	DisponibilidadeInternet    []CategoricStat        `json:"disponibilidade_internet"`
+	PorProvedor                []CategoricStat        `json:"por_provedor"`
+	PorQualidade               []CategoricStat        `json:"por_qualidade"`
+	TotalDesktopsAdm           float64                `json:"total_desktops_adm"`
+	TotalDesktopsAlunos        float64                `json:"total_desktops_alunos"`
+	TotalNotebooks             float64                `json:"total_notebooks"`
+	TotalChromebooks           float64                `json:"total_chromebooks"`
+	MediaEquipamentos          []MediaEquipamentoStat `json:"media_equipamentos_por_escola"`
+	EscolasComInoperantes      int64                  `json:"escolas_com_computadores_inoperantes"`
+	TotalInoperantes           float64                `json:"total_computadores_inoperantes"`
+	PercentualAtendeDemanda    float64                `json:"percentual_computadores_atendem"`
+	ComputadoresAtendemDemanda []CategoricStat        `json:"computadores_atendem_demanda"`
 }
 
 type TecnologiaUso struct {
@@ -694,19 +694,19 @@ func (app *application) AdminAnalyticsTecnologiaUso(w http.ResponseWriter, r *ht
 
 // PessoalEscolaRow é uma linha da tabela escola-a-escola de Pessoal e Gestão Escolar.
 type PessoalEscolaRow struct {
-	CodigoINEP                    string `json:"codigo_inep"`
-	NomeEscola                    string `json:"nome_escola"`
-	DRE                           string `json:"dre"`
-	Municipio                     string `json:"municipio"`
-	Zona                          string `json:"zona"`
-	RegiaoIntegracao              string `json:"regiao_integracao"`
-	HasCenso                      bool   `json:"has_censo"`
-	NomeDiretor                   string `json:"nome_diretor"`
-	PossuiDirecao                 string `json:"possui_direcao"`
-	PossuiCoordPedagogico         string `json:"possui_coord_pedagogico"`
-	QtdProfessoresEfetivos        string `json:"qtd_professores_efetivos"`
-	QtdProfessoresTemporarios     string `json:"qtd_professores_temporarios"`
-	QtdServidoresAdministrativos  string `json:"qtd_servidores_administrativos"`
+	CodigoINEP                   string `json:"codigo_inep"`
+	NomeEscola                   string `json:"nome_escola"`
+	DRE                          string `json:"dre"`
+	Municipio                    string `json:"municipio"`
+	Zona                         string `json:"zona"`
+	RegiaoIntegracao             string `json:"regiao_integracao"`
+	HasCenso                     bool   `json:"has_censo"`
+	NomeDiretor                  string `json:"nome_diretor"`
+	PossuiDirecao                string `json:"possui_direcao"`
+	PossuiCoordPedagogico        string `json:"possui_coord_pedagogico"`
+	QtdProfessoresEfetivos       string `json:"qtd_professores_efetivos"`
+	QtdProfessoresTemporarios    string `json:"qtd_professores_temporarios"`
+	QtdServidoresAdministrativos string `json:"qtd_servidores_administrativos"`
 }
 
 // PessoalEscolasPayload é o envelope de resposta de GET /admin/analytics/pessoal-gestao/escolas.

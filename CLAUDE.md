@@ -11,7 +11,7 @@ Censo Operacional e Estrutural das Escolas — a census system for SEDUC-PA (Sec
 ### Backend (`/api`)
 ```bash
 # Run development server (requires DB running)
-go run ./cmd/api/main.go
+go run ./cmd/api
 
 # Generate bcrypt password hash for ADMIN_PASSWORD_HASH
 go run ./cmd/genpasswd/main.go

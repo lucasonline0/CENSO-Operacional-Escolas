@@ -146,7 +146,9 @@ func (s *SheetsService) AppendCenso(censo models.CensusResponse, school models.S
 	}
 
 	formatJsonField := func(raw json.RawMessage) string {
-		if len(raw) == 0 { return "" }
+		if len(raw) == 0 {
+			return ""
+		}
 		var arr []string
 		if err := json.Unmarshal(raw, &arr); err == nil {
 			return strings.Join(arr, ", ")
@@ -302,30 +304,36 @@ func (s *SheetsService) AppendCenso(censo models.CensusResponse, school models.S
 // 24:total_alunos 25:alunos_pcd 26:alunos_rural 27:alunos_urbana
 
 const (
-	colDre       = 3
-	colNome      = 4
-	colINEP      = 5
-	colZona      = 11
-	colEtapas    = 17
-	colModalidades = 18
-	colSalas     = 19
-	colTurnosManha = 20
-	colTurnosTarde = 21
-	colTurnosNoite = 22
+	colDre            = 3
+	colNome           = 4
+	colINEP           = 5
+	colZona           = 11
+	colEtapas         = 17
+	colModalidades    = 18
+	colSalas          = 19
+	colTurnosManha    = 20
+	colTurnosTarde    = 21
+	colTurnosNoite    = 22
 	colTurnosIntegral = 23
-	colTotalAlunos = 24
-	colAlunosPCD = 25
+	colTotalAlunos    = 24
+	colAlunosPCD      = 25
 )
 
 // PorteLabel categoriza a escola pelo número de alunos, igual ao Looker Studio.
 func PorteLabel(alunos int) string {
 	switch {
-	case alunos <= 50:   return "0–50"
-	case alunos <= 150:  return "50–150"
-	case alunos <= 300:  return "150–300"
-	case alunos <= 500:  return "300–500"
-	case alunos <= 1000: return "500–1.000"
-	default:             return "1.000+"
+	case alunos <= 50:
+		return "0–50"
+	case alunos <= 150:
+		return "50–150"
+	case alunos <= 300:
+		return "150–300"
+	case alunos <= 500:
+		return "300–500"
+	case alunos <= 1000:
+		return "500–1.000"
+	default:
+		return "1.000+"
 	}
 }
 
@@ -342,25 +350,29 @@ type PorteStat struct {
 	Alunos int    `json:"alunos"`
 }
 type DreStat struct {
-	Dre    string `json:"dre"`
-	Escolas int   `json:"escolas"`
-	Alunos int    `json:"alunos"`
-	Salas  int    `json:"salas"`
+	Dre     string `json:"dre"`
+	Escolas int    `json:"escolas"`
+	Alunos  int    `json:"alunos"`
+	Salas   int    `json:"salas"`
 }
 type SheetMetrics struct {
-	TotalEscolas        int         `json:"total_escolas"`
-	TotalAlunos         int         `json:"total_alunos"`
-	TotalAlunosPCD      int         `json:"total_alunos_pcd"`
-	MediaAlunosPorEscola float64    `json:"media_alunos_por_escola"`
-	PorZona             []ZonaStat  `json:"por_zona"`
-	PorPorte            []PorteStat `json:"por_porte"`
-	PorDre              []DreStat   `json:"por_dre"`
+	TotalEscolas         int         `json:"total_escolas"`
+	TotalAlunos          int         `json:"total_alunos"`
+	TotalAlunosPCD       int         `json:"total_alunos_pcd"`
+	MediaAlunosPorEscola float64     `json:"media_alunos_por_escola"`
+	PorZona              []ZonaStat  `json:"por_zona"`
+	PorPorte             []PorteStat `json:"por_porte"`
+	PorDre               []DreStat   `json:"por_dre"`
 }
 
 func toInt(v interface{}) int {
-	if v == nil { return 0 }
+	if v == nil {
+		return 0
+	}
 	s := strings.TrimSpace(fmt.Sprint(v))
-	if s == "" { return 0 }
+	if s == "" {
+		return 0
+	}
 	// Remove pontos de milhar que podem vir do Sheets
 	s = strings.ReplaceAll(s, ".", "")
 	s = strings.ReplaceAll(s, ",", "")
@@ -369,8 +381,12 @@ func toInt(v interface{}) int {
 }
 
 func cell(row []interface{}, idx int) string {
-	if idx >= len(row) { return "" }
-	if row[idx] == nil { return "" }
+	if idx >= len(row) {
+		return ""
+	}
+	if row[idx] == nil {
+		return ""
+	}
 	return strings.TrimSpace(fmt.Sprint(row[idx]))
 }
 
@@ -386,8 +402,8 @@ func (s *SheetsService) GetSheetMetrics() (*SheetMetrics, error) {
 
 	zonaCount := map[string]int{}
 	porteSchools := map[string]int{}
-	porteAlunos  := map[string]int{}
-	dreMap       := map[string]*DreStat{}
+	porteAlunos := map[string]int{}
+	dreMap := map[string]*DreStat{}
 
 	var totalAlunos, totalPCD, escolas int
 
@@ -399,21 +415,27 @@ func (s *SheetsService) GetSheetMetrics() (*SheetMetrics, error) {
 				continue // é header
 			}
 		}
-		if len(row) <= colINEP { continue }
-		if cell(row, colINEP) == "" { continue }
+		if len(row) <= colINEP {
+			continue
+		}
+		if cell(row, colINEP) == "" {
+			continue
+		}
 
-		dre  := cell(row, colDre)
+		dre := cell(row, colDre)
 		zona := cell(row, colZona)
 		alunos := toInt(cell(row, colTotalAlunos))
-		salas  := toInt(cell(row, colSalas))
-		pcd    := toInt(cell(row, colAlunosPCD))
+		salas := toInt(cell(row, colSalas))
+		pcd := toInt(cell(row, colAlunosPCD))
 
-		if zona == "" { zona = "Não informado" }
+		if zona == "" {
+			zona = "Não informado"
+		}
 		porte := PorteLabel(alunos)
 
 		escolas++
 		totalAlunos += alunos
-		totalPCD    += pcd
+		totalPCD += pcd
 		zonaCount[zona]++
 		porteSchools[porte]++
 		porteAlunos[porte] += alunos
@@ -424,7 +446,7 @@ func (s *SheetsService) GetSheetMetrics() (*SheetMetrics, error) {
 			}
 			dreMap[dre].Escolas++
 			dreMap[dre].Alunos += alunos
-			dreMap[dre].Salas  += salas
+			dreMap[dre].Salas += salas
 		}
 	}
 
@@ -443,8 +465,15 @@ func (s *SheetsService) GetSheetMetrics() (*SheetMetrics, error) {
 	}
 	for z, c := range zonaCount {
 		found := false
-		for _, zo := range zonaOrder { if zo == z { found = true; break } }
-		if !found { zonas = append(zonas, ZonaStat{Zona: z, Count: c}) }
+		for _, zo := range zonaOrder {
+			if zo == z {
+				found = true
+				break
+			}
+		}
+		if !found {
+			zonas = append(zonas, ZonaStat{Zona: z, Count: c})
+		}
 	}
 
 	// Porte (ordenado)
@@ -455,7 +484,9 @@ func (s *SheetsService) GetSheetMetrics() (*SheetMetrics, error) {
 
 	// DRE ordenado por escolas desc
 	dres := make([]DreStat, 0, len(dreMap))
-	for _, d := range dreMap { dres = append(dres, *d) }
+	for _, d := range dreMap {
+		dres = append(dres, *d)
+	}
 	sort.Slice(dres, func(i, j int) bool { return dres[i].Escolas > dres[j].Escolas })
 
 	return &SheetMetrics{
@@ -476,8 +507,8 @@ type BenefStat struct {
 	Count int    `json:"count"`
 }
 type AbandonoStat struct {
-	Faixa string  `json:"faixa"`
-	Count int     `json:"count"`
+	Faixa string `json:"faixa"`
+	Count int    `json:"count"`
 }
 type DreAbandonoStat struct {
 	Dre   string  `json:"dre"`
@@ -485,10 +516,10 @@ type DreAbandonoStat struct {
 	Count int     `json:"count"`
 }
 type IndicadoresMetrics struct {
-	EscolasRiscoFluxo    int               `json:"escolas_risco_fluxo"`
-	PorFaixaBenef        []BenefStat       `json:"por_faixa_benef"`
-	PorFaixaAbandono     []AbandonoStat    `json:"por_faixa_abandono"`
-	TopDreAbandono       []DreAbandonoStat `json:"top_dre_abandono"`
+	EscolasRiscoFluxo int               `json:"escolas_risco_fluxo"`
+	PorFaixaBenef     []BenefStat       `json:"por_faixa_benef"`
+	PorFaixaAbandono  []AbandonoStat    `json:"por_faixa_abandono"`
+	TopDreAbandono    []DreAbandonoStat `json:"top_dre_abandono"`
 }
 
 // findCol retorna o índice (0-based) do primeiro header que contenha algum dos padrões.
@@ -536,22 +567,26 @@ func (s *SheetsService) GetIndicadoresMetrics() (*IndicadoresMetrics, error) {
 	headers := resp.Values[0]
 
 	// Localiza colunas por nome (flexível)
-	colDre         := findCol(headers, "dre")
-	colBenef       := findCol(headers, "faixa_beneficiarios", "faixa_benef", "beneficiarios_faixa", "beneficiarios")
-	colFxAbandono  := findCol(headers, "faixa_abandono", "abandono_faixa")
-	colTxAbandono  := findCol(headers, "taxa_abandono", "tx_abandono", "abandono")
-	colRiscoFluxo  := findCol(headers, "flag_risco_fluxo", "risco_fluxo", "flag_fluxo", "risco_de_fluxo")
+	colDre := findCol(headers, "dre")
+	colBenef := findCol(headers, "faixa_beneficiarios", "faixa_benef", "beneficiarios_faixa", "beneficiarios")
+	colFxAbandono := findCol(headers, "faixa_abandono", "abandono_faixa")
+	colTxAbandono := findCol(headers, "taxa_abandono", "tx_abandono", "abandono")
+	colRiscoFluxo := findCol(headers, "flag_risco_fluxo", "risco_fluxo", "flag_fluxo", "risco_de_fluxo")
 
-	benefCount    := map[string]int{}
+	benefCount := map[string]int{}
 	abandonoCount := map[string]int{}
-	dreAbandono   := map[string][]float64{} // dre → lista de taxas
-	riscoFluxo    := 0
+	dreAbandono := map[string][]float64{} // dre → lista de taxas
+	riscoFluxo := 0
 
 	for _, row := range resp.Values[1:] {
-		if len(row) == 0 { continue }
+		if len(row) == 0 {
+			continue
+		}
 
 		dre := ""
-		if colDre >= 0 && colDre < len(row) { dre = strings.TrimSpace(fmt.Sprint(row[colDre])) }
+		if colDre >= 0 && colDre < len(row) {
+			dre = strings.TrimSpace(fmt.Sprint(row[colDre]))
+		}
 
 		// Faixa Beneficiários
 		if colBenef >= 0 && colBenef < len(row) {
@@ -598,8 +633,15 @@ func (s *SheetsService) GetIndicadoresMetrics() (*IndicadoresMetrics, error) {
 	// Adiciona faixas não previstas
 	for f, c := range benefCount {
 		known := false
-		for _, o := range benefOrder { if o == f { known = true; break } }
-		if !known { benefStats = append(benefStats, BenefStat{Faixa: f, Count: c}) }
+		for _, o := range benefOrder {
+			if o == f {
+				known = true
+				break
+			}
+		}
+		if !known {
+			benefStats = append(benefStats, BenefStat{Faixa: f, Count: c})
+		}
 	}
 
 	// Ordena faixas de abandono
@@ -611,14 +653,20 @@ func (s *SheetsService) GetIndicadoresMetrics() (*IndicadoresMetrics, error) {
 	// Top 10 DREs por taxa média de abandono
 	dreStats := make([]DreAbandonoStat, 0)
 	for dre, taxas := range dreAbandono {
-		if dre == "" || len(taxas) == 0 { continue }
+		if dre == "" || len(taxas) == 0 {
+			continue
+		}
 		sum := 0.0
-		for _, t := range taxas { sum += t }
+		for _, t := range taxas {
+			sum += t
+		}
 		media := math.Round((sum/float64(len(taxas)))*100) / 100
 		dreStats = append(dreStats, DreAbandonoStat{Dre: dre, Media: media, Count: len(taxas)})
 	}
 	sort.Slice(dreStats, func(i, j int) bool { return dreStats[i].Media > dreStats[j].Media })
-	if len(dreStats) > 10 { dreStats = dreStats[:10] }
+	if len(dreStats) > 10 {
+		dreStats = dreStats[:10]
+	}
 
 	return &IndicadoresMetrics{
 		EscolasRiscoFluxo: riscoFluxo,
@@ -650,11 +698,11 @@ func (s *SheetsService) ensureAndAppendDeficit(sheetTitle string, questionText s
 				},
 			},
 		}
-		
+
 		_, err := s.srv.Spreadsheets.BatchUpdate(s.censusSpreadsheetID, &sheets.BatchUpdateSpreadsheetRequest{
 			Requests: []*sheets.Request{addSheetReq},
 		}).Do()
-		
+
 		if err != nil {
 			return fmt.Errorf("erro ao criar aba %s: %v", sheetTitle, err)
 		}
@@ -676,6 +724,6 @@ func (s *SheetsService) ensureAndAppendDeficit(sheetTitle string, questionText s
 	}
 	vr := &sheets.ValueRange{Values: [][]interface{}{row}}
 	_, err = s.srv.Spreadsheets.Values.Append(s.censusSpreadsheetID, fmt.Sprintf("%s!A:A", sheetTitle), vr).ValueInputOption("RAW").Do()
-	
+
 	return err
 }

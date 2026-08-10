@@ -10,6 +10,7 @@ require (
 	github.com/xuri/excelize/v2 v2.10.0
 	golang.org/x/crypto v0.47.0
 	golang.org/x/oauth2 v0.34.0
+	golang.org/x/term v0.39.0
 	golang.org/x/text v0.33.0
 	google.golang.org/api v0.264.0
 )

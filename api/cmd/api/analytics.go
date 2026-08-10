@@ -465,6 +465,8 @@ WITH escolas AS (
       AND ($3 = '' OR e.municipio = $3)
       AND ($4 = '' OR e.zona = $4)
       AND ($5 = '' OR e.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
+	  AND ($6 = '' OR e.codigo_inep = $6)
+      AND ($7 = 0  OR e.school_id = $7)
     GROUP BY e.school_id
 ),
 essenciais(nome) AS (
@@ -561,6 +563,8 @@ func (app *application) AdminAnalyticsCaracterizacaoInfraEducacional(w http.Resp
 		  AND ($3 = '' OR a.municipio = $3)
 		  AND ($4 = '' OR a.zona = $4)
 		  AND ($5 = '' OR a.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
+		  AND ($6 = '' OR a.school_id IN (SELECT id FROM schools WHERE codigo_inep = $6))
+		  AND ($7 = 0  OR a.school_id = $7)
 		GROUP BY TRIM(a.ambiente)
 		ORDER BY escolas DESC, label
 	`, f.Args()...)
@@ -794,6 +798,8 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 			  AND ($3 = '' OR s.municipio = $3)
 			  AND ($4 = '' OR s.zona = $4)
 			  AND ($5 = '' OR s.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
+			  AND ($6 = '' OR s.codigo_inep = $6)
+			  AND ($7 = 0  OR s.id = $7)
 		),
 		total AS (
 			SELECT COUNT(DISTINCT school_id)::numeric AS n FROM completed
@@ -852,6 +858,8 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 			  AND ($3 = '' OR s.municipio = $3)
 			  AND ($4 = '' OR s.zona = $4)
 			  AND ($5 = '' OR s.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
+			  AND ($6 = '' OR s.codigo_inep = $6)
+			  AND ($7 = 0  OR s.id = $7)
 		),
 		total AS (
 			SELECT COUNT(DISTINCT school_id)::numeric AS n FROM completed
@@ -910,6 +918,8 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 			  AND ($3 = '' OR s.municipio = $3)
 			  AND ($4 = '' OR s.zona = $4)
 			  AND ($5 = '' OR s.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
+			  AND ($6 = '' OR s.codigo_inep = $6)
+			  AND ($7 = 0  OR s.id = $7)
 		),
 		total AS (
 			SELECT COUNT(*)::numeric AS n FROM completed
@@ -976,6 +986,8 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 			  AND ($3 = '' OR s.municipio = $3)
 			  AND ($4 = '' OR s.zona = $4)
 			  AND ($5 = '' OR s.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
+			  AND ($6 = '' OR s.codigo_inep = $6)
+			  AND ($7 = 0  OR s.id = $7)
 		),
 		turnos_por_escola AS (
 			SELECT c.school_id,
@@ -1108,6 +1120,8 @@ const caracterizacaoEscolasSelectSQL = `
 	        FROM reg_integracao
 	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
 	      ))
+	  AND ($6 = '' OR s.codigo_inep = $6)
+	  AND ($7 = 0  OR s.id = $7)
 	ORDER BY UPPER(TRIM(s.dre)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
 `
 
@@ -1147,8 +1161,7 @@ func (app *application) AdminAnalyticsCaracterizacaoEscolas(w http.ResponseWrite
 	direction := parseEscolasDirection(q.Get("direction"))
 
 	ctx := r.Context()
-	dbRows, err := app.models.Schools.DB.QueryContext(ctx, caracterizacaoEscolasSelectSQL,
-		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao)
+	dbRows, err := app.models.Schools.DB.QueryContext(ctx, caracterizacaoEscolasSelectSQL, f.Args()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("caracterizacao escolas: %w", err), http.StatusInternalServerError)
 		return

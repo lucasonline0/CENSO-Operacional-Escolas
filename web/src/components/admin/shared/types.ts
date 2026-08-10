@@ -517,6 +517,7 @@ export interface FiltrosOpcoes {
   dres: string[];
   municipios: string[]; 
   zonas: string[];
+  codigo_inep: string[];
   escolas: FiltrosEscolaItem[];
 }
 

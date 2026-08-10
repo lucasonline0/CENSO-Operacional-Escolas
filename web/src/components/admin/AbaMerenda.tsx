@@ -29,6 +29,9 @@ function buildFilterParams(filters?: DashboardFilters): string {
   if (filters.dre) p.set("dre", filters.dre);
   if (filters.municipio) p.set("municipio", filters.municipio);
   if (filters.zona) p.set("zona", filters.zona);
+
+  if (filters.school_id) p.set("school_id", String(filters.school_id));
+  if (filters.codigo_inep) p.set("codigo_inep", filters.codigo_inep);
   const s = p.toString();
   return s ? `?${s}` : "";
 }

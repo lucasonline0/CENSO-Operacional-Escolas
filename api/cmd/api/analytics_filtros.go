@@ -19,6 +19,8 @@ type AnalyticsFilters struct {
 	Municipio        string
 	Zona             string
 	RegiaoIntegracao string
+	CodigoINEP       string
+	SchoolID         int
 }
 
 func parseAnalyticsFilters(r *http.Request) AnalyticsFilters {
@@ -37,6 +39,11 @@ func parseAnalyticsFiltersFromValues(q url.Values, now time.Time) AnalyticsFilte
 		Zona:             strings.TrimSpace(q.Get("zona")),
 		RegiaoIntegracao: strings.TrimSpace(q.Get("regiao_integracao")),
 	}
+
+	if sid, err := strconv.Atoi(strings.TrimSpace(q.Get("school_id"))); err == nil && sid > 0 {
+		f.SchoolID = sid
+	}
+
 	if y, err := strconv.Atoi(strings.TrimSpace(q.Get("year"))); err == nil && y > 0 {
 		f.Year = y
 	}
@@ -58,12 +65,14 @@ func (f AnalyticsFilters) WhereSQL() string {
         SELECT UPPER(TRIM(municipio))
         FROM reg_integracao
         WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
-      ))`
+      ))
+	  AND ($6 = '' OR codigo_inep = $6)
+      AND ($7 = 0  OR school_id = $7)`
 }
 
 // Args returns the five positional arguments that match WhereSQL in order.
 func (f AnalyticsFilters) Args() []any {
-	return []any{f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao}
+	return []any{f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.CodigoINEP, f.SchoolID}
 }
 
 func queryStringSlice(app *application, ctx context.Context, query string, args ...any) ([]string, error) {

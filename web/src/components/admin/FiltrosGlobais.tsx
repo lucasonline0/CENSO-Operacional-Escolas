@@ -7,33 +7,39 @@ import type { DashboardFilters, FiltrosOpcoes, FiltrosEscolaItem } from "./share
 
 const EMPTY: DashboardFilters = {};
 
-function SchoolSelect({
+function SearchSelect<T>({
   label,
   value,
-  escolas = [],
+  options = [],
   onChange,
+  placeholder = "Todas",
+  getOptionLabel,
+  getOptionValue,
+  getOptionSubtext,
 }: {
   label: string;
-  value: number | undefined;
-  escolas: FiltrosEscolaItem[];
+  value: string | number | undefined;
+  options: T[];
   onChange: (v: string) => void;
+  placeholder?: string;
+  getOptionLabel: (option: T) => string;
+  getOptionValue: (option: T) => string | number;
+  getOptionSubtext?: (option: T) => string | undefined;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const selected = escolas.find((e) => Number(e.school_id) === Number(value));
-  const [query, setQuery] = useState(selected?.nome_escola ?? "");
+  
+  const selected = options.find((opt) => String(getOptionValue(opt)) === String(value));
+  
+  const [query, setQuery] = useState(selected ? getOptionLabel(selected) : "");
   const containerRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
-  if (value === undefined || value === null) {
-    setQuery("");
-  } else if (selected) {
-    setQuery(selected.nome_escola);
-  }
-}, [value, selected]);
-
-  React.useEffect(() => {
-    setQuery(selected?.nome_escola ?? "");
-  }, [value, selected]);
+    if (value === undefined || value === null || value === "") {
+      setQuery("");
+    } else if (selected) {
+      setQuery(getOptionLabel(selected));
+    }
+  }, [value, selected, getOptionLabel]);
 
   React.useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -45,12 +51,12 @@ function SchoolSelect({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filtered = escolas.filter((e) => {
-    const nome = (e?.nome_escola || "").toLowerCase();
-    const inep = e?.codigo_inep || "";
+  const filtered = options.filter((opt) => {
+    const labelText = getOptionLabel(opt).toLowerCase();
+    const subText = getOptionSubtext ? (getOptionSubtext(opt) || "").toLowerCase() : "";
     const term = query.toLowerCase();
 
-    return nome.includes(term) || inep.includes(term);
+    return labelText.includes(term) || subText.includes(term);
   });
 
   return (
@@ -62,7 +68,7 @@ function SchoolSelect({
       <div className="relative flex items-center">
         <input
           type="text"
-          placeholder="Todas"
+          placeholder={placeholder}
           value={query}
           onFocus={() => setIsOpen(true)}
           onChange={(e) => {
@@ -96,7 +102,7 @@ function SchoolSelect({
       </div>
 
       {isOpen && (
-        <div className="absolute top-full left-0 z-50 mt-1 w-96 max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg flex flex-col gap-0.5">
+        <div className="absolute top-full left-0 z-50 mt-1 w-80 max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg flex flex-col gap-0.5">
           <button
             type="button"
             onMouseDown={(e) => {
@@ -112,19 +118,23 @@ function SchoolSelect({
 
           {filtered.length === 0 ? (
             <div className="px-2.5 py-2 text-xs text-slate-400 text-center">
-              Nenhuma escola encontrada
+              Nenhuma opção encontrada
             </div>
           ) : (
-            filtered.map((e) => {
-              const isSelected = Number(e.school_id) === Number(value);
+            filtered.map((opt, index) => {
+              const optValue = getOptionValue(opt);
+              const optLabel = getOptionLabel(opt);
+              const optSubtext = getOptionSubtext?.(opt);
+              const isSelected = String(optValue) === String(value);
+
               return (
                 <button
-                  key={e.school_id}
+                  key={`${optValue}-${index}`}
                   type="button"
                   onMouseDown={(eEvent) => {
                     eEvent.preventDefault();
-                    onChange(String(e.school_id));
-                    setQuery(e.nome_escola);
+                    onChange(String(optValue));
+                    setQuery(optLabel);
                     setIsOpen(false);
                   }}
                   className={`w-full rounded px-2.5 py-1.5 text-left text-xs transition-colors ${
@@ -133,10 +143,10 @@ function SchoolSelect({
                       : "text-slate-800 hover:bg-slate-100 hover:text-slate-900"
                   }`}
                 >
-                  <div className="truncate">{e.nome_escola}</div>
-                  {e.codigo_inep && (
+                  <div className="truncate font-medium">{optLabel}</div>
+                  {optSubtext && (
                     <div className="text-[10px] text-slate-400 truncate">
-                      INEP: {e.codigo_inep}
+                      {optSubtext}
                     </div>
                   )}
                 </button>
@@ -205,7 +215,7 @@ export function FiltrosGlobais({
     [filters],
   );
 
-  // Lista de códigos INEP (sem nulos ou duplicatas)
+  // Lista de codigos INEP (sem nulos ou código dupos)
 
   const inepOptions = useMemo(() => {
 
@@ -305,10 +315,13 @@ export function FiltrosGlobais({
           options={opcoes?.zonas ?? []}
           onChange={(v) => set("zona", v)}
         />
-        <SchoolSelect
-          label="Nome da Escola"
+        <SearchSelect
+          label="Nome da escola ou INEP"
           value={filters.school_id}
-          escolas={opcoes?.escolas ?? []}
+          options={opcoes?.escolas ?? []}
+          getOptionLabel={(e) => e.nome_escola}
+          getOptionValue={(e) => e.school_id}
+          getOptionSubtext={(e) => e.codigo_inep ? `INEP: ${e.codigo_inep}` : undefined}
           onChange={(v) => set("school_id", v)}
         />
       </div>
@@ -337,6 +350,12 @@ export function FiltrosGlobais({
                 opcoes?.escolas.find((e) => e.school_id === filters.school_id)?.nome_escola ?? filters.school_id
               }`}
               onRemove={() => set("school_id", "")}
+            />
+          )}
+          {filters.codigo_inep && (
+            <ActiveTag
+              label={`INEP: ${filters.codigo_inep}`}
+              onRemove={() => set("codigo_inep", "")}
             />
           )}
         </div>

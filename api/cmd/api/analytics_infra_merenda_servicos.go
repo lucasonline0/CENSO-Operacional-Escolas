@@ -347,7 +347,7 @@ func (app *application) AdminAnalyticsInfraCondicoes(w http.ResponseWriter, r *h
 				 ELSE 0
 			END::float8
 		FROM por_escola
-	`, f.Args()...).Scan(&out.PctCoberturaPlena)
+	`, f.LegacyArgs()...).Scan(&out.PctCoberturaPlena)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("pct_cobertura_plena: %v", err), http.StatusInternalServerError)
 		return

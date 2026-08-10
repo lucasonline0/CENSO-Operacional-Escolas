@@ -19,9 +19,13 @@ type AnalyticsFilters struct {
 	Municipio        string
 	Zona             string
 	RegiaoIntegracao string
+	SchoolID         int
+	CodigoINEP       string
 }
 
 func parseAnalyticsFilters(r *http.Request) AnalyticsFilters {
+	// TODO(#157): constrain f.DRE from the authenticated AdminAccessScope here
+	// (or immediately after this call), never from a query-string authorization claim.
 	return parseAnalyticsFiltersFromValues(r.URL.Query(), time.Now())
 }
 
@@ -36,16 +40,21 @@ func parseAnalyticsFiltersFromValues(q url.Values, now time.Time) AnalyticsFilte
 		Municipio:        strings.TrimSpace(q.Get("municipio")),
 		Zona:             strings.TrimSpace(q.Get("zona")),
 		RegiaoIntegracao: strings.TrimSpace(q.Get("regiao_integracao")),
+		CodigoINEP:       strings.TrimSpace(q.Get("codigo_inep")),
 	}
 	if y, err := strconv.Atoi(strings.TrimSpace(q.Get("year"))); err == nil && y > 0 {
 		f.Year = y
+	}
+	if schoolID, err := strconv.Atoi(strings.TrimSpace(q.Get("school_id"))); err == nil && schoolID > 0 {
+		f.SchoolID = schoolID
 	}
 	return f
 }
 
 // WhereSQL returns a parameterized WHERE fragment (no table alias prefix).
-// $1=year, $2=dre, $3=municipio, $4=zona, $5=regiao_integracao.
-// Empty string params disable the corresponding filter.
+// $1=year, $2=dre, $3=municipio, $4=zona, $5=regiao_integracao,
+// $6=school_id and $7=codigo_inep. Empty strings and school_id zero disable
+// the corresponding optional filters.
 // Pair with Args() to get the matching positional arguments.
 func (f AnalyticsFilters) WhereSQL() string {
 	return `status = 'completed'
@@ -58,12 +67,21 @@ func (f AnalyticsFilters) WhereSQL() string {
         SELECT UPPER(TRIM(municipio))
         FROM reg_integracao
         WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
-      ))`
+      ))
+      AND ($6 = 0 OR school_id = $6)
+      AND ($7 = '' OR UPPER(TRIM(codigo_inep)) = UPPER(TRIM($7)))`
 }
 
-// Args returns the five positional arguments that match WhereSQL in order.
+// Args returns the positional arguments that match WhereSQL in order.
 func (f AnalyticsFilters) Args() []any {
-	return []any{f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao}
+	return []any{f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP}
+}
+
+// LegacyArgs preserves the original five-argument contract for bespoke
+// analytics queries that do not use WhereSQL. Those endpoints intentionally
+// remain outside the shared filter infrastructure.
+func (f AnalyticsFilters) LegacyArgs() []any {
+	return f.Args()[:5]
 }
 
 func queryStringSlice(app *application, ctx context.Context, query string, args ...any) ([]string, error) {
@@ -99,6 +117,30 @@ type FiltrosOpcoes struct {
 	Municipios        []string            `json:"municipios"`
 	Zonas             []string            `json:"zonas"`
 	Escolas           []FiltrosEscolaItem `json:"escolas"`
+	CodigosINEP       []string            `json:"codigos_inep"`
+}
+
+// filtrosOpcoesSchoolsWhere returns a parameterized predicate over schools.
+// except excludes the option currently being populated from its own cascade.
+func filtrosOpcoesSchoolsWhere(f AnalyticsFilters, alias, except string) (string, []any) {
+	conditions := make([]string, 0, 6)
+	args := make([]any, 0, 6)
+	add := func(key, condition string, arg any) {
+		if key == except {
+			return
+		}
+		args = append(args, arg)
+		conditions = append(conditions, fmt.Sprintf(condition, len(args), len(args)))
+	}
+
+	add("dre", "($%d = '' OR UPPER(TRIM("+alias+".dre)) = UPPER(TRIM($%d)))", f.DRE)
+	add("municipio", "($%d = '' OR UPPER(TRIM("+alias+".municipio)) = UPPER(TRIM($%d)))", f.Municipio)
+	add("zona", "($%d = '' OR UPPER(TRIM("+alias+".zona)) = UPPER(TRIM($%d)))", f.Zona)
+	add("regiao_integracao", "($%d = '' OR UPPER(TRIM("+alias+".municipio)) IN (SELECT UPPER(TRIM(municipio)) FROM reg_integracao WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($%d))))", f.RegiaoIntegracao)
+	add("school_id", "($%d = 0 OR "+alias+".id = $%d)", f.SchoolID)
+	add("codigo_inep", "($%d = '' OR UPPER(TRIM("+alias+".codigo_inep)) = UPPER(TRIM($%d)))", f.CodigoINEP)
+
+	return strings.Join(conditions, "\n\t  AND "), args
 }
 
 // AdminAnalyticsFiltrosOpcoes retorna as listas para popular os selects
@@ -127,63 +169,60 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 	}
 
 	// Regiões: filtradas por dre, municipio, zona (não pela própria regiao)
+	regioesWhere, regioesArgs := filtrosOpcoesSchoolsWhere(f, "s", "regiao_integracao")
 	regioes, err := queryStringSlice(app, ctx, `
 		SELECT DISTINCT r.regiao_de_integracao
 		FROM reg_integracao r
-		JOIN schools s ON s.municipio = r.municipio
-		WHERE ($1 = '' OR s.dre = $1)
-		  AND ($2 = '' OR s.municipio = $2)
-		  AND ($3 = '' OR s.zona = $3)
+		JOIN schools s ON UPPER(TRIM(s.municipio)) = UPPER(TRIM(r.municipio))
+		WHERE `+regioesWhere+`
 		ORDER BY 1
-	`, f.DRE, f.Municipio, f.Zona)
+	`, regioesArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("regioes_integracao: %w", err), http.StatusInternalServerError)
 		return
 	}
 
 	// DREs: filtradas por municipio, zona, regiao (não pela própria dre)
+	dresWhere, dresArgs := filtrosOpcoesSchoolsWhere(f, "s", "dre")
 	dres, err := queryStringSlice(app, ctx, `
 		SELECT DISTINCT COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado') AS dre
 		FROM schools s
-		WHERE ($1 = '' OR s.municipio = $1)
-		  AND ($2 = '' OR s.zona = $2)
-		  AND ($3 = '' OR s.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $3))
+		WHERE `+dresWhere+`
 		ORDER BY 1
-	`, f.Municipio, f.Zona, f.RegiaoIntegracao)
+	`, dresArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("dres: %w", err), http.StatusInternalServerError)
 		return
 	}
 
 	// Municípios: filtrados por dre, zona, regiao (não pelo próprio municipio)
+	municipiosWhere, municipiosArgs := filtrosOpcoesSchoolsWhere(f, "s", "municipio")
 	municipios, err := queryStringSlice(app, ctx, `
 		SELECT DISTINCT COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado') AS municipio
 		FROM schools s
-		WHERE ($1 = '' OR s.dre = $1)
-		  AND ($2 = '' OR s.zona = $2)
-		  AND ($3 = '' OR s.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $3))
+		WHERE `+municipiosWhere+`
 		ORDER BY 1
-	`, f.DRE, f.Zona, f.RegiaoIntegracao)
+	`, municipiosArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("municipios: %w", err), http.StatusInternalServerError)
 		return
 	}
 
 	// Zonas: filtradas por dre, municipio, regiao (não pela própria zona)
+	zonasWhere, zonasArgs := filtrosOpcoesSchoolsWhere(f, "s", "zona")
 	zonas, err := queryStringSlice(app, ctx, `
 		SELECT DISTINCT s.zona
 		FROM schools s
 		WHERE s.zona IS NOT NULL AND TRIM(s.zona) <> ''
-		  AND ($1 = '' OR s.dre = $1)
-		  AND ($2 = '' OR s.municipio = $2)
-		  AND ($3 = '' OR s.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $3))
+		  AND `+zonasWhere+`
 		ORDER BY 1
-	`, f.DRE, f.Municipio, f.RegiaoIntegracao)
+	`, zonasArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("zonas: %w", err), http.StatusInternalServerError)
 		return
 	}
 
+	escolasWhere, escolasArgs := filtrosOpcoesSchoolsWhere(f, "s", "school_id")
 	rows, err := app.models.Schools.DB.QueryContext(ctx, `
 		SELECT
 			id,
@@ -192,9 +231,10 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 			COALESCE(NULLIF(TRIM(municipio), ''), 'Não informado') AS municipio,
 			COALESCE(NULLIF(TRIM(dre), ''), 'Não informado') AS dre,
 			zona
-		FROM schools
+		FROM schools s
+		WHERE `+escolasWhere+`
 		ORDER BY nome_escola
-	`)
+	`, escolasArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("escolas: %w", err), http.StatusInternalServerError)
 		return
@@ -222,6 +262,19 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 		return
 	}
 
+	codigosWhere, codigosArgs := filtrosOpcoesSchoolsWhere(f, "s", "codigo_inep")
+	codigosINEP, err := queryStringSlice(app, ctx, `
+		SELECT DISTINCT TRIM(s.codigo_inep)
+		FROM schools s
+		WHERE s.codigo_inep IS NOT NULL AND TRIM(s.codigo_inep) <> ''
+		  AND `+codigosWhere+`
+		ORDER BY 1
+	`, codigosArgs...)
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("codigos_inep: %w", err), http.StatusInternalServerError)
+		return
+	}
+
 	out := FiltrosOpcoes{
 		Anos:              anosInt,
 		RegioesIntegracao: regioes,
@@ -229,6 +282,7 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 		Municipios:        municipios,
 		Zonas:             zonas,
 		Escolas:           escolas,
+		CodigosINEP:       codigosINEP,
 	}
 
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: out})

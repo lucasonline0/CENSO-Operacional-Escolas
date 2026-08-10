@@ -538,7 +538,7 @@ func (app *application) AdminAnalyticsCaracterizacaoInfraEducacional(w http.Resp
 				 ELSE 0
 			END::float8                                                        AS pct_plena
 		FROM por_escola
-	`, f.Args()...).Scan(
+	`, f.LegacyArgs()...).Scan(
 		&totalEscolas,
 		&out.CoberturaEssenciais.MediaAmbientesEssenciais,
 		&out.CoberturaEssenciais.PctCoberturaPlena,
@@ -563,7 +563,7 @@ func (app *application) AdminAnalyticsCaracterizacaoInfraEducacional(w http.Resp
 		  AND ($5 = '' OR a.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
 		GROUP BY TRIM(a.ambiente)
 		ORDER BY escolas DESC, label
-	`, f.Args()...)
+	`, f.LegacyArgs()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro na presença de ambientes: %v", err), http.StatusInternalServerError)
 		return
@@ -601,7 +601,7 @@ func (app *application) AdminAnalyticsCaracterizacaoInfraEducacional(w http.Resp
 			COUNT(*)      AS escolas
 		FROM por_escola
 		GROUP BY 1
-	`, f.Args()...)
+	`, f.LegacyArgs()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro nas faixas de cobertura: %v", err), http.StatusInternalServerError)
 		return
@@ -642,7 +642,7 @@ func (app *application) AdminAnalyticsCaracterizacaoInfraEducacional(w http.Resp
 		FROM por_escola
 		GROUP BY porte_nome
 		ORDER BY ord
-	`, f.Args()...)
+	`, f.LegacyArgs()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro na média por porte: %v", err), http.StatusInternalServerError)
 		return
@@ -821,7 +821,7 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 		CROSS JOIN total t
 		GROUP BY ex.etapa, t.n
 		ORDER BY escolas DESC, label
-	`, f.Args()...)
+	`, f.LegacyArgs()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro em etapas_ofertadas: %v", err), http.StatusInternalServerError)
 		return
@@ -879,7 +879,7 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 		CROSS JOIN total t
 		GROUP BY ex.modalidade, t.n
 		ORDER BY escolas DESC, label
-	`, f.Args()...)
+	`, f.LegacyArgs()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro em modalidades_ofertadas: %v", err), http.StatusInternalServerError)
 		return
@@ -944,7 +944,7 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 		CROSS JOIN total t
 		GROUP BY ex.turno, t.n
 		ORDER BY escolas DESC, label
-	`, f.Args()...)
+	`, f.LegacyArgs()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro em turnos: %v", err), http.StatusInternalServerError)
 		return
@@ -1006,7 +1006,7 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 		 AND e.year      = $1
 		GROUP BY e.porte_escola_nome
 		ORDER BY ord
-	`, f.Args()...)
+	`, f.LegacyArgs()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro em media_turnos_por_porte: %v", err), http.StatusInternalServerError)
 		return

@@ -327,6 +327,7 @@ func (app *application) routes() http.Handler {
 		r.Post("/admin/login", app.AdminLogin)
 		r.Group(func(protected chi.Router) {
 			protected.Use(app.requireAdminAuth)
+			protected.Get("/admin/me", app.AdminMe)
 			protected.Get("/admin/dashboard", app.AdminDashboard)
 			protected.Get("/admin/sheet-metrics", app.AdminSheetMetrics)
 			protected.Get("/admin/indicadores-metrics", app.AdminIndicadoresMetrics)

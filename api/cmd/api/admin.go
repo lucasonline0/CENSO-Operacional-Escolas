@@ -148,6 +148,8 @@ func (app *application) requirePublicAPIKey(next http.Handler) http.Handler {
 
 type adminClaims struct {
 	Username string `json:"username"`
+	Role     string `json:"role"`
+	DRE      string `json:"dre,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -204,26 +206,54 @@ func (app *application) AdminLogin(w http.ResponseWriter, r *http.Request) {
 	adminUser := os.Getenv("ADMIN_USERNAME")
 	adminHash := os.Getenv("ADMIN_PASSWORD_HASH") // bcrypt hash
 
-	if adminUser == "" || adminHash == "" {
-		app.logger.Println("AVISO SEGURANÇA: ADMIN_USERNAME ou ADMIN_PASSWORD_HASH não definidos")
-		app.errorJSON(w, fmt.Errorf("autenticação não configurada no servidor"), http.StatusInternalServerError)
-		return
-	}
+	isEnvAdmin := adminUser != "" && adminHash != "" && req.Username == adminUser
 
-	// Always run bcrypt (even on wrong username) to prevent timing attacks
-	hashToCheck := adminHash
-	usernameOK := req.Username == adminUser
-	pwErr := bcrypt.CompareHashAndPassword([]byte(hashToCheck), []byte(req.Password))
+	var role string
+	var dre string
 
-	if !usernameOK || pwErr != nil {
-		// Artificial delay discourages automated brute force
-		time.Sleep(600 * time.Millisecond)
-		app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
-		return
+	if isEnvAdmin {
+		pwErr := bcrypt.CompareHashAndPassword([]byte(adminHash), []byte(req.Password))
+		if pwErr != nil {
+			time.Sleep(600 * time.Millisecond)
+			app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
+			return
+		}
+		role = RoleAdmin
+		dre = ""
+	} else {
+		// Busca usuário ativo no banco de dados (role=dre)
+		u, err := app.models.AdminUsers.GetActiveByUsername(r.Context(), req.Username)
+		if err != nil {
+			// Executa bcrypt fictício para mitigar ataques de tempo em usernames inexistentes
+			if adminHash != "" {
+				_ = bcrypt.CompareHashAndPassword([]byte(adminHash), []byte(req.Password))
+			}
+			time.Sleep(600 * time.Millisecond)
+			app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
+			return
+		}
+
+		pwErr := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password))
+		if pwErr != nil {
+			time.Sleep(600 * time.Millisecond)
+			app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
+			return
+		}
+
+		if u.Role != RoleDRE || strings.TrimSpace(u.DRE) == "" {
+			time.Sleep(600 * time.Millisecond)
+			app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
+			return
+		}
+
+		role = u.Role
+		dre = u.DRE
 	}
 
 	claims := adminClaims{
 		Username: req.Username,
+		Role:     role,
+		DRE:      dre,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(jwtExpiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -271,24 +301,61 @@ func (app *application) requireAdminAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), contextKeyAdminUser, claims.Username)
+		if claims.Role != RoleAdmin && claims.Role != RoleDRE {
+			app.errorJSON(w, fmt.Errorf("role desconhecida ou inválida"), http.StatusUnauthorized)
+			return
+		}
+
+		if claims.Role == RoleDRE && strings.TrimSpace(claims.DRE) == "" {
+			app.errorJSON(w, fmt.Errorf("token DRE sem DRE válida"), http.StatusUnauthorized)
+			return
+		}
+
+		scope := AdminAccessScope{
+			Username: claims.Username,
+			Role:     claims.Role,
+			DRE:      claims.DRE,
+		}
+
+		ctx := context.WithValue(r.Context(), contextKeyAdminScope, scope)
+		ctx = context.WithValue(ctx, contextKeyAdminUser, claims.Username)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-type contextKey string
+// AdminMe retorna os dados do perfil do usuário autenticado.
+func (app *application) AdminMe(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok {
+		app.errorJSON(w, fmt.Errorf("escopo de acesso não encontrado"), http.StatusUnauthorized)
+		return
+	}
 
-const contextKeyAdminUser contextKey = "admin_username"
+	var drePtr *string
+	if scope.Role == RoleDRE && scope.DRE != "" {
+		dreVal := scope.DRE
+		drePtr = &dreVal
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{
+		Error: false,
+		Data: map[string]interface{}{
+			"username": scope.Username,
+			"role":     scope.Role,
+			"dre":      drePtr,
+		},
+	})
+}
 
 // ─── Dashboard data types ─────────────────────────────────────────────────────
 
 type DashboardStats struct {
-	TotalSchools      int              `json:"total_schools"`
-	CompletedCensuses int              `json:"completed_censuses"`
-	DraftCensuses     int              `json:"draft_censuses"`
-	PendingSync       int              `json:"pending_sync"`
-	ByDre             []DreStats       `json:"by_dre"`
-	Recent            []CensusRow      `json:"recent"`
+	TotalSchools      int         `json:"total_schools"`
+	CompletedCensuses int         `json:"completed_censuses"`
+	DraftCensuses     int         `json:"draft_censuses"`
+	PendingSync       int         `json:"pending_sync"`
+	ByDre             []DreStats  `json:"by_dre"`
+	Recent            []CensusRow `json:"recent"`
 }
 
 type DreStats struct {
@@ -299,16 +366,16 @@ type DreStats struct {
 }
 
 type CensusRow struct {
-	CensusID   int       `json:"census_id"`
-	SchoolID   int       `json:"school_id"`
-	Nome       string    `json:"nome_escola"`
-	INEP       string    `json:"codigo_inep"`
-	Municipio  string    `json:"municipio"`
-	Dre        string    `json:"dre"`
-	Year       int       `json:"year"`
-	Status     string    `json:"status"`
-	UpdatedAt  time.Time `json:"updated_at"`
-	Synced     bool      `json:"synced"`
+	CensusID  int       `json:"census_id"`
+	SchoolID  int       `json:"school_id"`
+	Nome      string    `json:"nome_escola"`
+	INEP      string    `json:"codigo_inep"`
+	Municipio string    `json:"municipio"`
+	Dre       string    `json:"dre"`
+	Year      int       `json:"year"`
+	Status    string    `json:"status"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Synced    bool      `json:"synced"`
 }
 
 // ─── AdminDashboard ───────────────────────────────────────────────────────────
@@ -316,74 +383,142 @@ type CensusRow struct {
 func (app *application) AdminDashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	db := app.models.Schools.DB // same *sql.DB for both models
+	scope, _ := GetAdminAccessScope(ctx)
 
 	s := DashboardStats{
 		ByDre:  []DreStats{},
 		Recent: []CensusRow{},
 	}
 
-	// Counts — single query avoids multiple round-trips
-	err := db.QueryRowContext(ctx, `
-		SELECT
-			(SELECT COUNT(*) FROM schools),
-			COUNT(*) FILTER (WHERE cr.status = 'completed'),
-			COUNT(*) FILTER (WHERE cr.status = 'draft'),
-			COUNT(*) FILTER (WHERE cr.status = 'completed' AND cr.sheet_synced_at IS NULL)
-		FROM census_responses cr`).Scan(
-		&s.TotalSchools, &s.CompletedCensuses, &s.DraftCensuses, &s.PendingSync)
-	if err != nil {
-		app.errorJSON(w, fmt.Errorf("erro ao buscar totais"), http.StatusInternalServerError)
-		return
-	}
-
-	// By DRE — parameterized, no interpolation
-	rows, err := db.QueryContext(ctx, `
-		SELECT
-			s.dre,
-			COUNT(DISTINCT s.id)                                              AS total,
-			COUNT(DISTINCT s.id) FILTER (WHERE cr.status = 'completed')      AS completed,
-			COUNT(DISTINCT s.id) FILTER (WHERE cr.status = 'draft')          AS draft
-		FROM schools s
-		LEFT JOIN census_responses cr ON cr.school_id = s.id
-		GROUP BY s.dre
-		ORDER BY s.dre`)
-	if err != nil {
-		app.errorJSON(w, fmt.Errorf("erro ao buscar por DRE"), http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var d DreStats
-		if err := rows.Scan(&d.Dre, &d.Total, &d.Completed, &d.Draft); err != nil {
-			app.errorJSON(w, err, http.StatusInternalServerError)
+	if scope.Role == RoleDRE {
+		dreFilter := strings.TrimSpace(scope.DRE)
+		err := db.QueryRowContext(ctx, `
+			SELECT
+				(SELECT COUNT(*) FROM schools s WHERE UPPER(TRIM(s.dre)) = UPPER(TRIM($1))),
+				COUNT(*) FILTER (WHERE cr.status = 'completed' AND UPPER(TRIM(s.dre)) = UPPER(TRIM($1))),
+				COUNT(*) FILTER (WHERE cr.status = 'draft' AND UPPER(TRIM(s.dre)) = UPPER(TRIM($1))),
+				COUNT(*) FILTER (WHERE cr.status = 'completed' AND cr.sheet_synced_at IS NULL AND UPPER(TRIM(s.dre)) = UPPER(TRIM($1)))
+			FROM census_responses cr
+			JOIN schools s ON s.id = cr.school_id`, dreFilter).Scan(
+			&s.TotalSchools, &s.CompletedCensuses, &s.DraftCensuses, &s.PendingSync)
+		if err != nil {
+			app.errorJSON(w, fmt.Errorf("erro ao buscar totais"), http.StatusInternalServerError)
 			return
 		}
-		s.ByDre = append(s.ByDre, d)
-	}
 
-	// Recent 50 census submissions
-	rows2, err := db.QueryContext(ctx, `
-		SELECT
-			cr.id, cr.school_id, s.nome_escola, s.codigo_inep, s.municipio, s.dre,
-			cr.year, cr.status, cr.updated_at,
-			(cr.sheet_synced_at IS NOT NULL)
-		FROM census_responses cr
-		JOIN schools s ON s.id = cr.school_id
-		ORDER BY cr.updated_at DESC
-		LIMIT 50`)
-	if err != nil {
-		app.errorJSON(w, fmt.Errorf("erro ao buscar censos recentes"), http.StatusInternalServerError)
-		return
-	}
-	defer rows2.Close()
-	for rows2.Next() {
-		var c CensusRow
-		if err := rows2.Scan(&c.CensusID, &c.SchoolID, &c.Nome, &c.INEP, &c.Municipio,
-			&c.Dre, &c.Year, &c.Status, &c.UpdatedAt, &c.Synced); err != nil {
-			app.errorJSON(w, err, http.StatusInternalServerError)
+		rows, err := db.QueryContext(ctx, `
+			SELECT
+				s.dre,
+				COUNT(DISTINCT s.id)                                              AS total,
+				COUNT(DISTINCT s.id) FILTER (WHERE cr.status = 'completed')      AS completed,
+				COUNT(DISTINCT s.id) FILTER (WHERE cr.status = 'draft')          AS draft
+			FROM schools s
+			LEFT JOIN census_responses cr ON cr.school_id = s.id
+			WHERE UPPER(TRIM(s.dre)) = UPPER(TRIM($1))
+			GROUP BY s.dre
+			ORDER BY s.dre`, dreFilter)
+		if err != nil {
+			app.errorJSON(w, fmt.Errorf("erro ao buscar por DRE"), http.StatusInternalServerError)
 			return
 		}
-		s.Recent = append(s.Recent, c)
+		defer rows.Close()
+		for rows.Next() {
+			var d DreStats
+			if err := rows.Scan(&d.Dre, &d.Total, &d.Completed, &d.Draft); err != nil {
+				app.errorJSON(w, err, http.StatusInternalServerError)
+				return
+			}
+			s.ByDre = append(s.ByDre, d)
+		}
+
+		rows2, err := db.QueryContext(ctx, `
+			SELECT
+				cr.id, cr.school_id, s.nome_escola, s.codigo_inep, s.municipio, s.dre,
+				cr.year, cr.status, cr.updated_at,
+				(cr.sheet_synced_at IS NOT NULL)
+			FROM census_responses cr
+			JOIN schools s ON s.id = cr.school_id
+			WHERE UPPER(TRIM(s.dre)) = UPPER(TRIM($1))
+			ORDER BY cr.updated_at DESC
+			LIMIT 50`, dreFilter)
+		if err != nil {
+			app.errorJSON(w, fmt.Errorf("erro ao buscar censos recentes"), http.StatusInternalServerError)
+			return
+		}
+		defer rows2.Close()
+		for rows2.Next() {
+			var c CensusRow
+			if err := rows2.Scan(&c.CensusID, &c.SchoolID, &c.Nome, &c.INEP, &c.Municipio,
+				&c.Dre, &c.Year, &c.Status, &c.UpdatedAt, &c.Synced); err != nil {
+				app.errorJSON(w, err, http.StatusInternalServerError)
+				return
+			}
+			s.Recent = append(s.Recent, c)
+		}
+	} else {
+		// Counts — single query avoids multiple round-trips
+		err := db.QueryRowContext(ctx, `
+			SELECT
+				(SELECT COUNT(*) FROM schools),
+				COUNT(*) FILTER (WHERE cr.status = 'completed'),
+				COUNT(*) FILTER (WHERE cr.status = 'draft'),
+				COUNT(*) FILTER (WHERE cr.status = 'completed' AND cr.sheet_synced_at IS NULL)
+			FROM census_responses cr`).Scan(
+			&s.TotalSchools, &s.CompletedCensuses, &s.DraftCensuses, &s.PendingSync)
+		if err != nil {
+			app.errorJSON(w, fmt.Errorf("erro ao buscar totais"), http.StatusInternalServerError)
+			return
+		}
+
+		// By DRE — parameterized, no interpolation
+		rows, err := db.QueryContext(ctx, `
+			SELECT
+				s.dre,
+				COUNT(DISTINCT s.id)                                              AS total,
+				COUNT(DISTINCT s.id) FILTER (WHERE cr.status = 'completed')      AS completed,
+				COUNT(DISTINCT s.id) FILTER (WHERE cr.status = 'draft')          AS draft
+			FROM schools s
+			LEFT JOIN census_responses cr ON cr.school_id = s.id
+			GROUP BY s.dre
+			ORDER BY s.dre`)
+		if err != nil {
+			app.errorJSON(w, fmt.Errorf("erro ao buscar por DRE"), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var d DreStats
+			if err := rows.Scan(&d.Dre, &d.Total, &d.Completed, &d.Draft); err != nil {
+				app.errorJSON(w, err, http.StatusInternalServerError)
+				return
+			}
+			s.ByDre = append(s.ByDre, d)
+		}
+
+		// Recent 50 census submissions
+		rows2, err := db.QueryContext(ctx, `
+			SELECT
+				cr.id, cr.school_id, s.nome_escola, s.codigo_inep, s.municipio, s.dre,
+				cr.year, cr.status, cr.updated_at,
+				(cr.sheet_synced_at IS NOT NULL)
+			FROM census_responses cr
+			JOIN schools s ON s.id = cr.school_id
+			ORDER BY cr.updated_at DESC
+			LIMIT 50`)
+		if err != nil {
+			app.errorJSON(w, fmt.Errorf("erro ao buscar censos recentes"), http.StatusInternalServerError)
+			return
+		}
+		defer rows2.Close()
+		for rows2.Next() {
+			var c CensusRow
+			if err := rows2.Scan(&c.CensusID, &c.SchoolID, &c.Nome, &c.INEP, &c.Municipio,
+				&c.Dre, &c.Year, &c.Status, &c.UpdatedAt, &c.Synced); err != nil {
+				app.errorJSON(w, err, http.StatusInternalServerError)
+				return
+			}
+			s.Recent = append(s.Recent, c)
+		}
 	}
 
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: s})
@@ -552,8 +687,13 @@ func (p censusListParams) summaryArgs() []any {
 func (app *application) AdminGetCensus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	db := app.models.Schools.DB
+	scope, _ := GetAdminAccessScope(ctx)
 
 	p := parseCensusListParams(r.URL.Query())
+	if scope.Role == RoleDRE {
+		p.DRE = scope.DRE
+	}
+
 	whereArgs := p.whereArgs()
 	offset := (p.Page - 1) * p.Limit
 
@@ -613,8 +753,13 @@ type CensusFullRecord struct {
 	Synced    bool            `json:"synced"`
 }
 
-// AdminSheetMetrics retorna os indicadores calculados a partir da planilha Base_dados.
+// AdminSheetMetrics retorna os indicadores calculados a partir da planilha Base_dados (apenas admin).
 func (app *application) AdminSheetMetrics(w http.ResponseWriter, r *http.Request) {
+	scope, _ := GetAdminAccessScope(r.Context())
+	if scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
 	if app.sheets == nil {
 		app.errorJSON(w, fmt.Errorf("serviço de planilhas não configurado"), http.StatusServiceUnavailable)
 		return
@@ -628,8 +773,13 @@ func (app *application) AdminSheetMetrics(w http.ResponseWriter, r *http.Request
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: metrics})
 }
 
-// AdminIndicadoresMetrics retorna métricas de perfil dos alunos da aba Indicadores_Flags.
+// AdminIndicadoresMetrics retorna métricas de perfil dos alunos da aba Indicadores_Flags (apenas admin).
 func (app *application) AdminIndicadoresMetrics(w http.ResponseWriter, r *http.Request) {
+	scope, _ := GetAdminAccessScope(r.Context())
+	if scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
 	if app.sheets == nil {
 		app.errorJSON(w, fmt.Errorf("serviço de planilhas não configurado"), http.StatusServiceUnavailable)
 		return
@@ -643,9 +793,10 @@ func (app *application) AdminIndicadoresMetrics(w http.ResponseWriter, r *http.R
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: metrics})
 }
 
-// AdminGetCensusByID retorna o JSON completo de uma resposta de censo específica.
-// Usado pelo botão "Ver JSON" no painel admin.
+// AdminGetCensusByID retorna o JSON completo de uma resposta de censo específica com verificação BOLA por DRE.
 func (app *application) AdminGetCensusByID(w http.ResponseWriter, r *http.Request) {
+	scope, _ := GetAdminAccessScope(r.Context())
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil || id <= 0 {
@@ -668,6 +819,11 @@ func (app *application) AdminGetCensusByID(w http.ResponseWriter, r *http.Reques
 	)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("censo não encontrado"), http.StatusNotFound)
+		return
+	}
+
+	if scope.Role == RoleDRE && !strings.EqualFold(strings.TrimSpace(c.Dre), strings.TrimSpace(scope.DRE)) {
+		app.errorJSON(w, fmt.Errorf("acesso não permitido para esta DRE"), http.StatusForbidden)
 		return
 	}
 

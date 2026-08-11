@@ -1,11 +1,40 @@
 package main
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
 )
+
+func requestWithAnalyticsScope(scope AdminAccessScope, query string) *http.Request {
+	r := httptest.NewRequest("GET", "/admin/analytics/filtros/opcoes?"+query, nil)
+	return r.WithContext(context.WithValue(r.Context(), contextKeyAdminScope, scope))
+}
+
+func TestParseAnalyticsFilters_AdminScopeKeepsQueryDRE(t *testing.T) {
+	f := parseAnalyticsFilters(requestWithAnalyticsScope(AdminAccessScope{Role: RoleAdmin}, "dre=DRE_B"))
+	if f.DRE != "DRE_B" {
+		t.Fatalf("expected query DRE, got %q", f.DRE)
+	}
+}
+
+func TestParseAnalyticsFilters_DREScopeOverridesQueryAndTrims(t *testing.T) {
+	f := parseAnalyticsFilters(requestWithAnalyticsScope(AdminAccessScope{Role: RoleDRE, DRE: "  DRE_A  "}, "dre=DRE_B"))
+	if f.DRE != "DRE_A" {
+		t.Fatalf("expected authorized DRE, got %q", f.DRE)
+	}
+}
+
+func TestParseAnalyticsFilters_WithoutScopeKeepsCompatibility(t *testing.T) {
+	r := httptest.NewRequest("GET", "/admin/analytics?dre=DRE_B", nil)
+	if f := parseAnalyticsFilters(r); f.DRE != "DRE_B" {
+		t.Fatalf("expected query DRE, got %q", f.DRE)
+	}
+}
 
 var fixedNow = time.Date(2025, time.March, 15, 10, 0, 0, 0, time.UTC)
 
@@ -69,6 +98,27 @@ func TestParseAnalyticsFilters_SchoolID(t *testing.T) {
 	}
 }
 
+func TestParseAnalyticsFilters_InvalidSchoolIDMeansNoFilter(t *testing.T) {
+	for _, raw := range []string{"", "   ", "abc", "0", "-1", "1.5"} {
+		f := parseAnalyticsFiltersFromValues(url.Values{"school_id": {raw}}, fixedNow)
+		if f.SchoolID != 0 {
+			t.Fatalf("school_id %q: expected no filter, got %d", raw, f.SchoolID)
+		}
+	}
+}
+
+func TestParseAnalyticsFilters_SchoolAndINEPWithOtherFilters(t *testing.T) {
+	f := parseAnalyticsFiltersFromValues(url.Values{
+		"school_id": {"42"}, "codigo_inep": {" 15000001 "},
+		"dre": {"DRE A"}, "municipio": {"Cidade A"}, "zona": {"Urbana"},
+		"regiao_integracao": {"RI A"},
+	}, fixedNow)
+	if f.SchoolID != 42 || f.CodigoINEP != "15000001" || f.DRE != "DRE A" ||
+		f.Municipio != "Cidade A" || f.Zona != "Urbana" || f.RegiaoIntegracao != "RI A" {
+		t.Fatalf("combined filters were not preserved: %+v", f)
+	}
+}
+
 func TestParseAnalyticsFilters_CodigoINEP(t *testing.T) {
 	f := parseAnalyticsFiltersFromValues(url.Values{"codigo_inep": {" 15000001 "}}, fixedNow)
 	if f.CodigoINEP != "15000001" {
@@ -125,6 +175,9 @@ func TestAnalyticsFilters_WhereSQL(t *testing.T) {
 			t.Fatalf("WhereSQL missing %q\n--- got ---\n%s", frag, sql)
 		}
 	}
+	if strings.Contains(sql, "15000001") || strings.Contains(sql, "DRE") || strings.Contains(sql, "42") {
+		t.Fatalf("WhereSQL must not interpolate request values: %s", sql)
+	}
 }
 
 func TestFiltrosOpcoesSchoolsWhere_CascadesSchoolAndINEP(t *testing.T) {
@@ -161,5 +214,16 @@ func TestFiltrosOpcoesSchoolsWhere_INEPOptionsUseSchoolID(t *testing.T) {
 	}
 	if len(args) != 5 || args[4] != 42 {
 		t.Fatalf("unexpected INEP option args: %#v", args)
+	}
+}
+
+func TestFiltrosOpcoesSchoolsWhere_AuthorizedDRESurvivesExcept(t *testing.T) {
+	f := AnalyticsFilters{DRE: "DRE_A"}
+	where, args := filtrosOpcoesSchoolsWhereWithAuthorization(f, "s", "dre", " DRE_A ")
+	if !strings.Contains(where, "s.dre") || len(args) != 6 || args[0] != "DRE_A" {
+		t.Fatalf("authorized DRE was removed from cascade: where=%s args=%#v", where, args)
+	}
+	if strings.Contains(where, "($1 = '' OR") {
+		t.Fatalf("authorization must be mandatory: %s", where)
 	}
 }

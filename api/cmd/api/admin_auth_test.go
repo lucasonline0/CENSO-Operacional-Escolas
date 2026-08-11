@@ -20,7 +20,7 @@ func setupTestApp() *application {
 	return app
 }
 
-// 1. login admin legado via env continua válido
+// 1. login admin legado continua válido
 func TestLegacyEnvAdminLogin(t *testing.T) {
 	app := setupTestApp()
 
@@ -64,7 +64,7 @@ func TestLegacyEnvAdminLogin(t *testing.T) {
 	}
 }
 
-// 2. senha errada não autentica
+// 3. senha errada não autentica
 func TestWrongPasswordRejection(t *testing.T) {
 	app := setupTestApp()
 
@@ -84,7 +84,7 @@ func TestWrongPasswordRejection(t *testing.T) {
 	}
 }
 
-// 3. token DRE sem DRE é inválido
+// 5. token DRE sem DRE é inválido
 func TestDRETokenWithoutDRERejected(t *testing.T) {
 	app := setupTestApp()
 
@@ -119,7 +119,7 @@ func TestDRETokenWithoutDRERejected(t *testing.T) {
 	}
 }
 
-// 4. token expirado continua inválido
+// 6. token expirado continua inválido
 func TestExpiredTokenRejected(t *testing.T) {
 	app := setupTestApp()
 
@@ -145,7 +145,7 @@ func TestExpiredTokenRejected(t *testing.T) {
 	}
 }
 
-// 5. algoritmo JWT inválido continua rejeitado
+// 7. algoritmo JWT inválido continua rejeitado
 func TestInvalidSigningAlgorithmRejected(t *testing.T) {
 	app := setupTestApp()
 
@@ -173,7 +173,7 @@ func TestInvalidSigningAlgorithmRejected(t *testing.T) {
 	}
 }
 
-// 6. Role desconhecida rejeitada
+// Role desconhecida rejeitada
 func TestUnknownRoleRejected(t *testing.T) {
 	app := setupTestApp()
 
@@ -199,7 +199,7 @@ func TestUnknownRoleRejected(t *testing.T) {
 	}
 }
 
-// 7. /admin/me retorna o perfil correto
+// 8. /admin/me retorna o perfil correto
 func TestAdminMeEndpoint(t *testing.T) {
 	app := setupTestApp()
 
@@ -248,4 +248,44 @@ func TestAdminMeEndpoint(t *testing.T) {
 			t.Fatalf("dre /me response invalid: %+v", data)
 		}
 	})
+}
+
+// 10. DRE não executa /admin/sync-sheets
+func TestDRECannotSyncSheets(t *testing.T) {
+	app := setupTestApp()
+
+	req := httptest.NewRequest("POST", "/v1/admin/sync-sheets", nil)
+	scope := AdminAccessScope{Username: "user_belem", Role: RoleDRE, DRE: "DRE BELEM"}
+	req = req.WithContext(context.WithValue(req.Context(), contextKeyAdminScope, scope))
+
+	rr := httptest.NewRecorder()
+	app.AdminSyncSheets(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for DRE user on /sync-sheets, got %d", rr.Code)
+	}
+}
+
+// DRE não acessa métricas globais de planilhas
+func TestDRECannotAccessSheetMetrics(t *testing.T) {
+	app := setupTestApp()
+
+	req1 := httptest.NewRequest("GET", "/v1/admin/sheet-metrics", nil)
+	scope := AdminAccessScope{Username: "user_belem", Role: RoleDRE, DRE: "DRE BELEM"}
+	req1 = req1.WithContext(context.WithValue(req1.Context(), contextKeyAdminScope, scope))
+
+	rr1 := httptest.NewRecorder()
+	app.AdminSheetMetrics(rr1, req1)
+	if rr1.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden on AdminSheetMetrics for DRE user, got %d", rr1.Code)
+	}
+
+	req2 := httptest.NewRequest("GET", "/v1/admin/indicadores-metrics", nil)
+	req2 = req2.WithContext(context.WithValue(req2.Context(), contextKeyAdminScope, scope))
+
+	rr2 := httptest.NewRecorder()
+	app.AdminIndicadoresMetrics(rr2, req2)
+	if rr2.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden on AdminIndicadoresMetrics for DRE user, got %d", rr2.Code)
+	}
 }

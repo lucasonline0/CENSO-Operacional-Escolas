@@ -94,9 +94,10 @@ const (
 // UPPER+TRIM. prefix vazio significa "não remover prefixo" (caso de município).
 //
 // É aplicada aos DOIS lados (coluna do PRODEP e parâmetro), de modo que:
-//   dre=ABAETETUBA  case com dre_prodep="DRE ABAETETUBA"
-//   ri=XINGU        case com ri_prodep="RI Xingu"
-//   municipio=ACARA case tanto com "ACARA" quanto com "Acará"
+//
+//	dre=ABAETETUBA  case com dre_prodep="DRE ABAETETUBA"
+//	ri=XINGU        case com ri_prodep="RI Xingu"
+//	municipio=ACARA case tanto com "ACARA" quanto com "Acará"
 //
 // `expr` é sempre uma expressão controlada pelo servidor (nome de coluna ou
 // placeholder posicional) — nunca entrada do usuário —, então a interpolação

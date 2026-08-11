@@ -17,7 +17,7 @@ var (
 	ErrInvalidDRE        = errors.New("DRE não encontrada na tabela de escolas")
 	ErrUsernameExists    = errors.New("username já está em uso")
 	ErrInvalidRole       = errors.New("role inválida")
-	ErrDRERequiredForDRE = errors.New("DRE é obrigatoria para a role dre")
+	ErrDRERequiredForDRE = errors.New("DRE é obrigatória para a role dre")
 )
 
 type AdminUser struct {

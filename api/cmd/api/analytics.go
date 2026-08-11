@@ -67,8 +67,8 @@ type MatriculasPorPorteStat struct {
 // CaracterizacaoDRE é o payload de
 // GET /v1/admin/analytics/caracterizacao/dre.
 type CaracterizacaoDRE struct {
-	TopDRES       []DRECountStat   `json:"top_dres"`
-	Detalhamento  []DRESummaryStat `json:"detalhamento"`
+	TopDRES      []DRECountStat   `json:"top_dres"`
+	Detalhamento []DRESummaryStat `json:"detalhamento"`
 }
 
 // DRECountStat é a contagem de escolas por DRE ordenada desc (top).
@@ -113,17 +113,17 @@ type ZonaStat struct {
 //
 //   - Contagens operacionais usam diretamente o banco via vw_censo_base
 //     (que produz LEFT JOIN entre schools e census_responses):
-//     * "total_schools"  = total de escolas cadastradas (independente de censo).
-//     * "total_censuses" = total de linhas de censo registradas (todas as
-//       combinações school_id × year), filtrando "census_id IS NOT NULL"
-//       para descartar escolas sem nenhum censo (LEFT JOIN preenche NULL).
+//   - "total_schools"  = total de escolas cadastradas (independente de censo).
+//   - "total_censuses" = total de linhas de censo registradas (todas as
+//     combinações school_id × year), filtrando "census_id IS NOT NULL"
+//     para descartar escolas sem nenhum censo (LEFT JOIN preenche NULL).
 //   - "completed" e "drafts" contam ESCOLAS DISTINTAS (COUNT DISTINCT
 //     school_id) — uma escola com censos em vários anos é contada uma
 //     única vez. Isso casa com a semântica do card "Total de Escolas
 //     (Censos concluídos)" no painel admin.
 //   - Métricas QUANTITATIVAS DE ALUNOS ("total_alunos", "alunos_pcd",
 //     "media_alunos_por_escola") consideram somente:
-//        status = 'completed'  AND  year = EXTRACT(YEAR FROM CURRENT_DATE)::int
+//     status = 'completed'  AND  year = EXTRACT(YEAR FROM CURRENT_DATE)::int
 //     O filtro de ano corrente evita inflação caso a base já contenha
 //     censos completados de múltiplos anos (cenário futuro do ciclo
 //     anual). Filtros por ano via querystring serão tratados em fase
@@ -683,7 +683,7 @@ func round2(v float64) float64 {
 //   - "escolas":              COUNT DISTINCT school_id;
 //   - "total_alunos":         SUM(total_alunos);
 //   - "media_alunos_por_escola": AVG(total_alunos) restrita a escolas
-//                              com total_alunos NOT NULL;
+//     com total_alunos NOT NULL;
 //   - "salas_aula":           SUM(qtd_salas_aula);
 //   - DREs vazias/NULL caem em 'Não informado' para não sumirem do top.
 func (app *application) AdminAnalyticsCaracterizacaoDRE(w http.ResponseWriter, r *http.Request) {

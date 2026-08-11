@@ -309,6 +309,7 @@ func (app *application) routes() http.Handler {
 
 	mux.Route("/v1", func(r chi.Router) {
 		r.Get("/health", app.HealthCheck)
+		r.Get("/census/status", app.CensusStatus)
 
 		// Endpoints públicos do formulário. Ficam atrás do gate opcional de
 		// X-API-Key (requirePublicAPIKey): inerte até PUBLIC_API_KEY ser
@@ -317,10 +318,10 @@ func (app *application) routes() http.Handler {
 			pub.Use(app.requirePublicAPIKey)
 			pub.Get("/locations", app.GetLocations)
 			pub.Get("/schools", app.GetSchools)
-			pub.Post("/schools", app.CreateSchool)
+			pub.With(app.requireCensusSubmissions).Post("/schools", app.CreateSchool)
 			pub.Get("/census", app.GetCenso)
-			pub.Post("/census", app.CreateOrUpdateCenso)
-			pub.Post("/upload", app.uploadPhoto)
+			pub.With(app.requireCensusSubmissions).Post("/census", app.CreateOrUpdateCenso)
+			pub.With(app.requireCensusSubmissions).Post("/upload", app.uploadPhoto)
 		})
 
 		// Admin: login público + rotas protegidas por JWT

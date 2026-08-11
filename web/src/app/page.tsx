@@ -33,6 +33,15 @@ export default function CensusPage() {
   const [isCompleted, setIsCompleted] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [submissionsEnabled, setSubmissionsEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    fetch(`${baseUrl}/v1/census/status`)
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((payload) => setSubmissionsEnabled(payload.data?.submissions_enabled === true))
+      .catch(() => setSubmissionsEnabled(false));
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -278,7 +287,18 @@ export default function CensusPage() {
     }
   };
 
-  if (!isInitialized) return null;
+  if (!isInitialized || submissionsEnabled === null) return null;
+
+  if (!submissionsEnabled) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <Card className="w-full max-w-md text-center p-8 shadow-md border-slate-200 bg-white">
+          <h1 className="text-2xl font-bold text-slate-900 mb-3">Período de preenchimento encerrado.</h1>
+          <p className="text-slate-600">O prazo para envio das informações do Censo Operacional foi finalizado.</p>
+        </Card>
+      </div>
+    );
+  }
 
   if (isCompleted) {
     return (

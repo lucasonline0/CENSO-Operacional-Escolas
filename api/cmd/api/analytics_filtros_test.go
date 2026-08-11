@@ -69,6 +69,27 @@ func TestParseAnalyticsFilters_SchoolID(t *testing.T) {
 	}
 }
 
+func TestParseAnalyticsFilters_InvalidSchoolIDMeansNoFilter(t *testing.T) {
+	for _, raw := range []string{"", "   ", "abc", "0", "-1", "1.5"} {
+		f := parseAnalyticsFiltersFromValues(url.Values{"school_id": {raw}}, fixedNow)
+		if f.SchoolID != 0 {
+			t.Fatalf("school_id %q: expected no filter, got %d", raw, f.SchoolID)
+		}
+	}
+}
+
+func TestParseAnalyticsFilters_SchoolAndINEPWithOtherFilters(t *testing.T) {
+	f := parseAnalyticsFiltersFromValues(url.Values{
+		"school_id": {"42"}, "codigo_inep": {" 15000001 "},
+		"dre": {"DRE A"}, "municipio": {"Cidade A"}, "zona": {"Urbana"},
+		"regiao_integracao": {"RI A"},
+	}, fixedNow)
+	if f.SchoolID != 42 || f.CodigoINEP != "15000001" || f.DRE != "DRE A" ||
+		f.Municipio != "Cidade A" || f.Zona != "Urbana" || f.RegiaoIntegracao != "RI A" {
+		t.Fatalf("combined filters were not preserved: %+v", f)
+	}
+}
+
 func TestParseAnalyticsFilters_CodigoINEP(t *testing.T) {
 	f := parseAnalyticsFiltersFromValues(url.Values{"codigo_inep": {" 15000001 "}}, fixedNow)
 	if f.CodigoINEP != "15000001" {
@@ -124,6 +145,9 @@ func TestAnalyticsFilters_WhereSQL(t *testing.T) {
 		if !strings.Contains(sql, frag) {
 			t.Fatalf("WhereSQL missing %q\n--- got ---\n%s", frag, sql)
 		}
+	}
+	if strings.Contains(sql, "15000001") || strings.Contains(sql, "DRE") || strings.Contains(sql, "42") {
+		t.Fatalf("WhereSQL must not interpolate request values: %s", sql)
 	}
 }
 

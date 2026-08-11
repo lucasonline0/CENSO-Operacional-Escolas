@@ -224,7 +224,7 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 
 	escolasWhere, escolasArgs := filtrosOpcoesSchoolsWhere(f, "s", "school_id")
 	rows, err := app.models.Schools.DB.QueryContext(ctx, `
-		SELECT
+		SELECT DISTINCT
 			id,
 			codigo_inep,
 			COALESCE(NULLIF(TRIM(nome_escola), ''), 'Sem nome') AS nome_escola,

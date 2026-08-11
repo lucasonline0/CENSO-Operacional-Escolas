@@ -16,6 +16,13 @@ func TestAdminUserModelValidation(t *testing.T) {
 		}
 	})
 
+	t.Run("whitespace username validation", func(t *testing.T) {
+		_, err := m.Create(ctx, "   ", "password123", "dre", "DRE BELEM")
+		if err == nil || err.Error() != "username não pode ser vazio" {
+			t.Fatalf("expected empty username error, got %v", err)
+		}
+	})
+
 	t.Run("short password validation", func(t *testing.T) {
 		_, err := m.Create(ctx, "user1", "123", "dre", "DRE BELEM")
 		if err == nil || err.Error() != "senha deve ter no mínimo 6 caracteres" {
@@ -32,6 +39,13 @@ func TestAdminUserModelValidation(t *testing.T) {
 
 	t.Run("missing DRE validation for dre role", func(t *testing.T) {
 		_, err := m.Create(ctx, "user1", "password123", "dre", "")
+		if err != ErrDRERequiredForDRE {
+			t.Fatalf("expected ErrDRERequiredForDRE, got %v", err)
+		}
+	})
+
+	t.Run("whitespace DRE validation for dre role", func(t *testing.T) {
+		_, err := m.Create(ctx, "user1", "password123", "dre", "   ")
 		if err != ErrDRERequiredForDRE {
 			t.Fatalf("expected ErrDRERequiredForDRE, got %v", err)
 		}

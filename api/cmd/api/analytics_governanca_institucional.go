@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"strconv"
 )
 
 // =========================================================================
@@ -34,12 +35,14 @@ type governancaInstitucionalFilters struct {
 	DRE       string
 	Municipio string
 	Zona      string
+	CodigoINEP string
+	SchoolID   int
 }
 
 // args devolve os argumentos posicionais na ordem esperada por
 // governancaInstitucionalWhereSQL ($1=dre $2=municipio $3=zona).
 func (f governancaInstitucionalFilters) args() []any {
-	return []any{f.DRE, f.Municipio, f.Zona}
+	return []any{f.DRE, f.Municipio, f.Zona, f.CodigoINEP, f.SchoolID}
 }
 
 // parseGovernancaInstitucionalFilters lê os filtros opcionais da query string.
@@ -48,10 +51,13 @@ func (f governancaInstitucionalFilters) args() []any {
 // PRODEP são intencionalmente ignorados.
 func parseGovernancaInstitucionalFilters(q url.Values) governancaInstitucionalFilters {
 	get := func(key string) string { return strings.TrimSpace(q.Get(key)) }
+	schoolID, _ := strconv.Atoi(get("school_id"))
 	return governancaInstitucionalFilters{
 		DRE:       get("dre"),
 		Municipio: get("municipio"),
 		Zona:      get("zona"),
+		CodigoINEP: get("codigo_inep"),
+		SchoolID:   schoolID,
 	}
 }
 
@@ -62,6 +68,8 @@ const governancaInstitucionalWhereSQL = `
 	WHERE ($1 = '' OR UPPER(TRIM(dre)) = UPPER(TRIM($1)))
 	  AND ($2 = '' OR UPPER(TRIM(municipio)) = UPPER(TRIM($2)))
 	  AND ($3 = '' OR UPPER(TRIM(zona)) = UPPER(TRIM($3)))
+	  AND ($4 = '' OR codigo_inep = $4)
+	  AND ($5 = 0  OR school_id = $5)
 `
 
 // GovernancaIndicador é a tripla total/denominador/percentual de cada card.

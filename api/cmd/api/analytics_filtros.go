@@ -38,6 +38,7 @@ func parseAnalyticsFiltersFromValues(q url.Values, now time.Time) AnalyticsFilte
 		Municipio:        strings.TrimSpace(q.Get("municipio")),
 		Zona:             strings.TrimSpace(q.Get("zona")),
 		RegiaoIntegracao: strings.TrimSpace(q.Get("regiao_integracao")),
+		CodigoINEP: strings.TrimSpace(q.Get("codigo_inep")),
 	}
 
 	if sid, err := strconv.Atoi(strings.TrimSpace(q.Get("school_id"))); err == nil && sid > 0 {

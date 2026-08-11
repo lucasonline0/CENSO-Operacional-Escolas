@@ -72,6 +72,8 @@ const indiceGovernancaSelectSQL = `
 	WHERE ($1 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($1)))
 	  AND ($2 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($2)))
 	  AND ($3 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($3)))
+	  AND ($4 = '' OR s.codigo_inep = $4)
+	  AND ($5 = 0  OR s.id = $5)
 `
 
 func (app *application) AdminAnalyticsGovernancaIndiceEscolas(w http.ResponseWriter, r *http.Request) {

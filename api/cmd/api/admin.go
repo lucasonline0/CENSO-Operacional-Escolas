@@ -148,6 +148,8 @@ func (app *application) requirePublicAPIKey(next http.Handler) http.Handler {
 
 type adminClaims struct {
 	Username string `json:"username"`
+	Role     string `json:"role"`
+	DRE      string `json:"dre,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -204,26 +206,54 @@ func (app *application) AdminLogin(w http.ResponseWriter, r *http.Request) {
 	adminUser := os.Getenv("ADMIN_USERNAME")
 	adminHash := os.Getenv("ADMIN_PASSWORD_HASH") // bcrypt hash
 
-	if adminUser == "" || adminHash == "" {
-		app.logger.Println("AVISO SEGURANÇA: ADMIN_USERNAME ou ADMIN_PASSWORD_HASH não definidos")
-		app.errorJSON(w, fmt.Errorf("autenticação não configurada no servidor"), http.StatusInternalServerError)
-		return
-	}
+	isEnvAdmin := adminUser != "" && adminHash != "" && req.Username == adminUser
 
-	// Always run bcrypt (even on wrong username) to prevent timing attacks
-	hashToCheck := adminHash
-	usernameOK := req.Username == adminUser
-	pwErr := bcrypt.CompareHashAndPassword([]byte(hashToCheck), []byte(req.Password))
+	var role string
+	var dre string
 
-	if !usernameOK || pwErr != nil {
-		// Artificial delay discourages automated brute force
-		time.Sleep(600 * time.Millisecond)
-		app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
-		return
+	if isEnvAdmin {
+		pwErr := bcrypt.CompareHashAndPassword([]byte(adminHash), []byte(req.Password))
+		if pwErr != nil {
+			time.Sleep(600 * time.Millisecond)
+			app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
+			return
+		}
+		role = RoleAdmin
+		dre = ""
+	} else {
+		// Busca usuário ativo no banco de dados (role=dre)
+		u, err := app.models.AdminUsers.GetActiveByUsername(r.Context(), req.Username)
+		if err != nil {
+			// Executa bcrypt fictício para mitigar ataques de tempo em usernames inexistentes
+			if adminHash != "" {
+				_ = bcrypt.CompareHashAndPassword([]byte(adminHash), []byte(req.Password))
+			}
+			time.Sleep(600 * time.Millisecond)
+			app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
+			return
+		}
+
+		pwErr := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password))
+		if pwErr != nil {
+			time.Sleep(600 * time.Millisecond)
+			app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
+			return
+		}
+
+		if u.Role != RoleDRE || strings.TrimSpace(u.DRE) == "" {
+			time.Sleep(600 * time.Millisecond)
+			app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
+			return
+		}
+
+		role = u.Role
+		dre = u.DRE
 	}
 
 	claims := adminClaims{
 		Username: req.Username,
+		Role:     role,
+		DRE:      dre,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(jwtExpiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -271,14 +301,51 @@ func (app *application) requireAdminAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), contextKeyAdminUser, claims.Username)
+		if claims.Role != RoleAdmin && claims.Role != RoleDRE {
+			app.errorJSON(w, fmt.Errorf("role desconhecida ou inválida"), http.StatusUnauthorized)
+			return
+		}
+
+		if claims.Role == RoleDRE && strings.TrimSpace(claims.DRE) == "" {
+			app.errorJSON(w, fmt.Errorf("token DRE sem DRE válida"), http.StatusUnauthorized)
+			return
+		}
+
+		scope := AdminAccessScope{
+			Username: claims.Username,
+			Role:     claims.Role,
+			DRE:      claims.DRE,
+		}
+
+		ctx := context.WithValue(r.Context(), contextKeyAdminScope, scope)
+		ctx = context.WithValue(ctx, contextKeyAdminUser, claims.Username)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-type contextKey string
+// AdminMe retorna os dados do perfil do usuário autenticado.
+func (app *application) AdminMe(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok {
+		app.errorJSON(w, fmt.Errorf("escopo de acesso não encontrado"), http.StatusUnauthorized)
+		return
+	}
 
-const contextKeyAdminUser contextKey = "admin_username"
+	var drePtr *string
+	if scope.Role == RoleDRE && scope.DRE != "" {
+		dreVal := scope.DRE
+		drePtr = &dreVal
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{
+		Error: false,
+		Data: map[string]interface{}{
+			"username": scope.Username,
+			"role":     scope.Role,
+			"dre":      drePtr,
+		},
+	})
+}
 
 // ─── Dashboard data types ─────────────────────────────────────────────────────
 

@@ -24,9 +24,11 @@ type AnalyticsFilters struct {
 }
 
 func parseAnalyticsFilters(r *http.Request) AnalyticsFilters {
-	// TODO(#157): constrain f.DRE from the authenticated AdminAccessScope here
-	// (or immediately after this call), never from a query-string authorization claim.
-	return parseAnalyticsFiltersFromValues(r.URL.Query(), time.Now())
+	f := parseAnalyticsFiltersFromValues(r.URL.Query(), time.Now())
+	if scope, ok := GetAdminAccessScope(r.Context()); ok && scope.Role == RoleDRE {
+		f.DRE = strings.TrimSpace(scope.DRE)
+	}
+	return f
 }
 
 // parseAnalyticsFiltersFromValues is the testable core of parseAnalyticsFilters.
@@ -123,6 +125,13 @@ type FiltrosOpcoes struct {
 // filtrosOpcoesSchoolsWhere returns a parameterized predicate over schools.
 // except excludes the option currently being populated from its own cascade.
 func filtrosOpcoesSchoolsWhere(f AnalyticsFilters, alias, except string) (string, []any) {
+	return filtrosOpcoesSchoolsWhereWithAuthorization(f, alias, except, "")
+}
+
+// filtrosOpcoesSchoolsWhereWithAuthorization applies the mandatory territorial
+// scope independently from the select cascade. A DRE user's authorization
+// must survive even when the DRE select is the option being populated.
+func filtrosOpcoesSchoolsWhereWithAuthorization(f AnalyticsFilters, alias, except, authorizedDRE string) (string, []any) {
 	conditions := make([]string, 0, 6)
 	args := make([]any, 0, 6)
 	add := func(key, condition string, arg any) {
@@ -133,7 +142,12 @@ func filtrosOpcoesSchoolsWhere(f AnalyticsFilters, alias, except string) (string
 		conditions = append(conditions, fmt.Sprintf(condition, len(args), len(args)))
 	}
 
-	add("dre", "($%d = '' OR UPPER(TRIM("+alias+".dre)) = UPPER(TRIM($%d)))", f.DRE)
+	if strings.TrimSpace(authorizedDRE) != "" {
+		args = append(args, strings.TrimSpace(authorizedDRE))
+		conditions = append(conditions, "UPPER(TRIM("+alias+".dre)) = UPPER(TRIM($"+strconv.Itoa(len(args))+"))")
+	} else {
+		add("dre", "($%d = '' OR UPPER(TRIM("+alias+".dre)) = UPPER(TRIM($%d)))", f.DRE)
+	}
 	add("municipio", "($%d = '' OR UPPER(TRIM("+alias+".municipio)) = UPPER(TRIM($%d)))", f.Municipio)
 	add("zona", "($%d = '' OR UPPER(TRIM("+alias+".zona)) = UPPER(TRIM($%d)))", f.Zona)
 	add("regiao_integracao", "($%d = '' OR UPPER(TRIM("+alias+".municipio)) IN (SELECT UPPER(TRIM(municipio)) FROM reg_integracao WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($%d))))", f.RegiaoIntegracao)
@@ -149,13 +163,26 @@ func filtrosOpcoesSchoolsWhere(f AnalyticsFilters, alias, except string) (string
 func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	f := parseAnalyticsFilters(r)
+	authorizedDRE := ""
+	if scope, ok := GetAdminAccessScope(ctx); ok && scope.Role == RoleDRE {
+		authorizedDRE = strings.TrimSpace(scope.DRE)
+	}
 
-	anos, err := queryStringSlice(app, ctx, `
-		SELECT DISTINCT year::text
-		FROM census_responses
-		WHERE status = 'completed'
-		ORDER BY year::text DESC
-	`)
+	anosQuery := `
+		SELECT DISTINCT cr.year::text
+		FROM census_responses cr
+		JOIN schools s ON s.id = cr.school_id
+		WHERE cr.status = 'completed'
+	`
+	var anosArgs []any
+	if authorizedDRE != "" {
+		anosQuery += ` AND UPPER(TRIM(s.dre)) = UPPER(TRIM($1))`
+		anosArgs = append(anosArgs, authorizedDRE)
+	}
+	anosQuery += `
+		ORDER BY cr.year::text DESC
+	`
+	anos, err := queryStringSlice(app, ctx, anosQuery, anosArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("anos: %w", err), http.StatusInternalServerError)
 		return
@@ -169,7 +196,7 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 	}
 
 	// Regiões: filtradas por dre, municipio, zona (não pela própria regiao)
-	regioesWhere, regioesArgs := filtrosOpcoesSchoolsWhere(f, "s", "regiao_integracao")
+	regioesWhere, regioesArgs := filtrosOpcoesSchoolsWhereWithAuthorization(f, "s", "regiao_integracao", authorizedDRE)
 	regioes, err := queryStringSlice(app, ctx, `
 		SELECT DISTINCT r.regiao_de_integracao
 		FROM reg_integracao r
@@ -183,7 +210,7 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 	}
 
 	// DREs: filtradas por municipio, zona, regiao (não pela própria dre)
-	dresWhere, dresArgs := filtrosOpcoesSchoolsWhere(f, "s", "dre")
+	dresWhere, dresArgs := filtrosOpcoesSchoolsWhereWithAuthorization(f, "s", "dre", authorizedDRE)
 	dres, err := queryStringSlice(app, ctx, `
 		SELECT DISTINCT COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado') AS dre
 		FROM schools s
@@ -196,7 +223,7 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 	}
 
 	// Municípios: filtrados por dre, zona, regiao (não pelo próprio municipio)
-	municipiosWhere, municipiosArgs := filtrosOpcoesSchoolsWhere(f, "s", "municipio")
+	municipiosWhere, municipiosArgs := filtrosOpcoesSchoolsWhereWithAuthorization(f, "s", "municipio", authorizedDRE)
 	municipios, err := queryStringSlice(app, ctx, `
 		SELECT DISTINCT COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado') AS municipio
 		FROM schools s
@@ -209,7 +236,7 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 	}
 
 	// Zonas: filtradas por dre, municipio, regiao (não pela própria zona)
-	zonasWhere, zonasArgs := filtrosOpcoesSchoolsWhere(f, "s", "zona")
+	zonasWhere, zonasArgs := filtrosOpcoesSchoolsWhereWithAuthorization(f, "s", "zona", authorizedDRE)
 	zonas, err := queryStringSlice(app, ctx, `
 		SELECT DISTINCT s.zona
 		FROM schools s
@@ -222,7 +249,7 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 		return
 	}
 
-	escolasWhere, escolasArgs := filtrosOpcoesSchoolsWhere(f, "s", "school_id")
+	escolasWhere, escolasArgs := filtrosOpcoesSchoolsWhereWithAuthorization(f, "s", "school_id", authorizedDRE)
 	rows, err := app.models.Schools.DB.QueryContext(ctx, `
 		SELECT DISTINCT
 			id,
@@ -262,7 +289,7 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 		return
 	}
 
-	codigosWhere, codigosArgs := filtrosOpcoesSchoolsWhere(f, "s", "codigo_inep")
+	codigosWhere, codigosArgs := filtrosOpcoesSchoolsWhereWithAuthorization(f, "s", "codigo_inep", authorizedDRE)
 	codigosINEP, err := queryStringSlice(app, ctx, `
 		SELECT DISTINCT TRIM(s.codigo_inep)
 		FROM schools s

@@ -1,11 +1,40 @@
 package main
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
 )
+
+func requestWithAnalyticsScope(scope AdminAccessScope, query string) *http.Request {
+	r := httptest.NewRequest("GET", "/admin/analytics/filtros/opcoes?"+query, nil)
+	return r.WithContext(context.WithValue(r.Context(), contextKeyAdminScope, scope))
+}
+
+func TestParseAnalyticsFilters_AdminScopeKeepsQueryDRE(t *testing.T) {
+	f := parseAnalyticsFilters(requestWithAnalyticsScope(AdminAccessScope{Role: RoleAdmin}, "dre=DRE_B"))
+	if f.DRE != "DRE_B" {
+		t.Fatalf("expected query DRE, got %q", f.DRE)
+	}
+}
+
+func TestParseAnalyticsFilters_DREScopeOverridesQueryAndTrims(t *testing.T) {
+	f := parseAnalyticsFilters(requestWithAnalyticsScope(AdminAccessScope{Role: RoleDRE, DRE: "  DRE_A  "}, "dre=DRE_B"))
+	if f.DRE != "DRE_A" {
+		t.Fatalf("expected authorized DRE, got %q", f.DRE)
+	}
+}
+
+func TestParseAnalyticsFilters_WithoutScopeKeepsCompatibility(t *testing.T) {
+	r := httptest.NewRequest("GET", "/admin/analytics?dre=DRE_B", nil)
+	if f := parseAnalyticsFilters(r); f.DRE != "DRE_B" {
+		t.Fatalf("expected query DRE, got %q", f.DRE)
+	}
+}
 
 var fixedNow = time.Date(2025, time.March, 15, 10, 0, 0, 0, time.UTC)
 
@@ -185,5 +214,16 @@ func TestFiltrosOpcoesSchoolsWhere_INEPOptionsUseSchoolID(t *testing.T) {
 	}
 	if len(args) != 5 || args[4] != 42 {
 		t.Fatalf("unexpected INEP option args: %#v", args)
+	}
+}
+
+func TestFiltrosOpcoesSchoolsWhere_AuthorizedDRESurvivesExcept(t *testing.T) {
+	f := AnalyticsFilters{DRE: "DRE_A"}
+	where, args := filtrosOpcoesSchoolsWhereWithAuthorization(f, "s", "dre", " DRE_A ")
+	if !strings.Contains(where, "s.dre") || len(args) != 6 || args[0] != "DRE_A" {
+		t.Fatalf("authorized DRE was removed from cascade: where=%s args=%#v", where, args)
+	}
+	if strings.Contains(where, "($1 = '' OR") {
+		t.Fatalf("authorization must be mandatory: %s", where)
 	}
 }

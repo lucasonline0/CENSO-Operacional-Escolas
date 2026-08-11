@@ -50,14 +50,16 @@ type CensusModel struct {
 }
 
 type Models struct {
-	Schools SchoolModel
-	Census  CensusModel
+	Schools    SchoolModel
+	Census     CensusModel
+	AdminUsers AdminUserModel
 }
 
 func NewModels(db *sql.DB) Models {
 	return Models{
-		Schools: SchoolModel{DB: db},
-		Census:  CensusModel{DB: db},
+		Schools:    SchoolModel{DB: db},
+		Census:     CensusModel{DB: db},
+		AdminUsers: AdminUserModel{DB: db},
 	}
 }
 

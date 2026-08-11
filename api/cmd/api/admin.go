@@ -691,7 +691,7 @@ func (app *application) AdminGetCensus(w http.ResponseWriter, r *http.Request) {
 
 	p := parseCensusListParams(r.URL.Query())
 	if scope.Role == RoleDRE {
-		p.DRE = scope.DRE
+		p.DRE = strings.TrimSpace(scope.DRE)
 	}
 
 	whereArgs := p.whereArgs()
@@ -822,7 +822,7 @@ func (app *application) AdminGetCensusByID(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if scope.Role == RoleDRE && !strings.EqualFold(strings.TrimSpace(c.Dre), strings.TrimSpace(scope.DRE)) {
+	if !scope.IsAuthorizedForDRE(c.Dre) {
 		app.errorJSON(w, fmt.Errorf("acesso não permitido para esta DRE"), http.StatusForbidden)
 		return
 	}

@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  LogOut, Search, RefreshCw, CloudUpload, Lock, User as UserIcon,
-  AlertCircle, Loader2, PanelLeftClose, Eye, EyeOff, ArrowRight,
-  BarChart2, UsersRound, MonitorSmartphone, ShieldCheck, Utensils,
+  LogOut, RefreshCw, AlertCircle, Loader2, PanelLeftClose, BarChart2,
+  UsersRound, MonitorSmartphone, ShieldCheck, Utensils,
   ClipboardCheck, Activity, Landmark, Database, MapPinned,
   Menu, X, ChevronDown, HeartPulse,
   MonitorPlay,
@@ -16,7 +15,7 @@ import "./admin.css";
 
 import { API, C } from "@/components/admin/shared/constants";
 import {
-  apiFetch, saveToken, loadToken, clearToken, clearApiCache, sanitize, prefetchDashboard,
+  apiFetch, saveToken, loadToken, clearToken, clearApiCache, sanitize, prefetchDashboard, fetchAdminMe,
 } from "@/components/admin/shared/api";
 import { JsonModal } from "@/components/admin/shared/JsonModal";
 import { AbaTodosCensos } from "@/components/admin/AbaTodosCensos";
@@ -33,7 +32,7 @@ import { AbaSaudeOperacionalEscolas } from "@/components/admin/AbaSaudeOperacion
 import { FiltrosGlobais } from "@/components/admin/FiltrosGlobais";
 import PresentationMode from "@/components/admin/PresentationMode";
 import type {
-  CensusPage, DashboardData, DashboardFilters, FiltrosOpcoes,
+  CensusPage, DashboardData, DashboardFilters, FiltrosOpcoes, AdminProfile,
 } from "@/components/admin/shared/types";
 
 // ─── Login ────────────────────────────────────────────────────────────────────
@@ -62,7 +61,12 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
       const token = (json.data as { token: string }).token;
       saveToken(token);
       setStatus("prefetch");
-      await prefetchDashboard(token);
+      try {
+        const prof = await fetchAdminMe(token);
+        await prefetchDashboard(token, prof.role);
+      } catch {
+        await prefetchDashboard(token);
+      }
       onLogin(token);
     } catch { setError("Não foi possível conectar ao servidor."); setStatus("idle"); }
   }
@@ -366,6 +370,7 @@ function NavGroup({
 }
 
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
+  const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [censusPage, setCensusPage] = useState<CensusPage | null>(null);
   const [tab, setTab] = useState<Tab>("perfil");
   const [filterStatus, setFilterStatus] = useState("");
@@ -417,7 +422,30 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     catch (e) { if ((e as Error).message === "UNAUTHORIZED") logout(); }
   }, [token, filterStatus, filters, search, censusLimit, censusPageNum, logout]);
 
-  useEffect(() => { loadDb(); }, [loadDb]);
+   useEffect(() => {
+     let active = true;
+     async function init() {
+       try {
+         const userProfile = await fetchAdminMe(token);
+         if (!active) return;
+         setProfile(userProfile);
+        
+         if (userProfile.role === "dre" && userProfile.dre) {
+            setFilters((prev) => ({ ...prev, dre: userProfile.dre ?? undefined }));
+         }
+       } catch (e) {
+       if ((e as Error).message === "UNAUTHORIZED") {
+           logout();
+           return;
+         }
+       }
+       loadDb();
+     }
+     init();
+     return () => { active = false; };
+   }, [token, logout, loadDb]);
+
+
   // Pequeno debounce: a busca textual agora dispara requisição ao backend e o
   // timeout evita uma chamada por tecla digitada.
   useEffect(() => {
@@ -455,7 +483,13 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   // Mudanças de recorte (filtros globais, status ou busca) voltam para a página 1.
   const updateSearch = (s: string) => { setSearch(s); setCensusPageNum(1); };
   const updateFilterStatus = (s: string) => { setFilterStatus(s); setCensusPageNum(1); };
-  const updateFilters = (f: DashboardFilters) => { setFilters(f); setCensusPageNum(1); };
+  const updateFilters = (f: DashboardFilters) => {
+    if (profile?.role === "dre" && profile.dre) {
+      f = { ...f, dre: profile.dre };
+    }
+    setFilters(f);
+    setCensusPageNum(1);
+  };
 
   const handleNav = (id: Tab) => { setTab(id); updateSearch(""); setVisited((prev) => new Set([...prev, id])); setMobileNavOpen(false); };
 
@@ -599,6 +633,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                   opcoes={filtrosOpcoes}
                   filters={filters}
                   onFiltersChange={updateFilters}
+                  profile={profile}
                 />
               </div>
             )}

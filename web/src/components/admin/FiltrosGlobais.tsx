@@ -3,7 +3,7 @@
 import React, { useMemo } from "react";
 import { Filter, X } from "lucide-react";
 import { C } from "./shared/constants";
-import type { DashboardFilters, FiltrosOpcoes } from "./shared/types";
+import type { DashboardFilters, FiltrosOpcoes, AdminProfile } from "./shared/types";
 
 const EMPTY: DashboardFilters = {};
 
@@ -12,11 +12,13 @@ function FilterSelect({
   value,
   options,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value: string | number | undefined;
   options: (string | number)[];
   onChange: (v: string) => void;
+  disabled?: boolean;
 }) {
   const hasValue = value !== undefined && value !== "";
   return (
@@ -27,8 +29,11 @@ function FilterSelect({
       <select
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
         className={`rounded-lg border py-1.5 pl-2.5 pr-7 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-          hasValue
+          disabled
+            ? "border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed"
+            : hasValue
             ? "border-blue-300 bg-blue-50 font-semibold text-blue-800"
             : "border-slate-200 bg-white text-slate-700"
         }`}
@@ -49,11 +54,15 @@ export function FiltrosGlobais({
   opcoes,
   filters,
   onFiltersChange,
+  profile,
 }: {
   opcoes: FiltrosOpcoes | null;
   filters: DashboardFilters;
   onFiltersChange: (f: DashboardFilters) => void;
+  profile?: AdminProfile | null;    
 }) {
+  const isDreUser = profile?.role === "dre";
+
   const activeCount = useMemo(
     () => Object.values(filters).filter((v) => v !== undefined && v !== "").length,
     [filters],
@@ -72,13 +81,16 @@ export function FiltrosGlobais({
   }
 
   function clear() {
-    onFiltersChange(EMPTY);
+    if (isDreUser && profile?.dre) {
+      onFiltersChange({ dre: profile.dre });
+    } else {
+      onFiltersChange(EMPTY);
+    }
   }
-
   return (
     <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
 
-      {/* Linha superior: label + badge + botão limpar */}
+      {/* Linha superior: label + badge + indicação DRE + botão limpar */}
       <div className="flex items-center gap-2 mb-2.5">
         <Filter size={14} style={{ color: C.primary }} />
         <span className="text-xs font-semibold text-slate-600">Filtros</span>
@@ -90,11 +102,18 @@ export function FiltrosGlobais({
             {activeCount}
           </span>
         )}
+
+        {isDreUser && profile?.dre && (
+          <span className="ml-2 text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-0.5">
+            Acesso restrito à DRE: <strong>{profile.dre}</strong>
+          </span>
+        )}
+
         {activeCount > 0 && (
           <button
             type="button"
             onClick={clear}
-            className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            className="ml-auto flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
           >
             <X size={12} />
             Limpar filtros
@@ -121,6 +140,7 @@ export function FiltrosGlobais({
           value={filters.dre}
           options={opcoes?.dres ?? []}
           onChange={(v) => set("dre", v)}
+          disabled={isDreUser}
         />
         <FilterSelect
           label="Município"
@@ -146,7 +166,7 @@ export function FiltrosGlobais({
             <ActiveTag label={`Região: ${filters.regiao_integracao}`} onRemove={() => set("regiao_integracao", "")} />
           )}
           {filters.dre && (
-            <ActiveTag label={`DRE: ${filters.dre}`} onRemove={() => set("dre", "")} />
+            <ActiveTag label={`DRE: ${filters.dre}`} onRemove={isDreUser ? undefined : () => set("dre", "")} />
           )}
           {filters.municipio && (
             <ActiveTag label={`Município: ${filters.municipio}`} onRemove={() => set("municipio", "")} />
@@ -160,11 +180,12 @@ export function FiltrosGlobais({
   );
 }
 
-function ActiveTag({ label, onRemove }: { label: string; onRemove: () => void }) {
+function ActiveTag({ label, onRemove }: { label: string; onRemove?: () => void }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700">
       {label}
-      <button
+      {onRemove && (
+        <button
         type="button"
         onClick={onRemove}
         className="ml-0.5 rounded-full p-0.5 hover:bg-blue-100"
@@ -172,6 +193,7 @@ function ActiveTag({ label, onRemove }: { label: string; onRemove: () => void })
       >
         <X size={10} />
       </button>
+    )}
     </span>
   );
 }

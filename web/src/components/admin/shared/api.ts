@@ -52,6 +52,10 @@ export async function apiFetch<T>(path: string, token: string, opts?: RequestIni
   return data;
 }
 
+export async function fetchAdminMe(token: string): Promise<AdminProfile> {
+  return apiFetch<AdminProfile>("/v1/admin/me", token);
+}
+
 // Dispara todos os endpoints do dashboard em paralelo e armazena no cache.
 // Chamado durante o login para que as abas abram instantaneamente.
 const DASHBOARD_ENDPOINTS = [
@@ -83,7 +87,11 @@ const DASHBOARD_ENDPOINTS = [
   "/v1/admin/analytics/filtros/opcoes",
 ];
 
-export async function prefetchDashboard(token: string): Promise<void> {
+export async function prefetchDashboard(token: string, role?: string): Promise<void> {
+  const endpoints = role === "dre" 
+    ? DASHBOARD_ENDPOINTS.filter((ep) => !ep.includes("sheet-metrics")) 
+    : DASHBOARD_ENDPOINTS;
+
   const fetches = Promise.allSettled(DASHBOARD_ENDPOINTS.map((ep) => apiFetch(ep, token)));
   const timeout = new Promise<void>((resolve) => setTimeout(resolve, 6000));
   await Promise.race([fetches, timeout]);
@@ -91,7 +99,7 @@ export async function prefetchDashboard(token: string): Promise<void> {
 
 // ── Filtros e Labels ────────────────────────────────────────────────────────
 
-import type { DashboardFilters } from "./types";
+import type { DashboardFilters, AdminProfile } from "./types";
 
 export function buildFilterParams(filters?: DashboardFilters): string {
   if (!filters) return "";
@@ -101,6 +109,8 @@ export function buildFilterParams(filters?: DashboardFilters): string {
   if (filters.dre) p.set("dre", filters.dre);
   if (filters.municipio) p.set("municipio", filters.municipio);
   if (filters.zona) p.set("zona", filters.zona);
+  if (filters.school_id) p.set("school_id", String(filters.school_id));
+  if (filters.codigo_inep) p.set("codigo_inep", filters.codigo_inep);
   const s = p.toString();
   return s ? `?${s}` : "";
 }

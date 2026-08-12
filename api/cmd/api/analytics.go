@@ -133,42 +133,45 @@ type ZonaStat struct {
 func (app *application) AdminAnalyticsOverview(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	db := app.models.Schools.DB
+	f := parseAnalyticsFilters(r)
 
-	out := AnalyticsOverview{
-		PorZona: []ZonaStat{},
-	}
+	out := AnalyticsOverview{PorZona: []ZonaStat{}}
 
-	// 1) Contagens operacionais e quantitativos de alunos (1 query).
-	//    - COUNT DISTINCT school_id em completed/drafts: evita contar
-	//      a mesma escola múltiplas vezes quando houver censos de mais
-	//      de um ano.
-	//    - SUM/AVG filtram pelo ano corrente para evitar inflação
-	//      acumulada entre ciclos anuais.
-	//    - COALESCE garante 0 quando não há linhas completed no ano.
+	// Scope schools before any aggregate so a DRE profile cannot observe totals
+	// from another DRE. School/INEP filters are applied to the same base relation.
 	err := db.QueryRowContext(ctx, `
+		WITH scoped_schools AS (
+			SELECT s.id
+			FROM schools s
+			WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+			  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
+			  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
+			  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
+			        SELECT UPPER(TRIM(municipio))
+			        FROM reg_integracao
+			        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
+			      ))
+			  AND ($6 = 0 OR s.id = $6)
+			  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
+		),
+		base AS (
+			SELECT v.*
+			FROM vw_censo_base v
+			JOIN scoped_schools ss ON ss.id = v.school_id
+			WHERE v.year = $1
+		)
 		SELECT
-			(SELECT COUNT(*) FROM schools)                                                       AS total_schools,
-			COUNT(*) FILTER (WHERE census_id IS NOT NULL)                                        AS total_censuses,
-			COUNT(DISTINCT school_id) FILTER (WHERE status = 'completed')                        AS completed,
-			COUNT(DISTINCT school_id) FILTER (WHERE status = 'draft')                            AS drafts,
-			COALESCE(SUM(total_alunos)
-				FILTER (
-					WHERE status = 'completed'
-					  AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int
-				), 0)::float8                                                                    AS total_alunos,
-			COALESCE(SUM(alunos_pcd)
-				FILTER (
-					WHERE status = 'completed'
-					  AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int
-				), 0)::float8                                                                    AS alunos_pcd,
-			COALESCE(AVG(total_alunos)
-				FILTER (
-					WHERE status = 'completed'
-					  AND total_alunos IS NOT NULL
-					  AND year = EXTRACT(YEAR FROM CURRENT_DATE)::int
-				), 0)::float8                                                                    AS media_alunos
-		FROM vw_censo_base
-	`).Scan(
+			(SELECT COUNT(*) FROM scoped_schools)                                      AS total_schools,
+			COUNT(*) FILTER (WHERE census_id IS NOT NULL)                              AS total_censuses,
+			COUNT(DISTINCT school_id) FILTER (WHERE status = 'completed')              AS completed,
+			COUNT(DISTINCT school_id) FILTER (WHERE status = 'draft')                  AS drafts,
+			COALESCE(SUM(total_alunos) FILTER (WHERE status = 'completed'), 0)::float8 AS total_alunos,
+			COALESCE(SUM(alunos_pcd) FILTER (WHERE status = 'completed'), 0)::float8   AS alunos_pcd,
+			COALESCE(AVG(total_alunos) FILTER (
+				WHERE status = 'completed' AND total_alunos IS NOT NULL
+			), 0)::float8 AS media_alunos
+		FROM base
+	`, f.Args()...).Scan(
 		&out.TotalSchools,
 		&out.TotalCensuses,
 		&out.Completed,
@@ -182,15 +185,24 @@ func (app *application) AdminAnalyticsOverview(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// 2) Distribuição por zona — escolas DISTINTAS por zona.
 	rows, err := db.QueryContext(ctx, `
 		SELECT
-			COALESCE(NULLIF(zona, ''), 'Não informado') AS zona,
-			COUNT(DISTINCT school_id)                   AS total
-		FROM vw_censo_base
+			COALESCE(NULLIF(TRIM(s.zona), ''), 'Não informado') AS zona,
+			COUNT(*) AS total
+		FROM schools s
+		WHERE ($1 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($1)))
+		  AND ($2 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($2)))
+		  AND ($3 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($3)))
+		  AND ($4 = '' OR UPPER(TRIM(s.municipio)) IN (
+		        SELECT UPPER(TRIM(municipio))
+		        FROM reg_integracao
+		        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($4))
+		      ))
+		  AND ($5 = 0 OR s.id = $5)
+		  AND ($6 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($6)))
 		GROUP BY 1
 		ORDER BY 2 DESC, 1
-	`)
+	`, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro ao agrupar por zona: %v", err), http.StatusInternalServerError)
 		return
@@ -465,6 +477,8 @@ WITH escolas AS (
       AND ($3 = '' OR e.municipio = $3)
       AND ($4 = '' OR e.zona = $4)
       AND ($5 = '' OR e.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
+      AND ($6 = 0 OR e.school_id = $6)
+      AND ($7 = '' OR UPPER(TRIM(COALESCE(e.codigo_inep, ''))) = UPPER(TRIM($7)))
     GROUP BY e.school_id
 ),
 essenciais(nome) AS (
@@ -538,7 +552,7 @@ func (app *application) AdminAnalyticsCaracterizacaoInfraEducacional(w http.Resp
 				 ELSE 0
 			END::float8                                                        AS pct_plena
 		FROM por_escola
-	`, f.LegacyArgs()...).Scan(
+	`, f.Args()...).Scan(
 		&totalEscolas,
 		&out.CoberturaEssenciais.MediaAmbientesEssenciais,
 		&out.CoberturaEssenciais.PctCoberturaPlena,
@@ -561,9 +575,11 @@ func (app *application) AdminAnalyticsCaracterizacaoInfraEducacional(w http.Resp
 		  AND ($3 = '' OR a.municipio = $3)
 		  AND ($4 = '' OR a.zona = $4)
 		  AND ($5 = '' OR a.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
+		  AND ($6 = 0 OR a.school_id = $6)
+		  AND ($7 = '' OR EXISTS (SELECT 1 FROM schools s_scope WHERE s_scope.id = a.school_id AND UPPER(TRIM(COALESCE(s_scope.codigo_inep, ''))) = UPPER(TRIM($7))))
 		GROUP BY TRIM(a.ambiente)
 		ORDER BY escolas DESC, label
-	`, f.LegacyArgs()...)
+	`, f.Args()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro na presença de ambientes: %v", err), http.StatusInternalServerError)
 		return
@@ -601,7 +617,7 @@ func (app *application) AdminAnalyticsCaracterizacaoInfraEducacional(w http.Resp
 			COUNT(*)      AS escolas
 		FROM por_escola
 		GROUP BY 1
-	`, f.LegacyArgs()...)
+	`, f.Args()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro nas faixas de cobertura: %v", err), http.StatusInternalServerError)
 		return
@@ -642,7 +658,7 @@ func (app *application) AdminAnalyticsCaracterizacaoInfraEducacional(w http.Resp
 		FROM por_escola
 		GROUP BY porte_nome
 		ORDER BY ord
-	`, f.LegacyArgs()...)
+	`, f.Args()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro na média por porte: %v", err), http.StatusInternalServerError)
 		return
@@ -794,6 +810,8 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 			  AND ($3 = '' OR s.municipio = $3)
 			  AND ($4 = '' OR s.zona = $4)
 			  AND ($5 = '' OR s.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
+			  AND ($6 = 0 OR s.id = $6)
+			  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
 		),
 		total AS (
 			SELECT COUNT(DISTINCT school_id)::numeric AS n FROM completed
@@ -821,7 +839,7 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 		CROSS JOIN total t
 		GROUP BY ex.etapa, t.n
 		ORDER BY escolas DESC, label
-	`, f.LegacyArgs()...)
+	`, f.Args()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro em etapas_ofertadas: %v", err), http.StatusInternalServerError)
 		return
@@ -852,6 +870,8 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 			  AND ($3 = '' OR s.municipio = $3)
 			  AND ($4 = '' OR s.zona = $4)
 			  AND ($5 = '' OR s.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
+			  AND ($6 = 0 OR s.id = $6)
+			  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
 		),
 		total AS (
 			SELECT COUNT(DISTINCT school_id)::numeric AS n FROM completed
@@ -879,7 +899,7 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 		CROSS JOIN total t
 		GROUP BY ex.modalidade, t.n
 		ORDER BY escolas DESC, label
-	`, f.LegacyArgs()...)
+	`, f.Args()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro em modalidades_ofertadas: %v", err), http.StatusInternalServerError)
 		return
@@ -910,6 +930,8 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 			  AND ($3 = '' OR s.municipio = $3)
 			  AND ($4 = '' OR s.zona = $4)
 			  AND ($5 = '' OR s.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
+			  AND ($6 = 0 OR s.id = $6)
+			  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
 		),
 		total AS (
 			SELECT COUNT(*)::numeric AS n FROM completed
@@ -944,7 +966,7 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 		CROSS JOIN total t
 		GROUP BY ex.turno, t.n
 		ORDER BY escolas DESC, label
-	`, f.LegacyArgs()...)
+	`, f.Args()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro em turnos: %v", err), http.StatusInternalServerError)
 		return
@@ -976,6 +998,8 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 			  AND ($3 = '' OR s.municipio = $3)
 			  AND ($4 = '' OR s.zona = $4)
 			  AND ($5 = '' OR s.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
+			  AND ($6 = 0 OR s.id = $6)
+			  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
 		),
 		turnos_por_escola AS (
 			SELECT c.school_id,
@@ -1006,7 +1030,7 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 		 AND e.year      = $1
 		GROUP BY e.porte_escola_nome
 		ORDER BY ord
-	`, f.LegacyArgs()...)
+	`, f.Args()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro em media_turnos_por_porte: %v", err), http.StatusInternalServerError)
 		return
@@ -1108,6 +1132,8 @@ const caracterizacaoEscolasSelectSQL = `
 	        FROM reg_integracao
 	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
 	      ))
+	  AND ($6 = 0 OR s.id = $6)
+	  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
 	ORDER BY UPPER(TRIM(s.dre)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
 `
 
@@ -1148,7 +1174,7 @@ func (app *application) AdminAnalyticsCaracterizacaoEscolas(w http.ResponseWrite
 
 	ctx := r.Context()
 	dbRows, err := app.models.Schools.DB.QueryContext(ctx, caracterizacaoEscolasSelectSQL,
-		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao)
+		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("caracterizacao escolas: %w", err), http.StatusInternalServerError)
 		return

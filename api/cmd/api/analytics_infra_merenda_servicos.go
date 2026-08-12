@@ -347,7 +347,7 @@ func (app *application) AdminAnalyticsInfraCondicoes(w http.ResponseWriter, r *h
 				 ELSE 0
 			END::float8
 		FROM por_escola
-	`, f.LegacyArgs()...).Scan(&out.PctCoberturaPlena)
+	`, f.Args()...).Scan(&out.PctCoberturaPlena)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("pct_cobertura_plena: %v", err), http.StatusInternalServerError)
 		return
@@ -1404,6 +1404,15 @@ func infraEscolaSortVal(r InfraEscolaRow, key string) string {
 	}
 }
 
+var infraestruturaAnalyticsSelectSQL = strings.Replace(
+	infraestruturaSelectSQL,
+	"\n\tORDER BY",
+	"\n\t  AND ($6 = 0 OR s.id = $6)"+
+		"\n\t  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))"+
+		"\n\tORDER BY",
+	1,
+)
+
 // AdminAnalyticsInfraEscolas retorna a listagem escola-a-escola de infraestrutura e
 // segurança com busca textual, ordenação e paginação server-side.
 // Parâmetros: year, dre, municipio, zona, regiao_integracao, q, page, page_size, sort, direction.
@@ -1420,8 +1429,8 @@ func (app *application) AdminAnalyticsInfraEscolas(w http.ResponseWriter, r *htt
 	direction := parseEscolasDirection(q.Get("direction"))
 
 	ctx := r.Context()
-	dbRows, err := app.models.Schools.DB.QueryContext(ctx, infraestruturaSelectSQL,
-		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao)
+	dbRows, err := app.models.Schools.DB.QueryContext(ctx, infraestruturaAnalyticsSelectSQL,
+		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("infra escolas: %w", err), http.StatusInternalServerError)
 		return
@@ -1584,6 +1593,8 @@ const merendaEscolasSelectSQL = `
 	        FROM reg_integracao
 	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
 	      ))
+	  AND ($6 = 0 OR s.id = $6)
+	  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
 	ORDER BY UPPER(TRIM(s.dre)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
 `
 
@@ -1626,7 +1637,7 @@ func (app *application) AdminAnalyticsMerendaEscolas(w http.ResponseWriter, r *h
 
 	ctx := r.Context()
 	dbRows, err := app.models.Schools.DB.QueryContext(ctx, merendaEscolasSelectSQL,
-		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao)
+		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("merenda escolas: %w", err), http.StatusInternalServerError)
 		return
@@ -1764,6 +1775,8 @@ const servicosEscolasSelectSQL = `
 	        FROM reg_integracao
 	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
 	      ))
+	  AND ($6 = 0 OR s.id = $6)
+	  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
 	ORDER BY UPPER(TRIM(s.dre)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
 `
 
@@ -1807,7 +1820,7 @@ func (app *application) AdminAnalyticsServicosTerceirizadosEscolas(w http.Respon
 
 	ctx := r.Context()
 	dbRows, err := app.models.Schools.DB.QueryContext(ctx, servicosEscolasSelectSQL,
-		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao)
+		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("servicos escolas: %w", err), http.StatusInternalServerError)
 		return

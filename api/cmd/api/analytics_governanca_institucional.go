@@ -64,6 +64,20 @@ const governancaInstitucionalWhereSQL = `
 	  AND ($3 = '' OR UPPER(TRIM(zona)) = UPPER(TRIM($3)))
 `
 
+// governancaInstitucionalScopedWhereSQL é a variante usada pelo handler HTTP:
+// além dos filtros territoriais, aplica o recorte obrigatório do perfil DRE e
+// os filtros Escola/INEP antes dos COUNTs.
+const governancaInstitucionalScopedWhereSQL = `
+	WHERE ($1 = '' OR UPPER(TRIM(dre)) = UPPER(TRIM($1)))
+	  AND ($2 = '' OR UPPER(TRIM(municipio)) = UPPER(TRIM($2)))
+	  AND ($3 = '' OR UPPER(TRIM(zona)) = UPPER(TRIM($3)))
+	  AND ($4 = '' OR UPPER(TRIM(municipio)) IN (
+	        SELECT UPPER(TRIM(municipio)) FROM reg_integracao
+	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($4))))
+	  AND ($5 = 0 OR school_id = $5)
+	  AND ($6 = '' OR UPPER(TRIM(COALESCE(codigo_inep, ''))) = UPPER(TRIM($6)))
+`
+
 // GovernancaIndicador é a tripla total/denominador/percentual de cada card.
 type GovernancaIndicador struct {
 	Total       int64   `json:"total"`
@@ -123,8 +137,15 @@ func (app *application) AdminAnalyticsFinanceiroGovernancaInstitucional(w http.R
 	ctx := r.Context()
 	db := app.models.Schools.DB
 
-	filters := parseGovernancaInstitucionalFilters(r.URL.Query())
-	args := filters.args()
+	shared := parseAnalyticsFilters(r)
+	args := []any{
+		shared.DRE,
+		shared.Municipio,
+		shared.Zona,
+		shared.RegiaoIntegracao,
+		shared.SchoolID,
+		shared.CodigoINEP,
+	}
 
 	var (
 		totalEscolas        int64
@@ -145,7 +166,7 @@ func (app *application) AdminAnalyticsFinanceiroGovernancaInstitucional(w http.R
 			COUNT(*) FILTER (WHERE is_conselho_parcialmente_ativo)::bigint,
 			COUNT(*) FILTER (WHERE is_governanca_completa)::bigint,
 			COUNT(*) FILTER (WHERE is_governanca_critica)::bigint
-		FROM vw_censo_governanca_institucional`+governancaInstitucionalWhereSQL,
+		FROM vw_censo_governanca_institucional`+governancaInstitucionalScopedWhereSQL,
 		args...,
 	).Scan(
 		&totalEscolas,

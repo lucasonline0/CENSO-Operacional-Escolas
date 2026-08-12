@@ -72,12 +72,18 @@ const indiceGovernancaSelectSQL = `
 	WHERE ($1 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($1)))
 	  AND ($2 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($2)))
 	  AND ($3 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($3)))
+	  AND ($4 = '' OR UPPER(TRIM(s.municipio)) IN (
+	        SELECT UPPER(TRIM(municipio)) FROM reg_integracao
+	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($4))))
+	  AND ($5 = 0 OR s.id = $5)
+	  AND ($6 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($6)))
 `
 
 func (app *application) AdminAnalyticsGovernancaIndiceEscolas(w http.ResponseWriter, r *http.Request) {
-	filters := parseGovernancaInstitucionalFilters(r.URL.Query())
+	filters := parseAnalyticsFilters(r)
 
-	rows, err := app.models.Schools.DB.QueryContext(r.Context(), indiceGovernancaSelectSQL, filters.args()...)
+	rows, err := app.models.Schools.DB.QueryContext(r.Context(), indiceGovernancaSelectSQL,
+		filters.DRE, filters.Municipio, filters.Zona, filters.RegiaoIntegracao, filters.SchoolID, filters.CodigoINEP)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro ao consultar indice de governanca: %w", err), http.StatusInternalServerError)
 		return

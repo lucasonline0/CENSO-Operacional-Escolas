@@ -43,6 +43,8 @@ type preenchimentoDreFilters struct {
 	Municipio        string
 	Zona             string
 	RegiaoIntegracao string
+	SchoolID         int
+	CodigoINEP       string
 }
 
 // parsePreenchimentoDreFilters lê os filtros globais da query string. Espaços em
@@ -116,6 +118,39 @@ func buildPreenchimentoDreQuery(f preenchimentoDreFilters) (string, []any) {
 	}
 }
 
+var preenchimentoDreScopedSelectSQL = strings.Replace(
+	preenchimentoDreSelectSQL,
+	"\n\tGROUP BY",
+	"\n\t  AND ($6 = 0 OR s.id = $6)"+
+		"\n\t  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))"+
+		"\n\tGROUP BY",
+	1,
+)
+
+func preenchimentoDreFiltersFromRequest(r *http.Request, now time.Time) preenchimentoDreFilters {
+	f := parsePreenchimentoDreFilters(r.URL.Query(), now)
+	shared := parseAnalyticsFilters(r)
+	f.DRE = shared.DRE
+	f.Municipio = shared.Municipio
+	f.Zona = shared.Zona
+	f.RegiaoIntegracao = shared.RegiaoIntegracao
+	f.SchoolID = shared.SchoolID
+	f.CodigoINEP = shared.CodigoINEP
+	return f
+}
+
+func buildPreenchimentoDreScopedQuery(f preenchimentoDreFilters) (string, []any) {
+	return preenchimentoDreScopedSelectSQL, []any{
+		f.Year,
+		f.DRE,
+		f.Municipio,
+		f.Zona,
+		f.RegiaoIntegracao,
+		f.SchoolID,
+		f.CodigoINEP,
+	}
+}
+
 // completionPercentage devolve o percentual inteiro de conclusão (completed /
 // total * 100), arredondado, espelhando o que a UI atual já faz com Math.round.
 // Retorna 0 quando não há escolas no recorte.
@@ -147,8 +182,8 @@ func buildPreenchimentoDreRow(dre string, total, completed, draft int) Preenchim
 // por DRE, respeitando os filtros globais (year, dre, municipio, zona,
 // regiao_integracao). Recorte vazio devolve payload válido com totais zerados.
 func (app *application) AdminAnalyticsPreenchimentoDre(w http.ResponseWriter, r *http.Request) {
-	filters := parsePreenchimentoDreFilters(r.URL.Query(), time.Now())
-	query, args := buildPreenchimentoDreQuery(filters)
+	filters := preenchimentoDreFiltersFromRequest(r, time.Now())
+	query, args := buildPreenchimentoDreScopedQuery(filters)
 
 	rows, err := app.models.Schools.DB.QueryContext(r.Context(), query, args...)
 	if err != nil {

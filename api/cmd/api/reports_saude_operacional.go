@@ -210,6 +210,8 @@ func (app *application) buildSaudeOperacionalReportData(ctx context.Context, def
 		Municipio:        f.Municipio,
 		Zona:             f.Zona,
 		RegiaoIntegracao: f.RegiaoIntegracao,
+		SchoolID:         f.SchoolID,
+		CodigoINEP:       f.CodigoINEP,
 	}
 
 	escolas, _, err := app.buildSaudeOperacionalDataset(ctx, f.Year, soFilters)

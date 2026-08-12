@@ -1404,14 +1404,7 @@ func infraEscolaSortVal(r InfraEscolaRow, key string) string {
 	}
 }
 
-var infraestruturaAnalyticsSelectSQL = strings.Replace(
-	infraestruturaSelectSQL,
-	"\n\tORDER BY",
-	"\n\t  AND ($6 = 0 OR s.id = $6)"+
-		"\n\t  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))"+
-		"\n\tORDER BY",
-	1,
-)
+var infraestruturaAnalyticsSelectSQL = infraestruturaSelectSQL
 
 // AdminAnalyticsInfraEscolas retorna a listagem escola-a-escola de infraestrutura e
 // segurança com busca textual, ordenação e paginação server-side.

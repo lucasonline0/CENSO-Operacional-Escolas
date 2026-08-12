@@ -43,6 +43,8 @@ type reportFilters struct {
 	Municipio        string
 	Zona             string
 	RegiaoIntegracao string
+	SchoolID         int
+	CodigoINEP       string
 }
 
 // parseReportFilters lê os filtros da query string, removendo espaços. Um
@@ -66,6 +68,28 @@ func parseReportFilters(q url.Values) reportFilters {
 // $5=regiao_integracao.
 func (f reportFilters) args() []any {
 	return []any{f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao}
+}
+
+// scopedArgs amplia o contrato dos relatórios escola-a-escola com os filtros
+// de identidade. O método args legado é mantido para helpers/testes que ainda
+// exercitam o contrato histórico de cinco argumentos.
+func (f reportFilters) scopedArgs() []any {
+	return []any{f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP}
+}
+
+// parseReportFiltersRequest aplica o escopo autenticado antes do dispatch para
+// qualquer builder XLSX. Assim nenhum builder pode confiar no `dre` enviado pelo
+// navegador quando o token pertence a um perfil DRE.
+func parseReportFiltersRequest(r *http.Request) reportFilters {
+	f := parseReportFilters(r.URL.Query())
+	shared := parseAnalyticsFilters(r)
+	f.DRE = shared.DRE
+	f.Municipio = shared.Municipio
+	f.Zona = shared.Zona
+	f.RegiaoIntegracao = shared.RegiaoIntegracao
+	f.SchoolID = shared.SchoolID
+	f.CodigoINEP = shared.CodigoINEP
+	return f
 }
 
 // describe monta a linha 2 do XLSX ("Filtros aplicados — ..."). Sempre
@@ -271,7 +295,7 @@ func (app *application) AdminGetReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filters := parseReportFilters(r.URL.Query())
+	filters := parseReportFiltersRequest(r)
 
 	var (
 		rd  reportData
@@ -394,6 +418,8 @@ const censoPreenchimentoSelectSQL = `
 	        FROM reg_integracao
 	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
 	      ))
+	  AND ($6 = 0 OR s.id = $6)
+	  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
 	ORDER BY
 		CASE
 			WHEN cr.status IS NULL THEN 1
@@ -415,7 +441,7 @@ const reportDateLayout = "02/01/2006 15:04"
 // e monta o reportData (sem paginar). Datas chegam formatadas em pt-BR; o
 // ano vem como inteiro quando há resposta, ou célula vazia quando pendente.
 func (app *application) buildCensoPreenchimentoReportData(ctx context.Context, def ReportDefinition, f reportFilters) (reportData, error) {
-	rows, err := app.models.Schools.DB.QueryContext(ctx, censoPreenchimentoSelectSQL, f.args()...)
+	rows, err := app.models.Schools.DB.QueryContext(ctx, censoPreenchimentoSelectSQL, f.scopedArgs()...)
 	if err != nil {
 		return reportData{}, fmt.Errorf("consultar preenchimento: %w", err)
 	}

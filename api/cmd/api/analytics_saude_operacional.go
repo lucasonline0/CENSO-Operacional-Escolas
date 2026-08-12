@@ -1108,6 +1108,8 @@ type saudeOperacionalFilters struct {
 	Municipio        string
 	Zona             string
 	RegiaoIntegracao string
+	SchoolID         int
+	CodigoINEP       string
 }
 
 // parseSaudeOperacionalFilters lê os filtros globais da query string. Espaços em
@@ -1119,6 +1121,22 @@ func parseSaudeOperacionalFilters(q url.Values) saudeOperacionalFilters {
 		Municipio:        strings.TrimSpace(q.Get("municipio")),
 		Zona:             strings.TrimSpace(q.Get("zona")),
 		RegiaoIntegracao: strings.TrimSpace(q.Get("regiao_integracao")),
+	}
+}
+
+// saudeOperacionalFiltersFromRequest reaproveita o parser compartilhado para
+// aplicar o escopo de autorização DRE antes de carregar o dataset. School/INEP
+// também entram na consulta base, portanto totais, resumo, ordenação e paginação
+// nunca são calculados sobre linhas fora do recorte.
+func saudeOperacionalFiltersFromRequest(r *http.Request) saudeOperacionalFilters {
+	shared := parseAnalyticsFilters(r)
+	return saudeOperacionalFilters{
+		DRE:              shared.DRE,
+		Municipio:        shared.Municipio,
+		Zona:             shared.Zona,
+		RegiaoIntegracao: shared.RegiaoIntegracao,
+		SchoolID:         shared.SchoolID,
+		CodigoINEP:       shared.CodigoINEP,
 	}
 }
 
@@ -1217,6 +1235,8 @@ const saudeOperacionalSelectSQL = `
 	        FROM reg_integracao
 	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
 	      ))
+	  AND ($6 = 0 OR s.id = $6)
+	  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
 	ORDER BY s.nome_escola, s.id
 `
 
@@ -1230,6 +1250,8 @@ func buildSaudeOperacionalQuery(year int, f saudeOperacionalFilters) (string, []
 		f.Municipio,
 		f.Zona,
 		f.RegiaoIntegracao,
+		f.SchoolID,
+		f.CodigoINEP,
 	}
 }
 
@@ -1380,7 +1402,7 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 		return
 	}
 
-	filters := parseSaudeOperacionalFilters(q)
+	filters := saudeOperacionalFiltersFromRequest(r)
 
 	localFilters, err := parseSaudeOperacionalLocalFilters(q)
 	if err != nil {

@@ -907,31 +907,31 @@ func TestSaudeOperacionalBuildQueryArgs(t *testing.T) {
 		{
 			name: "sem filtros",
 			year: 2026,
-			want: []any{2026, "", "", "", ""},
+			want: []any{2026, "", "", "", "", 0, ""},
 		},
 		{
 			name:    "dre filtra o universo",
 			year:    2026,
 			filters: saudeOperacionalFilters{DRE: "CASTANHAL"},
-			want:    []any{2026, "CASTANHAL", "", "", ""},
+			want:    []any{2026, "CASTANHAL", "", "", "", 0, ""},
 		},
 		{
 			name:    "municipio filtra o universo",
 			year:    2026,
 			filters: saudeOperacionalFilters{Municipio: "BELEM"},
-			want:    []any{2026, "", "BELEM", "", ""},
+			want:    []any{2026, "", "BELEM", "", "", 0, ""},
 		},
 		{
 			name:    "zona filtra o universo",
 			year:    2026,
 			filters: saudeOperacionalFilters{Zona: "Urbana"},
-			want:    []any{2026, "", "", "Urbana", ""},
+			want:    []any{2026, "", "", "Urbana", "", 0, ""},
 		},
 		{
 			name:    "regiao_integracao filtra o universo",
 			year:    2026,
 			filters: saudeOperacionalFilters{RegiaoIntegracao: "GUAJARA"},
-			want:    []any{2026, "", "", "", "GUAJARA"},
+			want:    []any{2026, "", "", "", "GUAJARA", 0, ""},
 		},
 		{
 			name: "multiplos filtros combinados por AND",
@@ -942,7 +942,7 @@ func TestSaudeOperacionalBuildQueryArgs(t *testing.T) {
 				Zona:             "Urbana",
 				RegiaoIntegracao: "GUAJARA",
 			},
-			want: []any{2025, "BELEM", "BELEM", "Urbana", "GUAJARA"},
+			want: []any{2025, "BELEM", "BELEM", "Urbana", "GUAJARA", 0, ""},
 		},
 	}
 

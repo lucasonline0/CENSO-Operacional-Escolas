@@ -62,6 +62,9 @@ type prodepFilters struct {
 	RI                    string // '' = todas (case-insensitive sobre ri_prodep)
 	MatchStatus           string // '' = todos
 	StatusPrestacaoContas string // '' = todos
+	SchoolID              int
+	CodigoINEP            string
+	RequireLinkedDRE      bool
 }
 
 // args devolve os argumentos posicionais na ordem esperada por prodepWhereSQL.
@@ -74,6 +77,9 @@ func (f prodepFilters) args() []any {
 		f.RI,
 		f.MatchStatus,
 		f.StatusPrestacaoContas,
+		f.RequireLinkedDRE,
+		f.SchoolID,
+		f.CodigoINEP,
 	}
 }
 
@@ -125,6 +131,14 @@ var prodepWhereSQL = `
 	  AND ($5 = '' OR ` + sqlNormalizeProdep("COALESCE(ri_prodep, '')", "RI") + ` = ` + sqlNormalizeProdep("$5::text", "RI") + `)
 	  AND ($6 = '' OR match_status = $6)
 	  AND ($7 = '' OR COALESCE(status_prestacao_contas, '') = $7)
+	  AND ($8 = false OR ($3 <> '' AND EXISTS (
+	        SELECT 1
+	        FROM schools scope_s
+	        WHERE (scope_s.id = prodep_repasses.school_id OR scope_s.id = prodep_repasses.school_id_sede)
+	          AND UPPER(TRIM(scope_s.dre)) = UPPER(TRIM($3))
+	      )))
+	  AND ($9 = 0 OR prodep_repasses.school_id = $9 OR prodep_repasses.school_id_sede = $9)
+	  AND ($10 = '' OR UPPER(TRIM(COALESCE(codigo_inep_prodep, ''))) = UPPER(TRIM($10)))
 `
 
 type ProdepResumo struct {
@@ -270,6 +284,26 @@ func parseProdepFilters(q map[string][]string) (prodepFilters, error) {
 	return f, nil
 }
 
+// applyProdepAccessScope combina os filtros específicos do PRODEP com o escopo
+// compartilhado. Um usuário DRE só pode consumir linhas que tenham vínculo
+// operacional verificável (school_id ou school_id_sede) com sua DRE. Entradas
+// apenas saneadas por fonte auxiliar permanecem visíveis para admin, mas são
+// deliberadamente ocultadas do perfil DRE quando não há vínculo confiável.
+func applyProdepAccessScope(r *http.Request, f prodepFilters) prodepFilters {
+	shared := parseAnalyticsFilters(r)
+	f.DRE = shared.DRE
+	f.Municipio = shared.Municipio
+	f.SchoolID = shared.SchoolID
+	f.CodigoINEP = shared.CodigoINEP
+	if strings.TrimSpace(shared.RegiaoIntegracao) != "" {
+		f.RI = shared.RegiaoIntegracao
+	}
+	if scope, ok := GetAdminAccessScope(r.Context()); ok && scope.Role == RoleDRE {
+		f.RequireLinkedDRE = true
+	}
+	return f
+}
+
 // AdminAnalyticsFinanceiroGovernancaProdep responde GET
 // /v1/admin/analytics/financeiro-governanca/prodep.
 //
@@ -285,6 +319,7 @@ func (app *application) AdminAnalyticsFinanceiroGovernancaProdep(w http.Response
 		app.errorJSON(w, err, http.StatusBadRequest)
 		return
 	}
+	filters = applyProdepAccessScope(r, filters)
 	args := filters.args()
 
 	out := ProdepFinanceiroPayload{
@@ -479,15 +514,15 @@ func (app *application) AdminAnalyticsFinanceiroGovernancaProdep(w http.Response
 		MatchStatus:           []string{"matched_by_inep_schools", "matched_by_base_dige", "prodep_only_validado", "anexo_vinculado_sede"},
 		StatusPrestacaoContas: []string{"ok", "sem_recurso", "nao_prestou_contas"},
 	}
-	if out.FiltrosDisponiveis.DREs, err = app.queryProdepDistinct(ctx, db, "dre_prodep"); err != nil {
+	if out.FiltrosDisponiveis.DREs, err = app.queryProdepDistinct(ctx, db, "dre_prodep", args); err != nil {
 		app.errorJSON(w, fmt.Errorf("filtros dres prodep: %v", err), http.StatusInternalServerError)
 		return
 	}
-	if out.FiltrosDisponiveis.Municipios, err = app.queryProdepDistinct(ctx, db, "municipio_resolvido"); err != nil {
+	if out.FiltrosDisponiveis.Municipios, err = app.queryProdepDistinct(ctx, db, "municipio_resolvido", args); err != nil {
 		app.errorJSON(w, fmt.Errorf("filtros municipios prodep: %v", err), http.StatusInternalServerError)
 		return
 	}
-	if out.FiltrosDisponiveis.RIs, err = app.queryProdepDistinct(ctx, db, "ri_prodep"); err != nil {
+	if out.FiltrosDisponiveis.RIs, err = app.queryProdepDistinct(ctx, db, "ri_prodep", args); err != nil {
 		app.errorJSON(w, fmt.Errorf("filtros ris prodep: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -584,6 +619,7 @@ func (app *application) queryProdepDistinct(
 	ctx context.Context,
 	db *sql.DB,
 	col string,
+	args []any,
 ) ([]string, error) {
 	switch col {
 	case "dre_prodep", "municipio_resolvido", "ri_prodep":
@@ -593,13 +629,12 @@ func (app *application) queryProdepDistinct(
 
 	query := fmt.Sprintf(`
 		SELECT DISTINCT TRIM(%s)
-		FROM prodep_repasses
-		WHERE usar_na_carga = true
+		FROM prodep_repasses`+prodepWhereSQL+`
 		  AND %s IS NOT NULL
 		  AND TRIM(%s) <> ''
 		ORDER BY 1`, col, col, col)
 
-	rows, err := db.QueryContext(ctx, query)
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

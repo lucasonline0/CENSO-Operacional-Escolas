@@ -207,6 +207,8 @@ const merendaSelectSQL = `
 	        FROM reg_integracao
 	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
 	      ))
+	  AND ($6 = 0 OR s.id = $6)
+	  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
 	ORDER BY
 		UPPER(TRIM(s.dre)),
 		UPPER(TRIM(s.municipio)),
@@ -218,7 +220,7 @@ const merendaSelectSQL = `
 // cada escola, ordena por prioridade operacional e projeta as colunas do XLSX.
 // Não pagina.
 func (app *application) buildMerendaReportData(ctx context.Context, def ReportDefinition, f reportFilters) (reportData, error) {
-	dbRows, err := app.models.Schools.DB.QueryContext(ctx, merendaSelectSQL, f.args()...)
+	dbRows, err := app.models.Schools.DB.QueryContext(ctx, merendaSelectSQL, f.scopedArgs()...)
 	if err != nil {
 		return reportData{}, fmt.Errorf("consultar merenda: %w", err)
 	}

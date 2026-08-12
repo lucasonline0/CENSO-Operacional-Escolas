@@ -89,32 +89,38 @@ var (
 // idebFilters reúne os filtros opcionais do endpoint. Ano default = 2023; strings
 // vazias significam "filtro desativado"; SomenteComIdeb=false significa "todos".
 type idebFilters struct {
-	Ano               int
-	Etapa             string
-	DRE               string
-	Municipio         string
-	Zona              string
-	RegiaoIntegracao  string
-	StatusIdeb        string
-	DetalheStatusIdeb string
-	StatusVinculo     string
-	SomenteComIdeb    bool
+	Ano                 int
+	Etapa               string
+	DRE                 string
+	Municipio           string
+	Zona                string
+	RegiaoIntegracao    string
+	StatusIdeb          string
+	DetalheStatusIdeb   string
+	StatusVinculo       string
+	SomenteComIdeb      bool
+	SchoolID            int
+	CodigoINEP          string
+	RequireLinkedSchool bool
 }
 
 // args devolve os argumentos posicionais na ordem esperada por idebFromWhere
 // ($1..$10).
 func (f idebFilters) args() []any {
 	return []any{
-		f.Ano,               // $1
-		f.Etapa,             // $2
-		f.DRE,               // $3
-		f.Municipio,         // $4
-		f.Zona,              // $5
-		f.RegiaoIntegracao,  // $6
-		f.StatusIdeb,        // $7
-		f.DetalheStatusIdeb, // $8
-		f.StatusVinculo,     // $9
-		f.SomenteComIdeb,    // $10
+		f.Ano,                 // $1
+		f.Etapa,               // $2
+		f.DRE,                 // $3
+		f.Municipio,           // $4
+		f.Zona,                // $5
+		f.RegiaoIntegracao,    // $6
+		f.StatusIdeb,          // $7
+		f.DetalheStatusIdeb,   // $8
+		f.StatusVinculo,       // $9
+		f.SomenteComIdeb,      // $10
+		f.SchoolID,            // $11
+		f.CodigoINEP,          // $12
+		f.RequireLinkedSchool, // $13
 	}
 }
 
@@ -167,6 +173,24 @@ func parseIdebFilters(q url.Values) (idebFilters, error) {
 	return f, nil
 }
 
+// applyIdebAccessScope aplica os filtros compartilhados depois da validação dos
+// filtros específicos do IDEB. Para perfil DRE, registros sem vínculo confiável
+// em schools são excluídos explicitamente; admin preserva a visão ampla e os
+// indicadores de qualidade sobre registros sem match.
+func applyIdebAccessScope(r *http.Request, f idebFilters) idebFilters {
+	shared := parseAnalyticsFilters(r)
+	f.DRE = shared.DRE
+	f.Municipio = shared.Municipio
+	f.Zona = shared.Zona
+	f.RegiaoIntegracao = shared.RegiaoIntegracao
+	f.SchoolID = shared.SchoolID
+	f.CodigoINEP = shared.CodigoINEP
+	if scope, ok := GetAdminAccessScope(r.Context()); ok && scope.Role == RoleDRE {
+		f.RequireLinkedSchool = true
+	}
+	return f
+}
+
 // idebFromWhere é o trecho FROM + LEFT JOIN + WHERE comum a todas as agregações.
 // Os filtros territoriais (dre/municipio/zona/regiao_integracao) atuam sobre a
 // tabela schools via LEFT JOIN: quando presentes, registros com school_id NULL
@@ -189,6 +213,12 @@ const idebFromWhere = `
 	  AND ($8 = '' OR ir.detalhe_status_ideb = $8)
 	  AND ($9 = '' OR ir.status_vinculo = $9)
 	  AND ($10 = false OR ir.ideb IS NOT NULL)
+	  AND ($11 = 0 OR ir.school_id = $11)
+	  AND ($12 = '' OR (
+	        ($13 = false AND UPPER(TRIM(COALESCE(ir.codigo_inep, ''))) = UPPER(TRIM($12)))
+	        OR ($13 = true AND UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($12)))
+	      ))
+	  AND ($13 = false OR ir.school_id IS NOT NULL)
 `
 
 // ---------------------------------------------------------------------------
@@ -391,6 +421,7 @@ func (app *application) AdminAnalyticsPerfilAlunosResultadosIDEB(w http.Response
 		app.errorJSON(w, err, http.StatusBadRequest)
 		return
 	}
+	f = applyIdebAccessScope(r, f)
 
 	out := IdebAnalytics{
 		PorEtapa:           []IdebPorEtapa{},

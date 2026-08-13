@@ -740,6 +740,9 @@ func (app *application) idebRankings(ctx context.Context, f idebFilters) (IdebRa
 // controladas pelo servidor (constantes), não entrada de usuário.
 func (app *application) idebRankingQuery(ctx context.Context, f idebFilters, extraPredicate, orderBy string, limit int) ([]IdebRankingItem, error) {
 	db := app.models.Schools.DB
+
+	limitParamIdx := len(f.args()) + 1
+
 	query := fmt.Sprintf(`
 		SELECT codigo_inep, nome_escola_origem, etapa, ideb, total_avaliado,
 		       percentual_avaliado, dre, municipio, status_ideb, status_vinculo
@@ -753,13 +756,13 @@ func (app *application) idebRankingQuery(ctx context.Context, f idebFilters, ext
 			%s
 			  AND %s
 		) t
-		WHERE rn <= $11
+		WHERE rn <= $%d
 		ORDER BY CASE etapa
 			WHEN 'anos_iniciais' THEN 1
 			WHEN 'anos_finais' THEN 2
 			WHEN 'ensino_medio' THEN 3
 			ELSE 4 END, rn
-	`, orderBy, idebFromWhere, extraPredicate)
+	`, orderBy, idebFromWhere, extraPredicate, limitParamIdx)
 
 	args := append(f.args(), limit)
 	rows, err := db.QueryContext(ctx, query, args...)

@@ -522,7 +522,7 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
     }
 
     const intervalMs = 50;
-    let timer: any = null;
+    let timer: ReturnType<typeof setInterval> | null = null;
 
     timer = setInterval(() => {
       setProgress((prev) => {

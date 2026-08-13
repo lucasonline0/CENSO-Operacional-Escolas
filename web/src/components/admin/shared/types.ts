@@ -55,6 +55,12 @@ export interface CaracterizacaoPerfilPg {
   por_zona:              CaracterizacaoZonaPg[];
   matriculas_por_porte:  CaracterizacaoMatPortePg[];
 }
+export interface AdminProfile{
+  username: string;
+  role: "admin" | "dre";
+  dre: string | null;
+}
+
 export interface DreCountPg   { dre: string; escolas: number; }
 export interface DreSummaryPg {
   dre:                     string;
@@ -496,6 +502,8 @@ export interface DashboardFilters {
   dre?: string;
   municipio?: string;
   zona?: string;
+  school_id?: number;
+  codigo_inep?: string;
 }
 
 // Filtros globais do dashboard.

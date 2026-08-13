@@ -415,6 +415,8 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     if (filters.municipio) p.set("municipio", filters.municipio);
     if (filters.zona) p.set("zona", filters.zona);
     if (filters.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
+    if (filters.school_id) p.set("school_id", String(filters.school_id));
+    if (filters.codigo_inep) p.set("codigo_inep", filters.codigo_inep);
     if (search) p.set("search", search);
     p.set("limit", String(limit));
     p.set("page", String(page));

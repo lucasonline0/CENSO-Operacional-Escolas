@@ -139,6 +139,8 @@ function buildFinanceiroParams(filters?: DashboardFilters): string {
   if (filters?.dre) p.set("dre", filters.dre);
   if (filters?.municipio) p.set("municipio", filters.municipio);
   if (filters?.regiao_integracao) p.set("ri", filters.regiao_integracao);
+  if (filters?.school_id) p.set("school_id", String(filters.school_id));
+  if (filters?.codigo_inep) p.set("codigo_inep", filters.codigo_inep);
   const s = p.toString();
   return s ? `?${s}` : "";
 }

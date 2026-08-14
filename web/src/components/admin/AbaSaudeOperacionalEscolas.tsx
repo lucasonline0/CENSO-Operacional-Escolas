@@ -162,6 +162,8 @@ function buildEndpoint(
   if (filters?.municipio)         params.set("municipio", filters.municipio);
   if (filters?.zona)              params.set("zona", filters.zona);
   if (filters?.regiao_integracao) params.set("regiao_integracao", filters.regiao_integracao);
+  if (filters?.school_id)         params.set("school_id", String(filters.school_id));
+  if (filters?.codigo_inep)       params.set("codigo_inep", filters.codigo_inep);
   if (localStatus !== "todos")      params.set("status", localStatus);
   if (localCriticidade !== "todas") params.set("criticidade_faixa", localCriticidade);
   return `${ENDPOINT_BASE}?${params.toString()}`;

@@ -114,7 +114,7 @@ function SearchSelectEscola({
 
       {/* Dropdown de Opções */}
       {isOpen && (
-        <div className="absolute top-[100%] left-0 z-10 mt-1 max-h-60 w-[300px] overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+        <div className="absolute top-[100%] left-0 z-10 mt-1 max-h-96 w-[450] overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
           {filteredOptions.length === 0 ? (
             <div className="px-3 py-2 text-xs text-slate-500">Nenhuma escola encontrada.</div>
           ) : (
@@ -134,11 +134,14 @@ function SearchSelectEscola({
                 <span className="text-[13px] font-medium text-slate-700 leading-tight">
                   {opt.nome_escola}
                 </span>
-                {opt.codigo_inep && (
-                  <span className="text-[11px] text-slate-500 mt-0.5">
-                    INEP: {opt.codigo_inep}
+          
+                  <span className="text-[11px] text-slate-500 mt-0.5 truncate">
+                    {opt.municipio && <span className="font-semibold">{opt.municipio}</span>}
+                    {opt.municipio && opt.dre && " • "}
+                    {opt.dre && <span>{opt.dre}</span>}
+                    {(opt.municipio || opt.dre) && opt.codigo_inep && " • "}
+                    {opt.codigo_inep ? `INEP: ${opt.codigo_inep}` : "Sem INEP"}
                   </span>
-                )}
               </button>
             ))
           )}

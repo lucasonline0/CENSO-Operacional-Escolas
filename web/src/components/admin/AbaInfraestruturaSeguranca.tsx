@@ -164,12 +164,14 @@ export function AbaInfraestruturaSeguranca({
     setEscolasError("");
 
     const p = new URLSearchParams();
-    if (filters?.ano)              p.set("year",              String(filters.ano));
+    if (filters?.ano)               p.set("year",              String(filters.ano));
     if (filters?.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
-    if (filters?.dre)              p.set("dre",               filters.dre);
-    if (filters?.municipio)        p.set("municipio",         filters.municipio);
-    if (filters?.zona)             p.set("zona",              filters.zona);
-    if (esSearch.trim())           p.set("q",                 esSearch.trim());
+    if (filters?.dre)               p.set("dre",               filters.dre);
+    if (filters?.municipio)         p.set("municipio",         filters.municipio);
+    if (filters?.zona)              p.set("zona",              filters.zona);
+    if (filters?.school_id)         p.set("school_id",         String(filters.school_id));
+    if (filters?.codigo_inep)       p.set("codigo_inep",       filters.codigo_inep);
+    if (esSearch.trim())            p.set("q",                 esSearch.trim());
     p.set("page",      String(esPage));
     p.set("page_size", String(esPageSize));
     p.set("sort",      esSortKey);

@@ -389,7 +389,14 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const [presentationMode, setPresentationMode] = useState(false);
   const [showMobilePresAlert, setShowMobilePresAlert] = useState(false);
 
-  const logout = useCallback(() => { clearToken(); clearApiCache(); onLogout(); }, [onLogout]);
+  /* const logout = useCallback(() => { clearToken(); clearApiCache(); onLogout(); }, [onLogout]); */
+  const logout = useCallback(() => { 
+    setFilters({});
+    setFiltrosOpcoes(null);
+    clearToken(); 
+    clearApiCache(); 
+    onLogout(); 
+  }, [onLogout]);
 
   // O endpoint legado /v1/admin/dashboard segue sendo consultado para gatear o
   // estado de carregamento/erro do painel operacional. O payload (incl. by_dre)

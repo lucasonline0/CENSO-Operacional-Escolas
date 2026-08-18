@@ -118,7 +118,6 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
                     className="login__input login__input--icon"
                     disabled={loading || blocked} value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="admin_seduc_pa" required
                   />
                 </div>
               </label>
@@ -139,7 +138,6 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
                     className="login__input login__input--icon"
                     disabled={loading || blocked} value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••••••" required
                   />
                   <button
                     type="button" className="login__input-toggle" tabIndex={-1}
@@ -468,6 +466,8 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     if (filters.municipio) qs.set("municipio", filters.municipio);
     if (filters.zona) qs.set("zona", filters.zona);
     if (filters.regiao_integracao) qs.set("regiao_integracao", filters.regiao_integracao);
+    if (filters.school_id) qs.set("school_id", String(filters.school_id));
+    if (filters.codigo_inep) qs.set("codigo_inep", filters.codigo_inep);
     const url = `/v1/admin/analytics/filtros/opcoes${qs.toString() ? `?${qs}` : ""}`;
     apiFetch<FiltrosOpcoes>(url, token)
       .then(setFiltrosOpcoes)
@@ -564,15 +564,17 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             <NavGroup items={NAV_OPERACIONAL} active={tab} onNav={handleNav} mobileOpen={mobileNavOpen} />
           </div>
 
-          <div className="ca-side-footer">
-            <div className="ca-sf-icon">
-              <RefreshCw size={16} />
+          {profile?.role !== "dre" && (
+            <div className="ca-side-footer" onClick={handleSync} style={{ cursor: "pointer" }}>
+              <div className="ca-sf-icon">
+                <RefreshCw size={16} className={syncing ? "animate-spin" : ""} />
+              </div>
+              <div>
+                <div className="ca-sf-t">Dados do censo</div>
+                <div className="ca-sf-s">Atualizado em 27/05/2026</div>
+              </div>
             </div>
-            <div>
-              <div className="ca-sf-t">Dados do censo</div>
-              <div className="ca-sf-s">Atualizado em 27/05/2026</div>
-            </div>
-          </div>
+          )}
         </aside>
 
         {/* ── Main ─────────────────────────────────────────────── */}
@@ -646,10 +648,14 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 />
               </div>
             )}
-            {/* Renderiza todas as abas já visitadas. Quando volta para uma aba os dados já são carregados*/}
             {visited.has("perfil") && (
               <div style={{ display: tab === "perfil" ? undefined : "none" }}>
-                <AbaCaracterizacao token={token} onUnauth={logout} filters={filters} />
+                <AbaCaracterizacao 
+                  token={token} 
+                  onUnauth={logout} 
+                  filters={filters} 
+                  userRole={profile?.role}
+                />
               </div>
             )}
             {visited.has("pessoal") && (

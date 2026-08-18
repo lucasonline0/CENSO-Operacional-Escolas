@@ -92,7 +92,7 @@ export async function prefetchDashboard(token: string, role?: string): Promise<v
     ? DASHBOARD_ENDPOINTS.filter((ep) => !ep.includes("sheet-metrics")) 
     : DASHBOARD_ENDPOINTS;
 
-  const fetches = Promise.allSettled(DASHBOARD_ENDPOINTS.map((ep) => apiFetch(ep, token)));
+  const fetches = Promise.allSettled(endpoints.map((ep) => apiFetch(ep, token)));
   const timeout = new Promise<void>((resolve) => setTimeout(resolve, 6000));
   await Promise.race([fetches, timeout]);
 }

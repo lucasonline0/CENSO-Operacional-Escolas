@@ -1,177 +1,295 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for coding agents and contributors working in this repository.
 
-## Project Overview
+## Project overview
 
-Censo Operacional e Estrutural das Escolas — a census system for SEDUC-PA (Secretaria de Estado de Educação do Pará) to collect school infrastructure, personnel, and profile data from 800+ schools. A monorepo with a Go API backend, Next.js frontend, and PostgreSQL database.
+Censo Operacional e Estrutural das Escolas — SEDUC-PA system for consolidating, analysing and monitoring school operational data.
 
-## Development Commands
+Monorepo:
 
-### Backend (`/api`)
+- `api/`: Go backend
+- `web/`: Next.js frontend
+- `infra/`: PostgreSQL bootstrap, migrations, optional Docker setup and env example
+- `docs/`: dashboard, analytics, validation and operational documentation
+
+The current administrative flow is PostgreSQL-first. The `/admin` dashboard and the analytical endpoints use PostgreSQL/Railway as their main data source.
+
+The public census form remains in the codebase, but submissions are closed unless `CENSUS_SUBMISSIONS_ENABLED=true`.
+
+## Development commands
+
+### Backend
+
 ```bash
-# Run development server (requires DB running)
+cd api
+
+go mod download
 go run ./cmd/api
-
-# Generate bcrypt password hash for ADMIN_PASSWORD_HASH
-go run ./cmd/genpasswd/main.go
-
-# Build
 go build ./cmd/api/...
+go test ./...
 ```
 
-### Frontend (`/web`)
+Generate the bcrypt hash for the env-admin password:
+
 ```bash
-npm run dev       # Dev server on port 3000
-npm run build     # Production build
-npm run start     # Production server
-npm run lint      # ESLint
+cd api
+go run ./cmd/genpasswd 'PasswordWithAtLeast12Characters'
 ```
 
-### Infrastructure (`/infra`)
+### Frontend
+
 ```bash
-docker-compose up -d     # Start PostgreSQL (5432) + Adminer (8080)
-docker-compose down      # Stop services
+cd web
+
+npm install
+npm run dev
+npm run build
+npm run start
+npm run lint
 ```
 
-## Environment Configuration
+### Optional local PostgreSQL
 
-Copy `/infra/.env.example` to `/infra/.env`. Key variables:
-- `DB_HOST/PORT/USER/PASSWORD/NAME` — PostgreSQL connection
-- `PORT=8000` — Go API port
-- `ADMIN_PASSWORD_HASH` — bcrypt hash (use `go run ./cmd/genpasswd/main.go` to generate)
-- `ADMIN_JWT_SECRET` — secret for JWT token signing
-- `GOOGLE_CREDENTIALS_JSON` — service account JSON for Sheets/Drive
-- `SPREADSHEET_ID` — target Google Sheet ID
-- `NEXT_PUBLIC_API_URL=http://localhost:8000` — consumed by Next.js
+Docker is not required when the backend uses Railway PostgreSQL.
 
-## Architecture
+If an isolated local database is needed:
 
-### Data Flow
-```
-School Director fills multi-step form (Next.js)
-  → POST /census (Go API)
-  → PostgreSQL (census_responses table, JSONB data field)
-  → Background sync job (every 10 min) → Google Sheets
-  ← Admin dashboard reads metrics via /admin/* endpoints
+```bash
+cd infra
+docker compose up -d
 ```
 
-### Backend (`/api`)
-- **Entry point**: `cmd/api/main.go` — wires routes, DB connection, starts background sync job
-- **Handlers**: `cmd/api/handlers.go` — public census/school endpoints; `cmd/api/admin.go` — JWT-protected admin endpoints
-- **Models**: `internal/models/models.go` — `School` and `CensusResponse` structs
-- **Services**: `internal/services/sheets.go` (Google Sheets sync), `internal/services/drive.go` (photo uploads)
-- **No ORM** — uses `database/sql` + `pgx/v5` driver with raw SQL
-- **Auth**: JWT (2-hour expiry), bcrypt passwords, rate limiting (5 login attempts / 15 min / IP)
-- Router: Chi (`github.com/go-chi/chi/v5`), all routes under `/v1/`
+## Environment configuration
 
-### Database Schema (`/infra/init.sql`)
-- `schools` — school master data (INEP code unique, JSON fields for turnos/etapas/modalidades)
-- `census_responses` — one row per (school_id, year), `data JSONB` stores all form answers, unique constraint on (school_id, year)
+Copy:
 
-### Frontend (`/web`)
-- **Entry points**: `src/app/page.tsx` (11-step census wizard), `src/app/admin/page.tsx` (admin dashboard — large file ~50KB)
-- **Form steps**: 11 components in `src/components/forms/` (step 1 = identification through step 11 = observations)
-- **Validation**: Zod schemas in `src/schemas/` mirror backend expectations; step-specific schemas in `src/schemas/steps/`
-- **Step config**: `src/config/steps.ts` defines the `CENSUS_STEPS` array that drives the wizard
-- **Draft persistence**: localStorage caches school ID and current step
-- **UI**: Tailwind CSS + Radix UI primitives + shadcn/ui (configured via `components.json`)
-- **PDF export**: jsPDF generates downloadable census report
-- **Security**: CSP headers configured in `next.config.ts` for the `/admin` route
+```bash
+cd infra
+cp .env.example .env
+```
 
-### Google Integration
-- `SheetsService` in `internal/services/sheets.go` batch-writes completed census rows
-- Background retry job (10-min interval) re-syncs any census where `sheet_synced_at IS NULL`
-- Drive service handles photo uploads to a configurable root folder
+### Standard local setup
 
-## Key Conventions
+Frontend and backend run locally. PostgreSQL remains on Railway.
 
-- Census `status` field: `'draft'` or `'completed'` — only `completed` records sync to Sheets
-- INEP code is the canonical school identifier (8 digits, unique)
-- Admin routes all require `Authorization: Bearer <token>` header
-- CORS allowed origins are configured at startup from environment
-- The frontend reads location data (DRE/município lists) from the Go API via `GET /locations`, which fetches from Google Sheets
+Use the external PostgreSQL URL exposed by the Railway Postgres service and place it in `DB_DSN`:
 
-## Active Development Track — Admin Dashboard Migration
+```env
+PORT=8000
+DB_DSN="postgresql://user:password@public-host:port/railway"
 
-The admin dashboard (`/admin`) is being incrementally migrated from Google Sheets to PostgreSQL as its analytical source. Treat this as an active, multi-phase track; new work should respect the current state and the documented phases.
+ADMIN_USERNAME=admin_local
+ADMIN_PASSWORD_HASH=<bcrypt-hash>
+ADMIN_JWT_SECRET=<32+-character-random-secret>
 
-### Current state (hybrid)
+ALLOWED_ORIGINS=http://localhost:3000
+CENSUS_SUBMISSIONS_ENABLED=false
+```
 
-- **Operational tab** ("Operacional", "Todos os Censos", "Por DRE") reads from PostgreSQL via `/v1/admin/dashboard` and `/v1/admin/census`.
-- **Analytical tab** ("Caracterização da Rede"): **fully migrated to PostgreSQL** (Phases 1 + 2A + 2B.1 — landed). KPIs, donuts, bar charts and the DRE table consume `/v1/admin/analytics/overview` and `/v1/admin/analytics/caracterizacao/{perfil,dre}`. `sheet-metrics` continues responding and is loaded in parallel as fallback.
-- **Student profile tab** ("Perfil dos Alunos e Resultados") still reads entirely from Google Sheets via `/v1/admin/indicadores-metrics` — target of Phase 3 (Frente 1).
-- The form flow and Sheets sync are unchanged.
+Do not commit real Railway URLs or secrets.
 
-### Target architecture
+### Database DSN precedence
 
-```txt
+`api/cmd/api/main.go` resolves the database connection in this order:
+
+1. `DATABASE_URL`
+2. `DB_DSN`
+3. `DB_HOST` + `DB_PORT` + `DB_USER` + `DB_PASSWORD` + `DB_NAME`
+
+For a backend running locally, `DB_DSN` normally contains the value copied from Railway `DATABASE_PUBLIC_URL`.
+
+For the API service running inside Railway, prefer the private Postgres connection through a Railway reference variable, e.g.:
+
+```text
+DB_DSN=${{Postgres.DATABASE_URL}}
+```
+
+### Admin auth
+
+Required for the environment-backed admin user:
+
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD_HASH`
+- `ADMIN_JWT_SECRET`
+
+`ADMIN_JWT_SECRET` must be at least 32 characters. The API aborts startup when it is missing or too short.
+
+DRE users can also be loaded from the database by the admin auth flow.
+
+### CORS
+
+The backend reads:
+
+```env
+ALLOWED_ORIGINS=http://localhost:3000
+```
+
+Do not use the old `CORS_ALLOWED_ORIGINS` name.
+
+### Public census period
+
+`CENSUS_SUBMISSIONS_ENABLED` controls the public write routes.
+
+- `true`: public submissions enabled
+- `false`: submissions disabled
+- missing: submissions disabled
+
+The current development/admin workflow does not require the form to be open.
+
+### Frontend env
+
+`NEXT_PUBLIC_API_URL` is optional when the backend is available at `http://localhost:8000`; this is already the frontend fallback.
+
+`NEXT_PUBLIC_API_KEY` is also optional. Any `NEXT_PUBLIC_*` value is shipped to the browser and must not be treated as a secret.
+
+## Current architecture
+
+```text
+Next.js /admin
+    ↓ HTTP + Bearer JWT
+Go API /v1/admin/*
+    ↓ database/sql + pgx
+PostgreSQL / Railway
+```
+
+### Backend
+
+- Router: Chi
+- SQL access: `database/sql` + `pgx/v5`
+- No ORM
+- Admin authentication: JWT + bcrypt
+- Analytical routes: `/v1/admin/analytics/*`
+- Public census write routes are gated by `requireCensusSubmissions`
+- Migrations used by the API are embedded from `api/cmd/api/migrations/*.sql`
+
+### Database
+
+Main tables include:
+
+- `schools`
+- `census_responses`
+- `admin_users`
+- analytical/support tables and views created by migrations
+
+`census_responses.data` stores census answers in JSONB.
+
+### Frontend
+
+- `web/src/app/page.tsx`: public census flow
+- `web/src/app/admin/`: administrative dashboard entrypoints
+- `web/src/components/admin/`: dashboard tabs/components
+- `web/src/components/forms/`: public census form steps
+- `web/src/components/admin/shared/api.ts`: admin HTTP client/cache
+
+## PostgreSQL-first dashboard
+
+New dashboard work must use PostgreSQL when the required data already exists there.
+
+The preferred path is:
+
+```text
 PostgreSQL
-  → SQL views / analytical queries / indicator services
-    → protected /v1/admin/analytics/* endpoints
-      → Next.js admin dashboard
+  → views / parameterized analytical queries
+    → /v1/admin/analytics/*
+      → Next.js admin components
 ```
 
-### Sheets must remain functional
+Do not create a new Google Sheets dependency for data already stored in PostgreSQL.
 
-Do **not** remove or disable any of the following:
+## Google Sheets / Drive legacy
 
-- `GET /v1/locations` — used by the public form.
-- `SheetsService.AppendCenso` — writes completed censuses to the sheet.
-- `sheetSyncRetryJob` (10-min ticker in `main.go`).
-- `POST /v1/admin/sync-sheets` — manual resync button.
-- `GET /v1/admin/sheet-metrics` and `GET /v1/admin/indicadores-metrics` — still consumed by parts of `/admin`.
+The repository still contains legacy Google integration code, including `SheetsService`, `DriveService`, sync endpoints/jobs and a small amount of fallback code.
 
-`sheet-metrics` and `indicadores-metrics` will be retired only in a future phase (see roadmap), after:
-1. the UI is fully decoupled from those endpoints,
-2. numerical parity vs. PostgreSQL is validated and documented,
-3. an explicit deprecation phase is signed off.
+Important distinction:
 
-### Incremental development rules
+- Google configuration is **not required** for the standard local `/admin` workflow.
+- Missing Google credentials must not be treated as a blocker for the PostgreSQL-backed admin flow.
+- Do not document Google Cloud/Sheets/Drive as a prerequisite for normal development.
+- Do not add new features that depend on Sheets when PostgreSQL is the intended source.
+- Removal of legacy Google code should be done as a dedicated cleanup change because routes/services/fallbacks still exist and must be removed coherently.
 
-- Do **not** refactor `/admin` as a whole — change one card / one section at a time.
-- Do **not** alter `POST /v1/census` (form submission path) without an explicit request.
-- Do **not** change the form flow (steps, schemas, persistence) unless asked.
-- Do **not** introduce an ORM — the project deliberately uses `database/sql` + `pgx/v5`.
-- Do **not** replace the Go backend or rewrite handlers wholesale.
-- Do **not** remove existing endpoints without a deprecation phase.
-- Prefer **small, reversible PRs** with a paired validation note (numbers compared against the current Sheets-backed view).
+Legacy env names may include:
 
-### Parallel work after Phase 2B.1 — 3 frentes
+- `GOOGLE_CREDENTIALS_JSON`
+- `SPREADSHEET_ID`
+- `DRIVE_ROOT_FOLDER_ID`
+- `GOOGLE_IMPERSONATE_EMAIL`
 
-After Phases 1, 1B, 2A and 2B.1 landed, the track is split into **three frentes** working in parallel from branch `develop`, each on its own branch and on a disjoint set of files. The target is **5 new thematic tabs** in `/admin`: Pessoal e Gestão Escolar, Tecnologia e Equipamentos, Infraestrutura e Segurança, Merenda Escolar, Serviços Terceirizados.
+They should remain out of the standard `.env` setup instructions.
 
-**Out of scope for this round:** the "Perfil dos Alunos e Resultados" and "Gestão Financeira e Governança" tabs — both will be remodelled to consume a **different spreadsheet** (not the census database). No frente should create views, endpoints or components for those two themes. The existing "Caracterização da Rede" tab (already on PostgreSQL) is also not touched.
+## Public API key
 
-- **Frente 1 — Backend Pessoal/Gestão Escolar + Tecnologia.** Branch `feat/analytics-pessoal-tecnologia`. Delivers 4 thematic views (`vw_censo_direcao_escolar`, `_coordenacao_area`, `_quadro_pessoal`, `_equipamentos_tecnologia`) and endpoints `/v1/admin/analytics/pessoal-gestao/*` and `/v1/admin/analytics/tecnologia/*`. Touches `infra/migrations/0003_*` to `0006_*`, `api/cmd/api/analytics_pessoal_tecnologia.go` (new), `api/cmd/api/main.go`. Does **not** touch `web/`. Guide: `docs/dashboard/frente-1-pessoal-tecnologia.md`.
-- **Frente 2 — Backend Infra/Segurança + Merenda + Serviços Terceirizados.** Branch `feat/analytics-infra-merenda-servicos`. Delivers up to 6 thematic views (`vw_censo_ambientes`, `_infraestrutura_seguranca`, `_equipamentos_merenda`, `_rh_merendeiras`, `_rh_servicos_gerais`, `_servicos_terceirizados`) and endpoints `/v1/admin/analytics/infraestrutura/*`, `/merenda/*`, `/servicos-terceirizados/*`. Touches `infra/migrations/0007_*` to `0012_*`, `api/cmd/api/analytics_infra_merenda_servicos.go` (new), `api/cmd/api/main.go`. Does **not** touch `web/`. Guide: `docs/dashboard/frente-2-infra-merenda-servicos.md`.
-- **Frente 3 — Frontend + Data Quality.** Branch `refactor/admin-page-componentes`. Splits `web/src/app/admin/page.tsx` into per-tab components (without changing data sources), creates **placeholders for the 5 new tabs** (skeleton/empty state, no fetch yet), fills in the Phase 2A parity table, investigates decimals in `total_alunos`. Touches `web/`, `docs/dashboard/validacao-fase-2.md`, `docs/dashboard/criterios-contagem-e-qualidade-dados.md`. Does **not** touch `api/` or `infra/`. Guide: `docs/dashboard/frente-3-frontend-qualidade.md`.
+The optional public endpoint gate reads:
 
-The previous 2-frente split (Frente A docs + Frente B Fase 2A) has been concluded — see `docs/dashboard/plano-trabalho-paralelo.md` for the new coordination rules.
+```env
+PUBLIC_API_KEY=...
+```
 
-### Analytical migrations
+The frontend counterpart is:
 
-- Place new SQL in `infra/migrations/NNNN_<descricao>.sql`. A loader in `main.go` (`applyMigrations`) runs every `.sql` in that directory at startup, in alphabetical order.
-- Migrations must be **idempotent** — prefer `CREATE OR REPLACE VIEW`, `IF NOT EXISTS`, etc. No version table for now; the loader simply re-applies every file.
-- Replicate essential views also in `infra/init.sql` so that fresh environments (new docker-compose, new Railway DB) have them on first boot. Or, rely on `applyMigrations` if a startup hook is acceptable for that environment.
-- Use **safe casts** when reading from `census_responses.data` JSONB. The canonical pattern (see `0001_vw_censo_base.sql`) is:
-  ```sql
-  CASE WHEN data->>'campo' ~ '^-?[0-9]+(\.[0-9]+)?$'
-       THEN (data->>'campo')::numeric END AS campo
-  ```
-  This tolerates missing keys, JSON `null`, empty strings and non-numeric text — it never raises.
-- For categorical fields, prefer `NULLIF(data->>'campo', '')`.
-- New analytical endpoints live under `/v1/admin/analytics/*` and must be registered inside the JWT-protected `chi.Router` group in `main.go`.
-- All SQL uses parameterized queries (`$1`, `$2`, ...). Never interpolate user input.
+```env
+NEXT_PUBLIC_API_KEY=...
+```
 
-### Reference documents
+Do not confuse these with a legacy/general `API_KEY` variable. The backend code checks `PUBLIC_API_KEY`.
 
-When working on this track, consult (in this order):
+Because `NEXT_PUBLIC_API_KEY` is visible in the browser, it is not a security boundary equivalent to admin JWT authentication.
 
-- `docs/roadmap-dashboard-proprio.md` — phases, target architecture, acceptance criteria.
-- `docs/checklist-dashboard-proprio.md` — executable checklist per phase.
-- `docs/dashboard/jsonb-field-inventory.md` — what is actually stored in `census_responses.data`.
-- `docs/dashboard/validacao-fase-1.md` — Phase 1 parity template (filled in homologação).
-- `docs/dashboard/plano-trabalho-paralelo.md` — escopo das 3 frentes paralelas atuais (Fase 3 backend, Fase 4 backend, refactor frontend + qualidade).
-- `docs/dashboard/frente-1-pessoal-tecnologia.md`, `docs/dashboard/frente-2-infra-merenda-servicos.md`, `docs/dashboard/frente-3-frontend-qualidade.md` — guia operacional de cada frente.
-- `docs/guia_views_analiticas_baseado_repositorio_censo.md` — methodological reference for the full set of views.
+## Development rules
+
+- Do not introduce an ORM; the project deliberately uses raw SQL through `database/sql` + `pgx`.
+- Use parameterized SQL for all user-controlled values.
+- Keep migrations idempotent where the current migration loader expects repeatable execution.
+- Do not commit `.env`, Railway URLs, passwords, JWT secrets, API keys or Google service-account credentials.
+- Do not change the public census form flow unless the task explicitly requires it.
+- Do not silently enable `CENSUS_SUBMISSIONS_ENABLED`.
+- Prefer small, scoped changes over broad rewrites.
+- New admin analytics should read PostgreSQL directly rather than recreating spreadsheet-backed metrics.
+- When touching admin authentication, preserve role scoping for `admin` and `dre` users.
+- When running destructive SQL or migrations locally, confirm which Railway environment/database is configured first.
+
+## Migrations
+
+The API embeds SQL migrations from:
+
+```text
+api/cmd/api/migrations/*.sql
+```
+
+The repository also maintains infrastructure SQL under `infra/` for operational/reference purposes.
+
+When adding analytical SQL:
+
+- use safe casts for JSONB values
+- use `NULLIF(..., '')` where empty strings should become null
+- use parameterized filters in Go handlers
+- prefer `CREATE OR REPLACE VIEW` / `IF NOT EXISTS` where repeatability is required
+
+Example numeric JSONB cast pattern:
+
+```sql
+CASE
+  WHEN data->>'campo' ~ '^-?[0-9]+(\.[0-9]+)?$'
+  THEN (data->>'campo')::numeric
+END AS campo
+```
+
+## Security notes
+
+- `ADMIN_JWT_SECRET` must stay server-side.
+- `ADMIN_PASSWORD_HASH` is a bcrypt hash, never a plaintext password.
+- Configure `ALLOWED_ORIGINS` explicitly for production.
+- Treat a local connection to Railway production as production access.
+- Avoid bulk scans/transfers of full census JSONB over the public Railway TCP proxy when a narrower SQL query can return only the needed fields.
+- Prefer a staging database/environment for development when available.
+
+## Useful references
+
+- `README.md` — current setup and architecture
+- `infra/.env.example` — current env template
+- `docs/dashboard/` — analytical/dashboard implementation notes
+- `docs/diagnostico-saude-operacional-execucao-local.md` — measured behaviour of local backend + remote Railway PostgreSQL
+- `docs/guia_views_analiticas_baseado_repositorio_censo.md` — analytical SQL methodology
+
+When older documents conflict with the current code, `README.md`, `infra/.env.example` and the implementation on `develop` take precedence.

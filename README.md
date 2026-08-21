@@ -1,500 +1,470 @@
 # Censo Operacional e Estrutural das Escolas (SEDUC-PA)
 
-Este repositório contém o código-fonte do sistema de levantamento estrutural, recursos humanos e perfil escolar da Secretaria de Estado de Educação do Pará (SEDUC-PA). O sistema foi projetado para garantir alta disponibilidade, integridade de dados e segurança da informação, utilizando uma arquitetura moderna e escalável.
+Sistema da Secretaria de Estado de Educação do Pará (SEDUC-PA) para consolidação, análise e acompanhamento dos dados do Censo Operacional das escolas.
 
-## Visão Geral do Projeto
+O projeto é um monorepo com frontend em Next.js, backend em Go e PostgreSQL. O fluxo administrativo atual usa o PostgreSQL hospedado no Railway como fonte principal dos dados e indicadores do painel `/admin`.
 
-O objetivo principal deste software é prover uma interface segura e robusta para que diretores e gestores escolares submetam dados detalhados sobre suas unidades de ensino. O sistema utiliza um padrão de formulário multi-etapas ("Wizard") com validação estrita de dados no lado do cliente e do servidor, assegurando a consistência das informações armazenadas.
+> **Estado atual do projeto:** o período de preenchimento público do formulário está encerrado por padrão. O desenvolvimento corrente está concentrado no painel administrativo e nas consultas analíticas sobre PostgreSQL.
 
-### Principais Funcionalidades
+## Arquitetura atual
 
-- **Coleta de Dados em Etapas:** Segmentação do censo em 14 seções lógicas para redução de carga cognitiva e melhoria da experiência do usuário.
-- **Salvamento de Rascunho:** Capacidade de persistência parcial de dados, permitindo o preenchimento assíncrono.
-- **Validação Robusta:** Verificação de integridade de dados em múltiplas camadas utilizando Zod.
-- **Integração com Ecossistema Google:** Sincronização e exportação de dados automatizada utilizando as APIs do Google Drive e Google Sheets.
-- **Geração de Relatórios:** Suporte para exportação de dados do censo para formato PDF (via jsPDF).
-- **Segurança:** Autenticação robusta, proteção contra ataques comuns da web e validação de requisições com CORS configurado.
+```text
+┌──────────────────────────────┐
+│ Next.js                      │
+│ Frontend / Painel Admin      │
+└──────────────┬───────────────┘
+               │ HTTP / JSON
+               ▼
+┌──────────────────────────────┐
+│ API Go                       │
+│ Chi + database/sql + pgx     │
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ PostgreSQL                   │
+│ Railway                      │
+└──────────────────────────────┘
+```
 
-## Arquitetura Técnica
+### Desenvolvimento local
 
-O projeto segue a estrutura de **Monorepo**, consolidando frontend, backend e infraestrutura em um único repositório versionado.
+No setup padrão de desenvolvimento, frontend e backend rodam localmente e a API acessa o PostgreSQL do Railway:
 
-### Tecnologias Utilizadas
+```text
+http://localhost:3000
+          │
+          ▼
+http://localhost:8000
+          │
+          │ conexão externa PostgreSQL
+          ▼
+     Railway Postgres
+```
 
-- **Backend (Go 1.24)**
-  - _Roteamento:_ Chi (Múltiplas rotas, middlewares customizados e alta performance)
-  - _Banco de Dados:_ Driver PGX estrito com `database/sql` (sem ORM, garantindo performance bruta e controle sobre as queries)
-  - _Integrações:_ APIs do Google Drive/Sheets e manipulação nativa de Excel (`excelize`)
+A integração antiga com Google Sheets/Drive ainda possui código legado no repositório, mas **não é necessária para iniciar a API nem para usar o fluxo principal do painel administrativo**. Não configure Google Cloud, Service Account, planilha ou Drive para o setup local padrão.
 
-- **Frontend (React 19 & Next.js 16)**
-  - _Framework:_ Next.js (App Router)
-  - _Linguagem:_ TypeScript (Tipagem estática estrita)
-  - _Estilização & UI:_ Tailwind CSS v3, Radix UI Primitives e Lucide Icons
-  - _Gerenciamento de Formulários:_ React Hook Form + Zod (Schema Validation)
+## Stack
 
-- **Banco de Dados & Infraestrutura**
-  - _SGBD:_ PostgreSQL 16
-  - _Gerenciamento de Banco Visual:_ Adminer
-  - _Orquestração:_ Docker & Docker Compose
+### Backend
 
-### Estrutura de Diretórios
+- Go 1.24+
+- Chi
+- `database/sql`
+- `pgx/v5`
+- PostgreSQL
+- JWT para autenticação administrativa
+- bcrypt para senha do administrador
 
-A organização do código segue a separação de responsabilidades e princípios de Clean Architecture:
+### Frontend
 
-- `/api`: Contém todo o código-fonte do servidor Backend em Go (`cmd`, `internal/models`, `internal/services`, etc.).
-- `/web`: Contém a aplicação web Frontend em Next.js.
-- `/infra`: Arquivos de configuração de infraestrutura (`docker-compose.yml`, `init.sql` e variáveis de ambiente).
+- Next.js 16
+- React 19
+- TypeScript
+- Tailwind CSS
+- Radix UI
+- Zod
+- React Hook Form
 
-## Como Executar Localmente
+### Infraestrutura
 
-### Pré-requisitos
+- Railway para API e PostgreSQL em produção
+- PostgreSQL 16
+- Docker Compose disponível apenas como alternativa para banco local
 
-Antes de iniciar, certifique-se de ter instalado:
+## Estrutura do repositório
 
-- **Go 1.24** ou superior ([https://go.dev/dl](https://go.dev/dl))
-- **Node.js 20+** com npm ([https://nodejs.org](https://nodejs.org))
-- **Docker** e **Docker Compose** ([https://www.docker.com](https://www.docker.com))
-- **Git** para clonar o repositório
+```text
+CENSO-Operacional-Escolas/
+├── api/                      # API Go
+│   ├── cmd/api/              # entrada da API e handlers
+│   ├── cmd/genpasswd/        # gerador de hash bcrypt
+│   └── internal/             # models e services
+├── web/                      # aplicação Next.js
+│   └── src/
+├── infra/
+│   ├── .env.example          # exemplo de configuração
+│   ├── docker-compose.yml    # PostgreSQL local opcional
+│   ├── init.sql
+│   └── migrations/
+└── docs/                     # documentação técnica adicional
+```
 
-### Passo 1: Configurar Variáveis de Ambiente
+# Executar localmente
 
-#### 1.1 Copiar arquivo de exemplo
+## Pré-requisitos
+
+Instale:
+
+- Git
+- Go 1.24 ou superior
+- Node.js 20 ou superior
+- npm
+
+Docker não é necessário para o fluxo padrão quando o banco do Railway é utilizado.
+
+## 1. Clonar o repositório
+
+```bash
+git clone https://github.com/lucasonline0/CENSO-Operacional-Escolas.git
+cd CENSO-Operacional-Escolas
+git checkout develop
+```
+
+## 2. Criar o arquivo de ambiente
 
 ```bash
 cd infra
 cp .env.example .env
 ```
 
-#### 1.2 Editar `.env` com as configurações necessárias
+O backend procura `.env` em mais de um local e reconhece `infra/.env` quando executado a partir de `api/`.
 
-Abra o arquivo `/infra/.env` e configure as seguintes variáveis:
+## 3. Configurar o banco Railway
+
+No serviço **Postgres** do Railway existem duas URLs com finalidades diferentes:
+
+- `DATABASE_URL`: conexão privada entre serviços dentro do projeto Railway.
+- `DATABASE_PUBLIC_URL`: conexão externa via TCP Proxy, usada quando a aplicação está rodando fora do Railway, como no computador do desenvolvedor.
+
+Para desenvolvimento local, copie o valor de `DATABASE_PUBLIC_URL` do serviço Postgres e use-o em `DB_DSN`:
 
 ```env
-# ============================================
-# DATABASE CONFIGURATION
-# ============================================
-DB_HOST=postgres
-DB_PORT=5432
-DB_USER=censo_user
-DB_PASSWORD=senha_segura_123
-DB_NAME=censo_operacional
-
-# ============================================
-# GO API CONFIGURATION
-# ============================================
-PORT=8000
-ADMIN_PASSWORD_HASH=<use 'go run ./cmd/genpasswd/main.go' para gerar>
-ADMIN_JWT_SECRET=sua_chave_secreta_muito_segura_aqui_minimo_32_caracteres
-
-# ============================================
-# FRONTEND CONFIGURATION
-# ============================================
-NEXT_PUBLIC_API_URL=http://localhost:8000
-
-# ============================================
-# GOOGLE INTEGRATION (Opcional)
-# ============================================
-# Deixe vazio para desenvolvimento sem Google Sheets
-GOOGLE_CREDENTIALS_JSON={}
-SPREADSHEET_ID=
-GOOGLE_DRIVE_FOLDER_ID=
-
-# ============================================
-# CORS CONFIGURATION
-# ============================================
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8000
+DB_DSN="postgresql://usuario:senha@host-publico:porta/railway"
 ```
 
-**Importante:** O `ADMIN_PASSWORD_HASH` deve ser gerado usando bcrypt. Veja [Passo 2.1](#passo-21-gerar-hash-de-senha).
+> Nunca faça commit da URL real do banco ou de qualquer segredo.
 
-### Passo 2: Iniciar o Banco de Dados
+O backend resolve a conexão nesta ordem:
 
-#### 2.1 Gerar Hash da Senha do Admin
+1. `DATABASE_URL`
+2. `DB_DSN`
+3. `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` e `DB_NAME`
 
-Abra um terminal na raiz do projeto e execute:
+Por isso, no setup padrão local basta fornecer `DB_DSN`.
 
-```bash
-cd api
-go run ./cmd/genpasswd/main.go
-```
+### Produção no Railway
 
-Você será solicitado a inserir uma senha. O programa exibirá o hash bcrypt. **Copie este hash e substitua o valor de `ADMIN_PASSWORD_HASH` no arquivo `.env`**.
-
-Exemplo de saída:
+No serviço `CENSO-Operacional-Escolas`, prefira uma variável de referência apontando para a URL privada do serviço Postgres, por exemplo:
 
 ```text
-Enter password: senha123
-Password hash: $2a$10$abcdefghijklmnopqrstuvwxyz...
+DB_DSN=${{Postgres.DATABASE_URL}}
 ```
 
-#### 2.2 Iniciar PostgreSQL e Adminer via Docker
+Isso mantém o tráfego entre API e banco na rede privada do Railway.
 
-```bash
-cd infra
-docker-compose up -d
+## 4. Configurar autenticação administrativa
+
+O `.env` local precisa das credenciais administrativas:
+
+```env
+ADMIN_USERNAME=admin_local
+ADMIN_PASSWORD_HASH=<hash_bcrypt>
+ADMIN_JWT_SECRET=<segredo_aleatorio_com_no_minimo_32_caracteres>
 ```
 
-Verifique se os containers estão rodando:
+### Gerar o hash da senha
 
-```bash
-docker-compose ps
-```
-
-Você deve ver dois containers em execução:
-
-- `postgres` (porta 5432)
-- `adminer` (porta 8080)
-
-**Acessar Adminer (interface visual do banco):**
-
-- URL: [http://localhost:8080](http://localhost:8080)
-- Sistema: PostgreSQL
-- Servidor: postgres
-- Usuário: censo_user
-- Senha: (conforme em `.env`)
-- Banco: censo_operacional
-
-### Passo 3: Iniciar o Backend (Go API)
-
-Abra um novo terminal na raiz do projeto:
+O gerador recebe a senha como argumento e exige pelo menos 12 caracteres:
 
 ```bash
 cd api
-go mod download    # Baixa as dependências
+go run ./cmd/genpasswd 'SuaSenhaForteAqui'
+```
+
+Copie somente o hash retornado para `ADMIN_PASSWORD_HASH`.
+
+### Gerar o segredo JWT
+
+Exemplo:
+
+```bash
+openssl rand -hex 32
+```
+
+A API não inicia se `ADMIN_JWT_SECRET` tiver menos de 32 caracteres.
+
+## 5. Configurar CORS
+
+Para frontend local:
+
+```env
+ALLOWED_ORIGINS=http://localhost:3000
+```
+
+A variável correta consumida pelo backend é `ALLOWED_ORIGINS`.
+
+## 6. Manter o formulário público encerrado
+
+O envio público do Censo é controlado por:
+
+```env
+CENSUS_SUBMISSIONS_ENABLED=false
+```
+
+Apenas o valor `true` abre novamente os endpoints públicos de escrita.
+
+Se a variável estiver ausente, o comportamento também é de período encerrado.
+
+Não é necessário preencher o formulário para trabalhar no painel administrativo.
+
+## 7. Arquivo `.env` mínimo para desenvolvimento local
+
+Exemplo:
+
+```env
+# API
+PORT=8000
+
+# Banco remoto Railway
+DB_DSN="postgresql://usuario:senha@host-publico:porta/railway"
+
+# Admin
+ADMIN_USERNAME=admin_local
+ADMIN_PASSWORD_HASH=$2a$10$SUBSTITUIR_PELO_HASH_REAL
+ADMIN_JWT_SECRET=SUBSTITUIR_POR_SEGREDO_ALEATORIO_COM_32_OU_MAIS_CARACTERES
+
+# CORS
+ALLOWED_ORIGINS=http://localhost:3000
+
+# Formulário público encerrado
+CENSUS_SUBMISSIONS_ENABLED=false
+```
+
+## 8. Iniciar o backend
+
+```bash
+cd api
+go mod download
 go run ./cmd/api
 ```
 
-Você deve ver uma mensagem similar:
-
-```text
-[INFO] Iniciando sincronização de sheets em segundo plano...
-[INFO] Servidor iniciado na porta 8000
-```
-
-**Verificar se a API está rodando:**
+Verifique:
 
 ```bash
 curl http://localhost:8000/v1/health
 ```
 
-Resposta esperada:
+## 9. Iniciar o frontend
 
-```json
-{ "status": "ok" }
-```
-
-### Passo 4: Iniciar o Frontend (Next.js)
-
-Abra um novo terminal na raiz do projeto:
+Em outro terminal:
 
 ```bash
 cd web
-npm install        # Instala dependências
-npm run dev        # Inicia servidor de desenvolvimento
+npm install
+npm run dev
 ```
 
-A aplicação estará disponível em: [http://localhost:3000](http://localhost:3000)
+Abra:
 
-Você deve ver uma mensagem similar:
+- Painel administrativo: `http://localhost:3000/admin`
+- API: `http://localhost:8000`
+- Health check: `http://localhost:8000/v1/health`
 
-```bash
-▲ Next.js 16.0.0
-  - Local:        http://localhost:3000
-  - Environments: .env.local
-```
+O frontend já usa `http://localhost:8000` como fallback. Portanto, `web/.env.local` não é obrigatório enquanto a API estiver nessa URL.
 
-### Passo 5: Verificar Instalação Completa
-
-Quando todos os serviços estiverem rodando:
-
-1. **Frontend:** Acesse [http://localhost:3000](http://localhost:3000) e você deve ver a página inicial do formulário de censo
-2. **Admin Dashboard:** Acesse [http://localhost:3000/admin](http://localhost:3000/admin) (requer autenticação)
-3. **API Health Check:** Acesse [http://localhost:8000/v1/health](http://localhost:8000/v1/health)
-4. **Adminer:** Acesse [http://localhost:8080](http://localhost:8080) para gerenciar o banco de dados
-
----
-
-## Configuração Detalhada de Variáveis de Ambiente
-
-### Variáveis de Banco de Dados
-
-| Variável      | Descrição           | Padrão    | Exemplo           |
-| ------------- | ------------------- | --------- | ----------------- |
-| `DB_HOST`     | Host do PostgreSQL  | localhost | postgres          |
-| `DB_PORT`     | Porta do PostgreSQL | 5432      | 5432              |
-| `DB_USER`     | Usuário do banco    | -         | censo_user        |
-| `DB_PASSWORD` | Senha do banco      | -         | senha_segura_123  |
-| `DB_NAME`     | Nome do banco       | -         | censo_operacional |
-
-### Variáveis da API Go
-
-| Variável               | Descrição                            | Padrão | Obrigatória |
-| ---------------------- | ------------------------------------ | ------ | ----------- |
-| `PORT`                 | Porta da API                         | 8000   | Não         |
-| `ADMIN_PASSWORD_HASH`  | Hash bcrypt da senha admin           | -      | Sim         |
-| `ADMIN_JWT_SECRET`     | Chave para assinar JWTs              | -      | Sim         |
-| `CORS_ALLOWED_ORIGINS` | Origins permitidas (comma-separated) | -      | Não         |
-
-### Variáveis do Frontend
-
-| Variável              | Descrição       | Padrão                  | Obrigatória |
-| --------------------- | --------------- | ----------------------- | ----------- |
-| `NEXT_PUBLIC_API_URL` | URL base da API | <http://localhost:8000> | Não         |
-
-### Integração Google (Opcional)
-
-Para utilizar integração com Google Sheets e Google Drive:
-
-1. Crie um projeto no [Google Cloud Console](https://console.cloud.google.com)
-2. Habilite as APIs: **Google Sheets API** e **Google Drive API**
-3. Crie uma Service Account e baixe o JSON de credenciais
-4. Configure as variáveis no `.env`:
+Se precisar usar outra API:
 
 ```env
-GOOGLE_CREDENTIALS_JSON={"type":"service_account","project_id":"seu-projeto",...}
-SPREADSHEET_ID=seu_id_planilha_aqui
-GOOGLE_DRIVE_FOLDER_ID=seu_id_pasta_aqui
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-**Nota:** Sem essas variáveis, a aplicação funciona normalmente, mas o export automático para Google Sheets será desabilitado.
+# Variáveis de ambiente
 
----
+## Backend
 
-## Comandos de Desenvolvimento
+| Variável | Função | Obrigatória no setup padrão |
+| --- | --- | --- |
+| `DB_DSN` | DSN PostgreSQL para desenvolvimento local | Sim |
+| `DATABASE_URL` | DSN PostgreSQL; tem prioridade sobre `DB_DSN` | Não |
+| `PORT` | Porta HTTP da API | Não, padrão `8000` |
+| `ADMIN_USERNAME` | Usuário administrativo principal | Sim para login via env |
+| `ADMIN_PASSWORD_HASH` | Hash bcrypt da senha admin | Sim para login via env |
+| `ADMIN_JWT_SECRET` | Assina os JWTs administrativos | Sim |
+| `ALLOWED_ORIGINS` | Whitelist CORS | Recomendado |
+| `CENSUS_SUBMISSIONS_ENABLED` | Abre/fecha escrita do formulário público | Não; ausente = fechado |
+| `PUBLIC_API_KEY` | Gate opcional dos endpoints públicos | Não |
+| `TRUSTED_PROXY_COUNT` | Quantidade de proxies confiáveis para resolução de IP | Não |
 
-### Backend (Go)
+### Fallback para PostgreSQL local
+
+Se `DATABASE_URL` e `DB_DSN` não estiverem definidos, a API aceita:
+
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=censo_user
+DB_PASSWORD=sua_senha
+DB_NAME=censo_db
+DB_SSLMODE=disable
+```
+
+Esse modo é alternativo ao fluxo padrão com Railway.
+
+## Frontend
+
+| Variável | Função | Obrigatória |
+| --- | --- | --- |
+| `NEXT_PUBLIC_API_URL` | URL da API | Não em localhost:8000 |
+| `NEXT_PUBLIC_API_KEY` | Envia `X-API-Key` quando o gate público é usado | Não |
+
+`NEXT_PUBLIC_*` é exposto ao navegador. Portanto, `NEXT_PUBLIC_API_KEY` não deve ser tratado como segredo de autenticação.
+
+# Google Sheets e Drive
+
+Google Sheets e Google Drive são integrações **legadas** no estado atual do projeto.
+
+Ainda existem services, endpoints e alguns fallbacks antigos relacionados a Sheets/Drive, mas eles não fazem parte do setup local padrão do painel administrativo.
+
+Não é necessário configurar:
+
+```text
+GOOGLE_CREDENTIALS_JSON
+SPREADSHEET_ID
+DRIVE_ROOT_FOLDER_ID
+GOOGLE_IMPERSONATE_EMAIL
+```
+
+para iniciar o backend e trabalhar no fluxo principal do `/admin`.
+
+Novas funcionalidades do painel não devem criar dependência de Google Sheets quando os dados já estão disponíveis no PostgreSQL.
+
+# Banco local via Docker — opcional
+
+O repositório ainda contém `infra/docker-compose.yml` para quem precisa de um PostgreSQL isolado localmente.
+
+```bash
+cd infra
+docker compose up -d
+```
+
+Esse fluxo sobe PostgreSQL e Adminer e **não é necessário** quando `DB_DSN` aponta para Railway.
+
+Para desligar:
+
+```bash
+docker compose down
+```
+
+Para apagar também o volume local:
+
+```bash
+docker compose down -v
+```
+
+O comando acima afeta apenas o banco Docker local, não o banco Railway.
+
+# Fluxo de dados administrativo
+
+```text
+Usuário administrativo
+        │
+        ▼
+Next.js /admin
+        │ Bearer JWT
+        ▼
+Go API /v1/admin/*
+        │
+        ▼
+PostgreSQL
+        │
+        ├── schools
+        ├── census_responses
+        ├── views analíticas
+        └── tabelas auxiliares
+```
+
+Os endpoints analíticos ficam sob `/v1/admin/analytics/*` e são protegidos por JWT.
+
+# Formulário público
+
+O código do formulário continua no projeto, porém o período de preenchimento pode ser encerrado sem desligar o painel administrativo.
+
+Estado recomendado enquanto o formulário estiver fora de uso:
+
+```env
+CENSUS_SUBMISSIONS_ENABLED=false
+```
+
+As rotas públicas de leitura continuam disponíveis conforme a configuração da API, mas as escritas de escola, censo e upload são bloqueadas pelo middleware de período.
+
+# Comandos úteis
+
+## Backend
 
 ```bash
 cd api
 
-# Executar servidor de desenvolvimento
-go run ./cmd/api/main.go
-
-# Build para produção
-go build -o bin/census ./cmd/api
-
-# Gerar hash de senha
-go run ./cmd/genpasswd/main.go
-
-# Baixar dependências
+go run ./cmd/api
+go build ./cmd/api/...
+go test ./...
 go mod download
-
-# Atualizar dependências
 go mod tidy
 ```
 
-### Frontend (Next.js)
+## Frontend
 
 ```bash
 cd web
 
-# Instalar dependências
 npm install
-
-# Servidor de desenvolvimento (com hot reload)
 npm run dev
-
-# Build para produção
 npm run build
-
-# Executar produção localmente
 npm run start
-
-# Linting (ESLint)
 npm run lint
-
-# Formatação de código
-npm run format
 ```
 
-### Infraestrutura (Docker)
+# Segurança operacional
+
+- Nunca versione `.env`, URLs reais do Railway, hashes/segredos administrativos ou credenciais Google.
+- Não exponha `ADMIN_JWT_SECRET` no frontend.
+- Use `ALLOWED_ORIGINS` para limitar as origens permitidas.
+- Acesso local ao banco remoto pode alterar dados reais. Antes de executar migrations, `UPDATE`, `DELETE` ou scripts de importação, confirme qual ambiente Railway está sendo utilizado.
+- Para trabalho frequente de desenvolvimento, prefira um banco/ambiente de staging quando disponível.
+- Em produção no Railway, prefira `DATABASE_URL` privada/referenciada entre os serviços, em vez da URL pública do TCP Proxy.
+
+# Troubleshooting
+
+## `ERRO FATAL: Variáveis de banco ... não foram encontradas`
+
+Confirme se `infra/.env` existe e contém `DB_DSN` ou `DATABASE_URL` válido.
+
+## `ERRO FATAL SEGURANÇA: ADMIN_JWT_SECRET ...`
+
+Gere um novo segredo:
 
 ```bash
-cd infra
-
-# Iniciar PostgreSQL + Adminer
-docker-compose up -d
-
-# Parar containers
-docker-compose down
-
-# Ver logs em tempo real
-docker-compose logs -f
-
-# Remover volumes (limpa dados do banco)
-docker-compose down -v
+openssl rand -hex 32
 ```
 
----
+## Frontend não acessa a API
 
-## Estrutura de Diretórios
+Confirme:
 
-```text
-CENSO-Operacional-Escolas/
-├── api/                          # Backend Go
-│   ├── cmd/
-│   │   ├── api/main.go          # Ponto de entrada da API
-│   │   └── genpasswd/main.go    # Gerador de hash bcrypt
-│   ├── internal/
-│   │   ├── models/              # Modelos de dados
-│   │   └── services/            # Serviços (Google, Banco, etc)
-│   ├── go.mod
-│   └── go.sum
-├── web/                          # Frontend Next.js
-│   ├── src/
-│   │   ├── app/                 # Rotas Next.js
-│   │   ├── components/          # Componentes React
-│   │   ├── schemas/             # Validações Zod
-│   │   └── config/              # Configurações
-│   ├── package.json
-│   └── tsconfig.json
-├── infra/                        # Infraestrutura
-│   ├── docker-compose.yml       # Orquestração Docker
-│   ├── init.sql                 # Script de inicialização BD
-│   ├── .env.example             # Variáveis de ambiente (modelo)
-│   └── migrations/              # Migrações SQL
-├── docs/                         # Documentação adicional
-└── README.md                     # Este arquivo
+```env
+ALLOWED_ORIGINS=http://localhost:3000
 ```
 
----
-
-## Fluxo de Dados
-
-```text
-┌─────────────────────────────────────┐
-│  Diretores Escolares                │
-│  (Interface Next.js - Port 3000)    │
-└──────────┬──────────────────────────┘
-           │
-           │ POST /v1/census
-           │ (Dados do Formulário)
-           ▼
-┌─────────────────────────────────────┐
-│  API Go Backend (Port 8000)         │
-│  - Validação                        │
-│  - Autenticação (JWT)               │
-│  - Lógica de Negócio                │
-└──────────┬──────────────────────────┘
-           │
-           │ INSERT/UPDATE
-           ▼
-┌─────────────────────────────────────┐
-│  PostgreSQL Database                │
-│  - census_responses                 │
-│  - schools                          │
-│  - Dados estruturados               │
-└──────────┬──────────────────────────┘
-           │
-           │ Background Job (10 min)
-           │ Sincronização automática
-           ▼
-┌─────────────────────────────────────┐
-│  Google Sheets (Opcional)           │
-│  - Dados consolidados               │
-│  - Relatórios automáticos           │
-└─────────────────────────────────────┘
-```
-
----
-
-## Dicas de Desenvolvimento
-
-### Hot Reload
-
-- **Frontend:** Automático ao editar arquivos em `/web/src`
-- **Backend:** Recomenda-se usar `air` ou reiniciar manualmente:
-
-  ```bash
-  go install github.com/cosmtrek/air@latest
-  cd api && air
-  ```
-
-### Debug de Requisições
-
-Use o Adminer para inspecionar dados:
-
-- [http://localhost:8080](http://localhost:8080)
-
-Ou use ferramentas como:
-
-- **cURL**: `curl http://localhost:8000/v1/health`
-- **Postman**: [https://www.postman.com](https://www.postman.com)
-- **VS Code REST Client**: Extensão REST Client
-
-### Limpar Dados
-
-Para resetar o banco de dados:
+E teste:
 
 ```bash
-cd infra
-docker-compose down -v
-docker-compose up -d
+curl http://localhost:8000/v1/health
 ```
 
-**Aviso:** Isso apaga todos os dados armazenados.
+## Formulário mostra "Período de preenchimento encerrado"
+
+Esse é o comportamento esperado quando:
+
+```env
+CENSUS_SUBMISSIONS_ENABLED=false
+```
+
+ou quando a variável não existe.
+
+## Avisos sobre Sheets/Drive no boot
+
+No setup sem Google, services legados podem registrar avisos de credenciais ausentes. Esses avisos não impedem a inicialização da API nem o uso do fluxo principal do painel administrativo.
 
 ---
 
-## Troubleshooting
-
-### Erro: "connection refused" na porta 8000
-
-- Verifique se a API está rodando: `go run ./cmd/api/main.go`
-- Confirme que nenhuma outra aplicação está usando a porta 8000
-- Reinicie a API
-
-### Erro: "EADDRINUSE: address already in use :::3000"
-
-- A porta 3000 está ocupada. Identifique qual processo está usando:
-
-  ```bash
-  # No Windows
-  netstat -ano | findstr :3000
-
-  ```
-
-- Encerre o processo ou rode em outra porta: `PORT=3001 npm run dev`
-
-### Erro: "database connection failed"
-
-- Verifique se PostgreSQL está rodando:
-
-  ```bash
-  docker-compose ps
-  ```
-
-- Confirme as credenciais no `.env`
-- Tente reconectar:
-
-  ```bash
-  docker-compose down
-  docker-compose up -d
-  ```
-
-### Erro: "ADMIN_PASSWORD_HASH not set"
-
-- Execute: `go run ./cmd/genpasswd/main.go`
-- Copie o hash para `ADMIN_PASSWORD_HASH` no `.env`
-- Reinicie a API
-
----
-
-## Deploy em Produção
-
-Para informações sobre deploy em produção, veja:
-
-- Documentação de CI/CD (se disponível)
-- Configurações de Railway ou outro serviço de hospedagem
-- Variáveis de ambiente sensíveis devem usar um gerenciador de secrets
-
----
-
-## Suporte e Contribuição
-
-Para reportar problemas ou contribuir:
-
-1. Abra uma **Issue** descrevendo o problema
-2. Ou crie um **Pull Request** com a solução
-
-Certifique-se de seguir os padrões de código existentes.
+Documentação adicional de dashboard, views analíticas, validações e diagnósticos está disponível em [`docs/`](./docs/).

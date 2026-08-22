@@ -745,7 +745,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
             {profile?.role === "admin" && visited.has("gestao") && (
               <div style={{ display: tab === "gestao" ? undefined : "none" }}>
-                <AbaGestaoDres />
+                <AbaGestaoDres token={token} onUnauth={logout} />
               </div>
             )}
           </div>

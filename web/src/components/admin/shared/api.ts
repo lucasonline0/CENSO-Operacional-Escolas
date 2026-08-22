@@ -97,9 +97,21 @@ export async function prefetchDashboard(token: string, role?: string): Promise<v
   await Promise.race([fetches, timeout]);
 }
 
+// ── Escrita: Gestão de DREs ─────────────────────────────────────────────────
+
+// Criação de nova DRE — POST /v1/admin/dres.
+// Contrato provisório assumido enquanto o backend não define o endpoint final;
+// path e payload estão concentrados aqui para ajuste em ponto único.
+export async function createDre(token: string, payload: DreCreatePayload): Promise<DreRecord> {
+  return apiFetch<DreRecord>("/v1/admin/dres", token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 // ── Filtros e Labels ────────────────────────────────────────────────────────
 
-import type { DashboardFilters, AdminProfile } from "./types";
+import type { DashboardFilters, AdminProfile, DreCreatePayload, DreRecord } from "./types";
 
 export function buildFilterParams(filters?: DashboardFilters): string {
   if (!filters) return "";

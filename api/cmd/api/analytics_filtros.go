@@ -157,6 +157,43 @@ func filtrosOpcoesSchoolsWhereWithAuthorization(f AnalyticsFilters, alias, excep
 	return strings.Join(conditions, "\n\t  AND "), args
 }
 
+// filtrosOpcoesDREsQuery returns the master-DRE query for filter options.
+// The DRE option itself is excluded from its cascade, while the remaining
+// school filters retain the current cascade behavior. Without those filters,
+// no schools lookup is made so active DREs without schools remain visible.
+func filtrosOpcoesDREsQuery(f AnalyticsFilters, authorizedDRE string) (string, []any) {
+	query := `
+		SELECT TRIM(d.nome)
+		FROM dres d
+		WHERE d.ativa = TRUE
+		  AND NULLIF(TRIM(d.nome), '') IS NOT NULL
+	`
+	args := make([]any, 0, 6)
+	if authorizedDRE = strings.TrimSpace(authorizedDRE); authorizedDRE != "" {
+		args = append(args, authorizedDRE)
+		query += "\t  AND UPPER(TRIM(d.nome)) = UPPER(TRIM($" + strconv.Itoa(len(args)) + "))\n"
+	}
+
+	if f.Municipio != "" || f.Zona != "" || f.RegiaoIntegracao != "" || f.SchoolID != 0 || f.CodigoINEP != "" {
+		schoolsWhere, schoolsArgs := filtrosOpcoesSchoolsWhereWithAuthorization(f, "s", "dre", authorizedDRE)
+		offset := len(args)
+		args = append(args, schoolsArgs...)
+		for i := len(schoolsArgs); i > 0; i-- {
+			schoolsWhere = strings.ReplaceAll(schoolsWhere, "$"+strconv.Itoa(i), "$"+strconv.Itoa(offset+i))
+		}
+		query += `	  AND EXISTS (
+			SELECT 1
+			FROM schools s
+			WHERE ` + schoolsWhere + `
+			  AND UPPER(TRIM(s.dre)) = UPPER(TRIM(d.nome))
+		)
+`
+	}
+
+	query += "\t\tORDER BY UPPER(TRIM(d.nome)), TRIM(d.nome)\n"
+	return query, args
+}
+
 // AdminAnalyticsFiltrosOpcoes retorna as listas para popular os selects
 // dos filtros globais do dashboard. Aceita os mesmos query params dos filtros
 // analíticos e aplica cascata: cada lista é filtrada pelos demais filtros ativos.
@@ -210,13 +247,8 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 	}
 
 	// DREs: filtradas por municipio, zona, regiao (não pela própria dre)
-	dresWhere, dresArgs := filtrosOpcoesSchoolsWhereWithAuthorization(f, "s", "dre", authorizedDRE)
-	dres, err := queryStringSlice(app, ctx, `
-		SELECT DISTINCT COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado') AS dre
-		FROM schools s
-		WHERE `+dresWhere+`
-		ORDER BY 1
-	`, dresArgs...)
+	dresQuery, dresArgs := filtrosOpcoesDREsQuery(f, authorizedDRE)
+	dres, err := queryStringSlice(app, ctx, dresQuery, dresArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("dres: %w", err), http.StatusInternalServerError)
 		return

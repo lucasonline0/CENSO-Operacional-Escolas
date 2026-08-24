@@ -227,3 +227,59 @@ func TestFiltrosOpcoesSchoolsWhere_AuthorizedDRESurvivesExcept(t *testing.T) {
 		t.Fatalf("authorization must be mandatory: %s", where)
 	}
 }
+
+func TestFiltrosOpcoesDREsQuery_UsesActiveMasterDREs(t *testing.T) {
+	query, args := filtrosOpcoesDREsQuery(AnalyticsFilters{}, "")
+	for _, part := range []string{
+		"FROM dres d",
+		"d.ativa = TRUE",
+		"TRIM(d.nome)",
+		"ORDER BY UPPER(TRIM(d.nome)), TRIM(d.nome)",
+	} {
+		if !strings.Contains(query, part) {
+			t.Fatalf("master DRE query missing %q:\n%s", part, query)
+		}
+	}
+	if strings.Contains(query, "FROM schools s") {
+		t.Fatalf("unfiltered master DRE query must include DREs without schools:\n%s", query)
+	}
+	if len(args) != 0 {
+		t.Fatalf("unexpected arguments: %#v", args)
+	}
+}
+
+func TestFiltrosOpcoesDREsQuery_CascadesOtherSchoolFilters(t *testing.T) {
+	query, args := filtrosOpcoesDREsQuery(AnalyticsFilters{Municipio: "Belem"}, "")
+	if !strings.Contains(query, "EXISTS (") || !strings.Contains(query, "FROM schools s") {
+		t.Fatalf("DRE query must cascade municipio through schools:\n%s", query)
+	}
+	if !strings.Contains(query, "UPPER(TRIM(s.dre)) = UPPER(TRIM(d.nome))") {
+		t.Fatalf("DRE query must match school DREs to master DRE names:\n%s", query)
+	}
+	if len(args) != 5 || args[0] != "Belem" {
+		t.Fatalf("unexpected cascade arguments: %#v", args)
+	}
+}
+
+func TestFiltrosOpcoesDREsQuery_DREAuthorizationIsMandatory(t *testing.T) {
+	query, args := filtrosOpcoesDREsQuery(AnalyticsFilters{DRE: "DRE_B"}, " DRE_A ")
+	if !strings.Contains(query, "UPPER(TRIM(d.nome)) = UPPER(TRIM($1))") {
+		t.Fatalf("DRE scope must constrain master DREs:\n%s", query)
+	}
+	if len(args) != 1 || args[0] != "DRE_A" {
+		t.Fatalf("unexpected authorization arguments: %#v", args)
+	}
+	if strings.Contains(query, "DRE_B") {
+		t.Fatalf("query must not trust requested DRE value:\n%s", query)
+	}
+}
+
+func TestFiltrosOpcoesDREsQuery_RebindsCascadeArgumentsAfterAuthorization(t *testing.T) {
+	query, args := filtrosOpcoesDREsQuery(AnalyticsFilters{Municipio: "Belem"}, "DRE_A")
+	if !strings.Contains(query, "d.nome)) = UPPER(TRIM($1))") || !strings.Contains(query, "s.dre)) = UPPER(TRIM($2))") {
+		t.Fatalf("authorization arguments were not rebound correctly:\n%s", query)
+	}
+	if len(args) != 7 || args[0] != "DRE_A" || args[1] != "DRE_A" || args[2] != "Belem" {
+		t.Fatalf("unexpected authorization cascade arguments: %#v", args)
+	}
+}

@@ -9,6 +9,7 @@ import {
   MonitorPlay,
   Sun,
   Moon,
+  UserCog,
 } from "lucide-react";
 
 import "./admin.css";
@@ -29,6 +30,7 @@ import { AbaMerenda } from "@/components/admin/AbaMerenda";
 import { AbaServicosTerceirizados } from "@/components/admin/AbaServicosTerceirizados";
 import { AbaGestaoFinanceiraGovernanca } from "@/components/admin/AbaGestaoFinanceiraGovernanca";
 import { AbaSaudeOperacionalEscolas } from "@/components/admin/AbaSaudeOperacionalEscolas";
+import { AbaGestaoDres } from "@/components/admin/AbaGestaoDres";
 import { FiltrosGlobais } from "@/components/admin/FiltrosGlobais";
 import PresentationMode from "@/components/admin/PresentationMode";
 import type {
@@ -190,7 +192,8 @@ type Tab =
   | "governanca"
   | "saude"
   | "census"
-  | "dre";
+  | "dre"
+  | "gestao";
 
 const PAGE_META: Record<Tab, { title: string }> = {
   perfil: { title: "Caracterização da Rede" },
@@ -204,6 +207,7 @@ const PAGE_META: Record<Tab, { title: string }> = {
   saude: { title: "Índice de Saúde Operacional por escola" },
   census: { title: "Registros de Preenchimento do Censo" },
   dre: { title: "Andamento do Preenchimento por DRE" },
+  gestao: { title: "Gestão de DREs e Acessos" },
 };
 
 type SubItem = { label: string; anchor: string };
@@ -294,6 +298,11 @@ const NAV_OPERACIONAL: NavItem[] = [
   { id: "saude", label: "Saúde Operacional", Icon: HeartPulse },
   { id: "census", label: "Registros do Censo", Icon: Database },
   { id: "dre", label: "Preenchimento por DRE", Icon: MapPinned },
+];
+
+// Exclusivo para usuários com role "admin" — renderizado condicionalmente na sidebar.
+const NAV_ADMIN: NavItem[] = [
+  { id: "gestao", label: "Gestão de DREs e Acessos", Icon: UserCog },
 ];
 
 function NavGroup({
@@ -441,10 +450,10 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             setFilters((prev) => ({ ...prev, dre: userProfile.dre ?? undefined }));
          }
        } catch (e) {
-       if ((e as Error).message === "UNAUTHORIZED") {
-           logout();
-           return;
-         }
+        if ((e as Error).message === "UNAUTHORIZED") {
+            logout();
+            return;
+          }
        }
        loadDb();
      }
@@ -564,6 +573,13 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             <NavGroup items={NAV_OPERACIONAL} active={tab} onNav={handleNav} mobileOpen={mobileNavOpen} />
           </div>
 
+          {profile?.role === "admin" && (
+            <div className="ca-nav-group">
+              <div className="ca-nav-group-label">Administração</div>
+              <NavGroup items={NAV_ADMIN} active={tab} onNav={handleNav} mobileOpen={mobileNavOpen} />
+            </div>
+          )}
+
           {profile?.role !== "dre" && (
             <div className="ca-side-footer" onClick={handleSync} style={{ cursor: "pointer" }}>
               <div className="ca-sf-icon">
@@ -638,7 +654,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               </div>
             )}
 
-            {tab !== "saude" && (
+            {tab !== "saude" && tab !== "gestao" && (
               <div className="ca-filters-wrap">
                 <FiltrosGlobais
                   opcoes={filtrosOpcoes}
@@ -724,6 +740,12 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             {visited.has("dre") && (
               <div style={{ display: tab === "dre" ? undefined : "none" }}>
                 <AbaPorDre token={token} onUnauth={logout} filters={filters} />
+              </div>
+            )}
+
+            {profile?.role === "admin" && visited.has("gestao") && (
+              <div style={{ display: tab === "gestao" ? undefined : "none" }}>
+                <AbaGestaoDres />
               </div>
             )}
           </div>

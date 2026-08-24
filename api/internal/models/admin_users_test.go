@@ -57,4 +57,22 @@ func TestAdminUserModelValidation(t *testing.T) {
 			t.Fatalf("expected short new password error, got %v", err)
 		}
 	})
+
+	t.Run("ValidateDRE empty string returns false without error", func(t *testing.T) {
+		valid, err := m.ValidateDRE(ctx, "")
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+		if valid {
+			t.Fatalf("expected valid to be false for empty DRE")
+		}
+
+		valid, err = m.ValidateDRE(ctx, "   ")
+		if err != nil {
+			t.Fatalf("expected nil error for whitespace DRE, got %v", err)
+		}
+		if valid {
+			t.Fatalf("expected valid to be false for whitespace DRE")
+		}
+	})
 }

@@ -53,6 +53,7 @@ type Models struct {
 	Schools    SchoolModel
 	Census     CensusModel
 	AdminUsers AdminUserModel
+	DREs       DREModel
 }
 
 func NewModels(db *sql.DB) Models {
@@ -60,6 +61,7 @@ func NewModels(db *sql.DB) Models {
 		Schools:    SchoolModel{DB: db},
 		Census:     CensusModel{DB: db},
 		AdminUsers: AdminUserModel{DB: db},
+		DREs:       DREModel{DB: db},
 	}
 }
 

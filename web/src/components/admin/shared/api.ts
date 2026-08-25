@@ -88,8 +88,8 @@ const DASHBOARD_ENDPOINTS = [
 ];
 
 export async function prefetchDashboard(token: string, role?: string): Promise<void> {
-  const endpoints = role === "dre" 
-    ? DASHBOARD_ENDPOINTS.filter((ep) => !ep.includes("sheet-metrics")) 
+  const endpoints = role === "dre"
+    ? DASHBOARD_ENDPOINTS.filter((ep) => !ep.includes("sheet-metrics"))
     : DASHBOARD_ENDPOINTS;
 
   const fetches = Promise.allSettled(endpoints.map((ep) => apiFetch(ep, token)));
@@ -97,9 +97,31 @@ export async function prefetchDashboard(token: string, role?: string): Promise<v
   await Promise.race([fetches, timeout]);
 }
 
+// ── Escrita: Gestão de DREs ─────────────────────────────────────────────────
+
+// Criação de nova DRE — contrato do backend definido em POST /v1/admin/dres.
+// O formulário usa nomes amigáveis para os dados do responsável; o mapeamento
+// abaixo mantém o contrato HTTP centralizado neste helper.
+export async function createDre(token: string, payload: DreCreatePayload): Promise<DreRecord> {
+  const backendPayload = {
+    nome: payload.nome,
+    sigla: payload.sigla,
+    municipio_sede: payload.municipio_sede,
+    polo: payload.polo,
+    gestor_nome: payload.responsavel_nome,
+    email: payload.responsavel_email,
+    telefone: payload.responsavel_telefone,
+  };
+
+  return apiFetch<DreRecord>("/v1/admin/dres", token, {
+    method: "POST",
+    body: JSON.stringify(backendPayload),
+  });
+}
+
 // ── Filtros e Labels ────────────────────────────────────────────────────────
 
-import type { DashboardFilters, AdminProfile } from "./types";
+import type { DashboardFilters, AdminProfile, DreCreatePayload, DreRecord } from "./types";
 
 export function buildFilterParams(filters?: DashboardFilters): string {
   if (!filters) return "";

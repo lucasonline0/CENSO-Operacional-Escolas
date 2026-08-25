@@ -711,3 +711,24 @@ export interface CaracterizacaoEscolaRow extends EscolasBaseRow {
   etapas_texto: string;
   modalidades_texto: string;
 }
+
+// ── Gestão de DREs ──────────────────────────────────────────────────────────
+// Payload de criação de nova DRE (modal da aba "Gestão de DREs e Acessos").
+// Contrato provisório — aguardando definição final do endpoint pelo backend.
+export interface DreCreatePayload {
+  nome:               string;
+  sigla:              string;
+  municipio_sede:     string;
+  polo:               string;
+  responsavel_nome:   string;
+  responsavel_email:  string;
+  responsavel_telefone: string;
+}
+
+// Registro de DRE retornado pelo backend após a criação (campos mínimos
+// esperados; o contrato final pode trazer campos adicionais).
+export interface DreRecord {
+  id:    number | string;
+  nome:  string;
+  sigla: string;
+}

@@ -20,8 +20,7 @@ import { C } from "./constants";
 import type { FiltrosOpcoes } from "./types";
 
 // Modal de cadastro de nova DRE — aba "Gestão de DREs e Acessos".
-// Montado/desmontado pelo pai quando aberto/fechado (padrão JsonModal).
-// Endpoint de criação ainda sem contrato final do backend: ver createDre() em shared/api.ts.
+// Integrado ao contrato atual do backend em POST /v1/admin/dres.
 interface NovaDreModalProps {
   token: string;
   onClose: () => void;
@@ -30,16 +29,11 @@ interface NovaDreModalProps {
 }
 
 const INPUT_CLASS = "bg-white border-slate-200 text-slate-800 placeholder:text-slate-400";
-const SELECT_CLASS = `h-9 w-full rounded-md border px-3 text-sm shadow-xs focus:outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 ${INPUT_CLASS}`;
 
 export function NovaDreModal({ token, onClose, onSuccess, onUnauth }: NovaDreModalProps) {
   const [apiError, setApiError] = useState("");
   const [municipios, setMunicipios] = useState<string[]>([]);
   const [municipiosErro, setMunicipiosErro] = useState(false);
-
-  // Fonte dos polos ainda não exposta pelo backend — select obrigatório
-  // permanece vazio até que a lista seja disponibilizada.
-  const polos: string[] = [];
 
   const form = useForm<NovaDreFormValues>({
     resolver: zodResolver(novaDreSchema) as unknown as Resolver<NovaDreFormValues>,
@@ -60,10 +54,19 @@ export function NovaDreModal({ token, onClose, onSuccess, onUnauth }: NovaDreMod
   useEffect(() => {
     let cancelled = false;
     apiFetch<FiltrosOpcoes>("/v1/admin/analytics/filtros/opcoes", token)
-      .then((d) => { if (!cancelled) setMunicipios(d.municipios ?? []); })
-      .catch(() => { if (!cancelled) setMunicipiosErro(true); });
+      .then((d) => {
+        if (!cancelled) setMunicipios(d.municipios ?? []);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        if ((e as Error).message === "UNAUTHORIZED") {
+          onUnauth();
+          return;
+        }
+        setMunicipiosErro(true);
+      });
     return () => { cancelled = true; };
-  }, [token]);
+  }, [token, onUnauth]);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -110,7 +113,6 @@ export function NovaDreModal({ token, onClose, onSuccess, onUnauth }: NovaDreMod
         onClick={(e) => e.stopPropagation()}
         className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden animate-scale-in"
       >
-        {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between" style={{ background: C.primaryLight }}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0" style={{ background: C.primary }}>
@@ -131,7 +133,6 @@ export function NovaDreModal({ token, onClose, onSuccess, onUnauth }: NovaDreMod
           </button>
         </div>
 
-        {/* Formulário */}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col min-h-0">
             <div className="px-6 py-5 overflow-y-auto flex-1">
@@ -194,20 +195,24 @@ export function NovaDreModal({ token, onClose, onSuccess, onUnauth }: NovaDreMod
                     <FormItem>
                       <FormLabel>Município Sede *</FormLabel>
                       <FormControl>
-                        <select
-                          value={field.value ?? ""}
-                          onChange={(e) => field.onChange(e.target.value)}
+                        <Input
+                          list="municipios-dre"
+                          placeholder="Ex.: Belém"
                           disabled={submitting}
-                          className={SELECT_CLASS}
-                        >
-                          <option value="" disabled>Selecione...</option>
-                          {municipios.map((m) => (
-                            <option key={m} value={m}>{m}</option>
-                          ))}
-                        </select>
+                          className={INPUT_CLASS}
+                          {...field}
+                          value={field.value ?? ""}
+                        />
                       </FormControl>
+                      <datalist id="municipios-dre">
+                        {municipios.map((m) => (
+                          <option key={m} value={m} />
+                        ))}
+                      </datalist>
                       {municipiosErro && (
-                        <FormDescription>Não foi possível carregar os municípios.</FormDescription>
+                        <FormDescription>
+                          A lista de sugestões está indisponível; informe o município manualmente.
+                        </FormDescription>
                       )}
                       <FormMessage />
                     </FormItem>
@@ -221,21 +226,15 @@ export function NovaDreModal({ token, onClose, onSuccess, onUnauth }: NovaDreMod
                     <FormItem>
                       <FormLabel>Polo *</FormLabel>
                       <FormControl>
-                        <select
-                          value={field.value ?? ""}
-                          onChange={(e) => field.onChange(e.target.value)}
+                        <Input
+                          placeholder="Ex.: Polo Belém"
                           disabled={submitting}
-                          className={SELECT_CLASS}
-                        >
-                          <option value="" disabled>Selecione...</option>
-                          {polos.map((p) => (
-                            <option key={p} value={p}>{p}</option>
-                          ))}
-                        </select>
+                          className={INPUT_CLASS}
+                          {...field}
+                          value={field.value ?? ""}
+                        />
                       </FormControl>
-                      {polos.length === 0 && (
-                        <FormDescription>Nenhuma opção disponível no momento.</FormDescription>
-                      )}
+                      <FormDescription>Informe o polo administrativo da DRE.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -308,7 +307,6 @@ export function NovaDreModal({ token, onClose, onSuccess, onUnauth }: NovaDreMod
               </div>
             </div>
 
-            {/* Footer */}
             <div className="px-6 py-4 border-t border-slate-200 bg-white flex items-center justify-end gap-2">
               <button
                 type="button"

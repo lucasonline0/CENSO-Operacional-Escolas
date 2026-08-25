@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"censo-api/internal/models"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
@@ -829,4 +832,384 @@ func (app *application) AdminGetCensusByID(w http.ResponseWriter, r *http.Reques
 
 	c.Data = json.RawMessage(rawData)
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: c})
+}
+
+// ─── Gestão de DREs (role=admin) ─────────────────────────────────────────────
+
+// AdminCreateDRE cria uma nova DRE no sistema (exclusivo para role=admin).
+func (app *application) AdminCreateDRE(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		Nome          string `json:"nome"`
+		Sigla         string `json:"sigla"`
+		MunicipioSede string `json:"municipio_sede"`
+		Polo          string `json:"polo"`
+		GestorNome    string `json:"gestor_nome"`
+		Email         string `json:"email"`
+		Telefone      string `json:"telefone"`
+		Ativa         *bool  `json:"ativa"`
+	}
+
+	if err := app.readJSON(w, r, &req); err != nil {
+		app.errorJSON(w, fmt.Errorf("dados inválidos: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	if strings.TrimSpace(req.Nome) == "" {
+		app.errorJSON(w, fmt.Errorf("nome da DRE não pode ser vazio"), http.StatusBadRequest)
+		return
+	}
+
+	ativa := true
+	if req.Ativa != nil {
+		ativa = *req.Ativa
+	}
+
+	dre := models.DRE{
+		Nome:          req.Nome,
+		Sigla:         req.Sigla,
+		MunicipioSede: req.MunicipioSede,
+		Polo:          req.Polo,
+		GestorNome:    req.GestorNome,
+		Email:         req.Email,
+		Telefone:      req.Telefone,
+		Ativa:         ativa,
+	}
+
+	created, err := app.models.DREs.Create(r.Context(), dre)
+	if err != nil {
+		if errors.Is(err, models.ErrDREExists) {
+			app.errorJSON(w, err, http.StatusConflict)
+			return
+		}
+		if errors.Is(err, models.ErrDRENameRequired) {
+			app.errorJSON(w, err, http.StatusBadRequest)
+			return
+		}
+		app.errorJSON(w, fmt.Errorf("erro ao criar DRE: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	app.writeJSON(w, http.StatusCreated, jsonResponse{
+		Error:   false,
+		Message: "DRE criada com sucesso",
+		Data:    created,
+	})
+}
+
+// AdminListDREs lista todas as DREs cadastradas (exclusivo para role=admin).
+func (app *application) AdminListDREs(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
+
+	dres, err := app.models.DREs.List(r.Context())
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao listar DREs: %w", err), http.StatusInternalServerError)
+		return
+	}
+	if dres == nil {
+		dres = []*models.DRE{}
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{
+		Error: false,
+		Data:  dres,
+	})
+}
+
+// AdminUpdateDRE atualiza os dados de uma DRE existente (exclusivo para role=admin).
+func (app *application) AdminUpdateDRE(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		app.errorJSON(w, fmt.Errorf("ID de DRE inválido"), http.StatusBadRequest)
+		return
+	}
+
+	existing, err := app.models.DREs.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, models.ErrDRENotFound) {
+			app.errorJSON(w, fmt.Errorf("DRE não encontrada"), http.StatusNotFound)
+			return
+		}
+		app.errorJSON(w, fmt.Errorf("erro ao buscar DRE: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	var req struct {
+		Nome          string `json:"nome"`
+		Sigla         string `json:"sigla"`
+		MunicipioSede string `json:"municipio_sede"`
+		Polo          string `json:"polo"`
+		GestorNome    string `json:"gestor_nome"`
+		Email         string `json:"email"`
+		Telefone      string `json:"telefone"`
+		Ativa         *bool  `json:"ativa"`
+	}
+
+	if err := app.readJSON(w, r, &req); err != nil {
+		app.errorJSON(w, fmt.Errorf("dados inválidos: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	if strings.TrimSpace(req.Nome) == "" {
+		app.errorJSON(w, fmt.Errorf("nome da DRE não pode ser vazio"), http.StatusBadRequest)
+		return
+	}
+
+	ativa := existing.Ativa
+	if req.Ativa != nil {
+		ativa = *req.Ativa
+	}
+
+	dre := models.DRE{
+		ID:            id,
+		Nome:          req.Nome,
+		Sigla:         req.Sigla,
+		MunicipioSede: req.MunicipioSede,
+		Polo:          req.Polo,
+		GestorNome:    req.GestorNome,
+		Email:         req.Email,
+		Telefone:      req.Telefone,
+		Ativa:         ativa,
+	}
+
+	updated, err := app.models.DREs.Update(r.Context(), dre)
+	if err != nil {
+		if errors.Is(err, models.ErrDRENotFound) {
+			app.errorJSON(w, err, http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, models.ErrDREExists) {
+			app.errorJSON(w, err, http.StatusConflict)
+			return
+		}
+		if errors.Is(err, models.ErrDRENameRequired) || errors.Is(err, models.ErrDREInvalidID) {
+			app.errorJSON(w, err, http.StatusBadRequest)
+			return
+		}
+		app.errorJSON(w, fmt.Errorf("erro ao atualizar DRE: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{
+		Error:   false,
+		Message: "DRE atualizada com sucesso",
+		Data:    updated,
+	})
+}
+
+// ─── Gestão de Usuários Administrativos (role=admin) ─────────────────────────
+
+// AdminCreateUser cria um novo usuário DRE com hash bcrypt e validação de DRE (exclusivo para role=admin).
+func (app *application) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+		Role     string `json:"role"`
+		DRE      string `json:"dre"`
+	}
+
+	if err := app.readJSON(w, r, &req); err != nil {
+		app.errorJSON(w, fmt.Errorf("dados inválidos: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	if strings.TrimSpace(req.Role) == "" {
+		req.Role = RoleDRE
+	}
+
+	user, err := app.models.AdminUsers.Create(r.Context(), req.Username, req.Password, req.Role, req.DRE)
+	if err != nil {
+		if errors.Is(err, models.ErrUsernameExists) {
+			app.errorJSON(w, err, http.StatusConflict)
+			return
+		}
+		if errors.Is(err, models.ErrInvalidRole) ||
+			errors.Is(err, models.ErrDRERequiredForDRE) ||
+			errors.Is(err, models.ErrInvalidDRE) ||
+			errors.Is(err, models.ErrDREInactive) ||
+			strings.Contains(err.Error(), "não pode ser vazio") ||
+			strings.Contains(err.Error(), "mínimo 6 caracteres") {
+			app.errorJSON(w, err, http.StatusBadRequest)
+			return
+		}
+		app.errorJSON(w, fmt.Errorf("erro ao criar usuário: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	app.writeJSON(w, http.StatusCreated, jsonResponse{
+		Error:   false,
+		Message: "Usuário criado com sucesso",
+		Data:    user,
+	})
+}
+
+// AdminListUsers lista todos os usuários administrativos sem expor senhas (exclusivo para role=admin).
+func (app *application) AdminListUsers(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
+
+	users, err := app.models.AdminUsers.List(r.Context())
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao listar usuários: %w", err), http.StatusInternalServerError)
+		return
+	}
+	if users == nil {
+		users = []*models.AdminUser{}
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{
+		Error: false,
+		Data:  users,
+	})
+}
+
+// AdminUpdateUserStatus ativa ou desativa um usuário pelo ID (exclusivo para role=admin).
+func (app *application) AdminUpdateUserStatus(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		app.errorJSON(w, fmt.Errorf("ID de usuário inválido"), http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Active *bool   `json:"active"`
+		Status *string `json:"status"`
+	}
+
+	if err := app.readJSON(w, r, &req); err != nil {
+		app.errorJSON(w, fmt.Errorf("dados inválidos: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	var active bool
+	if req.Active != nil {
+		active = *req.Active
+	} else if req.Status != nil {
+		st := strings.ToLower(strings.TrimSpace(*req.Status))
+		if st == "active" || st == "ativo" || st == "true" {
+			active = true
+		} else if st == "inactive" || st == "inativo" || st == "false" {
+			active = false
+		} else {
+			app.errorJSON(w, fmt.Errorf("valor de status inválido. Use 'active' ou 'inactive'"), http.StatusBadRequest)
+			return
+		}
+	} else {
+		app.errorJSON(w, fmt.Errorf("campo 'active' ou 'status' é obrigatório"), http.StatusBadRequest)
+		return
+	}
+
+	err = app.models.AdminUsers.SetActiveByID(r.Context(), id, active)
+	if err != nil {
+		if errors.Is(err, models.ErrUserNotFound) {
+			app.errorJSON(w, fmt.Errorf("usuário não encontrado"), http.StatusNotFound)
+			return
+		}
+		app.errorJSON(w, fmt.Errorf("erro ao atualizar status do usuário: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	user, err := app.models.AdminUsers.GetByID(r.Context(), id)
+	if err == nil && user != nil {
+		app.writeJSON(w, http.StatusOK, jsonResponse{
+			Error:   false,
+			Message: "Status do usuário atualizado com sucesso",
+			Data:    user,
+		})
+		return
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{
+		Error:   false,
+		Message: "Status do usuário atualizado com sucesso",
+		Data:    map[string]interface{}{"id": id, "active": active},
+	})
+}
+
+// AdminResetUserPassword redefine a senha de um usuário pelo ID (exclusivo para role=admin).
+func (app *application) AdminResetUserPassword(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		app.errorJSON(w, fmt.Errorf("ID de usuário inválido"), http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Password    string `json:"password"`
+		NewPassword string `json:"new_password"`
+	}
+
+	if err := app.readJSON(w, r, &req); err != nil {
+		app.errorJSON(w, fmt.Errorf("dados inválidos: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	newPassword := req.Password
+	if newPassword == "" {
+		newPassword = req.NewPassword
+	}
+	newPassword = strings.TrimSpace(newPassword)
+
+	if len(newPassword) < 6 {
+		app.errorJSON(w, fmt.Errorf("nova senha deve ter no mínimo 6 caracteres"), http.StatusBadRequest)
+		return
+	}
+
+	err = app.models.AdminUsers.UpdatePasswordByID(r.Context(), id, newPassword)
+	if err != nil {
+		if errors.Is(err, models.ErrUserNotFound) {
+			app.errorJSON(w, fmt.Errorf("usuário não encontrado"), http.StatusNotFound)
+			return
+		}
+		if strings.Contains(err.Error(), "mínimo 6 caracteres") {
+			app.errorJSON(w, err, http.StatusBadRequest)
+			return
+		}
+		app.errorJSON(w, fmt.Errorf("erro ao redefinir senha: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{
+		Error:   false,
+		Message: "Senha redefinida com sucesso",
+	})
 }

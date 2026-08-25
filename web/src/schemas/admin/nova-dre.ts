@@ -20,11 +20,13 @@ export const novaDreSchema = z.object({
 
   municipio_sede: z
     .string()
-    .min(1, "Selecione o município sede"),
+    .trim()
+    .min(2, "Informe o município sede"),
 
   polo: z
     .string()
-    .min(1, "Selecione o polo"),
+    .trim()
+    .min(2, "Informe o polo"),
 
   responsavel_nome: z
     .string()

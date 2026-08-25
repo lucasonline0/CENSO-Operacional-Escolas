@@ -58,6 +58,49 @@ func TestAdminUserModelValidation(t *testing.T) {
 		}
 	})
 
+	t.Run("UpdatePasswordByID invalid ID validation", func(t *testing.T) {
+		err := m.UpdatePasswordByID(ctx, 0, "password123")
+		if err != ErrUserNotFound {
+			t.Fatalf("expected ErrUserNotFound for id=0, got %v", err)
+		}
+
+		err = m.UpdatePasswordByID(ctx, -1, "password123")
+		if err != ErrUserNotFound {
+			t.Fatalf("expected ErrUserNotFound for id=-1, got %v", err)
+		}
+	})
+
+	t.Run("UpdatePasswordByID short password validation", func(t *testing.T) {
+		err := m.UpdatePasswordByID(ctx, 1, "123")
+		if err == nil || err.Error() != "nova senha deve ter no mínimo 6 caracteres" {
+			t.Fatalf("expected short new password error, got %v", err)
+		}
+	})
+
+	t.Run("SetActiveByID invalid ID validation", func(t *testing.T) {
+		err := m.SetActiveByID(ctx, 0, true)
+		if err != ErrUserNotFound {
+			t.Fatalf("expected ErrUserNotFound for id=0, got %v", err)
+		}
+
+		err = m.SetActiveByID(ctx, -1, false)
+		if err != ErrUserNotFound {
+			t.Fatalf("expected ErrUserNotFound for id=-1, got %v", err)
+		}
+	})
+
+	t.Run("GetByID invalid ID validation", func(t *testing.T) {
+		_, err := m.GetByID(ctx, 0)
+		if err != ErrUserNotFound {
+			t.Fatalf("expected ErrUserNotFound for id=0, got %v", err)
+		}
+
+		_, err = m.GetByID(ctx, -1)
+		if err != ErrUserNotFound {
+			t.Fatalf("expected ErrUserNotFound for id=-1, got %v", err)
+		}
+	})
+
 	t.Run("ValidateDRE empty string returns false without error", func(t *testing.T) {
 		valid, err := m.ValidateDRE(ctx, "")
 		if err != nil {

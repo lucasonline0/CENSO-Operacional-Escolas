@@ -336,6 +336,17 @@ func (app *application) routes() http.Handler {
 			protected.Get("/admin/census/{id}", app.AdminGetCensusByID)
 			protected.Post("/admin/sync-sheets", app.AdminSyncSheets)
 
+			// Gestão de DREs (exclusivo role=admin)
+			protected.Post("/admin/dres", app.AdminCreateDRE)
+			protected.Get("/admin/dres", app.AdminListDREs)
+			protected.Put("/admin/dres/{id}", app.AdminUpdateDRE)
+
+			// Gestão de Usuários Administrativos (exclusivo role=admin)
+			protected.Post("/admin/users", app.AdminCreateUser)
+			protected.Get("/admin/users", app.AdminListUsers)
+			protected.Patch("/admin/users/{id}/status", app.AdminUpdateUserStatus)
+			protected.Post("/admin/users/{id}/reset-password", app.AdminResetUserPassword)
+
 			// Fase 1 — camada analítica baseada em PostgreSQL.
 			// Endpoints adicionais; não substituem sheet-metrics nem indicadores-metrics.
 			protected.Get("/admin/analytics/overview", app.AdminAnalyticsOverview)

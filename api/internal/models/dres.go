@@ -187,15 +187,15 @@ func (m *DREModel) Update(ctx context.Context, dre DRE) (*DRE, error) {
 	query := `
 		UPDATE dres
 		SET nome = $1, sigla = $2, municipio_sede = $3, polo = $4,
-		    gestor_nome = $5, email = $6, telefone = $7, updated_at = NOW()
-		WHERE id = $8
+		    gestor_nome = $5, email = $6, telefone = $7, ativa = $8, updated_at = NOW()
+		WHERE id = $9
 		RETURNING id, nome, COALESCE(sigla, ''), COALESCE(municipio_sede, ''), COALESCE(polo, ''),
 		          COALESCE(gestor_nome, ''), COALESCE(email, ''), COALESCE(telefone, ''),
 		          ativa, created_at, updated_at`
 
 	var d DRE
 	err := m.DB.QueryRowContext(ctx, query,
-		nome, sigla, municipioSede, polo, gestorNome, email, telefone, dre.ID,
+		nome, sigla, municipioSede, polo, gestorNome, email, telefone, dre.Ativa, dre.ID,
 	).Scan(
 		&d.ID, &d.Nome, &d.Sigla, &d.MunicipioSede, &d.Polo,
 		&d.GestorNome, &d.Email, &d.Telefone,

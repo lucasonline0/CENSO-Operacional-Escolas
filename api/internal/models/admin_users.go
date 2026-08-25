@@ -163,8 +163,31 @@ func (m *AdminUserModel) Create(ctx context.Context, username, plainPassword, ro
 	return &u, nil
 }
 
-// UpdatePassword atualiza a senha de um usuário existente usando bcrypt.
-func (m *AdminUserModel) UpdatePassword(ctx context.Context, username, newPlainPassword string) error {
+// GetByID localiza um usuário pelo seu ID numérico.
+func (m *AdminUserModel) GetByID(ctx context.Context, id int) (*AdminUser, error) {
+	if id <= 0 {
+		return nil, ErrUserNotFound
+	}
+	query := `
+		SELECT id, username, password_hash, role, COALESCE(dre, ''), active, created_at, updated_at
+		FROM admin_users
+		WHERE id = $1`
+
+	var u AdminUser
+	err := m.DB.QueryRowContext(ctx, query, id).Scan(
+		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.DRE, &u.Active, &u.CreatedAt, &u.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, ErrUserNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+// UpdatePassword atualiza a senha de um usuário existente usando bcrypt pelo username.
+func (m *AdminUserModel) UpdatePassword(ctx context.Context, username string, newPlainPassword string) error {
 	username = strings.TrimSpace(username)
 	if len(newPlainPassword) < 6 {
 		return errors.New("nova senha deve ter no mínimo 6 caracteres")
@@ -185,7 +208,36 @@ func (m *AdminUserModel) UpdatePassword(ctx context.Context, username, newPlainP
 	return err
 }
 
-// SetActive ativa ou desativa uma conta de usuário.
+// UpdatePasswordByID atualiza a senha de um usuário existente usando bcrypt pelo ID.
+func (m *AdminUserModel) UpdatePasswordByID(ctx context.Context, id int, newPlainPassword string) error {
+	if id <= 0 {
+		return ErrUserNotFound
+	}
+	if len(newPlainPassword) < 6 {
+		return errors.New("nova senha deve ter no mínimo 6 caracteres")
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPlainPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("erro ao gerar hash da senha: %w", err)
+	}
+
+	query := `UPDATE admin_users SET password_hash = $1, updated_at = NOW() WHERE id = $2`
+	result, err := m.DB.ExecContext(ctx, query, string(hash), id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrUserNotFound
+	}
+	return nil
+}
+
+// SetActive ativa ou desativa uma conta de usuário pelo username.
 func (m *AdminUserModel) SetActive(ctx context.Context, username string, active bool) error {
 	username = strings.TrimSpace(username)
 	u, err := m.GetByUsername(ctx, username)
@@ -196,6 +248,27 @@ func (m *AdminUserModel) SetActive(ctx context.Context, username string, active 
 	query := `UPDATE admin_users SET active = $1, updated_at = NOW() WHERE id = $2`
 	_, err = m.DB.ExecContext(ctx, query, active, u.ID)
 	return err
+}
+
+// SetActiveByID ativa ou desativa uma conta de usuário pelo ID.
+func (m *AdminUserModel) SetActiveByID(ctx context.Context, id int, active bool) error {
+	if id <= 0 {
+		return ErrUserNotFound
+	}
+
+	query := `UPDATE admin_users SET active = $1, updated_at = NOW() WHERE id = $2`
+	result, err := m.DB.ExecContext(ctx, query, active, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrUserNotFound
+	}
+	return nil
 }
 
 // List retorna todas as contas cadastradas sem expor o hash da senha.
@@ -211,7 +284,7 @@ func (m *AdminUserModel) List(ctx context.Context) ([]*AdminUser, error) {
 	}
 	defer rows.Close()
 
-	var users []*AdminUser
+	users := make([]*AdminUser, 0)
 	for rows.Next() {
 		var u AdminUser
 		if err := rows.Scan(&u.ID, &u.Username, &u.Role, &u.DRE, &u.Active, &u.CreatedAt, &u.UpdatedAt); err != nil {

@@ -29,7 +29,7 @@ func createTestJWT(username, role, dre string) string {
 	return tok
 }
 
-// ─── 1. Testes de Autorização (403 Forbidden para não-admin) ─────────────────
+// ─── 1. Testes de Autorização (403 Forbidden para role=dre) ───────────────────
 
 func TestAdminDREAndUsersEndpointsForbiddenForDREUser(t *testing.T) {
 	app := setupTestApp()
@@ -42,49 +42,49 @@ func TestAdminDREAndUsersEndpointsForbiddenForDREUser(t *testing.T) {
 		body    string
 	}{
 		{
-			name:    "POST /v1/admin/dres forbidden for DRE",
+			name:    "POST /v1/admin/dres (criação de DRE) forbidden for DRE",
 			method:  http.MethodPost,
 			url:     "/v1/admin/dres",
 			handler: app.AdminCreateDRE,
 			body:    `{"nome":"DRE ABAETETUBA"}`,
 		},
 		{
-			name:    "GET /v1/admin/dres forbidden for DRE",
+			name:    "GET /v1/admin/dres (listagem de DREs) forbidden for DRE",
 			method:  http.MethodGet,
 			url:     "/v1/admin/dres",
 			handler: app.AdminListDREs,
 			body:    "",
 		},
 		{
-			name:    "PUT /v1/admin/dres/1 forbidden for DRE",
+			name:    "PUT /v1/admin/dres/1 (edição de DRE) forbidden for DRE",
 			method:  http.MethodPut,
 			url:     "/v1/admin/dres/1",
 			handler: app.AdminUpdateDRE,
 			body:    `{"nome":"DRE NOVO NOME"}`,
 		},
 		{
-			name:    "POST /v1/admin/users forbidden for DRE",
+			name:    "POST /v1/admin/users (criação de usuário) forbidden for DRE",
 			method:  http.MethodPost,
 			url:     "/v1/admin/users",
 			handler: app.AdminCreateUser,
 			body:    `{"username":"user1","password":"password123","role":"dre","dre":"DRE BELEM"}`,
 		},
 		{
-			name:    "GET /v1/admin/users forbidden for DRE",
+			name:    "GET /v1/admin/users (listagem de usuários) forbidden for DRE",
 			method:  http.MethodGet,
 			url:     "/v1/admin/users",
 			handler: app.AdminListUsers,
 			body:    "",
 		},
 		{
-			name:    "PATCH /v1/admin/users/1/status forbidden for DRE",
+			name:    "PATCH /v1/admin/users/1/status (ativação/desativação de usuário) forbidden for DRE",
 			method:  http.MethodPatch,
 			url:     "/v1/admin/users/1/status",
 			handler: app.AdminUpdateUserStatus,
 			body:    `{"active":false}`,
 		},
 		{
-			name:    "POST /v1/admin/users/1/reset-password forbidden for DRE",
+			name:    "POST /v1/admin/users/1/reset-password (reset de senha) forbidden for DRE",
 			method:  http.MethodPost,
 			url:     "/v1/admin/users/1/reset-password",
 			handler: app.AdminResetUserPassword,
@@ -133,35 +133,152 @@ func TestAdminDREAndUsersEndpointsForbiddenForDREUser(t *testing.T) {
 	}
 }
 
-// ─── 2. Testes de Roteamento Chi e Middleware de Autenticação ───────────────
+// ─── 2. Testes de Autorização para Escopos Ausentes ou Não-Admin ─────────────
+
+func TestAdminDREAndUsersEndpointsForbiddenForNonAdminOrMissingScope(t *testing.T) {
+	app := setupTestApp()
+
+	handlers := []struct {
+		name    string
+		method  string
+		url     string
+		handler func(w http.ResponseWriter, r *http.Request)
+	}{
+		{"AdminCreateDRE", http.MethodPost, "/v1/admin/dres", app.AdminCreateDRE},
+		{"AdminListDREs", http.MethodGet, "/v1/admin/dres", app.AdminListDREs},
+		{"AdminUpdateDRE", http.MethodPut, "/v1/admin/dres/1", app.AdminUpdateDRE},
+		{"AdminCreateUser", http.MethodPost, "/v1/admin/users", app.AdminCreateUser},
+		{"AdminListUsers", http.MethodGet, "/v1/admin/users", app.AdminListUsers},
+		{"AdminUpdateUserStatus", http.MethodPatch, "/v1/admin/users/1/status", app.AdminUpdateUserStatus},
+		{"AdminResetUserPassword", http.MethodPost, "/v1/admin/users/1/reset-password", app.AdminResetUserPassword},
+	}
+
+	testCases := []struct {
+		name  string
+		scope *AdminAccessScope
+	}{
+		{
+			name:  "missing scope from context",
+			scope: nil,
+		},
+		{
+			name:  "empty role",
+			scope: &AdminAccessScope{Username: "unknown", Role: "", DRE: ""},
+		},
+		{
+			name:  "viewer role",
+			scope: &AdminAccessScope{Username: "viewer_user", Role: "viewer", DRE: "DRE BELEM"},
+		},
+		{
+			name:  "school role",
+			scope: &AdminAccessScope{Username: "escola_user", Role: "escola", DRE: "DRE BELEM"},
+		},
+	}
+
+	for _, tc := range testCases {
+		for _, h := range handlers {
+			testName := h.name + " - " + tc.name
+			t.Run(testName, func(t *testing.T) {
+				req := httptest.NewRequest(h.method, h.url, strings.NewReader(`{}`))
+				req.Header.Set("Content-Type", "application/json")
+
+				if tc.scope != nil {
+					ctx := context.WithValue(req.Context(), contextKeyAdminScope, *tc.scope)
+					req = req.WithContext(ctx)
+				}
+
+				rr := httptest.NewRecorder()
+				h.handler(rr, req)
+
+				if rr.Code != http.StatusForbidden {
+					t.Fatalf("expected status 403 Forbidden on %s, got %d. Body: %s", testName, rr.Code, rr.Body.String())
+				}
+
+				var resp jsonResponse
+				if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+					t.Fatalf("failed to decode response: %v", err)
+				}
+				if !resp.Error {
+					t.Fatalf("expected resp.Error to be true")
+				}
+			})
+		}
+	}
+}
+
+// ─── 3. Testes de Roteamento Chi e Middleware de Autenticação ───────────────
 
 func TestAdminDREAndUsersRoutesWithMux(t *testing.T) {
 	os.Setenv("ADMIN_JWT_SECRET", "123456789012345678901234567890123456")
-	app := &application{}
+	app := setupTestApp()
 	handler := app.routes()
 
 	adminToken := createTestJWT("admin_master", RoleAdmin, "")
 	dreToken := createTestJWT("user_belem", RoleDRE, "DRE BELEM")
 
 	routesToTest := []struct {
-		method string
-		url    string
-		body   string
+		name       string
+		method     string
+		url        string
+		dreBody    string
+		adminBody  string
 	}{
-		{http.MethodPost, "/v1/admin/dres", `{"nome":"DRE TESTE"}`},
-		{http.MethodGet, "/v1/admin/dres", ""},
-		{http.MethodPut, "/v1/admin/dres/1", `{"nome":"DRE NOVO NOME"}`},
-		{http.MethodPost, "/v1/admin/users", `{"username":"user_test","password":"secretpassword","role":"dre","dre":"DRE BELEM"}`},
-		{http.MethodGet, "/v1/admin/users", ""},
-		{http.MethodPatch, "/v1/admin/users/1/status", `{"active":false}`},
-		{http.MethodPost, "/v1/admin/users/1/reset-password", `{"password":"newPassword123"}`},
+		{
+			name:      "POST /v1/admin/dres",
+			method:    http.MethodPost,
+			url:       "/v1/admin/dres",
+			dreBody:   `{"nome":"DRE TESTE"}`,
+			adminBody: `{}`, // Invalid body triggers 400 validation error in handler, confirming auth passed
+		},
+		{
+			name:      "GET /v1/admin/dres",
+			method:    http.MethodGet,
+			url:       "/v1/admin/dres",
+			dreBody:   "",
+			adminBody: "",
+		},
+		{
+			name:      "PUT /v1/admin/dres/{id}",
+			method:    http.MethodPut,
+			url:       "/v1/admin/dres/0", // ID 0 triggers 400 validation error in handler
+			dreBody:   `{"nome":"DRE NOVO NOME"}`,
+			adminBody: `{}`,
+		},
+		{
+			name:      "POST /v1/admin/users",
+			method:    http.MethodPost,
+			url:       "/v1/admin/users",
+			dreBody:   `{"username":"user_test","password":"secretpassword","role":"dre","dre":"DRE BELEM"}`,
+			adminBody: `{}`, // Invalid body triggers 400 validation error in handler
+		},
+		{
+			name:      "GET /v1/admin/users",
+			method:    http.MethodGet,
+			url:       "/v1/admin/users",
+			dreBody:   "",
+			adminBody: "",
+		},
+		{
+			name:      "PATCH /v1/admin/users/{id}/status",
+			method:    http.MethodPatch,
+			url:       "/v1/admin/users/0/status", // ID 0 triggers 400 validation error in handler
+			dreBody:   `{"active":false}`,
+			adminBody: `{}`,
+		},
+		{
+			name:      "POST /v1/admin/users/{id}/reset-password",
+			method:    http.MethodPost,
+			url:       "/v1/admin/users/0/reset-password", // ID 0 triggers 400 validation error in handler
+			dreBody:   `{"password":"newPassword123"}`,
+			adminBody: `{}`,
+		},
 	}
 
 	for _, route := range routesToTest {
-		t.Run(route.method+" "+route.url+" - Unauthenticated (401)", func(t *testing.T) {
+		t.Run(route.name+" - Unauthenticated (401)", func(t *testing.T) {
 			var req *http.Request
-			if route.body != "" {
-				req = httptest.NewRequest(route.method, route.url, strings.NewReader(route.body))
+			if route.dreBody != "" {
+				req = httptest.NewRequest(route.method, route.url, strings.NewReader(route.dreBody))
 				req.Header.Set("Content-Type", "application/json")
 			} else {
 				req = httptest.NewRequest(route.method, route.url, nil)
@@ -171,14 +288,14 @@ func TestAdminDREAndUsersRoutesWithMux(t *testing.T) {
 			handler.ServeHTTP(rr, req)
 
 			if rr.Code != http.StatusUnauthorized {
-				t.Fatalf("expected 401 Unauthorized for missing token, got %d", rr.Code)
+				t.Fatalf("expected 401 Unauthorized for missing token on %s, got %d", route.name, rr.Code)
 			}
 		})
 
-		t.Run(route.method+" "+route.url+" - DRE Role Token (403)", func(t *testing.T) {
+		t.Run(route.name+" - DRE Role Token (403)", func(t *testing.T) {
 			var req *http.Request
-			if route.body != "" {
-				req = httptest.NewRequest(route.method, route.url, strings.NewReader(route.body))
+			if route.dreBody != "" {
+				req = httptest.NewRequest(route.method, route.url, strings.NewReader(route.dreBody))
 				req.Header.Set("Content-Type", "application/json")
 			} else {
 				req = httptest.NewRequest(route.method, route.url, nil)
@@ -189,14 +306,14 @@ func TestAdminDREAndUsersRoutesWithMux(t *testing.T) {
 			handler.ServeHTTP(rr, req)
 
 			if rr.Code != http.StatusForbidden {
-				t.Fatalf("expected 403 Forbidden for DRE token on %s %s, got %d", route.method, route.url, rr.Code)
+				t.Fatalf("expected 403 Forbidden for DRE token on %s, got %d. Body: %s", route.name, rr.Code, rr.Body.String())
 			}
 		})
 
-		t.Run(route.method+" "+route.url+" - Admin Token Passes Auth Gate", func(t *testing.T) {
+		t.Run(route.name+" - Admin Token Passes Auth Gate", func(t *testing.T) {
 			var req *http.Request
-			if route.body != "" {
-				req = httptest.NewRequest(route.method, route.url, strings.NewReader(route.body))
+			if route.adminBody != "" {
+				req = httptest.NewRequest(route.method, route.url, strings.NewReader(route.adminBody))
 				req.Header.Set("Content-Type", "application/json")
 			} else {
 				req = httptest.NewRequest(route.method, route.url, nil)
@@ -206,15 +323,15 @@ func TestAdminDREAndUsersRoutesWithMux(t *testing.T) {
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
 
-			// Garantir que a requisição NÃO foi barrada por 401 ou 403 (ou seja, o gate de auth aceitou admin)
+			// Garantir que o token de admin NÃO é barrado por 401 nem por 403
 			if rr.Code == http.StatusUnauthorized || rr.Code == http.StatusForbidden {
-				t.Fatalf("admin token unexpectedly blocked by auth gate on %s %s with status %d", route.method, route.url, rr.Code)
+				t.Fatalf("admin token unexpectedly blocked by auth gate on %s with status %d", route.name, rr.Code)
 			}
 		})
 	}
 }
 
-// ─── 3. Testes Unitários de Validação de Input dos Handlers ─────────────────
+// ─── 4. Testes Unitários de Validação de Input dos Handlers (Admin) ──────────
 
 func TestAdminCreateDREValidation(t *testing.T) {
 	app := setupTestApp()
@@ -285,6 +402,19 @@ func TestAdminUpdateDREValidation(t *testing.T) {
 
 		if rr.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 Bad Request for zero ID, got %d", rr.Code)
+		}
+	})
+
+	t.Run("negative ID", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPut, "/v1/admin/dres/-1", strings.NewReader(`{"nome":"DRE ABAETETUBA"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(context.WithValue(req.Context(), contextKeyAdminScope, AdminAccessScope{Role: RoleAdmin}))
+
+		rr := httptest.NewRecorder()
+		app.AdminUpdateDRE(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request for negative ID, got %d", rr.Code)
 		}
 	})
 }
@@ -358,12 +488,74 @@ func TestAdminCreateUserValidation(t *testing.T) {
 			t.Fatalf("expected 400 Bad Request for missing DRE, got %d", rr.Code)
 		}
 	})
+
+	t.Run("empty username", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users", strings.NewReader(`{
+			"username": "",
+			"password": "password123",
+			"role": "dre",
+			"dre": "DRE BELEM"
+		}`))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(context.WithValue(req.Context(), contextKeyAdminScope, AdminAccessScope{Role: RoleAdmin}))
+
+		rr := httptest.NewRecorder()
+		app.AdminCreateUser(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request for empty username, got %d", rr.Code)
+		}
+	})
+
+	t.Run("whitespace username", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users", strings.NewReader(`{
+			"username": "   ",
+			"password": "password123",
+			"role": "dre",
+			"dre": "DRE BELEM"
+		}`))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(context.WithValue(req.Context(), contextKeyAdminScope, AdminAccessScope{Role: RoleAdmin}))
+
+		rr := httptest.NewRecorder()
+		app.AdminCreateUser(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request for whitespace username, got %d", rr.Code)
+		}
+	})
+
+	t.Run("malformed json", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users", strings.NewReader(`{invalid json`))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(context.WithValue(req.Context(), contextKeyAdminScope, AdminAccessScope{Role: RoleAdmin}))
+
+		rr := httptest.NewRecorder()
+		app.AdminCreateUser(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request for malformed JSON, got %d", rr.Code)
+		}
+	})
 }
 
 func TestAdminUpdateUserStatusValidation(t *testing.T) {
 	app := setupTestApp()
 
-	t.Run("invalid user ID", func(t *testing.T) {
+	t.Run("invalid user ID string", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPatch, "/v1/admin/users/abc/status", strings.NewReader(`{"active":false}`))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(context.WithValue(req.Context(), contextKeyAdminScope, AdminAccessScope{Role: RoleAdmin}))
+
+		rr := httptest.NewRecorder()
+		app.AdminUpdateUserStatus(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request for non-integer user ID, got %d", rr.Code)
+		}
+	})
+
+	t.Run("invalid user ID 0", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPatch, "/v1/admin/users/0/status", strings.NewReader(`{"active":false}`))
 		req.Header.Set("Content-Type", "application/json")
 		req = req.WithContext(context.WithValue(req.Context(), contextKeyAdminScope, AdminAccessScope{Role: RoleAdmin}))
@@ -373,6 +565,19 @@ func TestAdminUpdateUserStatusValidation(t *testing.T) {
 
 		if rr.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 Bad Request for user ID 0, got %d", rr.Code)
+		}
+	})
+
+	t.Run("negative user ID", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPatch, "/v1/admin/users/-1/status", strings.NewReader(`{"active":false}`))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(context.WithValue(req.Context(), contextKeyAdminScope, AdminAccessScope{Role: RoleAdmin}))
+
+		rr := httptest.NewRecorder()
+		app.AdminUpdateUserStatus(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request for user ID -1, got %d", rr.Code)
 		}
 	})
 
@@ -401,12 +606,25 @@ func TestAdminUpdateUserStatusValidation(t *testing.T) {
 			t.Fatalf("expected 400 Bad Request for invalid status string, got %d", rr.Code)
 		}
 	})
+
+	t.Run("malformed json", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPatch, "/v1/admin/users/1/status", strings.NewReader(`{status:`))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(context.WithValue(req.Context(), contextKeyAdminScope, AdminAccessScope{Role: RoleAdmin}))
+
+		rr := httptest.NewRecorder()
+		app.AdminUpdateUserStatus(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request for malformed JSON, got %d", rr.Code)
+		}
+	})
 }
 
 func TestAdminResetUserPasswordValidation(t *testing.T) {
 	app := setupTestApp()
 
-	t.Run("invalid user ID", func(t *testing.T) {
+	t.Run("invalid user ID string", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/xyz/reset-password", strings.NewReader(`{"password":"newPassword123"}`))
 		req.Header.Set("Content-Type", "application/json")
 		req = req.WithContext(context.WithValue(req.Context(), contextKeyAdminScope, AdminAccessScope{Role: RoleAdmin}))
@@ -416,6 +634,32 @@ func TestAdminResetUserPasswordValidation(t *testing.T) {
 
 		if rr.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 Bad Request for non-numeric ID, got %d", rr.Code)
+		}
+	})
+
+	t.Run("zero user ID", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/0/reset-password", strings.NewReader(`{"password":"newPassword123"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(context.WithValue(req.Context(), contextKeyAdminScope, AdminAccessScope{Role: RoleAdmin}))
+
+		rr := httptest.NewRecorder()
+		app.AdminResetUserPassword(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request for zero ID, got %d", rr.Code)
+		}
+	})
+
+	t.Run("negative user ID", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/-1/reset-password", strings.NewReader(`{"password":"newPassword123"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(context.WithValue(req.Context(), contextKeyAdminScope, AdminAccessScope{Role: RoleAdmin}))
+
+		rr := httptest.NewRecorder()
+		app.AdminResetUserPassword(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request for negative ID, got %d", rr.Code)
 		}
 	})
 
@@ -442,6 +686,32 @@ func TestAdminResetUserPasswordValidation(t *testing.T) {
 
 		if rr.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 Bad Request for empty password, got %d", rr.Code)
+		}
+	})
+
+	t.Run("whitespace password", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/1/reset-password", strings.NewReader(`{"password":"   "}`))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(context.WithValue(req.Context(), contextKeyAdminScope, AdminAccessScope{Role: RoleAdmin}))
+
+		rr := httptest.NewRecorder()
+		app.AdminResetUserPassword(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request for whitespace password, got %d", rr.Code)
+		}
+	})
+
+	t.Run("malformed json", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/1/reset-password", strings.NewReader(`{password:`))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(context.WithValue(req.Context(), contextKeyAdminScope, AdminAccessScope{Role: RoleAdmin}))
+
+		rr := httptest.NewRecorder()
+		app.AdminResetUserPassword(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request for malformed JSON, got %d", rr.Code)
 		}
 	})
 }

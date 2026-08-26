@@ -1,0 +1,48 @@
+name: API CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - "api/**"
+      - ".github/workflows/api-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: api/go.mod
+          cache: true
+          cache-dependency-path: api/go.sum
+
+      - name: Download dependencies
+        working-directory: api
+        run: go mod download
+
+      - name: Vet
+        working-directory: api
+        run: go vet ./...
+
+      - name: Full test suite
+        working-directory: api
+        run: go test ./... -count=1
+
+      - name: DRE analytics stress regression
+        working-directory: api
+        run: go test ./cmd/api -run '^TestDREAnalyticsProperties20000Scenarios$' -count=5

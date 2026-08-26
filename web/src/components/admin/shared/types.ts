@@ -55,11 +55,36 @@ export interface CaracterizacaoPerfilPg {
   por_zona:              CaracterizacaoZonaPg[];
   matriculas_por_porte:  CaracterizacaoMatPortePg[];
 }
-export interface AdminProfile{
+export interface AdminProfile {
   username: string;
   role: "admin" | "dre";
   dre: string | null;
 }
+
+export interface DREItem {
+  id: number;
+  nome: string;
+  sigla: string;
+  municipio_sede: string;
+  polo: string;
+  gestor_nome: string;
+  email: string;
+  telefone: string;
+  ativa: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AdminUserItem {
+  id: number;
+  username: string;
+  role: "admin" | "dre";
+  dre: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 
 export interface DreCountPg   { dre: string; escolas: number; }
 export interface DreSummaryPg {

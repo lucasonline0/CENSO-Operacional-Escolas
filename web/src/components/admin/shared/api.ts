@@ -56,6 +56,65 @@ export async function fetchAdminMe(token: string): Promise<AdminProfile> {
   return apiFetch<AdminProfile>("/v1/admin/me", token);
 }
 
+export async function fetchDREs(token: string): Promise<DREItem[]> {
+  return apiFetch<DREItem[]>("/v1/admin/dres", token);
+}
+
+export async function createDRE(token: string, payload: Partial<DREItem>): Promise<DREItem> {
+  clearApiCache();
+  return apiFetch<DREItem>("/v1/admin/dres", token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateDRE(token: string, id: number, payload: Partial<DREItem>): Promise<DREItem> {
+  clearApiCache();
+  return apiFetch<DREItem>(`/v1/admin/dres/${id}`, token, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchAdminUsers(token: string): Promise<AdminUserItem[]> {
+  return apiFetch<AdminUserItem[]>("/v1/admin/users", token);
+}
+
+export async function createAdminUser(
+  token: string,
+  payload: { username: string; password: string; role?: string; dre: string }
+): Promise<AdminUserItem> {
+  clearApiCache();
+  return apiFetch<AdminUserItem>("/v1/admin/users", token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAdminUserStatus(
+  token: string,
+  id: number,
+  active: boolean
+): Promise<AdminUserItem> {
+  clearApiCache();
+  return apiFetch<AdminUserItem>(`/v1/admin/users/${id}/status`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ active }),
+  });
+}
+
+export async function resetAdminUserPassword(
+  token: string,
+  id: number,
+  password: string
+): Promise<{ message?: string }> {
+  return apiFetch<{ message?: string }>(`/v1/admin/users/${id}/reset-password`, token, {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+}
+
+
 // Dispara todos os endpoints do dashboard em paralelo e armazena no cache.
 // Chamado durante o login para que as abas abram instantaneamente.
 const DASHBOARD_ENDPOINTS = [
@@ -121,7 +180,7 @@ export async function createDre(token: string, payload: DreCreatePayload): Promi
 
 // ── Filtros e Labels ────────────────────────────────────────────────────────
 
-import type { DashboardFilters, AdminProfile, DreCreatePayload, DreRecord } from "./types";
+import type { DashboardFilters, AdminProfile, DreCreatePayload, DreRecord, DREItem, AdminUserItem } from "./types";
 
 export function buildFilterParams(filters?: DashboardFilters): string {
   if (!filters) return "";

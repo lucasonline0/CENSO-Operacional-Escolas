@@ -83,7 +83,8 @@ const preenchimentoDreSelectSQL = `
 	filtered_schools AS (
 		SELECT s.id, s.dre
 		FROM schools s
-		WHERE ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
+		WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+		  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
 		  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
 		  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
 		        SELECT UPPER(TRIM(municipio))
@@ -156,7 +157,8 @@ const preenchimentoDreScopedSelectSQL = `
 	filtered_schools AS (
 		SELECT s.id, s.dre
 		FROM schools s
-		WHERE ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
+		WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+		  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
 		  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
 		  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
 		        SELECT UPPER(TRIM(municipio))

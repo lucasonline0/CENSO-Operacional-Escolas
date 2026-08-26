@@ -86,6 +86,10 @@ jobs:
         working-directory: api
         run: go test ./cmd/api -run '^TestDREMasterIntegrationBatch1000Schools$' -count=3
 
+      - name: DRE PostgreSQL remap stress
+        working-directory: api
+        run: go test ./cmd/api -run '^TestDREMasterIntegrationRemap1000Schools5Cycles$' -count=2
+
       - name: DRE integration race detector
         working-directory: api
         run: go test -race ./cmd/api -run '^TestDREMasterIntegrationFlow$' -count=1

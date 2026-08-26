@@ -60,11 +60,13 @@ jobs:
           PGPASSWORD: postgres
         run: |
           set -euo pipefail
-          # infra/init.sql já espelha as migrations 0001..0017. Reaplicá-las
-          # aqui duplica constraints que alguns scripts antigos não tornam
-          # plenamente idempotentes. As entidades administrativas 0018/0019
-          # ainda não fazem parte do init e são aplicadas explicitamente.
+          # infra/init.sql contém o schema/base analítica, mas a tabela de
+          # regiões (0014) e as entidades administrativas de perfis DRE
+          # (0018/0019) são carregadas explicitamente para os testes reais.
+          # As demais migrations não são reaplicadas porque parte delas já é
+          # espelhada no init.sql e scripts históricos não são 100% idempotentes.
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f infra/init.sql
+          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0014_reg_integracao.sql
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0018_create_admin_users.sql
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0019_create_dres_master.sql
 

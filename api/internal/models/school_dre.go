@@ -45,6 +45,18 @@ func normalizeSchoolIDs(ids []int) ([]int, error) {
 	return normalized, nil
 }
 
+func normalizedSchoolIDsForUpdate(ids []int) ([]int, error) {
+	normalized, err := normalizeSchoolIDs(ids)
+	if err != nil {
+		return nil, err
+	}
+	// Acquire school row locks in a deterministic order. Concurrent admins may
+	// submit the same schools in different request orders; sorting minimizes the
+	// classic 1->2 / 2->1 lock inversion that can otherwise deadlock PostgreSQL.
+	sort.Ints(normalized)
+	return normalized, nil
+}
+
 // AssignToDRE associates one or more schools with a master DRE atomically.
 // The canonical DRE name is read and locked inside the same transaction used
 // to update schools, preventing stale or differently formatted DRE values from
@@ -54,14 +66,10 @@ func (m *SchoolModel) AssignToDRE(ctx context.Context, dreID int, schoolIDs []in
 		return "", 0, ErrDREInvalidID
 	}
 
-	ids, err := normalizeSchoolIDs(schoolIDs)
+	ids, err := normalizedSchoolIDsForUpdate(schoolIDs)
 	if err != nil {
 		return "", 0, err
 	}
-	// Acquire school row locks in a deterministic order. Concurrent admins may
-	// submit the same schools in different request orders; sorting minimizes the
-	// classic 1->2 / 2->1 lock inversion that can otherwise deadlock PostgreSQL.
-	sort.Ints(ids)
 
 	tx, err := m.DB.BeginTx(ctx, nil)
 	if err != nil {

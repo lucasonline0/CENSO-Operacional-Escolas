@@ -162,6 +162,7 @@ export async function prefetchDashboard(token: string, role?: string): Promise<v
 // O formulário usa nomes amigáveis para os dados do responsável; o mapeamento
 // abaixo mantém o contrato HTTP centralizado neste helper.
 export async function createDre(token: string, payload: DreCreatePayload): Promise<DreRecord> {
+  clearApiCache();
   const backendPayload = {
     nome: payload.nome,
     sigla: payload.sigla,

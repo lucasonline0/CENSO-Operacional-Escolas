@@ -509,7 +509,13 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     setCensusPageNum(1);
   };
 
-  const handleNav = (id: Tab) => { setTab(id); updateSearch(""); setVisited((prev) => new Set([...prev, id])); setMobileNavOpen(false); };
+  const handleNav = (id: Tab) => {
+    if (id === "gestao" && profile?.role !== "admin") return;
+    setTab(id);
+    updateSearch("");
+    setVisited((prev) => new Set([...prev, id]));
+    setMobileNavOpen(false);
+  };
 
   const [dark, setDark] = useState<boolean>(() => {
     if (typeof window !== "undefined") {

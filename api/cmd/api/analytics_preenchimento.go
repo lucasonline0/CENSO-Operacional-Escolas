@@ -34,9 +34,9 @@ type PreenchimentoDrePayload struct {
 }
 
 // preenchimentoDreFilters reúne os filtros globais do dashboard aplicados sobre
-// o cadastro de escolas (schools s). Strings vazias significam "filtro
-// desativado". O ano de referência segue a mesma regra dos demais endpoints
-// analíticos: usa o year enviado quando válido, senão o ano corrente.
+// o cadastro de escolas. Strings vazias significam "filtro desativado". O ano
+// segue os demais endpoints analíticos: valor válido enviado pelo cliente ou o
+// ano corrente como fallback.
 type preenchimentoDreFilters struct {
 	Year             int
 	DRE              string
@@ -47,9 +47,6 @@ type preenchimentoDreFilters struct {
 	CodigoINEP       string
 }
 
-// parsePreenchimentoDreFilters lê os filtros globais da query string. Espaços em
-// branco são removidos (um valor só com espaços equivale a ausência de filtro).
-// O ano segue parseAnalyticsFilters: year inválido/ausente cai no ano corrente.
 func parsePreenchimentoDreFilters(q url.Values, now time.Time) preenchimentoDreFilters {
 	f := preenchimentoDreFilters{
 		Year:             now.Year(),
@@ -64,19 +61,16 @@ func parsePreenchimentoDreFilters(q url.Values, now time.Time) preenchimentoDreF
 	return f
 }
 
-// preenchimentoDreSelectSQL agrega o andamento do preenchimento por DRE partindo
-// de schools s (não de census_responses), de modo que escolas sem censo no ano
-// permaneçam no recorte e sejam contadas como pendentes via LEFT JOIN.
+// preenchimentoDreSelectSQL parte da entidade mestre dres, garantindo que uma
+// DRE ativa recém-criada apareça mesmo sem escolas vinculadas. Escolas com DRE
+// legada/não mapeada continuam aparecendo numa linha própria para não provocar
+// perda silenciosa de dados operacionais durante a transição para a entidade
+// mestre.
 //
-// A CTE latest_census colapsa eventuais respostas duplicadas por escola/ano em
-// uma única linha (DISTINCT ON school_id, mantendo a mais recente). Há a
-// constraint unique_school_year que já garante unicidade; o DISTINCT ON é uma
-// salvaguarda defensiva caso isso mude.
-//
-// Os filtros globais incidem sobre schools s e por isso este endpoint NÃO
-// reutiliza AnalyticsFilters.WhereSQL(), que exige status = 'completed' AND
-// census_id IS NOT NULL — o que excluiria rascunhos e pendentes que precisamos
-// contar. A comparação usa UPPER(TRIM(...)) para tolerar caixa e espaços.
+// Filtros territoriais são aplicados primeiro a schools. Quando não existe
+// filtro de escola/território, todas as DREs ativas aparecem, inclusive com
+// total=0. Quando existe algum desses filtros, linhas mestre sem nenhuma escola
+// correspondente são omitidas, preservando a semântica de cascata do dashboard.
 const preenchimentoDreSelectSQL = `
 	WITH latest_census AS (
 		SELECT DISTINCT ON (school_id)
@@ -85,29 +79,58 @@ const preenchimentoDreSelectSQL = `
 		FROM census_responses
 		WHERE year = $1
 		ORDER BY school_id, updated_at DESC, id DESC
+	),
+	filtered_schools AS (
+		SELECT s.id, s.dre
+		FROM schools s
+		WHERE ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
+		  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
+		  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
+		        SELECT UPPER(TRIM(municipio))
+		        FROM reg_integracao
+		        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
+		      ))
+	),
+	master_rows AS (
+		SELECT
+			TRIM(d.nome) AS dre,
+			COUNT(s.id) AS total,
+			COUNT(s.id) FILTER (WHERE cr.status = 'completed') AS completed,
+			COUNT(s.id) FILTER (WHERE cr.status = 'draft') AS draft
+		FROM dres d
+		LEFT JOIN filtered_schools s
+		  ON UPPER(TRIM(s.dre)) = UPPER(TRIM(d.nome))
+		LEFT JOIN latest_census cr ON cr.school_id = s.id
+		WHERE d.ativa = TRUE
+		  AND NULLIF(TRIM(d.nome), '') IS NOT NULL
+		  AND ($2 = '' OR UPPER(TRIM(d.nome)) = UPPER(TRIM($2)))
+		GROUP BY d.id, d.nome
+		HAVING (($3 = '' AND $4 = '' AND $5 = '') OR COUNT(s.id) > 0)
+	),
+	legacy_rows AS (
+		SELECT
+			COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado') AS dre,
+			COUNT(s.id) AS total,
+			COUNT(s.id) FILTER (WHERE cr.status = 'completed') AS completed,
+			COUNT(s.id) FILTER (WHERE cr.status = 'draft') AS draft
+		FROM filtered_schools s
+		LEFT JOIN dres d
+		  ON d.ativa = TRUE
+		 AND UPPER(TRIM(d.nome)) = UPPER(TRIM(s.dre))
+		LEFT JOIN latest_census cr ON cr.school_id = s.id
+		WHERE d.id IS NULL
+		  AND ($2 = '' OR UPPER(TRIM(COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado'))) = UPPER(TRIM($2)))
+		GROUP BY COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado')
 	)
-	SELECT
-		COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado') AS dre,
-		COUNT(*) AS total,
-		COUNT(*) FILTER (WHERE cr.status = 'completed') AS completed,
-		COUNT(*) FILTER (WHERE cr.status = 'draft') AS draft
-	FROM schools s
-	LEFT JOIN latest_census cr ON cr.school_id = s.id
-	WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
-	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
-	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
-	  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
-	        SELECT UPPER(TRIM(municipio))
-	        FROM reg_integracao
-	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
-	      ))
-	GROUP BY COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado')
-	ORDER BY dre
+	SELECT dre, total, completed, draft
+	FROM (
+		SELECT 0 AS sort_order, dre, total, completed, draft FROM master_rows
+		UNION ALL
+		SELECT 1 AS sort_order, dre, total, completed, draft FROM legacy_rows
+	) rows_union
+	ORDER BY sort_order, UPPER(dre), dre
 `
 
-// buildPreenchimentoDreQuery devolve a query e os argumentos posicionais na
-// ordem esperada por preenchimentoDreSelectSQL: $1=year, $2=dre, $3=municipio,
-// $4=zona, $5=regiao_integracao.
 func buildPreenchimentoDreQuery(f preenchimentoDreFilters) (string, []any) {
 	return preenchimentoDreSelectSQL, []any{
 		f.Year,
@@ -118,14 +141,70 @@ func buildPreenchimentoDreQuery(f preenchimentoDreFilters) (string, []any) {
 	}
 }
 
-var preenchimentoDreScopedSelectSQL = strings.Replace(
-	preenchimentoDreSelectSQL,
-	"\n\tGROUP BY",
-	"\n\t  AND ($6 = 0 OR s.id = $6)"+
-		"\n\t  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))"+
-		"\n\tGROUP BY",
-	1,
-)
+// A variante scoped adiciona school_id/codigo_inep sem alterar o contrato da
+// query-base usado pelos testes e por chamadas que só precisam dos cinco filtros
+// históricos.
+const preenchimentoDreScopedSelectSQL = `
+	WITH latest_census AS (
+		SELECT DISTINCT ON (school_id)
+			school_id,
+			status
+		FROM census_responses
+		WHERE year = $1
+		ORDER BY school_id, updated_at DESC, id DESC
+	),
+	filtered_schools AS (
+		SELECT s.id, s.dre
+		FROM schools s
+		WHERE ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
+		  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
+		  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
+		        SELECT UPPER(TRIM(municipio))
+		        FROM reg_integracao
+		        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
+		      ))
+		  AND ($6 = 0 OR s.id = $6)
+		  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
+	),
+	master_rows AS (
+		SELECT
+			TRIM(d.nome) AS dre,
+			COUNT(s.id) AS total,
+			COUNT(s.id) FILTER (WHERE cr.status = 'completed') AS completed,
+			COUNT(s.id) FILTER (WHERE cr.status = 'draft') AS draft
+		FROM dres d
+		LEFT JOIN filtered_schools s
+		  ON UPPER(TRIM(s.dre)) = UPPER(TRIM(d.nome))
+		LEFT JOIN latest_census cr ON cr.school_id = s.id
+		WHERE d.ativa = TRUE
+		  AND NULLIF(TRIM(d.nome), '') IS NOT NULL
+		  AND ($2 = '' OR UPPER(TRIM(d.nome)) = UPPER(TRIM($2)))
+		GROUP BY d.id, d.nome
+		HAVING (($3 = '' AND $4 = '' AND $5 = '' AND $6 = 0 AND $7 = '') OR COUNT(s.id) > 0)
+	),
+	legacy_rows AS (
+		SELECT
+			COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado') AS dre,
+			COUNT(s.id) AS total,
+			COUNT(s.id) FILTER (WHERE cr.status = 'completed') AS completed,
+			COUNT(s.id) FILTER (WHERE cr.status = 'draft') AS draft
+		FROM filtered_schools s
+		LEFT JOIN dres d
+		  ON d.ativa = TRUE
+		 AND UPPER(TRIM(d.nome)) = UPPER(TRIM(s.dre))
+		LEFT JOIN latest_census cr ON cr.school_id = s.id
+		WHERE d.id IS NULL
+		  AND ($2 = '' OR UPPER(TRIM(COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado'))) = UPPER(TRIM($2)))
+		GROUP BY COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado')
+	)
+	SELECT dre, total, completed, draft
+	FROM (
+		SELECT 0 AS sort_order, dre, total, completed, draft FROM master_rows
+		UNION ALL
+		SELECT 1 AS sort_order, dre, total, completed, draft FROM legacy_rows
+	) rows_union
+	ORDER BY sort_order, UPPER(dre), dre
+`
 
 func preenchimentoDreFiltersFromRequest(r *http.Request, now time.Time) preenchimentoDreFilters {
 	f := parsePreenchimentoDreFilters(r.URL.Query(), now)
@@ -151,9 +230,6 @@ func buildPreenchimentoDreScopedQuery(f preenchimentoDreFilters) (string, []any)
 	}
 }
 
-// completionPercentage devolve o percentual inteiro de conclusão (completed /
-// total * 100), arredondado, espelhando o que a UI atual já faz com Math.round.
-// Retorna 0 quando não há escolas no recorte.
 func completionPercentage(completed, total int) int {
 	if total <= 0 {
 		return 0
@@ -161,8 +237,6 @@ func completionPercentage(completed, total int) int {
 	return int(math.Round(float64(completed) / float64(total) * 100))
 }
 
-// buildPreenchimentoDreRow monta uma linha do payload calculando pendentes e
-// percentual a partir dos totais agregados no banco.
 func buildPreenchimentoDreRow(dre string, total, completed, draft int) PreenchimentoDreRow {
 	pending := total - completed - draft
 	if pending < 0 {
@@ -178,9 +252,6 @@ func buildPreenchimentoDreRow(dre string, total, completed, draft int) Preenchim
 	}
 }
 
-// AdminAnalyticsPreenchimentoDre retorna o andamento do preenchimento do censo
-// por DRE, respeitando os filtros globais (year, dre, municipio, zona,
-// regiao_integracao). Recorte vazio devolve payload válido com totais zerados.
 func (app *application) AdminAnalyticsPreenchimentoDre(w http.ResponseWriter, r *http.Request) {
 	filters := preenchimentoDreFiltersFromRequest(r, time.Now())
 	query, args := buildPreenchimentoDreScopedQuery(filters)

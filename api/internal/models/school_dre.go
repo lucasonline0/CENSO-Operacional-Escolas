@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -57,6 +58,10 @@ func (m *SchoolModel) AssignToDRE(ctx context.Context, dreID int, schoolIDs []in
 	if err != nil {
 		return "", 0, err
 	}
+	// Acquire school row locks in a deterministic order. Concurrent admins may
+	// submit the same schools in different request orders; sorting minimizes the
+	// classic 1->2 / 2->1 lock inversion that can otherwise deadlock PostgreSQL.
+	sort.Ints(ids)
 
 	tx, err := m.DB.BeginTx(ctx, nil)
 	if err != nil {

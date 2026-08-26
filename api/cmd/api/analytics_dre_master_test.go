@@ -130,7 +130,7 @@ func seedIntegrationCensus(t *testing.T, db *sql.DB, schoolID int, status string
 	t.Helper()
 	_, err := db.Exec(`
 		INSERT INTO census_responses (school_id, year, status, data, created_at, updated_at)
-		VALUES ($1, $2, $3, jsonb_build_object('total_alunos', $4), NOW(), NOW())
+		VALUES ($1, $2, $3, jsonb_build_object('total_alunos', $4::int), NOW(), NOW())
 	`, schoolID, dreIntegrationYear, status, totalStudents)
 	if err != nil {
 		t.Fatalf("inserir censo da escola %d: %v", schoolID, err)
@@ -332,7 +332,7 @@ func TestDREMasterIntegrationBatch1000Schools(t *testing.T) {
 	}
 	censusStmt, err := censusTx.Prepare(`
 		INSERT INTO census_responses (school_id, year, status, data, created_at, updated_at)
-		VALUES ($1, $2, $3, jsonb_build_object('total_alunos', $4), NOW(), NOW())
+		VALUES ($1, $2, $3, jsonb_build_object('total_alunos', $4::int), NOW(), NOW())
 	`)
 	if err != nil {
 		_ = censusTx.Rollback()

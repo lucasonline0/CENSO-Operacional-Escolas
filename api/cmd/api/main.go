@@ -340,6 +340,7 @@ func (app *application) routes() http.Handler {
 			protected.Post("/admin/dres", app.AdminCreateDRE)
 			protected.Get("/admin/dres", app.AdminListDREs)
 			protected.Put("/admin/dres/{id}", app.AdminUpdateDRE)
+			protected.Get("/admin/dres/{id}/resumo", app.AdminDRESummary)
 			protected.Post("/admin/dres/{id}/schools", app.AdminAssignSchoolsToDRE)
 			protected.Patch("/admin/schools/{id}/dre", app.AdminMoveSchoolToDRE)
 

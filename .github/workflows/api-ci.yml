@@ -6,6 +6,7 @@ on:
       - develop
     paths:
       - "api/**"
+      - "infra/init.sql"
       - ".github/workflows/api-ci.yml"
 
 permissions:
@@ -19,6 +20,25 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: censo_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d censo_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/censo_test?sslmode=disable
+      ADMIN_JWT_SECRET: dre-ci-secret-0123456789-abcdefghijklmnopqrstuvwxyz
 
     steps:
       - name: Checkout
@@ -35,6 +55,17 @@ jobs:
         working-directory: api
         run: go mod download
 
+      - name: Initialize PostgreSQL integration schema
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f infra/init.sql
+          for migration in api/cmd/api/migrations/*.sql; do
+            echo "Applying $migration"
+            psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+          done
+
       - name: Vet
         working-directory: api
         run: go vet ./...
@@ -43,6 +74,14 @@ jobs:
         working-directory: api
         run: go test ./... -count=1
 
-      - name: DRE analytics stress regression
+      - name: DRE deterministic property stress
         working-directory: api
-        run: go test ./cmd/api -run '^TestDREAnalyticsProperties20000Scenarios$' -count=5
+        run: go test ./cmd/api -run '^(TestDREAnalyticsProperties20000Scenarios|TestDREMasterIntegrationProperties50000Scenarios)$' -count=4
+
+      - name: DRE PostgreSQL batch stress
+        working-directory: api
+        run: go test ./cmd/api -run '^TestDREMasterIntegrationBatch1000Schools$' -count=3
+
+      - name: DRE integration race detector
+        working-directory: api
+        run: go test -race ./cmd/api -run '^TestDREMasterIntegrationFlow$' -count=1

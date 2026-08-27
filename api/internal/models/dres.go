@@ -170,9 +170,10 @@ func (m *DREModel) List(ctx context.Context) ([]*DRE, error) {
 }
 
 // Update atualiza a entidade mestre e sincroniza, na MESMA transacao, os nomes
-// legados mantidos em schools/admin_users. Os vinculos permanecem identificados
-// por dre_id; o texto e apenas compatibilidade. Qualquer falha no meio do rename
-// faz rollback de toda a operacao.
+// legados mantidos em schools/admin_users. No schema pos-0020 a selecao dos
+// filhos usa dre_id. Durante a janela de rollout em um schema anterior, o nome
+// antigo bloqueado na mesma transacao e usado apenas para localizar os registros
+// legados. Qualquer falha faz rollback de toda a operacao.
 func (m *DREModel) Update(ctx context.Context, dre DRE) (*DRE, error) {
 	if dre.ID <= 0 {
 		return nil, ErrDREInvalidID
@@ -196,6 +197,25 @@ func (m *DREModel) Update(ctx context.Context, dre DRE) (*DRE, error) {
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	var oldName string
+	err = tx.QueryRowContext(ctx, `SELECT nome FROM dres WHERE id = $1 FOR UPDATE`, dre.ID).Scan(&oldName)
+	if err == sql.ErrNoRows {
+		return nil, ErrDRENotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	oldName = strings.TrimSpace(oldName)
+
+	schoolsCanonical, err := hasColumn(ctx, tx, "schools", "dre_id")
+	if err != nil {
+		return nil, err
+	}
+	usersCanonical, err := hasColumn(ctx, tx, "admin_users", "dre_id")
+	if err != nil {
+		return nil, err
+	}
+
 	query := `
 		UPDATE dres
 		SET nome = $1, sigla = $2, municipio_sede = $3, polo = $4,
@@ -213,9 +233,6 @@ func (m *DREModel) Update(ctx context.Context, dre DRE) (*DRE, error) {
 		&d.GestorNome, &d.Email, &d.Telefone,
 		&d.Ativa, &d.CreatedAt, &d.UpdatedAt,
 	)
-	if err == sql.ErrNoRows {
-		return nil, ErrDRENotFound
-	}
 	if err != nil {
 		if isDREDuplicateError(err) {
 			return nil, ErrDREExists
@@ -223,18 +240,33 @@ func (m *DREModel) Update(ctx context.Context, dre DRE) (*DRE, error) {
 		return nil, err
 	}
 
-	// dre_id e a referencia canonica. Atualizamos apenas a copia textual para
-	// consumidores legados; os triggers da migration 0020 reafirmam o mesmo ID.
-	if _, err = tx.ExecContext(ctx, `
-		UPDATE admin_users
-		SET dre = $1, updated_at = NOW()
-		WHERE dre_id = $2 AND dre IS DISTINCT FROM $1`, d.Nome, d.ID); err != nil {
+	if usersCanonical {
+		_, err = tx.ExecContext(ctx, `
+			UPDATE admin_users
+			SET dre = $1, updated_at = NOW()
+			WHERE dre_id = $2 AND dre IS DISTINCT FROM $1`, d.Nome, d.ID)
+	} else {
+		_, err = tx.ExecContext(ctx, `
+			UPDATE admin_users
+			SET dre = $1, updated_at = NOW()
+			WHERE UPPER(BTRIM(COALESCE(dre, ''))) = UPPER(BTRIM($2))`, d.Nome, oldName)
+	}
+	if err != nil {
 		return nil, err
 	}
-	if _, err = tx.ExecContext(ctx, `
-		UPDATE schools
-		SET dre = $1
-		WHERE dre_id = $2 AND dre IS DISTINCT FROM $1`, d.Nome, d.ID); err != nil {
+
+	if schoolsCanonical {
+		_, err = tx.ExecContext(ctx, `
+			UPDATE schools
+			SET dre = $1
+			WHERE dre_id = $2 AND dre IS DISTINCT FROM $1`, d.Nome, d.ID)
+	} else {
+		_, err = tx.ExecContext(ctx, `
+			UPDATE schools
+			SET dre = $1
+			WHERE UPPER(BTRIM(COALESCE(dre, ''))) = UPPER(BTRIM($2))`, d.Nome, oldName)
+	}
+	if err != nil {
 		return nil, err
 	}
 

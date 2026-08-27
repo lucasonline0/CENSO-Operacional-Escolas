@@ -172,7 +172,7 @@ func (app *application) resolveRuntimeDREScope(ctx context.Context, claims *runt
 		if strings.TrimSpace(claims.Username) == "" || strings.TrimSpace(claims.DRE) == "" {
 			return AdminAccessScope{}, fmt.Errorf("token DRE sem identidade válida")
 		}
-		return AdminAccessScope{Username: claims.Username, Role: RoleDRE, DRE: claims.DRE}, nil
+		return AdminAccessScope{Username: claims.Username, Role: RoleDRE, DREID: claims.DREID, DRE: claims.DRE}, nil
 	}
 
 	var (
@@ -196,6 +196,7 @@ func (app *application) resolveRuntimeDREScope(ctx context.Context, claims *runt
 	return AdminAccessScope{
 		Username: access.Username,
 		Role:     RoleDRE,
+		DREID:    access.DREID,
 		DRE:      access.DRE,
 	}, nil
 }

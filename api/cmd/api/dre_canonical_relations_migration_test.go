@@ -64,11 +64,11 @@ func TestDRECanonicalRelationsMigrationBackfillAndCompatibilityBridge(t *testing
 		INSERT INTO dres (id, nome) VALUES
 			(10, 'DRE ALPHA'),
 			(20, 'DRE BETA');
-		INSERT INTO schools (id, dre) VALUES
-			(1, '  dre alpha  '),
-			(2, NULL);
-		INSERT INTO admin_users (id, username, password_hash, role, dre) VALUES
-			(1, 'alpha.user', 'hash', 'dre', 'Dre Alpha');
+		INSERT INTO schools (dre) VALUES
+			('  dre alpha  '),
+			(NULL);
+		INSERT INTO admin_users (username, password_hash, role, dre) VALUES
+			('alpha.user', 'hash', 'dre', 'Dre Alpha');
 	`); err != nil {
 		t.Fatalf("seed legacy rows: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestDRECanonicalRelationsMigrationBackfillAndCompatibilityBridge(t *testing
 
 	var schoolDREID int
 	var schoolDRE string
-	if err := tx.QueryRow(`SELECT dre_id, dre FROM schools WHERE id = 1`).Scan(&schoolDREID, &schoolDRE); err != nil {
+	if err := tx.QueryRow(`SELECT dre_id, dre FROM schools WHERE dre_id = 10 LIMIT 1`).Scan(&schoolDREID, &schoolDRE); err != nil {
 		t.Fatalf("read backfilled school: %v", err)
 	}
 	if schoolDREID != 10 || schoolDRE != "DRE ALPHA" {
@@ -89,7 +89,7 @@ func TestDRECanonicalRelationsMigrationBackfillAndCompatibilityBridge(t *testing
 
 	var userDREID int
 	var userDRE string
-	if err := tx.QueryRow(`SELECT dre_id, dre FROM admin_users WHERE id = 1`).Scan(&userDREID, &userDRE); err != nil {
+	if err := tx.QueryRow(`SELECT dre_id, dre FROM admin_users WHERE username = 'alpha.user'`).Scan(&userDREID, &userDRE); err != nil {
 		t.Fatalf("read backfilled user: %v", err)
 	}
 	if userDREID != 10 || userDRE != "DRE ALPHA" {
@@ -124,9 +124,9 @@ func TestDRECanonicalRelationsMigrationIdempotentAndIDWinsAfterRename(t *testing
 	tx := setupDRECanonicalSchema(t)
 	if _, err := tx.Exec(`
 		INSERT INTO dres (id, nome) VALUES (10, 'DRE ALPHA');
-		INSERT INTO schools (id, dre) VALUES (1, 'DRE ALPHA');
-		INSERT INTO admin_users (id, username, password_hash, role, dre)
-		VALUES (1, 'alpha.user', 'hash', 'dre', 'DRE ALPHA');
+		INSERT INTO schools (dre) VALUES ('DRE ALPHA');
+		INSERT INTO admin_users (username, password_hash, role, dre)
+		VALUES ('alpha.user', 'hash', 'dre', 'DRE ALPHA');
 	`); err != nil {
 		t.Fatalf("seed rows: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestDRECanonicalRelationsMigrationIdempotentAndIDWinsAfterRename(t *testing
 
 	var schoolDREID int
 	var schoolDRE string
-	if err := tx.QueryRow(`SELECT dre_id, dre FROM schools WHERE id = 1`).Scan(&schoolDREID, &schoolDRE); err != nil {
+	if err := tx.QueryRow(`SELECT dre_id, dre FROM schools WHERE dre_id = 10 LIMIT 1`).Scan(&schoolDREID, &schoolDRE); err != nil {
 		t.Fatalf("read school after migration reexecution: %v", err)
 	}
 	if schoolDREID != 10 || schoolDRE != "DRE ALPHA RENAMED" {
@@ -152,7 +152,7 @@ func TestDRECanonicalRelationsMigrationIdempotentAndIDWinsAfterRename(t *testing
 
 	var userDREID int
 	var userDRE string
-	if err := tx.QueryRow(`SELECT dre_id, dre FROM admin_users WHERE id = 1`).Scan(&userDREID, &userDRE); err != nil {
+	if err := tx.QueryRow(`SELECT dre_id, dre FROM admin_users WHERE username = 'alpha.user'`).Scan(&userDREID, &userDRE); err != nil {
 		t.Fatalf("read user after migration reexecution: %v", err)
 	}
 	if userDREID != 10 || userDRE != "DRE ALPHA RENAMED" {

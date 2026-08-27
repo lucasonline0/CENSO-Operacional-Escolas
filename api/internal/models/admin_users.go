@@ -26,6 +26,7 @@ type AdminUser struct {
 	PasswordHash string    `json:"-"`
 	Role         string    `json:"role"`
 	DRE          string    `json:"dre"`
+	DREID        int       `json:"dre_id,omitempty"`
 	Active       bool      `json:"active"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
@@ -35,127 +36,92 @@ type AdminUserModel struct {
 	DB *sql.DB
 }
 
-// GetActiveByUsername localiza um usuário ativo pelo username.
-func (m *AdminUserModel) GetActiveByUsername(ctx context.Context, username string) (*AdminUser, error) {
-	query := `
-		SELECT id, username, password_hash, role, COALESCE(dre, ''), active, created_at, updated_at
-		FROM admin_users
-		WHERE LOWER(username) = LOWER($1) AND active = true`
-
-	var u AdminUser
-	err := m.DB.QueryRowContext(ctx, query, strings.TrimSpace(username)).Scan(
-		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.DRE, &u.Active, &u.CreatedAt, &u.UpdatedAt,
-	)
-	if err == sql.ErrNoRows {
-		return nil, ErrUserNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &u, nil
+type canonicalDRE struct {
+	ID     int
+	Nome   string
+	Active bool
 }
 
-// GetByUsername localiza um usuário (ativo ou inativo) pelo username.
-func (m *AdminUserModel) GetByUsername(ctx context.Context, username string) (*AdminUser, error) {
-	query := `
-		SELECT id, username, password_hash, role, COALESCE(dre, ''), active, created_at, updated_at
-		FROM admin_users
-		WHERE LOWER(username) = LOWER($1)`
-
-	var u AdminUser
-	err := m.DB.QueryRowContext(ctx, query, strings.TrimSpace(username)).Scan(
-		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.DRE, &u.Active, &u.CreatedAt, &u.UpdatedAt,
-	)
-	if err == sql.ErrNoRows {
-		return nil, ErrUserNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &u, nil
-}
-
-// ValidateDRE verifica se a DRE existe e está ativa, consultando prioritariamente a tabela 'dres'.
-// Se a DRE estiver cadastrada na tabela 'dres', verifica se está ativa (retornando ErrDREInactive caso inativa).
-// Caso não esteja na tabela 'dres', realiza fallback para a tabela 'schools'.
-func (m *AdminUserModel) ValidateDRE(ctx context.Context, dre string) (bool, error) {
+func (m *AdminUserModel) resolveDREByName(ctx context.Context, dre string) (*canonicalDRE, error) {
 	dre = strings.TrimSpace(dre)
-	if dre == "" {
-		return false, nil
-	}
-
-	// 1. Prioridade: tabela dres
-	var ativa bool
-	queryDRE := `SELECT ativa FROM dres WHERE UPPER(TRIM(nome)) = UPPER(TRIM($1))`
-	err := m.DB.QueryRowContext(ctx, queryDRE, dre).Scan(&ativa)
-	if err == nil {
-		if !ativa {
-			return false, ErrDREInactive
-		}
-		return true, nil
-	}
-
-	if err != sql.ErrNoRows {
-		// Se a tabela dres não existir (ambiente sem migration), faz fallback silencioso para schools
-		if !strings.Contains(err.Error(), "does not exist") && !strings.Contains(err.Error(), "não existe") {
-			return false, err
-		}
-	}
-
-	// 2. Fallback: tabela schools
-	querySchools := `SELECT EXISTS(SELECT 1 FROM schools WHERE UPPER(TRIM(dre)) = UPPER(TRIM($1)))`
-	var exists bool
-	err = m.DB.QueryRowContext(ctx, querySchools, dre).Scan(&exists)
-	return exists, err
-}
-
-// Create cria um novo usuário DRE com senha bcrypt e validação de DRE.
-func (m *AdminUserModel) Create(ctx context.Context, username, plainPassword, role, dre string) (*AdminUser, error) {
-	username = strings.TrimSpace(username)
-	role = strings.TrimSpace(strings.ToLower(role))
-	dre = strings.TrimSpace(dre)
-
-	if username == "" {
-		return nil, errors.New("username não pode ser vazio")
-	}
-	if len(plainPassword) < 6 {
-		return nil, errors.New("senha deve ter no mínimo 6 caracteres")
-	}
-	if role != "dre" {
-		return nil, ErrInvalidRole
-	}
 	if dre == "" {
 		return nil, ErrDRERequiredForDRE
 	}
 
-	validDRE, err := m.ValidateDRE(ctx, dre)
-	if err != nil {
-		if errors.Is(err, ErrDREInactive) {
-			return nil, ErrDREInactive
-		}
-		return nil, fmt.Errorf("erro ao validar DRE: %w", err)
+	var d canonicalDRE
+	err := m.DB.QueryRowContext(ctx, `
+		SELECT id, nome, ativa
+		FROM dres
+		WHERE UPPER(BTRIM(nome)) = UPPER(BTRIM($1))`, dre).Scan(&d.ID, &d.Nome, &d.Active)
+	if err == sql.ErrNoRows {
+		return nil, ErrInvalidDRE
 	}
-	if !validDRE {
+	if err != nil {
+		return nil, err
+	}
+	if !d.Active {
+		return nil, ErrDREInactive
+	}
+	return &d, nil
+}
+
+func (m *AdminUserModel) resolveDREByID(ctx context.Context, dreID int) (*canonicalDRE, error) {
+	if dreID <= 0 {
 		return nil, ErrInvalidDRE
 	}
 
+	var d canonicalDRE
+	err := m.DB.QueryRowContext(ctx, `
+		SELECT id, nome, ativa
+		FROM dres
+		WHERE id = $1`, dreID).Scan(&d.ID, &d.Nome, &d.Active)
+	if err == sql.ErrNoRows {
+		return nil, ErrInvalidDRE
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !d.Active {
+		return nil, ErrDREInactive
+	}
+	return &d, nil
+}
+
+func normalizeAdminUserCreateInput(username, plainPassword, role string) (string, string, error) {
+	username = strings.TrimSpace(username)
+	role = strings.TrimSpace(strings.ToLower(role))
+
+	if username == "" {
+		return "", "", errors.New("username não pode ser vazio")
+	}
+	if len(plainPassword) < 6 {
+		return "", "", errors.New("senha deve ter no mínimo 6 caracteres")
+	}
+	if role != "dre" {
+		return "", "", ErrInvalidRole
+	}
+	return username, role, nil
+}
+
+func (m *AdminUserModel) createForCanonicalDRE(ctx context.Context, username, plainPassword, role string, dre *canonicalDRE) (*AdminUser, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(plainPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao gerar hash da senha: %w", err)
 	}
 
 	query := `
-		INSERT INTO admin_users (username, password_hash, role, dre, active, created_at, updated_at)
+		INSERT INTO admin_users (username, password_hash, role, dre_id, active, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, true, NOW(), NOW())
-		RETURNING id, username, role, dre, active, created_at, updated_at`
+		RETURNING id, username, role, COALESCE(dre, ''), dre_id, active, created_at, updated_at`
 
 	var u AdminUser
 	u.PasswordHash = string(hash)
-	err = m.DB.QueryRowContext(ctx, query, username, u.PasswordHash, role, dre).Scan(
-		&u.ID, &u.Username, &u.Role, &u.DRE, &u.Active, &u.CreatedAt, &u.UpdatedAt,
+	err = m.DB.QueryRowContext(ctx, query, username, u.PasswordHash, role, dre.ID).Scan(
+		&u.ID, &u.Username, &u.Role, &u.DRE, &u.DREID, &u.Active, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if err != nil {
-		if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "duplicate") {
+		msg := strings.ToLower(err.Error())
+		if strings.Contains(msg, "unique") || strings.Contains(msg, "duplicate") {
 			return nil, ErrUsernameExists
 		}
 		return nil, err
@@ -163,19 +129,21 @@ func (m *AdminUserModel) Create(ctx context.Context, username, plainPassword, ro
 	return &u, nil
 }
 
-// GetByID localiza um usuário pelo seu ID numérico.
-func (m *AdminUserModel) GetByID(ctx context.Context, id int) (*AdminUser, error) {
-	if id <= 0 {
-		return nil, ErrUserNotFound
-	}
+// GetActiveByUsername localiza um usuario ativo pelo username. O nome da DRE
+// retornado e derivado do dre_id sempre que houver relacao canonica.
+func (m *AdminUserModel) GetActiveByUsername(ctx context.Context, username string) (*AdminUser, error) {
 	query := `
-		SELECT id, username, password_hash, role, COALESCE(dre, ''), active, created_at, updated_at
-		FROM admin_users
-		WHERE id = $1`
+		SELECT u.id, u.username, u.password_hash, u.role,
+		       COALESCE(d.nome, u.dre, ''), COALESCE(u.dre_id, 0),
+		       u.active, u.created_at, u.updated_at
+		FROM admin_users u
+		LEFT JOIN dres d ON d.id = u.dre_id
+		WHERE LOWER(u.username) = LOWER($1) AND u.active = true`
 
 	var u AdminUser
-	err := m.DB.QueryRowContext(ctx, query, id).Scan(
-		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.DRE, &u.Active, &u.CreatedAt, &u.UpdatedAt,
+	err := m.DB.QueryRowContext(ctx, query, strings.TrimSpace(username)).Scan(
+		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.DRE, &u.DREID,
+		&u.Active, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, ErrUserNotFound
@@ -186,7 +154,115 @@ func (m *AdminUserModel) GetByID(ctx context.Context, id int) (*AdminUser, error
 	return &u, nil
 }
 
-// UpdatePassword atualiza a senha de um usuário existente usando bcrypt pelo username.
+// GetByUsername localiza um usuario ativo ou inativo pelo username.
+func (m *AdminUserModel) GetByUsername(ctx context.Context, username string) (*AdminUser, error) {
+	query := `
+		SELECT u.id, u.username, u.password_hash, u.role,
+		       COALESCE(d.nome, u.dre, ''), COALESCE(u.dre_id, 0),
+		       u.active, u.created_at, u.updated_at
+		FROM admin_users u
+		LEFT JOIN dres d ON d.id = u.dre_id
+		WHERE LOWER(u.username) = LOWER($1)`
+
+	var u AdminUser
+	err := m.DB.QueryRowContext(ctx, query, strings.TrimSpace(username)).Scan(
+		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.DRE, &u.DREID,
+		&u.Active, &u.CreatedAt, &u.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, ErrUserNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+// ValidateDRE valida exclusivamente a entidade mestre dres. Nao existe mais
+// fallback para schools: texto em uma escola nunca cria ou valida uma regional.
+func (m *AdminUserModel) ValidateDRE(ctx context.Context, dre string) (bool, error) {
+	dre = strings.TrimSpace(dre)
+	if dre == "" {
+		return false, nil
+	}
+
+	var ativa bool
+	err := m.DB.QueryRowContext(ctx, `
+		SELECT ativa
+		FROM dres
+		WHERE UPPER(BTRIM(nome)) = UPPER(BTRIM($1))`, dre).Scan(&ativa)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !ativa {
+		return false, ErrDREInactive
+	}
+	return true, nil
+}
+
+// Create preserva o contrato legado que recebe o nome da DRE, mas o nome e
+// apenas resolvido na entidade mestre. O INSERT persiste o vinculo por dre_id.
+func (m *AdminUserModel) Create(ctx context.Context, username, plainPassword, role, dre string) (*AdminUser, error) {
+	username, role, err := normalizeAdminUserCreateInput(username, plainPassword, role)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(dre) == "" {
+		return nil, ErrDRERequiredForDRE
+	}
+
+	canonical, err := m.resolveDREByName(ctx, dre)
+	if err != nil {
+		return nil, err
+	}
+	return m.createForCanonicalDRE(ctx, username, plainPassword, role, canonical)
+}
+
+// CreateForDREID e o caminho canonico para novos callers/handlers. Ele evita
+// qualquer dependencia de nome textual para estabelecer o relacionamento.
+func (m *AdminUserModel) CreateForDREID(ctx context.Context, username, plainPassword, role string, dreID int) (*AdminUser, error) {
+	username, role, err := normalizeAdminUserCreateInput(username, plainPassword, role)
+	if err != nil {
+		return nil, err
+	}
+	canonical, err := m.resolveDREByID(ctx, dreID)
+	if err != nil {
+		return nil, err
+	}
+	return m.createForCanonicalDRE(ctx, username, plainPassword, role, canonical)
+}
+
+// GetByID localiza um usuario pelo seu ID numerico.
+func (m *AdminUserModel) GetByID(ctx context.Context, id int) (*AdminUser, error) {
+	if id <= 0 {
+		return nil, ErrUserNotFound
+	}
+	query := `
+		SELECT u.id, u.username, u.password_hash, u.role,
+		       COALESCE(d.nome, u.dre, ''), COALESCE(u.dre_id, 0),
+		       u.active, u.created_at, u.updated_at
+		FROM admin_users u
+		LEFT JOIN dres d ON d.id = u.dre_id
+		WHERE u.id = $1`
+
+	var u AdminUser
+	err := m.DB.QueryRowContext(ctx, query, id).Scan(
+		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.DRE, &u.DREID,
+		&u.Active, &u.CreatedAt, &u.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, ErrUserNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+// UpdatePassword atualiza a senha de um usuario existente usando bcrypt pelo username.
 func (m *AdminUserModel) UpdatePassword(ctx context.Context, username string, newPlainPassword string) error {
 	username = strings.TrimSpace(username)
 	if len(newPlainPassword) < 6 {
@@ -208,7 +284,7 @@ func (m *AdminUserModel) UpdatePassword(ctx context.Context, username string, ne
 	return err
 }
 
-// UpdatePasswordByID atualiza a senha de um usuário existente usando bcrypt pelo ID.
+// UpdatePasswordByID atualiza a senha de um usuario existente usando bcrypt pelo ID.
 func (m *AdminUserModel) UpdatePasswordByID(ctx context.Context, id int, newPlainPassword string) error {
 	if id <= 0 {
 		return ErrUserNotFound
@@ -237,7 +313,7 @@ func (m *AdminUserModel) UpdatePasswordByID(ctx context.Context, id int, newPlai
 	return nil
 }
 
-// SetActive ativa ou desativa uma conta de usuário pelo username.
+// SetActive ativa ou desativa uma conta de usuario pelo username.
 func (m *AdminUserModel) SetActive(ctx context.Context, username string, active bool) error {
 	username = strings.TrimSpace(username)
 	u, err := m.GetByUsername(ctx, username)
@@ -250,7 +326,7 @@ func (m *AdminUserModel) SetActive(ctx context.Context, username string, active 
 	return err
 }
 
-// SetActiveByID ativa ou desativa uma conta de usuário pelo ID.
+// SetActiveByID ativa ou desativa uma conta de usuario pelo ID.
 func (m *AdminUserModel) SetActiveByID(ctx context.Context, id int, active bool) error {
 	if id <= 0 {
 		return ErrUserNotFound
@@ -271,12 +347,16 @@ func (m *AdminUserModel) SetActiveByID(ctx context.Context, id int, active bool)
 	return nil
 }
 
-// List retorna todas as contas cadastradas sem expor o hash da senha.
+// List retorna todas as contas cadastradas sem expor o hash da senha e sempre
+// prefere o nome atual da DRE resolvido pela FK canonica.
 func (m *AdminUserModel) List(ctx context.Context) ([]*AdminUser, error) {
 	query := `
-		SELECT id, username, role, COALESCE(dre, ''), active, created_at, updated_at
-		FROM admin_users
-		ORDER BY username`
+		SELECT u.id, u.username, u.role,
+		       COALESCE(d.nome, u.dre, ''), COALESCE(u.dre_id, 0),
+		       u.active, u.created_at, u.updated_at
+		FROM admin_users u
+		LEFT JOIN dres d ON d.id = u.dre_id
+		ORDER BY u.username`
 
 	rows, err := m.DB.QueryContext(ctx, query)
 	if err != nil {
@@ -287,7 +367,10 @@ func (m *AdminUserModel) List(ctx context.Context) ([]*AdminUser, error) {
 	users := make([]*AdminUser, 0)
 	for rows.Next() {
 		var u AdminUser
-		if err := rows.Scan(&u.ID, &u.Username, &u.Role, &u.DRE, &u.Active, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(
+			&u.ID, &u.Username, &u.Role, &u.DRE, &u.DREID,
+			&u.Active, &u.CreatedAt, &u.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		users = append(users, &u)

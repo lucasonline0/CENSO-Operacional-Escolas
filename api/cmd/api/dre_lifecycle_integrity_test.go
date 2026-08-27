@@ -203,8 +203,6 @@ func TestDRELifecycleRenamePreservesCanonicalRelationsAndRemap(t *testing.T) {
 		t.Fatalf("rename broke canonical links: school=(%d,%q) user=(%d,%q)", schoolDREID, schoolDRE, userDREID, userDRE)
 	}
 
-	// This specifically guards the post-#204 bug where changing only schools.dre
-	// was ignored because the trigger correctly treated the old dre_id as source of truth.
 	if _, _, err := m.Schools.AssignToDRE(ctx, dreB.ID, []int{schoolID}); err != nil {
 		t.Fatalf("remap school to DRE B: %v", err)
 	}
@@ -271,12 +269,16 @@ func TestDRELifecycleStress12000CanonicalRelations(t *testing.T) {
 
 	if _, err := db.Exec(`
 		INSERT INTO schools (dre_id)
-		SELECT $1 FROM generate_series(1, 6000);
+		SELECT $1 FROM generate_series(1, 6000)
+	`, dre.ID); err != nil {
+		t.Fatalf("seed 6000 canonical school relations: %v", err)
+	}
+	if _, err := db.Exec(`
 		INSERT INTO admin_users (username, password_hash, role, dre_id)
 		SELECT 'dre205.stress.' || g, 'hash', 'dre', $1
-		FROM generate_series(1, 6000) AS g;
+		FROM generate_series(1, 6000) AS g
 	`, dre.ID); err != nil {
-		t.Fatalf("seed 12000 canonical relations: %v", err)
+		t.Fatalf("seed 6000 canonical user relations: %v", err)
 	}
 
 	dre.Nome = "DRE STRESS RENOMEADA"

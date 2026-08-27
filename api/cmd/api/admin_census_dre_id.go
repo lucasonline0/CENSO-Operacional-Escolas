@@ -150,7 +150,9 @@ func (app *application) AdminGetCensusCanonical(w http.ResponseWriter, r *http.R
 }
 
 // AdminGetCensusByIDCanonical elimina a BOLA textual do caminho ativo. Em
-// schema canônico, ausência ou mismatch de dre_id falha fechado.
+// schema canônico, ausência ou mismatch de dre_id falha fechado. O booleano
+// canonical_mode permite que o CI pré-0020 continue exercitando o contrato
+// legado sem mascarar órfãos em bancos já migrados.
 func (app *application) AdminGetCensusByIDCanonical(w http.ResponseWriter, r *http.Request) {
 	scope, _ := GetAdminAccessScope(r.Context())
 
@@ -163,17 +165,19 @@ func (app *application) AdminGetCensusByIDCanonical(w http.ResponseWriter, r *ht
 	var c CensusFullRecord
 	var rawData []byte
 	var targetDREID int
+	var canonicalMode bool
 	dreName := schoolDRENameExpr("s")
 	dreID := schoolDREIDExpr("s")
 	err = app.models.Schools.DB.QueryRowContext(r.Context(), `
 		SELECT cr.id, cr.school_id, s.nome_escola, s.codigo_inep, s.municipio,
 		       `+dreName+` AS dre, `+dreID+` AS dre_id,
+		       `+canonicalSchoolDREColumnSQL+` AS canonical_mode,
 		       cr.year, cr.status, cr.data, cr.created_at, cr.updated_at,
 		       (cr.sheet_synced_at IS NOT NULL)
 		FROM census_responses cr
 		JOIN schools s ON s.id = cr.school_id
 		WHERE cr.id = $1`, id).Scan(
-		&c.CensusID, &c.SchoolID, &c.Nome, &c.INEP, &c.Municipio, &c.Dre, &targetDREID,
+		&c.CensusID, &c.SchoolID, &c.Nome, &c.INEP, &c.Municipio, &c.Dre, &targetDREID, &canonicalMode,
 		&c.Year, &c.Status, &rawData, &c.CreatedAt, &c.UpdatedAt, &c.Synced,
 	)
 	if err != nil {
@@ -181,14 +185,12 @@ func (app *application) AdminGetCensusByIDCanonical(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if scope.Role == RoleDRE && scope.DREID > 0 {
-		if targetDREID <= 0 || !scope.IsAuthorizedForDREID(targetDREID) {
+	if scope.Role == RoleDRE && canonicalMode {
+		if scope.DREID <= 0 || targetDREID <= 0 || !scope.IsAuthorizedForDREID(targetDREID) {
 			app.errorJSON(w, fmt.Errorf("acesso não permitido para esta DRE"), http.StatusForbidden)
 			return
 		}
 	} else if !scope.IsAuthorizedForDRE(c.Dre) {
-		// Compatibilidade somente para testes/tokens pré-0020. Usuários runtime
-		// pós-#206 sempre chegam ao ramo canônico acima.
 		app.errorJSON(w, fmt.Errorf("acesso não permitido para esta DRE"), http.StatusForbidden)
 		return
 	}

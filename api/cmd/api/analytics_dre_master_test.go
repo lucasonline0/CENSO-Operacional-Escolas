@@ -56,7 +56,7 @@ func newDREIntegrationApp(t *testing.T, db *sql.DB) (*application, http.Handler,
 
 func resetDREIntegrationData(t *testing.T, db *sql.DB) {
 	t.Helper()
-	if _, err := db.Exec(`TRUNCATE TABLE census_responses, schools, dres RESTART IDENTITY CASCADE`); err != nil {
+	if _, err := db.Exec(`TRUNCATE TABLE census_responses, schools, admin_users, dres RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("limpar dados de integração: %v", err)
 	}
 }

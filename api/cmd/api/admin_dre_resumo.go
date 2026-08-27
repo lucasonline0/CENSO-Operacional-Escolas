@@ -18,6 +18,9 @@ type DRESummaryPayload struct {
 	CensusAdherencePercentage int     `json:"census_adherence_percentage"`
 }
 
+// Em schema pós-0020 o vínculo é exclusivamente schools.dre_id -> dres.id. O
+// ramo textual existe apenas para o schema de transição do CI enquanto #210
+// ainda não aplica 0020 no bootstrap compartilhado.
 const dreSummarySelectSQL = `
 	WITH target_dre AS (
 		SELECT id, TRIM(nome) AS nome
@@ -48,7 +51,15 @@ const dreSummarySelectSQL = `
 		COUNT(s.id) FILTER (WHERE cr.status = 'completed') AS completed
 	FROM target_dre d
 	LEFT JOIN schools s
-	  ON UPPER(TRIM(s.dre)) = UPPER(TRIM(d.nome))
+	  ON CASE
+		WHEN EXISTS (
+			SELECT 1 FROM pg_attribute
+			WHERE attrelid = to_regclass('schools')
+			  AND attname = 'dre_id'
+			  AND NOT attisdropped
+		) THEN NULLIF(to_jsonb(s)->>'dre_id', '')::int = d.id
+		ELSE UPPER(TRIM(s.dre)) = UPPER(TRIM(d.nome))
+	  END
 	LEFT JOIN latest_census cr ON cr.school_id = s.id
 	GROUP BY d.id, d.nome
 `

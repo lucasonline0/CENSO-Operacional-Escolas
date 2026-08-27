@@ -12,9 +12,11 @@ import (
 
 // AnalyticsFilters holds the parsed query-string filters common to all
 // analytical endpoints. Default year = current year; string filters default
-// to "" (= no filter applied in WhereSQL).
+// to "" (= no filter applied in WhereSQL). DREID is authorization-only and is
+// populated from the runtime scope, never from an untrusted query string.
 type AnalyticsFilters struct {
 	Year             int
+	DREID            int
 	DRE              string
 	Municipio        string
 	Zona             string
@@ -26,6 +28,7 @@ type AnalyticsFilters struct {
 func parseAnalyticsFilters(r *http.Request) AnalyticsFilters {
 	f := parseAnalyticsFiltersFromValues(r.URL.Query(), time.Now())
 	if scope, ok := GetAdminAccessScope(r.Context()); ok && scope.Role == RoleDRE {
+		f.DREID = scope.DREID
 		f.DRE = strings.TrimSpace(scope.DRE)
 	}
 	return f
@@ -57,12 +60,16 @@ func parseAnalyticsFiltersFromValues(q url.Values, now time.Time) AnalyticsFilte
 // $1=year, $2=dre, $3=municipio, $4=zona, $5=regiao_integracao,
 // $6=school_id and $7=codigo_inep. Empty strings and school_id zero disable
 // the corresponding optional filters.
-// Pair with Args() to get the matching positional arguments.
+//
+// A view ainda expõe `dre` textual por compatibilidade, mas em bancos pós-0020
+// o filtro DRE re-resolve school_id -> schools.dre_id -> dres.id/nome. Assim o
+// texto projetado pela view deixa de determinar escopo ou agregações.
 func (f AnalyticsFilters) WhereSQL() string {
+	drePredicate := analyticsDREPredicate("school_id", "dre", "$2")
 	return `status = 'completed'
       AND year = $1
       AND census_id IS NOT NULL
-      AND ($2 = '' OR UPPER(TRIM(dre)) = UPPER(TRIM($2)))
+      AND ($2 = '' OR ` + drePredicate + `)
       AND ($3 = '' OR UPPER(TRIM(municipio)) = UPPER(TRIM($3)))
       AND ($4 = '' OR UPPER(TRIM(zona)) = UPPER(TRIM($4)))
       AND ($5 = '' OR UPPER(TRIM(municipio)) IN (
@@ -129,11 +136,11 @@ func filtrosOpcoesSchoolsWhere(f AnalyticsFilters, alias, except string) (string
 }
 
 // filtrosOpcoesSchoolsWhereWithAuthorization applies the mandatory territorial
-// scope independently from the select cascade. A DRE user's authorization
-// must survive even when the DRE select is the option being populated.
+// scope independently from the select cascade. Em schema canônico a autorização
+// usa diretamente dre_id; o nome só permanece como fallback pré-0020.
 func filtrosOpcoesSchoolsWhereWithAuthorization(f AnalyticsFilters, alias, except, authorizedDRE string) (string, []any) {
-	conditions := make([]string, 0, 6)
-	args := make([]any, 0, 6)
+	conditions := make([]string, 0, 7)
+	args := make([]any, 0, 7)
 	add := func(key, condition string, arg any) {
 		if key == except {
 			return
@@ -142,11 +149,21 @@ func filtrosOpcoesSchoolsWhereWithAuthorization(f AnalyticsFilters, alias, excep
 		conditions = append(conditions, fmt.Sprintf(condition, len(args), len(args)))
 	}
 
-	if strings.TrimSpace(authorizedDRE) != "" {
-		args = append(args, strings.TrimSpace(authorizedDRE))
-		conditions = append(conditions, "UPPER(TRIM("+alias+".dre)) = UPPER(TRIM($"+strconv.Itoa(len(args))+"))")
-	} else {
-		add("dre", "($%d = '' OR UPPER(TRIM("+alias+".dre)) = UPPER(TRIM($%d)))", f.DRE)
+	if authorizedDRE = strings.TrimSpace(authorizedDRE); authorizedDRE != "" {
+		if f.DREID > 0 {
+			args = append(args, f.DREID)
+			idPos := len(args)
+			args = append(args, authorizedDRE)
+			namePos := len(args)
+			conditions = append(conditions, schoolDREAuthorizationPredicate(alias, "$"+strconv.Itoa(idPos), "$"+strconv.Itoa(namePos)))
+		} else {
+			args = append(args, authorizedDRE)
+			conditions = append(conditions, schoolDRENamePredicate(alias, "$"+strconv.Itoa(len(args))))
+		}
+	} else if except != "dre" {
+		args = append(args, f.DRE)
+		pos := "$" + strconv.Itoa(len(args))
+		conditions = append(conditions, "("+pos+" = '' OR "+schoolDRENamePredicate(alias, pos)+")")
 	}
 	add("municipio", "($%d = '' OR UPPER(TRIM("+alias+".municipio)) = UPPER(TRIM($%d)))", f.Municipio)
 	add("zona", "($%d = '' OR UPPER(TRIM("+alias+".zona)) = UPPER(TRIM($%d)))", f.Zona)
@@ -168,10 +185,15 @@ func filtrosOpcoesDREsQuery(f AnalyticsFilters, authorizedDRE string) (string, [
 		WHERE d.ativa = TRUE
 		  AND NULLIF(TRIM(d.nome), '') IS NOT NULL
 	`
-	args := make([]any, 0, 6)
+	args := make([]any, 0, 7)
 	if authorizedDRE = strings.TrimSpace(authorizedDRE); authorizedDRE != "" {
-		args = append(args, authorizedDRE)
-		query += "\t  AND UPPER(TRIM(d.nome)) = UPPER(TRIM($" + strconv.Itoa(len(args)) + "))\n"
+		if f.DREID > 0 {
+			args = append(args, f.DREID)
+			query += "\t  AND d.id = $" + strconv.Itoa(len(args)) + "\n"
+		} else {
+			args = append(args, authorizedDRE)
+			query += "\t  AND UPPER(TRIM(d.nome)) = UPPER(TRIM($" + strconv.Itoa(len(args)) + "))\n"
+		}
 	}
 
 	if f.Municipio != "" || f.Zona != "" || f.RegiaoIntegracao != "" || f.SchoolID != 0 || f.CodigoINEP != "" {
@@ -185,7 +207,7 @@ func filtrosOpcoesDREsQuery(f AnalyticsFilters, authorizedDRE string) (string, [
 			SELECT 1
 			FROM schools s
 			WHERE ` + schoolsWhere + `
-			  AND UPPER(TRIM(s.dre)) = UPPER(TRIM(d.nome))
+			  AND ` + schoolDRENamePredicate("s", "d.nome") + `
 		)
 `
 	}
@@ -213,8 +235,13 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 	`
 	var anosArgs []any
 	if authorizedDRE != "" {
-		anosQuery += ` AND UPPER(TRIM(s.dre)) = UPPER(TRIM($1))`
-		anosArgs = append(anosArgs, authorizedDRE)
+		if f.DREID > 0 {
+			anosQuery += ` AND ` + schoolDREAuthorizationPredicate("s", "$1", "$2")
+			anosArgs = append(anosArgs, f.DREID, authorizedDRE)
+		} else {
+			anosQuery += ` AND ` + schoolDRENamePredicate("s", "$1")
+			anosArgs = append(anosArgs, authorizedDRE)
+		}
 	}
 	anosQuery += `
 		ORDER BY cr.year::text DESC
@@ -246,7 +273,7 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// DREs: filtradas por municipio, zona, regiao (não pela própria dre)
+	// DREs: derivadas da entidade mestre; escolas só participam da cascata pelos IDs.
 	dresQuery, dresArgs := filtrosOpcoesDREsQuery(f, authorizedDRE)
 	dres, err := queryStringSlice(app, ctx, dresQuery, dresArgs...)
 	if err != nil {
@@ -282,14 +309,15 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 	}
 
 	escolasWhere, escolasArgs := filtrosOpcoesSchoolsWhereWithAuthorization(f, "s", "school_id", authorizedDRE)
+	dreNameExpr := schoolDRENameExpr("s")
 	rows, err := app.models.Schools.DB.QueryContext(ctx, `
 		SELECT DISTINCT
-			id,
-			codigo_inep,
-			COALESCE(NULLIF(TRIM(nome_escola), ''), 'Sem nome') AS nome_escola,
-			COALESCE(NULLIF(TRIM(municipio), ''), 'Não informado') AS municipio,
-			COALESCE(NULLIF(TRIM(dre), ''), 'Não informado') AS dre,
-			zona
+			s.id,
+			s.codigo_inep,
+			COALESCE(NULLIF(TRIM(s.nome_escola), ''), 'Sem nome') AS nome_escola,
+			COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado') AS municipio,
+			`+dreNameExpr+` AS dre,
+			s.zona
 		FROM schools s
 		WHERE `+escolasWhere+`
 		ORDER BY nome_escola

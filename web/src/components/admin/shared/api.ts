@@ -52,6 +52,14 @@ export async function apiFetch<T>(path: string, token: string, opts?: RequestIni
   return data;
 }
 
+// Mutations invalidam o cache somente após sucesso. Assim, uma escrita que falha
+// não descarta dados válidos nem força refetch desnecessário no dashboard.
+async function apiMutation<T>(path: string, token: string, opts: RequestInit): Promise<T> {
+  const data = await apiFetch<T>(path, token, opts);
+  clearApiCache();
+  return data;
+}
+
 export async function fetchAdminMe(token: string): Promise<AdminProfile> {
   return apiFetch<AdminProfile>("/v1/admin/me", token);
 }
@@ -61,16 +69,14 @@ export async function fetchDREs(token: string): Promise<DREItem[]> {
 }
 
 export async function createDRE(token: string, payload: Partial<DREItem>): Promise<DREItem> {
-  clearApiCache();
-  return apiFetch<DREItem>("/v1/admin/dres", token, {
+  return apiMutation<DREItem>("/v1/admin/dres", token, {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
 export async function updateDRE(token: string, id: number, payload: Partial<DREItem>): Promise<DREItem> {
-  clearApiCache();
-  return apiFetch<DREItem>(`/v1/admin/dres/${id}`, token, {
+  return apiMutation<DREItem>(`/v1/admin/dres/${id}`, token, {
     method: "PUT",
     body: JSON.stringify(payload),
   });
@@ -84,8 +90,7 @@ export async function createAdminUser(
   token: string,
   payload: { username: string; password: string; role?: string; dre: string }
 ): Promise<AdminUserItem> {
-  clearApiCache();
-  return apiFetch<AdminUserItem>("/v1/admin/users", token, {
+  return apiMutation<AdminUserItem>("/v1/admin/users", token, {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -96,8 +101,7 @@ export async function updateAdminUserStatus(
   id: number,
   active: boolean
 ): Promise<AdminUserItem> {
-  clearApiCache();
-  return apiFetch<AdminUserItem>(`/v1/admin/users/${id}/status`, token, {
+  return apiMutation<AdminUserItem>(`/v1/admin/users/${id}/status`, token, {
     method: "PATCH",
     body: JSON.stringify({ active }),
   });
@@ -158,12 +162,10 @@ export async function prefetchDashboard(token: string, role?: string): Promise<v
 
 // ── Escrita: Gestão de DREs ─────────────────────────────────────────────────
 
-// Criação de nova DRE — contrato do backend definido em POST /v1/admin/dres.
-// O formulário usa nomes amigáveis para os dados do responsável; o mapeamento
-// abaixo mantém o contrato HTTP centralizado neste helper.
+// Compatibilidade com o payload legado do modal: mapeia os nomes amigáveis e
+// reutiliza o caminho canônico de criação para manter uma única regra de cache.
 export async function createDre(token: string, payload: DreCreatePayload): Promise<DreRecord> {
-  clearApiCache();
-  const backendPayload = {
+  return createDRE(token, {
     nome: payload.nome,
     sigla: payload.sigla,
     municipio_sede: payload.municipio_sede,
@@ -171,11 +173,6 @@ export async function createDre(token: string, payload: DreCreatePayload): Promi
     gestor_nome: payload.responsavel_nome,
     email: payload.responsavel_email,
     telefone: payload.responsavel_telefone,
-  };
-
-  return apiFetch<DreRecord>("/v1/admin/dres", token, {
-    method: "POST",
-    body: JSON.stringify(backendPayload),
   });
 }
 

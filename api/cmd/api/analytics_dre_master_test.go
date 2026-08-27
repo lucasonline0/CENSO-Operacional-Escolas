@@ -56,7 +56,7 @@ func newDREIntegrationApp(t *testing.T, db *sql.DB) (*application, http.Handler,
 
 func resetDREIntegrationData(t *testing.T, db *sql.DB) {
 	t.Helper()
-	if _, err := db.Exec(`TRUNCATE TABLE census_responses, schools, dres RESTART IDENTITY CASCADE`); err != nil {
+	if _, err := db.Exec(`TRUNCATE TABLE census_responses, schools, admin_users, dres RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("limpar dados de integração: %v", err)
 	}
 }
@@ -239,7 +239,14 @@ func TestDREMasterIntegrationFlow(t *testing.T) {
 		t.Fatalf("resumo após associação inconsistente: %+v", summary)
 	}
 
-	// O escopo role=dre precisa impor a DRE do token mesmo sem query param.
+	// O escopo role=dre precisa impor a DRE da conta autenticada mesmo sem query param.
+	// A #206 exige que todo token DRE corresponda a um usuário real e ativo no banco.
+	if _, err := db.Exec(`
+		INSERT INTO admin_users (username, password_hash, role, dre, active, created_at, updated_at)
+		VALUES ($1, 'integration-test-hash', 'dre', $2, true, NOW(), NOW())
+	`, "integration-dre", dreA.Nome); err != nil {
+		t.Fatalf("inserir usuário DRE de integração: %v", err)
+	}
 	dreToken := createTestJWT("integration-dre", RoleDRE, dreA.Nome)
 	scopedRR := requestDREIntegration(t, handler, dreToken, http.MethodGet,
 		"/v1/admin/analytics/preenchimento/dre?year=2026", nil)

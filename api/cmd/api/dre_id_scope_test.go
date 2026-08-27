@@ -264,7 +264,7 @@ func TestDREIDScopePostgreSQLStress10000Relations(t *testing.T) {
 			'207S' || LPAD(g::text, 6, '0'),
 			'BELEM',
 			'Urbana',
-			CASE WHEN g <= 5000 THEN $1 ELSE $2 END
+			CASE WHEN g <= 5000 THEN $1::integer ELSE $2::integer END
 		FROM generate_series(1, 10000) g
 	`, dreA, dreB); err != nil {
 		t.Fatalf("seed 10k canonical schools: %v", err)

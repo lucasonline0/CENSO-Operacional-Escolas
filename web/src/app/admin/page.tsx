@@ -395,6 +395,8 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const [filtrosOpcoes, setFiltrosOpcoes] = useState<FiltrosOpcoes | null>(null);
   const [presentationMode, setPresentationMode] = useState(false);
   const [showMobilePresAlert, setShowMobilePresAlert] = useState(false);
+  const [dataVersion, setDataVersion] = useState(0);
+  const handleDataChanged = useCallback(() => setDataVersion((v) => v + 1), []);
 
   /* const logout = useCallback(() => { clearToken(); clearApiCache(); onLogout(); }, [onLogout]); */
   const logout = useCallback(() => { 
@@ -481,7 +483,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     apiFetch<FiltrosOpcoes>(url, token)
       .then(setFiltrosOpcoes)
       .catch((e) => { if ((e as Error).message === "UNAUTHORIZED") logout(); });
-  }, [filters, token, logout]);
+  }, [filters, token, logout, dataVersion]);
 
 
   async function handleSync() {
@@ -751,7 +753,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
             {profile?.role === "admin" && visited.has("gestao") && (
               <div style={{ display: tab === "gestao" ? undefined : "none" }}>
-                <AbaGestaoDres token={token} onUnauth={logout} />
+                <AbaGestaoDres token={token} onUnauth={logout} onDataChanged={handleDataChanged} />
               </div>
             )}
           </div>

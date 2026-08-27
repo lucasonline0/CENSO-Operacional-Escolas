@@ -42,9 +42,10 @@ import type { DREItem, AdminUserItem } from "./shared/types";
 interface AbaGestaoDresProps {
   token: string;
   onUnauth: () => void;
+  onDataChanged?: () => void;
 }
 
-export function AbaGestaoDres({ token, onUnauth }: AbaGestaoDresProps) {
+export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresProps) {
   const [dres, setDres] = useState<DREItem[]>([]);
   const [users, setUsers] = useState<AdminUserItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -231,6 +232,7 @@ export function AbaGestaoDres({ token, onUnauth }: AbaGestaoDresProps) {
         ...dre,
         ativa: nextActive,
       });
+      onDataChanged?.();
       showToast(`Status da ${dre.nome} atualizado para ${nextActive ? "Ativa" : "Inativa"}.`);
     } catch (err: unknown) {
       // Reverter
@@ -253,6 +255,7 @@ export function AbaGestaoDres({ token, onUnauth }: AbaGestaoDresProps) {
 
     try {
       await updateAdminUserStatus(token, user.id, nextActive);
+      onDataChanged?.();
       showToast(`Usuário ${user.username} ${nextActive ? "ativado" : "desativado"} com sucesso.`);
     } catch (err: unknown) {
       // Reverter
@@ -300,18 +303,18 @@ export function AbaGestaoDres({ token, onUnauth }: AbaGestaoDresProps) {
       }
       return [savedDre, ...prev];
     });
+    onDataChanged?.();
     showToast(`DRE "${savedDre.nome}" ${dreToEdit ? "atualizada" : "cadastrada"} com sucesso.`);
   };
 
   const handleUserSuccess = (createdUser: AdminUserItem, pass: string) => {
     setIsUserModalOpen(false);
     setUsers((prev) => [createdUser, ...prev]);
-    // Expandir automaticamente a DRE do usuário criado
     const targetDre = dres.find((d) => d.nome.trim().toLowerCase() === createdUser.dre.trim().toLowerCase());
     if (targetDre) {
       setExpandedDres((prev) => new Set(prev).add(targetDre.id));
     }
-    // Abrir modal de credenciais prontas para cópia segura
+    onDataChanged?.();
     setCredentialsModal({
       isOpen: true,
       title: "Novo Usuário Cadastrado!",

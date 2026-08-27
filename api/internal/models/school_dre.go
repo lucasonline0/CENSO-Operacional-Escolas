@@ -58,9 +58,9 @@ func normalizedSchoolIDsForUpdate(ids []int) ([]int, error) {
 }
 
 // AssignToDRE associates one or more schools with a master DRE atomically.
-// The canonical DRE name is read and locked inside the same transaction used
-// to update schools, preventing stale or differently formatted DRE values from
-// being persisted. If any school does not exist, the whole batch is rolled back.
+// dre_id is the source of truth; the legacy text column is hydrated by the
+// compatibility trigger from migration 0020. If any school does not exist,
+// the entire batch is rolled back.
 func (m *SchoolModel) AssignToDRE(ctx context.Context, dreID int, schoolIDs []int) (string, int, error) {
 	if dreID <= 0 {
 		return "", 0, ErrDREInvalidID
@@ -99,14 +99,14 @@ func (m *SchoolModel) AssignToDRE(ctx context.Context, dreID int, schoolIDs []in
 		return "", 0, ErrDRENameRequired
 	}
 
-	stmt, err := tx.PrepareContext(ctx, `UPDATE schools SET dre = $1 WHERE id = $2`)
+	stmt, err := tx.PrepareContext(ctx, `UPDATE schools SET dre_id = $1 WHERE id = $2`)
 	if err != nil {
 		return "", 0, err
 	}
 	defer stmt.Close()
 
 	for _, schoolID := range ids {
-		result, err := stmt.ExecContext(ctx, dreName, schoolID)
+		result, err := stmt.ExecContext(ctx, dreID, schoolID)
 		if err != nil {
 			return "", 0, err
 		}

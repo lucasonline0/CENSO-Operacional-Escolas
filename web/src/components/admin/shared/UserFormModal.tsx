@@ -48,10 +48,13 @@ export function UserFormModal({
   useEffect(() => {
     if (isOpen) {
       const activeDres = dres.filter((d) => d.ativa);
-      const defaultDre = preselectedDre || (activeDres.length > 0 ? activeDres[0].nome : (dres[0]?.nome ?? ""));
+      const preselectedValid = preselectedDre &&
+        dres.some(d => d.nome === preselectedDre && d.ativa);
+      const defaultDre = preselectedValid
+        ? preselectedDre
+        : (activeDres.length > 0 ? activeDres[0].nome : (dres[0]?.nome ?? ""));
       setSelectedDre(defaultDre);
       
-      // Gerar sugestão de username com base na DRE se aplicável
       if (defaultDre) {
         const clean = defaultDre
           .toLowerCase()
@@ -121,6 +124,11 @@ export function UserFormModal({
 
     if (!selectedDre) {
       setError("Selecione uma DRE.");
+      return;
+    }
+    const selectedDreObj = dres.find(d => d.nome === selectedDre);
+    if (!selectedDreObj || !selectedDreObj.ativa) {
+      setError("Não é possível criar usuário para uma DRE inativa.");
       return;
     }
     if (!u) {
@@ -312,7 +320,7 @@ export function UserFormModal({
             </button>
             <button
               type="submit"
-              disabled={loading || !username.trim() || !password.trim()}
+              disabled={loading || !username.trim() || !password.trim() || !dres.some(d => d.ativa)}
               className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold transition-colors disabled:opacity-50 shadow-sm"
             >
               {loading ? (

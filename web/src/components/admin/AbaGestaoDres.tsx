@@ -120,11 +120,12 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
     loadData();
   }, [loadData]);
 
-  // Mapeamento de usuários por nome de DRE (normalizado)
+  // Mapeamento de usuários por ID canônico da DRE
   const usersByDreMap = useMemo(() => {
-    const map = new Map<string, AdminUserItem[]>();
+    const map = new Map<number, AdminUserItem[]>();
     for (const u of users) {
-      const key = (u.dre || "").trim().toLowerCase();
+      const key = u.dre_id ?? 0;
+      if (key === 0) continue;
       const list = map.get(key) || [];
       list.push(u);
       map.set(key, list);
@@ -146,7 +147,7 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
     let dresSemUsuarios = 0;
 
     for (const d of dres) {
-      const uList = usersByDreMap.get((d.nome || "").trim().toLowerCase()) || [];
+      const uList = usersByDreMap.get(d.id) || [];
       if (uList.length > 0) dresComUsuarios++;
       else dresSemUsuarios++;
     }
@@ -162,6 +163,8 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
       dresSemUsuarios,
     };
   }, [dres, users, usersByDreMap]);
+
+  const hasActiveDres = useMemo(() => dres.some(d => d.ativa), [dres]);
 
   // Filtragem das DREs
   const filteredDres = useMemo(() => {
@@ -195,7 +198,7 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
       }
 
       // Verificar se casa com algum usuário vinculado a esta DRE
-      const uList = usersByDreMap.get((dre.nome || "").trim().toLowerCase()) || [];
+      const uList = usersByDreMap.get(dre.id) || [];
       return uList.some((u) => (u.username || "").toLowerCase().includes(query));
     });
   }, [dres, search, statusFilter, usersByDreMap]);
@@ -228,10 +231,14 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
     );
 
     try {
-      await updateDRE(token, dre.id, {
+      const result = await updateDRE(token, dre.id, {
         ...dre,
         ativa: nextActive,
       });
+      // Confirmar com resposta da API
+      setDres((prev) =>
+        prev.map((item) => (item.id === dre.id ? result : item))
+      );
       onDataChanged?.();
       showToast(`Status da ${dre.nome} atualizado para ${nextActive ? "Ativa" : "Inativa"}.`);
     } catch (err: unknown) {
@@ -254,7 +261,11 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
     );
 
     try {
-      await updateAdminUserStatus(token, user.id, nextActive);
+      const result = await updateAdminUserStatus(token, user.id, nextActive);
+      // Confirmar com resposta da API
+      setUsers((prev) =>
+        prev.map((item) => (item.id === user.id ? result : item))
+      );
       onDataChanged?.();
       showToast(`Usuário ${user.username} ${nextActive ? "ativado" : "desativado"} com sucesso.`);
     } catch (err: unknown) {
@@ -294,6 +305,14 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
   // Callbacks de Sucesso
   const handleDreSuccess = (savedDre: DREItem) => {
     setIsDreModalOpen(false);
+    // Se foi um rename, atualizar o dre text nos usuários locais
+    if (dreToEdit && dreToEdit.nome !== savedDre.nome) {
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.dre_id === savedDre.id ? { ...u, dre: savedDre.nome } : u
+        )
+      );
+    }
     setDres((prev) => {
       const idx = prev.findIndex((d) => d.id === savedDre.id);
       if (idx >= 0) {
@@ -310,7 +329,7 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
   const handleUserSuccess = (createdUser: AdminUserItem, pass: string) => {
     setIsUserModalOpen(false);
     setUsers((prev) => [createdUser, ...prev]);
-    const targetDre = dres.find((d) => d.nome.trim().toLowerCase() === createdUser.dre.trim().toLowerCase());
+    const targetDre = dres.find((d) => d.id === createdUser.dre_id);
     if (targetDre) {
       setExpandedDres((prev) => new Set(prev).add(targetDre.id));
     }
@@ -409,7 +428,9 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
             <button
               type="button"
               onClick={() => handleOpenNewUser()}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors shadow-sm"
+              disabled={!hasActiveDres}
+              title={!hasActiveDres ? "Nenhuma DRE ativa disponível" : undefined}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors shadow-sm ${!hasActiveDres ? "opacity-50 cursor-not-allowed" : ""}`}
             >
               <UserPlus size={15} />
               <span>Novo Usuário</span>
@@ -426,6 +447,14 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
           </div>
         </div>
       </div>
+
+      {/* Aviso quando não há DREs ativas */}
+      {!hasActiveDres && (
+        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 text-amber-700 dark:text-amber-300 text-xs flex items-center gap-2">
+          <AlertCircle size={17} className="flex-shrink-0" />
+          <span>Nenhuma DRE ativa disponível. Não é possível criar novos usuários regionais.</span>
+        </div>
+      )}
 
       {/* Cards de Resumo (KPIs) */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in-up">
@@ -584,7 +613,7 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                 {filteredDres.map((dre) => {
                   const isExpanded = expandedDres.has(dre.id);
-                  const linkedUsers = usersByDreMap.get((dre.nome || "").trim().toLowerCase()) || [];
+                  const linkedUsers = usersByDreMap.get(dre.id) || [];
                   const activeLinkedUsers = linkedUsers.filter((u) => u.active).length;
 
                   return (

@@ -105,34 +105,28 @@ func (app *application) AdminLoginRuntime(w http.ResponseWriter, r *http.Request
 			return
 		}
 
-		u, err := app.models.AdminUsers.GetActiveByUsername(r.Context(), req.Username)
-		if err != nil {
+		access, err := app.models.AdminUsers.GetRuntimeAccessByUsername(r.Context(), req.Username)
+		if err != nil || access == nil || !access.UserActive {
 			rejectRuntimeLogin(app, w, req.Password)
 			return
 		}
-		if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password)); err != nil {
+		if err := bcrypt.CompareHashAndPassword([]byte(access.PasswordHash), []byte(req.Password)); err != nil {
 			time.Sleep(600 * time.Millisecond)
 			app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
 			return
 		}
-		if u.Role != RoleDRE || u.DREID <= 0 {
+		if access.Role != RoleDRE || access.DREID <= 0 || !access.DREActive || strings.TrimSpace(access.DRE) == "" {
 			rejectRuntimeLogin(app, w, req.Password)
 			return
 		}
 
-		dre, err := app.models.DREs.GetByID(r.Context(), u.DREID)
-		if err != nil || !dre.Ativa {
-			rejectRuntimeLogin(app, w, req.Password)
-			return
-		}
-
-		registered.Subject = "admin-user:" + strconv.Itoa(u.ID)
+		registered.Subject = "admin-user:" + strconv.Itoa(access.ID)
 		claims = runtimeAdminClaims{
-			UserID:           u.ID,
-			DREID:            dre.ID,
-			Username:         u.Username,
+			UserID:           access.ID,
+			DREID:            access.DREID,
+			Username:         access.Username,
 			Role:             RoleDRE,
-			DRE:              dre.Nome,
+			DRE:              access.DRE,
 			RegisteredClaims: registered,
 		}
 	}
@@ -174,7 +168,7 @@ func (app *application) resolveRuntimeDREScope(ctx context.Context, claims *runt
 	// Alguns testes unitários históricos constroem application{} sem DB e
 	// exercitam apenas autorização estática. Em produção o DB é obrigatório no
 	// startup; este fallback nunca é usado no servidor real.
-	if app.models.AdminUsers.DB == nil || app.models.DREs.DB == nil {
+	if app.models.AdminUsers.DB == nil {
 		if strings.TrimSpace(claims.Username) == "" || strings.TrimSpace(claims.DRE) == "" {
 			return AdminAccessScope{}, fmt.Errorf("token DRE sem identidade válida")
 		}
@@ -182,32 +176,27 @@ func (app *application) resolveRuntimeDREScope(ctx context.Context, claims *runt
 	}
 
 	var (
-		u   *models.AdminUser
-		err error
+		access *models.RuntimeAdminAccess
+		err    error
 	)
 	if claims.UserID > 0 {
-		u, err = app.models.AdminUsers.GetByID(ctx, claims.UserID)
+		access, err = app.models.AdminUsers.GetRuntimeAccessByID(ctx, claims.UserID)
 	} else {
 		// Compatibilidade com tokens DRE emitidos antes da #206. O username só é
-		// usado para localizar a identidade estável; nome/escopo DRE do JWT é ignorado.
-		u, err = app.models.AdminUsers.GetByUsername(ctx, claims.Username)
+		// usado para localizar a conta; nome/escopo DRE do JWT é ignorado.
+		access, err = app.models.AdminUsers.GetRuntimeAccessByUsername(ctx, claims.Username)
 	}
-	if err != nil || u == nil || !u.Active || u.Role != RoleDRE || u.DREID <= 0 {
+	if err != nil || access == nil || !access.UserActive || access.Role != RoleDRE || access.DREID <= 0 || !access.DREActive || strings.TrimSpace(access.DRE) == "" {
 		return AdminAccessScope{}, fmt.Errorf("sessão DRE revogada")
 	}
-	if claims.UserID > 0 && claims.Subject != "admin-user:"+strconv.Itoa(u.ID) {
+	if claims.UserID > 0 && claims.Subject != "admin-user:"+strconv.Itoa(access.ID) {
 		return AdminAccessScope{}, fmt.Errorf("subject incompatível com user_id")
 	}
 
-	dre, err := app.models.DREs.GetByID(ctx, u.DREID)
-	if err != nil || dre == nil || !dre.Ativa {
-		return AdminAccessScope{}, fmt.Errorf("DRE inativa ou inexistente")
-	}
-
 	return AdminAccessScope{
-		Username: u.Username,
+		Username: access.Username,
 		Role:     RoleDRE,
-		DRE:      dre.Nome,
+		DRE:      access.DRE,
 	}, nil
 }
 

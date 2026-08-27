@@ -37,7 +37,6 @@ func TestPreenchimentoParseFiltersValidYear(t *testing.T) {
 	if got.Year != 2025 {
 		t.Fatalf("year = %d; want 2025", got.Year)
 	}
-	// Espaços ao redor do year são tolerados.
 	got = parsePreenchimentoDreFilters(url.Values{"year": {" 2024 "}}, now)
 	if got.Year != 2024 {
 		t.Fatalf("year com espaços = %d; want 2024", got.Year)
@@ -84,9 +83,9 @@ func TestPreenchimentoParseFiltersStrings(t *testing.T) {
 	})
 }
 
-// TestPreenchimentoBuildQueryArgs garante que cada filtro global é posicionado
-// no argumento correto ($1=year, $2=dre, $3=municipio, $4=zona,
-// $5=regiao_integracao) e combinado por AND sobre schools s.
+// TestPreenchimentoBuildQueryArgs garante o contrato de cinco argumentos da
+// query-base usada pelos filtros administrativos por nome. O escopo DRE por ID
+// fica exclusivamente na variante scoped, que recebe $8=dre_id.
 func TestPreenchimentoBuildQueryArgs(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -149,15 +148,15 @@ func TestPreenchimentoBuildQueryArgs(t *testing.T) {
 	}
 }
 
-// TestPreenchimentoQueryShape valida o formato da query: parte de schools s, usa
-// LEFT JOIN, limita census_responses ao ano, conta completed e draft, agrupa por
-// DRE com fallback "Não informado", combina filtros por AND e usa DISTINCT ON
-// como salvaguarda contra múltiplos censos por escola/ano. Não pode exigir
-// status='completed' no WHERE geral nem census_id IS NOT NULL.
+// TestPreenchimentoQueryShape valida que a query preserva escolas sem censo e
+// múltiplos estados, mas em schema pós-0020 filtra e agrega DRE por
+// schools.dre_id -> dres.id. A comparação textual existe somente no ramo de
+// compatibilidade para bancos onde a coluna dre_id ainda não existe.
 func TestPreenchimentoQueryShape(t *testing.T) {
 	query := preenchimentoDreSelectSQL
 
 	mustContain := []string{
+		"schema_mode AS",
 		"FROM schools s",
 		"LEFT JOIN latest_census cr",
 		"FROM census_responses",
@@ -165,12 +164,15 @@ func TestPreenchimentoQueryShape(t *testing.T) {
 		"DISTINCT ON (school_id)",
 		"FILTER (WHERE cr.status = 'completed')",
 		"FILTER (WHERE cr.status = 'draft')",
-		"COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado')",
-		"($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))",
+		"NULLIF(to_jsonb(s)->>'dre_id', '')::int",
+		"FROM dres fd",
+		"fd.id = NULLIF(to_jsonb(s)->>'dre_id', '')::int",
+		"ELSE UPPER(TRIM(s.dre)) = UPPER(TRIM($2))",
 		"($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))",
 		"($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))",
 		"FROM reg_integracao",
 		"UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))",
+		"CASE WHEN s.canonical THEN s.dre_id = d.id",
 	}
 	for _, fragment := range mustContain {
 		if !strings.Contains(query, fragment) {
@@ -178,12 +180,9 @@ func TestPreenchimentoQueryShape(t *testing.T) {
 		}
 	}
 
-	// O LEFT JOIN deve ser preservado: escolas sem censo continuam no recorte.
 	if strings.Contains(query, "INNER JOIN") {
 		t.Fatalf("query usa INNER JOIN; o LEFT JOIN deve ser preservado")
 	}
-	// O WHERE geral não pode restringir o universo a censos concluídos nem exigir
-	// census_id — isso eliminaria rascunhos e pendentes que precisamos contar.
 	if strings.Contains(query, "s.status = 'completed'") ||
 		strings.Contains(query, "AND status = 'completed'") {
 		t.Fatalf("query exige status='completed' no WHERE geral; rascunhos/pendentes seriam excluídos")
@@ -192,7 +191,6 @@ func TestPreenchimentoQueryShape(t *testing.T) {
 		t.Fatalf("query exige census_id IS NOT NULL; escolas sem censo seriam excluídas")
 	}
 
-	// Os filtros globais devem estar sob a mesma cláusula WHERE (combinados por AND).
 	if strings.Count(query, " AND ($") < 3 {
 		t.Fatalf("filtros globais não parecem combinados por AND: %s", query)
 	}
@@ -251,7 +249,6 @@ func TestPreenchimentoBuildRow(t *testing.T) {
 	})
 
 	t.Run("pending nunca fica negativo", func(t *testing.T) {
-		// Defensivo: se as contagens forem inconsistentes, pending não fica < 0.
 		row := buildPreenchimentoDreRow("X", 2, 2, 1)
 		if row.Pending != 0 {
 			t.Fatalf("pending = %d; want 0 (clamp em zero)", row.Pending)

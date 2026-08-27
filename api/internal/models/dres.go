@@ -34,8 +34,17 @@ type DREModel struct {
 	DB *sql.DB
 }
 
-// Create insere uma nova DRE. O campo 'nome' é obrigatório.
-// Por padrão, uma nova DRE é criada com status ativo.
+func isDREDuplicateError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "unique") || strings.Contains(msg, "duplicate")
+}
+
+// Create insere uma nova DRE. O campo nome e obrigatorio e o status recebido
+// pelo caller e respeitado literalmente. O handler HTTP e responsavel pelo
+// default ativa=true quando o campo nao vier no payload.
 func (m *DREModel) Create(ctx context.Context, dre DRE) (*DRE, error) {
 	nome := strings.TrimSpace(dre.Nome)
 	if nome == "" {
@@ -48,12 +57,6 @@ func (m *DREModel) Create(ctx context.Context, dre DRE) (*DRE, error) {
 	gestorNome := strings.TrimSpace(dre.GestorNome)
 	email := strings.TrimSpace(dre.Email)
 	telefone := strings.TrimSpace(dre.Telefone)
-	ativa := true
-	if dre.ID != 0 {
-		ativa = dre.Ativa
-	} else if dre.Ativa {
-		ativa = true
-	}
 
 	query := `
 		INSERT INTO dres (nome, sigla, municipio_sede, polo, gestor_nome, email, telefone, ativa, created_at, updated_at)
@@ -64,14 +67,14 @@ func (m *DREModel) Create(ctx context.Context, dre DRE) (*DRE, error) {
 
 	var d DRE
 	err := m.DB.QueryRowContext(ctx, query,
-		nome, sigla, municipioSede, polo, gestorNome, email, telefone, ativa,
+		nome, sigla, municipioSede, polo, gestorNome, email, telefone, dre.Ativa,
 	).Scan(
 		&d.ID, &d.Nome, &d.Sigla, &d.MunicipioSede, &d.Polo,
 		&d.GestorNome, &d.Email, &d.Telefone,
 		&d.Ativa, &d.CreatedAt, &d.UpdatedAt,
 	)
 	if err != nil {
-		if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "duplicate") {
+		if isDREDuplicateError(err) {
 			return nil, ErrDREExists
 		}
 		return nil, err
@@ -79,7 +82,7 @@ func (m *DREModel) Create(ctx context.Context, dre DRE) (*DRE, error) {
 	return &d, nil
 }
 
-// GetByID busca uma DRE pelo seu ID numérico.
+// GetByID busca uma DRE pelo seu ID numerico.
 func (m *DREModel) GetByID(ctx context.Context, id int) (*DRE, error) {
 	if id <= 0 {
 		return nil, ErrDREInvalidID
@@ -107,7 +110,7 @@ func (m *DREModel) GetByID(ctx context.Context, id int) (*DRE, error) {
 	return &d, nil
 }
 
-// GetByNome busca uma DRE pelo seu nome (busca sem diferenciar maiúsculas/minúsculas e tolerante a espaços).
+// GetByNome busca uma DRE pelo seu nome sem diferenciar caixa e tolerando espacos.
 func (m *DREModel) GetByNome(ctx context.Context, nome string) (*DRE, error) {
 	nome = strings.TrimSpace(nome)
 	if nome == "" {
@@ -166,7 +169,10 @@ func (m *DREModel) List(ctx context.Context) ([]*DRE, error) {
 	return dres, rows.Err()
 }
 
-// Update atualiza os dados de uma DRE existente pelo seu ID.
+// Update atualiza a entidade mestre e sincroniza, na MESMA transacao, os nomes
+// legados mantidos em schools/admin_users. Os vinculos permanecem identificados
+// por dre_id; o texto e apenas compatibilidade. Qualquer falha no meio do rename
+// faz rollback de toda a operacao.
 func (m *DREModel) Update(ctx context.Context, dre DRE) (*DRE, error) {
 	if dre.ID <= 0 {
 		return nil, ErrDREInvalidID
@@ -184,6 +190,12 @@ func (m *DREModel) Update(ctx context.Context, dre DRE) (*DRE, error) {
 	email := strings.TrimSpace(dre.Email)
 	telefone := strings.TrimSpace(dre.Telefone)
 
+	tx, err := m.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	query := `
 		UPDATE dres
 		SET nome = $1, sigla = $2, municipio_sede = $3, polo = $4,
@@ -194,7 +206,7 @@ func (m *DREModel) Update(ctx context.Context, dre DRE) (*DRE, error) {
 		          ativa, created_at, updated_at`
 
 	var d DRE
-	err := m.DB.QueryRowContext(ctx, query,
+	err = tx.QueryRowContext(ctx, query,
 		nome, sigla, municipioSede, polo, gestorNome, email, telefone, dre.Ativa, dre.ID,
 	).Scan(
 		&d.ID, &d.Nome, &d.Sigla, &d.MunicipioSede, &d.Polo,
@@ -205,9 +217,28 @@ func (m *DREModel) Update(ctx context.Context, dre DRE) (*DRE, error) {
 		return nil, ErrDRENotFound
 	}
 	if err != nil {
-		if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "duplicate") {
+		if isDREDuplicateError(err) {
 			return nil, ErrDREExists
 		}
+		return nil, err
+	}
+
+	// dre_id e a referencia canonica. Atualizamos apenas a copia textual para
+	// consumidores legados; os triggers da migration 0020 reafirmam o mesmo ID.
+	if _, err = tx.ExecContext(ctx, `
+		UPDATE admin_users
+		SET dre = $1, updated_at = NOW()
+		WHERE dre_id = $2 AND dre IS DISTINCT FROM $1`, d.Nome, d.ID); err != nil {
+		return nil, err
+	}
+	if _, err = tx.ExecContext(ctx, `
+		UPDATE schools
+		SET dre = $1
+		WHERE dre_id = $2 AND dre IS DISTINCT FROM $1`, d.Nome, d.ID); err != nil {
+		return nil, err
+	}
+
+	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
 	return &d, nil
@@ -236,7 +267,8 @@ func (m *DREModel) SetActive(ctx context.Context, id int, active bool) error {
 	return nil
 }
 
-// SetActiveByNome ativa ou desativa uma DRE pelo nome.
+// SetActiveByNome existe apenas para compatibilidade de callers legados. Novos
+// fluxos devem preferir SetActive por ID.
 func (m *DREModel) SetActiveByNome(ctx context.Context, nome string, active bool) error {
 	nome = strings.TrimSpace(nome)
 	if nome == "" {

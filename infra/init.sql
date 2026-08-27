@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS schools (
     nome_escola VARCHAR(255),
     codigo_inep VARCHAR(20) UNIQUE,
     municipio VARCHAR(100),
-    dre VARCHAR(100),
+    dre VARCHAR(255),
     zona VARCHAR(50),
     endereco TEXT,
     

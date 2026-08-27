@@ -6,10 +6,13 @@ import (
 )
 
 // AdminAccessScope representa a identidade e o escopo territorial/organizacional
-// do usuário autenticado no painel administrativo.
+// do usuário autenticado no painel administrativo. DREID é a identidade
+// canônica usada para autorização; DRE permanece no contrato para exibição e
+// compatibilidade com clientes existentes.
 type AdminAccessScope struct {
 	Username string `json:"username"`
 	Role     string `json:"role"`
+	DREID    int    `json:"dre_id,omitempty"`
 	DRE      string `json:"dre"`
 }
 
@@ -31,9 +34,23 @@ func GetAdminAccessScope(ctx context.Context) (AdminAccessScope, bool) {
 	return scope, ok
 }
 
-// IsAuthorizedForDRE verifica se o escopo de acesso do usuário permite visualizar dados
-// da DRE informada. O perfil "admin" possui acesso ilimitado; o perfil "dre" só acessa
-// sua própria DRE (compara sem diferenciar maiúsculas/minúsculas nem espaços extras).
+// IsAuthorizedForDREID é a verificação canônica de autorização territorial.
+// Admin possui acesso amplo; perfil DRE só acessa objetos vinculados exatamente
+// ao mesmo dres.id resolvido no runtime.
+func (scope AdminAccessScope) IsAuthorizedForDREID(targetDREID int) bool {
+	if scope.Role == RoleAdmin {
+		return true
+	}
+	if scope.Role == RoleDRE {
+		return scope.DREID > 0 && targetDREID > 0 && scope.DREID == targetDREID
+	}
+	return false
+}
+
+// IsAuthorizedForDRE preserva o contrato textual para código/testes em schema
+// pré-0020. Em caminhos canônicos de autorização deve-se usar
+// IsAuthorizedForDREID; esta comparação não é fonte de identidade quando DREID
+// está disponível.
 func (scope AdminAccessScope) IsAuthorizedForDRE(targetDRE string) bool {
 	if scope.Role == RoleAdmin {
 		return true

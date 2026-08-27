@@ -324,10 +324,10 @@ func (app *application) routes() http.Handler {
 			pub.With(app.requireCensusSubmissions).Post("/upload", app.uploadPhoto)
 		})
 
-		// Admin: login público + rotas protegidas por JWT
-		r.Post("/admin/login", app.AdminLogin)
+		// Admin: login público + rotas protegidas por JWT e estado runtime.
+		r.Post("/admin/login", app.AdminLoginRuntime)
 		r.Group(func(protected chi.Router) {
-			protected.Use(app.requireAdminAuth)
+			protected.Use(app.requireRuntimeAdminAuth)
 			protected.Get("/admin/me", app.AdminMe)
 			protected.Get("/admin/dashboard", app.AdminDashboard)
 			protected.Get("/admin/sheet-metrics", app.AdminSheetMetrics)

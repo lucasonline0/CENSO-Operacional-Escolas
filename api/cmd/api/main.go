@@ -36,6 +36,13 @@ var migrationsFS embed.FS
 
 const version = "1.1.0"
 
+var criticalAdministrativeMigrations = map[string]struct{}{
+	"0018_create_admin_users.sql":        {},
+	"0019_create_dres_master.sql":        {},
+	"0020_dre_canonical_relations.sql":   {},
+	"0021_dre_normalized_uniqueness.sql": {},
+}
+
 type config struct {
 	port string
 	env  string
@@ -61,10 +68,10 @@ func main() {
 
 	// PROCURA O .ENV DE FORMA INTELIGENTE EM VÁRIOS LUGARES
 	envPaths := []string{
-		".env",                                    // Tenta na mesma pasta de onde o comando rodou
-		filepath.Join(cwd, ".env"),                // Tenta no caminho absoluto atual
-		filepath.Join(cwd, "..", ".env"),          // Tenta um nível acima (raiz do projeto)
-		filepath.Join(cwd, "..", "infra", ".env"), // Tenta na pasta infra
+		".env",
+		filepath.Join(cwd, ".env"),
+		filepath.Join(cwd, "..", ".env"),
+		filepath.Join(cwd, "..", "infra", ".env"),
 	}
 
 	envLoaded := false
@@ -132,7 +139,7 @@ func main() {
 	}
 
 	if err = applyMigrations(db, logger); err != nil {
-		logger.Printf("AVISO: applyMigrations: %v", err)
+		logger.Fatal("ERRO FATAL MIGRATIONS: ", err)
 	}
 
 	sheetsService, err := services.NewSheetsService()
@@ -187,19 +194,31 @@ func openDB(cfg config) (*sql.DB, error) {
 	return db, nil
 }
 
+func isCriticalAdministrativeMigration(name string) bool {
+	_, ok := criticalAdministrativeMigrations[name]
+	return ok
+}
+
 func applyMigrations(db *sql.DB, logger *log.Logger) error {
 	entries, err := fs.ReadDir(migrationsFS, "migrations")
 	if err != nil {
 		return fmt.Errorf("applyMigrations: ler embed migrations/: %w", err)
 	}
 	files := make([]string, 0, len(entries))
+	seen := make(map[string]bool, len(entries))
 	for _, e := range entries {
 		if e.IsDir() || filepath.Ext(e.Name()) != ".sql" {
 			continue
 		}
 		files = append(files, e.Name())
+		seen[e.Name()] = true
 	}
 	sort.Strings(files)
+	for name := range criticalAdministrativeMigrations {
+		if !seen[name] {
+			return fmt.Errorf("applyMigrations: migration administrativa crítica ausente do binário: %s", name)
+		}
+	}
 	if len(files) == 0 {
 		logger.Println("applyMigrations: nenhum .sql embarcado, pulando.")
 		return nil
@@ -208,10 +227,16 @@ func applyMigrations(db *sql.DB, logger *log.Logger) error {
 	for _, name := range files {
 		content, err := fs.ReadFile(migrationsFS, "migrations/"+name)
 		if err != nil {
+			if isCriticalAdministrativeMigration(name) {
+				return fmt.Errorf("applyMigrations: erro lendo migration crítica %s: %w", name, err)
+			}
 			logger.Printf("applyMigrations: ERRO lendo %s do embed: %v", name, err)
 			continue
 		}
 		if _, err := db.Exec(string(content)); err != nil {
+			if isCriticalAdministrativeMigration(name) {
+				return fmt.Errorf("applyMigrations: migration administrativa crítica %s falhou: %w", name, err)
+			}
 			logger.Printf("applyMigrations: ERRO aplicando %s: %v", name, err)
 			continue
 		}

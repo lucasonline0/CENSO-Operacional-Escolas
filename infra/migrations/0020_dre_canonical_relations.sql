@@ -4,37 +4,9 @@
 -- de ser a fonte de verdade. Triggers de compatibilidade mantem writes legados
 -- sincronizados ate que os handlers sejam migrados integralmente para `dre_id`.
 
--- `dres.nome` suporta 255 caracteres. As colunas legadas precisam comportar o nome
--- canonico inteiro enquanto existirem como camada de compatibilidade. A alteracao e
--- condicional para que a migration possa ser reexecutada depois da criacao dos triggers.
-DO $$
-DECLARE
-    schools_dre_length INTEGER;
-    admin_users_dre_length INTEGER;
-BEGIN
-    SELECT character_maximum_length
-    INTO schools_dre_length
-    FROM information_schema.columns
-    WHERE table_schema = CURRENT_SCHEMA()
-      AND table_name = 'schools'
-      AND column_name = 'dre';
-
-    IF schools_dre_length IS NOT NULL AND schools_dre_length < 255 THEN
-        ALTER TABLE schools ALTER COLUMN dre TYPE VARCHAR(255);
-    END IF;
-
-    SELECT character_maximum_length
-    INTO admin_users_dre_length
-    FROM information_schema.columns
-    WHERE table_schema = CURRENT_SCHEMA()
-      AND table_name = 'admin_users'
-      AND column_name = 'dre';
-
-    IF admin_users_dre_length IS NOT NULL AND admin_users_dre_length < 255 THEN
-        ALTER TABLE admin_users ALTER COLUMN dre TYPE VARCHAR(255);
-    END IF;
-END
-$$;
+-- As colunas legadas permanecem com seus tipos historicos porque `schools.dre` e
+-- referenciada por views e ALTER TYPE pode falhar em bancos ja existentes. Como
+-- `dre_id` e a fonte de verdade, o texto legado e espelhado respeitando seus limites.
 
 ALTER TABLE schools
     ADD COLUMN IF NOT EXISTS dre_id INTEGER;
@@ -83,22 +55,22 @@ $$;
 -- Quando dre_id ja existe, ele e a fonte de verdade. Isso torna a migration segura
 -- para reexecucao inclusive apos rename da DRE: o texto legado acompanha o ID.
 UPDATE schools s
-SET dre = d.nome
+SET dre = LEFT(d.nome, 100)
 FROM dres d
 WHERE s.dre_id = d.id
-  AND s.dre IS DISTINCT FROM d.nome;
+  AND s.dre IS DISTINCT FROM LEFT(d.nome, 100);
 
 UPDATE admin_users u
-SET dre = d.nome
+SET dre = LEFT(d.nome, 128)
 FROM dres d
 WHERE u.dre_id = d.id
-  AND u.dre IS DISTINCT FROM d.nome;
+  AND u.dre IS DISTINCT FROM LEFT(d.nome, 128);
 
 -- Backfill somente de registros ainda sem ID, usando comparacao tolerante a caixa e
 -- espacos. A verificacao de ambiguidade acima garante correspondencia deterministica.
 UPDATE schools s
 SET dre_id = d.id,
-    dre = d.nome
+    dre = LEFT(d.nome, 100)
 FROM dres d
 WHERE s.dre_id IS NULL
   AND BTRIM(COALESCE(s.dre, '')) <> ''
@@ -106,7 +78,7 @@ WHERE s.dre_id IS NULL
 
 UPDATE admin_users u
 SET dre_id = d.id,
-    dre = d.nome
+    dre = LEFT(d.nome, 128)
 FROM dres d
 WHERE u.dre_id IS NULL
   AND BTRIM(COALESCE(u.dre, '')) <> ''
@@ -210,7 +182,7 @@ BEGIN
         END;
 
         NEW.dre_id := canonical_id;
-        NEW.dre := canonical_name;
+        NEW.dre := LEFT(canonical_name, 100);
         RETURN NEW;
     END IF;
 
@@ -235,7 +207,7 @@ BEGIN
     END;
 
     NEW.dre_id := canonical_id;
-    NEW.dre := canonical_name;
+    NEW.dre := LEFT(canonical_name, 100);
     RETURN NEW;
 END
 $$;
@@ -268,7 +240,7 @@ BEGIN
         END;
 
         NEW.dre_id := canonical_id;
-        NEW.dre := canonical_name;
+        NEW.dre := LEFT(canonical_name, 128);
         RETURN NEW;
     END IF;
 
@@ -296,7 +268,7 @@ BEGIN
     END;
 
     NEW.dre_id := canonical_id;
-    NEW.dre := canonical_name;
+    NEW.dre := LEFT(canonical_name, 128);
     RETURN NEW;
 END
 $$;

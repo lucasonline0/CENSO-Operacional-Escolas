@@ -48,10 +48,16 @@ export function UserFormModal({
   useEffect(() => {
     if (isOpen) {
       const activeDres = dres.filter((d) => d.ativa);
-      const defaultDre = preselectedDre || (activeDres.length > 0 ? activeDres[0].nome : (dres[0]?.nome ?? ""));
+      const preselectedValid = Boolean(
+        preselectedDre && dres.some((d) => d.nome === preselectedDre && d.ativa)
+      );
+      const defaultDre = preselectedValid && preselectedDre
+        ? preselectedDre
+        : preselectedDre
+          ? ""
+          : (activeDres[0]?.nome ?? "");
       setSelectedDre(defaultDre);
-      
-      // Gerar sugestão de username com base na DRE se aplicável
+
       if (defaultDre) {
         const clean = defaultDre
           .toLowerCase()
@@ -67,7 +73,11 @@ export function UserFormModal({
       const initialPass = generateSecurePassword(12);
       setPassword(initialPass);
       setShowPassword(true);
-      setError("");
+      setError(
+        preselectedDre && !preselectedValid
+          ? "A DRE selecionada está inativa. Escolha uma DRE ativa para criar o usuário."
+          : ""
+      );
       setLoading(false);
       setCopied(false);
     }
@@ -87,6 +97,7 @@ export function UserFormModal({
 
   const handleDreChange = (dreNome: string) => {
     setSelectedDre(dreNome);
+    setError("");
     // Ajustar sugestão de username caso o usuário não tenha personalizado muito
     if (dreNome) {
       const clean = dreNome
@@ -123,6 +134,11 @@ export function UserFormModal({
       setError("Selecione uma DRE.");
       return;
     }
+    const selectedDreObj = dres.find((d) => d.nome === selectedDre);
+    if (!selectedDreObj || !selectedDreObj.ativa) {
+      setError("Não é possível criar usuário para uma DRE inativa.");
+      return;
+    }
     if (!u) {
       setError("Informe o nome de usuário.");
       return;
@@ -149,6 +165,10 @@ export function UserFormModal({
       setLoading(false);
     }
   };
+
+  const selectedDreIsActive = dres.some(
+    (d) => d.nome === selectedDre && d.ativa
+  );
 
   return (
     <div
@@ -312,7 +332,7 @@ export function UserFormModal({
             </button>
             <button
               type="submit"
-              disabled={loading || !username.trim() || !password.trim()}
+              disabled={loading || !username.trim() || !password.trim() || !selectedDreIsActive}
               className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold transition-colors disabled:opacity-50 shadow-sm"
             >
               {loading ? (

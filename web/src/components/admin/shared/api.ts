@@ -42,7 +42,14 @@ export async function apiFetch<T>(path: string, token: string, opts?: RequestIni
     ...opts,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(opts?.headers ?? {}) },
   });
-  if (res.status === 401) throw new Error("UNAUTHORIZED");
+  if (res.status === 401) {
+    clearApiCache();
+    clearToken();
+    if (typeof window !== "undefined") {
+      window.location.reload();
+    }
+    throw new Error("UNAUTHORIZED");
+  }
   if (!res.ok) {
     const b = await res.json().catch(() => ({}));
     throw new Error((b as { message?: string }).message ?? `HTTP ${res.status}`);
@@ -112,7 +119,7 @@ export async function resetAdminUserPassword(
   id: number,
   password: string
 ): Promise<{ message?: string }> {
-  return apiFetch<{ message?: string }>(`/v1/admin/users/${id}/reset-password`, token, {
+  return apiMutation<{ message?: string }>(`/v1/admin/users/${id}/reset-password`, token, {
     method: "POST",
     body: JSON.stringify({ password }),
   });
@@ -152,7 +159,7 @@ const DASHBOARD_ENDPOINTS = [
 
 export async function prefetchDashboard(token: string, role?: string): Promise<void> {
   const endpoints = role === "dre"
-    ? DASHBOARD_ENDPOINTS.filter((ep) => !ep.includes("sheet-metrics"))
+    ? DASHBOARD_ENDPOINTS.filter((ep) => !ep.includes("sheet-metrics") && !ep.includes("indicadores-metrics"))
     : DASHBOARD_ENDPOINTS;
 
   const fetches = Promise.allSettled(endpoints.map((ep) => apiFetch(ep, token)));

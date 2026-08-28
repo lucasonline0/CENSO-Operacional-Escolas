@@ -59,6 +59,7 @@ export interface AdminProfile {
   username: string;
   role: "admin" | "dre";
   dre: string | null;
+  dre_id: number | null;
 }
 
 export interface DREItem {
@@ -80,6 +81,7 @@ export interface AdminUserItem {
   username: string;
   role: "admin" | "dre";
   dre: string;
+  dre_id: number | null;
   active: boolean;
   created_at: string;
   updated_at: string;

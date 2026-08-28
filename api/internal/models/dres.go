@@ -243,8 +243,8 @@ func (m *DREModel) Update(ctx context.Context, dre DRE) (*DRE, error) {
 	if usersCanonical {
 		_, err = tx.ExecContext(ctx, `
 			UPDATE admin_users
-			SET dre = $1, updated_at = NOW()
-			WHERE dre_id = $2 AND dre IS DISTINCT FROM $1`, d.Nome, d.ID)
+			SET dre = LEFT($1, 128), updated_at = NOW()
+			WHERE dre_id = $2 AND dre IS DISTINCT FROM LEFT($1, 128)`, d.Nome, d.ID)
 	} else {
 		_, err = tx.ExecContext(ctx, `
 			UPDATE admin_users
@@ -258,8 +258,8 @@ func (m *DREModel) Update(ctx context.Context, dre DRE) (*DRE, error) {
 	if schoolsCanonical {
 		_, err = tx.ExecContext(ctx, `
 			UPDATE schools
-			SET dre = $1
-			WHERE dre_id = $2 AND dre IS DISTINCT FROM $1`, d.Nome, d.ID)
+			SET dre = LEFT($1, 100)
+			WHERE dre_id = $2 AND dre IS DISTINCT FROM LEFT($1, 100)`, d.Nome, d.ID)
 	} else {
 		_, err = tx.ExecContext(ctx, `
 			UPDATE schools

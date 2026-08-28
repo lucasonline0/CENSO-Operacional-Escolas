@@ -43,6 +43,8 @@ BEGIN
 END
 $$;
 
+-- Normaliza apenas espaços externos. Essa é a mesma semântica usada hoje pelos
+-- models/handlers (`strings.TrimSpace` + LOWER/UPPER no banco).
 UPDATE admin_users
 SET username = BTRIM(username),
     updated_at = NOW()
@@ -53,6 +55,9 @@ SET nome = BTRIM(nome),
     updated_at = NOW()
 WHERE nome IS DISTINCT FROM BTRIM(nome);
 
+-- Como `dre_id` é a fonte de verdade, reespelha a camada textual legada após a
+-- normalização do nome canônico. Os limites preservam os tipos históricos sem
+-- obrigar ALTER TYPE em colunas usadas por views.
 UPDATE schools s
 SET dre = LEFT(d.nome, 100)
 FROM dres d

@@ -21,16 +21,26 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// migrationsFS embute, no próprio binário, todos os .sql em
+// api/cmd/api/migrations/. Isso elimina a dependência de um caminho
+// relativo em runtime (problema observado no deploy Railway, onde
+// o working directory do processo não contém o diretório
+// infra/migrations/ que existe no monorepo).
+//
+// A cópia em infra/migrations/ é mantida como referência operacional
+// e fonte de verdade documental — qualquer mudança numa view deve ser
+// refletida nas DUAS pastas.
+//
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
 
 const version = "1.1.0"
 
 var criticalAdministrativeMigrations = map[string]struct{}{
-	"0018_create_admin_users.sql":          {},
-	"0019_create_dres_master.sql":          {},
-	"0020_dre_canonical_relations.sql":     {},
-	"0021_dre_normalized_uniqueness.sql":   {},
+	"0018_create_admin_users.sql":        {},
+	"0019_create_dres_master.sql":        {},
+	"0020_dre_canonical_relations.sql":   {},
+	"0021_dre_normalized_uniqueness.sql": {},
 }
 
 type config struct {
@@ -52,14 +62,16 @@ type application struct {
 func main() {
 	logger := log.New(os.Stdout, "[CENSO-API] ", log.Ldate|log.Ltime|log.Lshortfile)
 
+	// --- CORREÇÃO DE PATH ---
 	cwd, _ := os.Getwd()
 	logger.Printf("Executando a partir de: %s", cwd)
 
+	// PROCURA O .ENV DE FORMA INTELIGENTE EM VÁRIOS LUGARES
 	envPaths := []string{
-		".env",
-		filepath.Join(cwd, ".env"),
-		filepath.Join(cwd, "..", ".env"),
-		filepath.Join(cwd, "..", "infra", ".env"),
+		".env",                                    // Tenta na mesma pasta de onde o comando rodou
+		filepath.Join(cwd, ".env"),                // Tenta no caminho absoluto atual
+		filepath.Join(cwd, "..", ".env"),          // Tenta um nível acima (raiz do projeto)
+		filepath.Join(cwd, "..", "infra", ".env"), // Tenta na pasta infra
 	}
 
 	envLoaded := false
@@ -192,7 +204,6 @@ func applyMigrations(db *sql.DB, logger *log.Logger) error {
 	if err != nil {
 		return fmt.Errorf("applyMigrations: ler embed migrations/: %w", err)
 	}
-
 	files := make([]string, 0, len(entries))
 	seen := make(map[string]bool, len(entries))
 	for _, e := range entries {
@@ -203,18 +214,15 @@ func applyMigrations(db *sql.DB, logger *log.Logger) error {
 		seen[e.Name()] = true
 	}
 	sort.Strings(files)
-
 	for name := range criticalAdministrativeMigrations {
 		if !seen[name] {
 			return fmt.Errorf("applyMigrations: migration administrativa crítica ausente do binário: %s", name)
 		}
 	}
-
 	if len(files) == 0 {
 		logger.Println("applyMigrations: nenhum .sql embarcado, pulando.")
 		return nil
 	}
-
 	logger.Printf("applyMigrations: %d migration(s) encontrada(s): %v", len(files), files)
 	for _, name := range files {
 		content, err := fs.ReadFile(migrationsFS, "migrations/"+name)
@@ -225,7 +233,6 @@ func applyMigrations(db *sql.DB, logger *log.Logger) error {
 			logger.Printf("applyMigrations: ERRO lendo %s do embed: %v", name, err)
 			continue
 		}
-
 		if _, err := db.Exec(string(content)); err != nil {
 			if isCriticalAdministrativeMigration(name) {
 				return fmt.Errorf("applyMigrations: migration administrativa crítica %s falhou: %w", name, err)

@@ -44,6 +44,10 @@ export async function apiFetch<T>(path: string, token: string, opts?: RequestIni
   });
   if (res.status === 401) {
     clearApiCache();
+    clearToken();
+    if (typeof window !== "undefined") {
+      window.location.reload();
+    }
     throw new Error("UNAUTHORIZED");
   }
   if (!res.ok) {

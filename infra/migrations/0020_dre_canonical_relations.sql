@@ -4,10 +4,37 @@
 -- de ser a fonte de verdade. Triggers de compatibilidade mantem writes legados
 -- sincronizados ate que os handlers sejam migrados integralmente para `dre_id`.
 
--- Nota: as colunas legadas `schools.dre` e `admin_users.dre` mantem seus tipos
--- originais (VARCHAR 100/128). Alterar o tipo causaria erro quando views do init.sql
--- referenciam a coluna. O texto legado e suficiente para nomes de DRE; o campo
--- canônico `dre_id` (INTEGER FK -> dres.id) é a fonte de verdade.
+-- `dres.nome` suporta 255 caracteres. As colunas legadas precisam comportar o nome
+-- canonico inteiro enquanto existirem como camada de compatibilidade. A alteracao e
+-- condicional para que a migration possa ser reexecutada depois da criacao dos triggers.
+DO $$
+DECLARE
+    schools_dre_length INTEGER;
+    admin_users_dre_length INTEGER;
+BEGIN
+    SELECT character_maximum_length
+    INTO schools_dre_length
+    FROM information_schema.columns
+    WHERE table_schema = CURRENT_SCHEMA()
+      AND table_name = 'schools'
+      AND column_name = 'dre';
+
+    IF schools_dre_length IS NOT NULL AND schools_dre_length < 255 THEN
+        ALTER TABLE schools ALTER COLUMN dre TYPE VARCHAR(255);
+    END IF;
+
+    SELECT character_maximum_length
+    INTO admin_users_dre_length
+    FROM information_schema.columns
+    WHERE table_schema = CURRENT_SCHEMA()
+      AND table_name = 'admin_users'
+      AND column_name = 'dre';
+
+    IF admin_users_dre_length IS NOT NULL AND admin_users_dre_length < 255 THEN
+        ALTER TABLE admin_users ALTER COLUMN dre TYPE VARCHAR(255);
+    END IF;
+END
+$$;
 
 ALTER TABLE schools
     ADD COLUMN IF NOT EXISTS dre_id INTEGER;

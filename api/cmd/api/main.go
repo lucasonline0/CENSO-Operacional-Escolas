@@ -21,20 +21,17 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// migrationsFS embute, no próprio binário, todos os .sql em
-// api/cmd/api/migrations/. Isso elimina a dependência de um caminho
-// relativo em runtime (problema observado no deploy Railway, onde
-// o working directory do processo não contém o diretório
-// infra/migrations/ que existe no monorepo).
-//
-// A cópia em infra/migrations/ é mantida como referência operacional
-// e fonte de verdade documental — qualquer mudança numa view deve ser
-// refletida nas DUAS pastas.
-//
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
 
 const version = "1.1.0"
+
+var criticalAdministrativeMigrations = map[string]struct{}{
+	"0018_create_admin_users.sql":          {},
+	"0019_create_dres_master.sql":          {},
+	"0020_dre_canonical_relations.sql":     {},
+	"0021_dre_normalized_uniqueness.sql":   {},
+}
 
 type config struct {
 	port string
@@ -55,16 +52,14 @@ type application struct {
 func main() {
 	logger := log.New(os.Stdout, "[CENSO-API] ", log.Ldate|log.Ltime|log.Lshortfile)
 
-	// --- CORREÇÃO DE PATH ---
 	cwd, _ := os.Getwd()
 	logger.Printf("Executando a partir de: %s", cwd)
 
-	// PROCURA O .ENV DE FORMA INTELIGENTE EM VÁRIOS LUGARES
 	envPaths := []string{
-		".env",                                    // Tenta na mesma pasta de onde o comando rodou
-		filepath.Join(cwd, ".env"),                // Tenta no caminho absoluto atual
-		filepath.Join(cwd, "..", ".env"),          // Tenta um nível acima (raiz do projeto)
-		filepath.Join(cwd, "..", "infra", ".env"), // Tenta na pasta infra
+		".env",
+		filepath.Join(cwd, ".env"),
+		filepath.Join(cwd, "..", ".env"),
+		filepath.Join(cwd, "..", "infra", ".env"),
 	}
 
 	envLoaded := false
@@ -132,7 +127,7 @@ func main() {
 	}
 
 	if err = applyMigrations(db, logger); err != nil {
-		logger.Printf("AVISO: applyMigrations: %v", err)
+		logger.Fatal("ERRO FATAL MIGRATIONS: ", err)
 	}
 
 	sheetsService, err := services.NewSheetsService()
@@ -187,31 +182,54 @@ func openDB(cfg config) (*sql.DB, error) {
 	return db, nil
 }
 
+func isCriticalAdministrativeMigration(name string) bool {
+	_, ok := criticalAdministrativeMigrations[name]
+	return ok
+}
+
 func applyMigrations(db *sql.DB, logger *log.Logger) error {
 	entries, err := fs.ReadDir(migrationsFS, "migrations")
 	if err != nil {
 		return fmt.Errorf("applyMigrations: ler embed migrations/: %w", err)
 	}
+
 	files := make([]string, 0, len(entries))
+	seen := make(map[string]bool, len(entries))
 	for _, e := range entries {
 		if e.IsDir() || filepath.Ext(e.Name()) != ".sql" {
 			continue
 		}
 		files = append(files, e.Name())
+		seen[e.Name()] = true
 	}
 	sort.Strings(files)
+
+	for name := range criticalAdministrativeMigrations {
+		if !seen[name] {
+			return fmt.Errorf("applyMigrations: migration administrativa crítica ausente do binário: %s", name)
+		}
+	}
+
 	if len(files) == 0 {
 		logger.Println("applyMigrations: nenhum .sql embarcado, pulando.")
 		return nil
 	}
+
 	logger.Printf("applyMigrations: %d migration(s) encontrada(s): %v", len(files), files)
 	for _, name := range files {
 		content, err := fs.ReadFile(migrationsFS, "migrations/"+name)
 		if err != nil {
+			if isCriticalAdministrativeMigration(name) {
+				return fmt.Errorf("applyMigrations: erro lendo migration crítica %s: %w", name, err)
+			}
 			logger.Printf("applyMigrations: ERRO lendo %s do embed: %v", name, err)
 			continue
 		}
+
 		if _, err := db.Exec(string(content)); err != nil {
+			if isCriticalAdministrativeMigration(name) {
+				return fmt.Errorf("applyMigrations: migration administrativa crítica %s falhou: %w", name, err)
+			}
 			logger.Printf("applyMigrations: ERRO aplicando %s: %v", name, err)
 			continue
 		}
@@ -257,93 +275,4 @@ func (app *application) syncPendingToSheets() {
 			app.logger.Printf("sheetSync: escola %d sincronizada", c.SchoolID)
 		}
 	}
-}
-
-func (app *application) routes() http.Handler {
-	mux := chi.NewRouter()
-	mux.Use(middleware.Recoverer)
-	mux.Use(middleware.Logger)
-	mux.Use(app.enableCORS)
-
-	mux.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Censo API Online"))
-	})
-
-	mux.Route("/v1", func(r chi.Router) {
-		r.Get("/health", app.HealthCheck)
-		r.Get("/census/status", app.CensusStatus)
-
-		r.Group(func(pub chi.Router) {
-			pub.Use(app.requirePublicAPIKey)
-			pub.Get("/locations", app.GetLocations)
-			pub.Get("/schools", app.GetSchools)
-			pub.With(app.requireCensusSubmissions).Post("/schools", app.CreateSchool)
-			pub.Get("/census", app.GetCenso)
-			pub.With(app.requireCensusSubmissions).Post("/census", app.CreateOrUpdateCenso)
-			pub.With(app.requireCensusSubmissions).Post("/upload", app.uploadPhoto)
-		})
-
-		r.Post("/admin/login", app.AdminLoginRuntime)
-		r.Group(func(protected chi.Router) {
-			protected.Use(app.requireRuntimeAdminAuth)
-			protected.Get("/admin/me", app.AdminMeCanonical)
-			protected.Get("/admin/dashboard", app.AdminDashboardCanonical)
-			protected.Get("/admin/sheet-metrics", app.AdminSheetMetrics)
-			protected.Get("/admin/indicadores-metrics", app.AdminIndicadoresMetrics)
-			protected.Get("/admin/census", app.AdminGetCensusCanonical)
-			protected.Get("/admin/census/{id}", app.AdminGetCensusByIDCanonical)
-			protected.Post("/admin/sync-sheets", app.AdminSyncSheets)
-
-			protected.Post("/admin/dres", app.AdminCreateDRE)
-			protected.Get("/admin/dres", app.AdminListDREs)
-			protected.Put("/admin/dres/{id}", app.AdminUpdateDRE)
-			protected.Get("/admin/dres/{id}/resumo", app.AdminDRESummary)
-			protected.Post("/admin/dres/{id}/schools", app.AdminAssignSchoolsToDRE)
-			protected.Patch("/admin/schools/{id}/dre", app.AdminMoveSchoolToDRE)
-
-			protected.Post("/admin/users", app.AdminCreateUser)
-			protected.Get("/admin/users", app.AdminListUsers)
-			protected.Patch("/admin/users/{id}/status", app.AdminUpdateUserStatus)
-			protected.Post("/admin/users/{id}/reset-password", app.AdminResetUserPassword)
-
-			protected.Get("/admin/analytics/overview", app.AdminAnalyticsOverview)
-			protected.Get("/admin/analytics/caracterizacao/perfil", app.AdminAnalyticsCaracterizacaoPerfil)
-			protected.Get("/admin/analytics/caracterizacao/dre", app.AdminAnalyticsCaracterizacaoDRE)
-			protected.Get("/admin/analytics/caracterizacao/oferta-funcionamento", app.AdminAnalyticsCaracterizacaoOfertaFuncionamento)
-			protected.Get("/admin/analytics/caracterizacao/infraestrutura-educacional", app.AdminAnalyticsCaracterizacaoInfraEducacional)
-			protected.Get("/admin/analytics/pessoal-gestao/estrutura", app.AdminAnalyticsPessoalEstrutura)
-			protected.Get("/admin/analytics/pessoal-gestao/coordenacao", app.AdminAnalyticsPessoalCoordenacao)
-			protected.Get("/admin/analytics/pessoal-gestao/quadro-pessoal", app.AdminAnalyticsPessoalQuadro)
-			protected.Get("/admin/analytics/tecnologia/infraestrutura", app.AdminAnalyticsTecnologiaInfra)
-			protected.Get("/admin/analytics/tecnologia/uso-pedagogico", app.AdminAnalyticsTecnologiaUso)
-			protected.Get("/admin/analytics/infraestrutura/condicoes", app.AdminAnalyticsInfraCondicoes)
-			protected.Get("/admin/analytics/infraestrutura/seguranca", app.AdminAnalyticsInfraSeguranca)
-			protected.Get("/admin/analytics/infraestrutura/energia", app.AdminAnalyticsInfraEnergia)
-			protected.Get("/admin/analytics/merenda/oferta", app.AdminAnalyticsMerendaOferta)
-			protected.Get("/admin/analytics/merenda/equipamentos", app.AdminAnalyticsMerendaEquipamentos)
-			protected.Get("/admin/analytics/merenda/recursos-humanos", app.AdminAnalyticsMerendaRH)
-			protected.Get("/admin/analytics/merenda/condicoes-sanitarias", app.AdminAnalyticsMerendaCondicoesSanitarias)
-			protected.Get("/admin/analytics/servicos-terceirizados/visao-geral", app.AdminAnalyticsServicosVisaoGeral)
-			protected.Get("/admin/analytics/servicos-terceirizados/servicos-gerais", app.AdminAnalyticsServicosGerais)
-			protected.Get("/admin/analytics/servicos-terceirizados/portaria", app.AdminAnalyticsServicosPortaria)
-			protected.Get("/admin/analytics/servicos-terceirizados/manipuladores-alimentos", app.AdminAnalyticsServicosManipuladoresAlimentos)
-			protected.Get("/admin/analytics/escolas/saude-operacional", app.AdminAnalyticsSaudeOperacionalEscolas)
-			protected.Get("/admin/analytics/infraestrutura/escolas", app.AdminAnalyticsInfraEscolas)
-			protected.Get("/admin/analytics/merenda/escolas", app.AdminAnalyticsMerendaEscolas)
-			protected.Get("/admin/analytics/servicos-terceirizados/escolas", app.AdminAnalyticsServicosTerceirizadosEscolas)
-			protected.Get("/admin/analytics/pessoal-gestao/escolas", app.AdminAnalyticsPessoalEscolas)
-			protected.Get("/admin/analytics/tecnologia/escolas", app.AdminAnalyticsTecnologiaEscolas)
-			protected.Get("/admin/analytics/caracterizacao/escolas", app.AdminAnalyticsCaracterizacaoEscolas)
-			protected.Get("/admin/analytics/financeiro-governanca/prodep", app.AdminAnalyticsFinanceiroGovernancaProdep)
-			protected.Get("/admin/analytics/financeiro-governanca/institucional", app.AdminAnalyticsFinanceiroGovernancaInstitucional)
-			protected.Get("/admin/analytics/financeiro-governanca/indice-escolas", app.AdminAnalyticsGovernancaIndiceEscolas)
-			protected.Get("/admin/analytics/perfil-alunos-resultados/ideb", app.AdminAnalyticsPerfilAlunosResultadosIDEB)
-			protected.Get("/admin/analytics/preenchimento/dre", app.AdminAnalyticsPreenchimentoDre)
-			protected.Get("/admin/analytics/filtros/opcoes", app.AdminAnalyticsFiltrosOpcoes)
-			protected.Get("/admin/reports/{report_id}", app.AdminGetReport)
-		})
-	})
-
-	return mux
 }

@@ -227,11 +227,17 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 		authorizedDRE = strings.TrimSpace(scope.DRE)
 	}
 
+	// Anos do seletor: censos concluídos UNIÃO anos presentes em
+	// ideb_resultados (ex.: IDEB 2023 e IDEB 2025). A chave temporal do IDEB é
+	// a mesma série ano × inep × etapa, portanto o ano do filtro global precisa
+	// refletir os anos disponíveis na base IDEB também. O escopo DRE é aplicado
+	// às duas fontes via schools (predicados reutilizam os mesmos $1/$2).
 	anosQuery := `
-		SELECT DISTINCT cr.year::text
-		FROM census_responses cr
-		JOIN schools s ON s.id = cr.school_id
-		WHERE cr.status = 'completed'
+		SELECT DISTINCT a.ano::text FROM (
+			SELECT cr.year AS ano
+			FROM census_responses cr
+			JOIN schools s ON s.id = cr.school_id
+			WHERE cr.status = 'completed'
 	`
 	var anosArgs []any
 	if authorizedDRE != "" {
@@ -244,7 +250,21 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 		}
 	}
 	anosQuery += `
-		ORDER BY cr.year::text DESC
+			UNION ALL
+			SELECT ir.ano AS ano
+			FROM ideb_resultados ir
+			JOIN schools s ON s.id = ir.school_id
+	`
+	if authorizedDRE != "" {
+		if f.DREID > 0 {
+			anosQuery += ` WHERE ` + schoolDREAuthorizationPredicate("s", "$1", "$2")
+		} else {
+			anosQuery += ` WHERE ` + schoolDRENamePredicate("s", "$1")
+		}
+	}
+	anosQuery += `
+		) a
+		ORDER BY a.ano::text DESC
 	`
 	anos, err := queryStringSlice(app, ctx, anosQuery, anosArgs...)
 	if err != nil {

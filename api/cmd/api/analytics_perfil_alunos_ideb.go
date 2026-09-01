@@ -832,13 +832,13 @@ func (app *application) idebMetadados(ctx context.Context, f idebFilters) (IdebM
 	if err != nil {
 		return IdebMetadados{}, err
 	}
-	fonte := idebFonteArquivoPadrao
+	fonte := fmt.Sprintf(idebFonteArquivoPadrao, f.Ano)
 	if fonteArquivo.Valid && strings.TrimSpace(fonteArquivo.String) != "" {
 		fonte = fonteArquivo.String
 	}
 	return IdebMetadados{
 		FonteArquivo:      fonte,
-		FonteMetodologica: idebFonteMetodologica,
+		FonteMetodologica: fmt.Sprintf(idebFonteMetodologica, f.Ano),
 		Grao:              idebGrao,
 		ImportBatchID:     idebNullStringPtr(batchID),
 		Observacoes: []string{

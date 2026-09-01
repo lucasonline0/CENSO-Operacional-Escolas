@@ -16,8 +16,140 @@ concurrency:
   group: api-ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# Checks obrigatórios antes do merge (documentação curta do PR):
+# - DRE critical migrations gate: migrations administrativas 0018-0021 em ordem,
+#   aplicadas contra PostgreSQL 16 real. Falha de migration crítica => CI vermelho.
+# - DRE lifecycle & auth gate: contratos de lifecycle DRE e autenticação/#209.
+# - API integration gate: go vet, go test ./..., stress/race atuais + build web lint.
+# Nenhum check depende de estado externo; todos usam PostgreSQL 16 efêmero.
+
 jobs:
-  test:
+  # ---------------------------------------------------------------------------
+  # Gate 1 — Migrations administrativas críticas.
+  # Exercita o caminho real de runtime: o loader aplica o fs embed em ordem
+  # (applyMigrations) e os testes de fail-closed/idempotência rodam em schemas
+  # isolados determinísticos. O passo psql com ON_ERROR_STOP converte qualquer
+  # falha de migration crítica (inclusive futuras) em CI vermelho.
+  # ---------------------------------------------------------------------------
+  migration-gate:
+    name: DRE critical migrations gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: censo_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d censo_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/censo_test?sslmode=disable
+      ADMIN_JWT_SECRET: dre-ci-secret-0123456789-abcdefghijklmnopqrstuvwxyz
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: api/go.mod
+          cache: true
+          cache-dependency-path: api/go.sum
+
+      - name: Download dependencies
+        working-directory: api
+        run: go mod download
+
+      - name: Apply critical admin migrations in order (fail closed)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          # Base analítica + cadeia administrativa crítica na MESMA ordem do runtime.
+          # ON_ERROR_STOP=1 faz qualquer falha de migration (inclusive futura)
+          # reprovar o workflow imediatamente.
+          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f infra/init.sql
+          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0014_reg_integracao.sql
+          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0018_create_admin_users.sql
+          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0019_create_dres_master.sql
+          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0020_dre_canonical_relations.sql
+          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0021_dre_normalized_uniqueness.sql
+
+      - name: Migration gate tests (applyMigrations ordem/idempotência + fail-closed)
+        working-directory: api
+        run: >-
+          go test ./cmd/api -run
+          '^(TestCriticalAdministrativeMigrationsCleanAndIdempotent|TestCriticalMigrationFailsClosedOnLegacyUsernameCollision|TestCriticalMigrationFailsClosedOnAmbiguousDRENames|TestDRECanonicalRelationsMigration.*)$'
+          -count=1
+
+  # ---------------------------------------------------------------------------
+  # Gate 2 — Lifecycle DRE + autenticação (check identificável; cobre #209).
+  # Os testes criam schemas isolados, portanto o job só exige PostgreSQL 16
+  # real e é determinístico (nenhuma dependência de schema/estado externo).
+  # ---------------------------------------------------------------------------
+  dre-lifecycle-auth:
+    name: DRE lifecycle & auth gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: censo_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d censo_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/censo_test?sslmode=disable
+      ADMIN_JWT_SECRET: dre-ci-secret-0123456789-abcdefghijklmnopqrstuvwxyz
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: api/go.mod
+          cache: true
+          cache-dependency-path: api/go.sum
+
+      - name: Download dependencies
+        working-directory: api
+        run: go mod download
+
+      - name: DRE lifecycle & auth contracts (#209)
+        working-directory: api
+        run: >-
+          go test ./cmd/api -run
+          '^(TestDRELifecycle|TestDRECreateWithAtivaFalsePersists|TestInactiveDRE|TestDREInactiveUserCannotAuthenticate|TestRenamePreserves|TestAdminMeReflects|TestDuplicate.*ByCaseIsRejected|TestDREEntityAbsentInDresNotValidatedBySchoolsText|TestRuntimeDRE|TestRuntimeEnvAdmin|TestRuntimeLegacyDRE|TestRuntimeTransitionSchema)'
+          -count=1
+
+  # ---------------------------------------------------------------------------
+  # Gate 3 — Suíte completa de integração (vet + go test + stress/race).
+  # Schema de integração compartilhado via init.sql + cadeia administrativa
+  # crítica em ordem (0014/0018/0019/0020/0021) para espelhar o runtime.
+  # ---------------------------------------------------------------------------
+  integration:
+    name: API integration gate
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -55,20 +187,23 @@ jobs:
         working-directory: api
         run: go mod download
 
-      - name: Initialize PostgreSQL integration schema
+      - name: Initialize PostgreSQL integration schema (with critical admin chain)
         env:
           PGPASSWORD: postgres
         run: |
           set -euo pipefail
-          # infra/init.sql contém o schema/base analítica, mas a tabela de
-          # regiões (0014) e as entidades administrativas de perfis DRE
-          # (0018/0019) são carregadas explicitamente para os testes reais.
-          # As demais migrations não são reaplicadas porque parte delas já é
-          # espelhada no init.sql e scripts históricos não são 100% idempotentes.
+          # infra/init.sql contém o schema/base analítica. As migrations
+          # administrativas críticas (0014, 0018, 0019, 0020, 0021) são
+          # aplicadas explicitamente EM ORDEM para os testes reais de
+          # integração espelharem o runtime. As demais migrations não são
+          # reaplicadas porque parte delas já é espelhada no init.sql e
+          # scripts históricos não são 100% idempotentes.
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f infra/init.sql
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0014_reg_integracao.sql
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0018_create_admin_users.sql
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0019_create_dres_master.sql
+          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0020_dre_canonical_relations.sql
+          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0021_dre_normalized_uniqueness.sql
 
       - name: Vet
         working-directory: api

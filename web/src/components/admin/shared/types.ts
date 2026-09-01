@@ -570,6 +570,7 @@ export interface IdebResumo {
   registros_sem_match_schools: number;
   ideb_medio_simples: number | null;
   ideb_medio_ponderado: number | null;
+  total_presentes: number | null;
 }
 
 export interface IdebPorEtapa {

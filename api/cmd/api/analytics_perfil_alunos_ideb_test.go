@@ -12,8 +12,8 @@ func TestParseIdebFilters_Defaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("filtros vazios não devem falhar: %v", err)
 	}
-	if f.Ano != 2023 {
-		t.Fatalf("ano default esperado 2023, obtive %d", f.Ano)
+	if f.Ano != DefaultIdebAno {
+		t.Fatalf("ano default esperado %d, obtive %d", DefaultIdebAno, f.Ano)
 	}
 	if f.Etapa != "" || f.DRE != "" || f.Municipio != "" || f.Zona != "" ||
 		f.RegiaoIntegracao != "" || f.StatusIdeb != "" || f.DetalheStatusIdeb != "" ||
@@ -67,6 +67,17 @@ func TestParseIdebFilters_InvalidDomainRejected(t *testing.T) {
 		if _, err := parseIdebFilters(q); err == nil {
 			t.Fatalf("%s: esperava erro de validação, obtive nil", name)
 		}
+	}
+}
+
+func TestParseIdebFilters_Ano2025(t *testing.T) {
+	q := url.Values{"ano": {"2025"}}
+	f, err := parseIdebFilters(q)
+	if err != nil {
+		t.Fatalf("ano 2023 válido não devia falhar: %v", err)
+	}
+	if f.Ano != 2025 {
+		t.Fatalf("ano: esperava 2025, obtive %d", f.Ano)
 	}
 }
 

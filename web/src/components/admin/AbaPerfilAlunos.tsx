@@ -5,6 +5,7 @@ import {
   AlertCircle, Loader2, School, BadgeCheck, MinusCircle,
   PieChart, Gauge, Scale, Link2Off, Info, TrendingUp, TrendingDown,
   LayoutDashboard, GraduationCap, BarChart3, Trophy, MapPinned, ShieldCheck,
+  Users,
 } from "lucide-react";
 import { apiFetch, getCached } from "./shared/api";
 import { C } from "./shared/constants";
@@ -63,7 +64,7 @@ const fmtNum2 = (n: number | null | undefined) =>
 
 // Monta a query string respeitando os filtros globais compatíveis + etapa.
 // IMPORTANTE: o endpoint IDEB usa `ano` (não `year`). Nunca enviar filtros
-// vazios. `ano` ausente faz o backend assumir 2023 (default IDEB).
+// vazios. `ano` ausente faz o backend assumir o ano padrão (DefaultIdebAno).
 function buildIdebParams(filters: DashboardFilters | undefined, etapa: EtapaSel): string {
   const p = new URLSearchParams();
   if (filters?.ano) p.set("ano", String(filters.ano));
@@ -302,6 +303,16 @@ export function AbaPerfilAlunos({
             sub="nenhuma etapa com IDEB divulgado"
             compact={presentationMode}
           />
+          {resumo.total_presentes != null && (
+            <StatCard
+              label="Total de presentes"
+              value={resumo.total_presentes}
+              Icon={Users}
+              tone="blue"
+              sub="alunos presentes na avaliação"
+              compact={presentationMode}
+            />
+          )}
         </div>
       </div>
 

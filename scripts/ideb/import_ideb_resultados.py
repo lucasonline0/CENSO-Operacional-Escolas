@@ -1,19 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-IDEB — Importador da base IDEB 2023 para a tabela ideb_resultados.
+IDEB — Importador multi-ano da base oficial do IDEB para ideb_resultados.
 
-Este script lê a planilha oficial do IDEB 2023 (insumo local, NÃO versionado),
+Este script lê a planilha oficial do IDEB (insumo local, NÃO versionado),
 valida colunas, normaliza campos, classifica status_ideb / detalhe_status_ideb,
 resolve o vínculo com schools por codigo_inep e, em dry-run, gera um relatório.
 
+Suporta múltiplos anos (2023, 2025, etc.). O ano é definido via --ano e
+determina automaticamente o nome da aba ("IDEB {ano}"), a coluna de IDEB
+("IDEB {ano}") e o mapeamento de colunas da planilha.
+
 Modo padrão: --dry-run (seguro, NÃO escreve no banco).
-A carga real (--apply, habilitada no IDEB-03B) é deliberadamente protegida por
-três travas combinadas: --apply + --confirm-apply + --batch-id explícito. Sem as
-três, o script não escreve nada. A escrita usa exclusivamente
+A carga real (--apply) é deliberadamente protegida por três travas combinadas:
+--apply + --confirm-apply + --batch-id explícito. Sem as três, o script não
+escreve nada. A escrita usa exclusivamente
 INSERT ... ON CONFLICT (ano, codigo_inep, etapa) DO UPDATE — nunca TRUNCATE/DELETE.
 
-Regras metodológicas (docs/dashboard/perfil-alunos-resultados-ideb-2023.md e
-infra/migrations/0017_create_ideb_resultados.sql):
+Regras metodológicas:
   * codigo_inep é a CHAVE de integração; preservado como TEXTO (zeros à esquerda,
     sem sufixo ".0" herdado do Excel).
   * '-', '', 'ND' => NULL numérico, NUNCA 0. Ausência é cobertura/elegibilidade.
@@ -22,18 +25,27 @@ infra/migrations/0017_create_ideb_resultados.sql):
   * percentual_avaliado > 100 é preservado (apenas alerta de qualidade).
   * agregações por DRE/município NÃO são IDEB oficial agregado do INEP.
 
+Mapeamento de colunas (2023 vs 2025):
+  2023: Total avaliado, Percentual avaliado
+  2025: QT. DE ALUNOS MATRICULADOS CENSO, TAXA DE PARTICIPACAO, PRESENTES
+
 Exemplos de uso:
 
-  # Dry-run (padrão; não escreve nada):
+  # Dry-run para 2023:
   python scripts/ideb/import_ideb_resultados.py \
       --source _local/ideb/fontes/ideb_2023_iniciais_finais_medio.xlsx \
       --ano 2023 --dry-run
 
-  # Carga real (IDEB-03B; exige as três travas combinadas):
+  # Dry-run para 2025:
   python scripts/ideb/import_ideb_resultados.py \
-      --source _local/ideb/fontes/ideb_2023_iniciais_finais_medio.xlsx \
-      --ano 2023 --apply --confirm-apply \
-      --batch-id ideb_2023_20260614_120000
+      --source _local/ideb/fontes/ideb_2025_iniciais_finais_medio.xlsx \
+      --ano 2025 --dry-run
+
+  # Carga real (exige as três travas combinadas):
+  python scripts/ideb/import_ideb_resultados.py \
+      --source _local/ideb/fontes/ideb_2025_iniciais_finais_medio.xlsx \
+      --ano 2025 --apply --confirm-apply \
+      --batch-id ideb_2025_20260901_120000
 """
 
 import argparse
@@ -67,42 +79,92 @@ except ImportError:
 
 
 # ---------------------------------------------------------------------------
-# Constantes da fonte
+# Configuração multi-ano
 # ---------------------------------------------------------------------------
-ABA = "IDEB 2023"
-FONTE_ARQUIVO_PADRAO = "ideb_2023_iniciais_finais_medio.xlsx"
-FONTE_INEP_URL = "https://download.inep.gov.br/ideb/nota_informativa_ideb_2023.pdf"
+def get_config(ano):
+    """Retorna configuração da fonte baseada no ano de referência.
 
-RELATORIO_MD = "_local/ideb/relatorios/import_dry_run_ideb_2023.md"
-RELATORIO_JSON = "_local/ideb/relatorios/import_dry_run_ideb_2023.json"
+    Cada ano pode ter:
+      - nome da aba na planilha
+      - nome da coluna IDEB
+      - colunas de mapeamento (diferentes entre anos)
+      - URL da fonte INEP
+      - colunas extras (ex: presentes no 2025)
+
+    Retorna dict com todas as configurações necessárias.
+    """
+    config_base = {
+        "ano": ano,
+        "aba": f"IDEB {ano}",
+        "coluna_ideb": f"IDEB {ano}",
+        "fonte_inep_url": f"https://download.inep.gov.br/ideb/nota_informativa_ideb_{ano}.pdf",
+        "fonte_arquivo_padrao": f"ideb_{ano}_iniciais_finais_medio.xlsx",
+        "relatorio_md": f"_local/ideb/relatorios/import_dry_run_ideb_{ano}.md",
+        "relatorio_json": f"_local/ideb/relatorios/import_dry_run_ideb_{ano}.json",
+        # Colunas base (comuns a todos os anos)
+        "colunas_base": {
+            "ano": "ANO",
+            "ensino": "Ensino",
+            "inep": "INEP",
+            "nome_escola": "NOME DA ESCOLA",
+            "proficiencia_portugues": "Proficiência Português",
+            "proficiencia_matematica": "Proficiência Matemática",
+            "fluxo_indicador_rendimento": "Fluxo - Indicador de rendimento",
+        },
+        # Colunas que mudam de nome entre anos
+        "colunas_anuais": {},
+        # Colunas extras (presentes apenas em alguns anos)
+        "colunas_extras": {},
+    }
+
+    if ano == 2023:
+        config_base["colunas_anuais"] = {
+            "total_avaliado": "Total avaliado",
+            "percentual_avaliado": "Percentual avaliado",
+        }
+    elif ano == 2025:
+        config_base["colunas_anuais"] = {
+            "total_avaliado": "QT. DE ALUNOS MATRICULADOS CENSO",
+            "percentual_avaliado": "TAXA DE PARTICIPACAO",
+        }
+        config_base["colunas_extras"] = {
+            "presentes": "PRESENTES",
+        }
+    else:
+        # Para anos futuros, assume estrutura similar ao 2023
+        config_base["colunas_anuais"] = {
+            "total_avaliado": "Total avaliado",
+            "percentual_avaliado": "Percentual avaliado",
+        }
+
+    return config_base
+
+
+def montar_colunas(config):
+    """Monta o dict completo de colunas (alias -> rótulo) a partir da config."""
+    colunas = dict(config["colunas_base"])
+    colunas.update(config["colunas_anuais"])
+    colunas["ideb"] = config["coluna_ideb"]
+    if config["colunas_extras"]:
+        colunas.update(config["colunas_extras"])
+    return colunas
+
+
+def montar_campos_indicadores(config):
+    """Monta a lista de campos indicadores (alias) para classificação de status."""
+    campos = [
+        "total_avaliado",
+        "percentual_avaliado",
+        "proficiencia_portugues",
+        "proficiencia_matematica",
+        "fluxo_indicador_rendimento",
+        "ideb",
+    ]
+    return campos
+
 
 # Marcadores textuais que indicam ausência de valor numérico (nunca viram zero).
 MARCADORES_AUSENCIA = {"-", "", "nd", "n/d", "na", "n/a", "nan", "none"}
-
-# Colunas esperadas: alias lógico -> rótulo canônico na planilha.
-COLUNAS = {
-    "ano": "ANO",
-    "ensino": "Ensino",
-    "inep": "INEP",
-    "nome_escola": "NOME DA ESCOLA",
-    "total_avaliado": "Total avaliado",
-    "percentual_avaliado": "Percentual avaliado",
-    "proficiencia_portugues": "Proficiência Português",
-    "proficiencia_matematica": "Proficiência Matemática",
-    "fluxo_indicador_rendimento": "Fluxo - Indicador de rendimento",
-    "ideb": "IDEB 2023",
-}
-
-# Campos numéricos (na ordem da planilha) que descrevem "todos os indicadores"
-# de Total avaliado até IDEB.
-CAMPOS_INDICADORES = [
-    "total_avaliado",
-    "percentual_avaliado",
-    "proficiencia_portugues",
-    "proficiencia_matematica",
-    "fluxo_indicador_rendimento",
-    "ideb",
-]
 
 ETAPAS_ORDEM = ["anos_iniciais", "anos_finais", "ensino_medio"]
 ETAPA_LABEL = {
@@ -166,12 +228,21 @@ def parse_num(valor):
 
 
 def normalizar_etapa(ensino):
-    """Normaliza o campo Ensino para chave canônica (tolerante a acento/caixa/espaço)."""
+    """Normaliza o campo Ensino para chave canônica (tolerante a acento/caixa/espaço).
+
+    Suporta tanto os nomes do IDEB 2023 quanto do IDEB 2025:
+      2023: "anos iniciais", "anos finais", "ensino medio"
+      2025: "3ª/4ª série do Ensino Médio", "5º ano do Ensino Fundamental",
+            "9º ano de Ensino Fundamental"
+    """
     n = norm(ensino)
-    if "inicia" in n:
+    # Anos iniciais: 2023 "anos iniciais" | 2025 "5º ano do Ensino Fundamental"
+    if "inicia" in n or ("5" in n and "fundamental" in n):
         return "anos_iniciais"
-    if "fina" in n:  # cobre "anos finais" e "anos final"
+    # Anos finais: 2023 "anos finais" | 2025 "9º ano de Ensino Fundamental"
+    if "fina" in n or ("9" in n and "fundamental" in n):
         return "anos_finais"
+    # Ensino médio: 2023 "ensino medio" | 2025 "3ª/4ª série do Ensino Médio"
     if "medio" in n:
         return "ensino_medio"
     return "desconhecida"
@@ -188,11 +259,11 @@ def normalizar_inep(valor):
     return t
 
 
-def classificar_status(linha):
+def classificar_status(linha, campos_indicadores):
     """Retorna (status_ideb, detalhe_status_ideb) conforme o documento metodológico.
 
     status_ideb:
-        com_ideb            : IDEB 2023 numérico.
+        com_ideb            : IDEB numérico.
         sem_ideb_divulgado  : IDEB ausente / não numérico.
 
     detalhe_status_ideb (somente quando sem_ideb_divulgado):
@@ -204,7 +275,7 @@ def classificar_status(linha):
     if linha["ideb"] is not None:
         return "com_ideb", None
 
-    todos_ausentes = all(is_ausente(linha["_raw"][c]) for c in CAMPOS_INDICADORES)
+    todos_ausentes = all(is_ausente(linha["_raw"][c]) for c in campos_indicadores)
     if todos_ausentes:
         return "sem_ideb_divulgado", "sem_resultado"
 
@@ -220,19 +291,19 @@ def classificar_status(linha):
 # ---------------------------------------------------------------------------
 # Leitura da planilha (openpyxl, preservando texto)
 # ---------------------------------------------------------------------------
-def carregar_planilha(path):
-    """Lê a aba 'IDEB 2023' e retorna (header_map, registros_brutos).
+def carregar_planilha(path, aba, colunas):
+    """Lê a aba especificada e retorna (header_map, registros_brutos).
 
     header_map: alias_lógico -> índice de coluna (0-based).
     registros_brutos: lista de dicts alias_lógico -> valor cru da célula.
     Levanta KeyError se faltar coluna esperada.
     """
     wb = load_workbook(path, read_only=True, data_only=True)
-    if ABA not in wb.sheetnames:
+    if aba not in wb.sheetnames:
         raise KeyError(
-            f"Aba '{ABA}' não encontrada na planilha. Abas presentes: {wb.sheetnames}"
+            f"Aba '{aba}' não encontrada na planilha. Abas presentes: {wb.sheetnames}"
         )
-    ws = wb[ABA]
+    ws = wb[aba]
 
     rows = ws.iter_rows(values_only=True)
     try:
@@ -248,14 +319,14 @@ def carregar_planilha(path):
 
     header_map = {}
     faltando = []
-    for alias, esperada in COLUNAS.items():
+    for alias, esperada in colunas.items():
         idx = norm_para_idx.get(norm(esperada))
         if idx is None:
             faltando.append(esperada)
         else:
             header_map[alias] = idx
     if faltando:
-        raise KeyError(f"Colunas esperadas ausentes na planilha (aba '{ABA}'): {faltando}")
+        raise KeyError(f"Colunas esperadas ausentes na planilha (aba '{aba}'): {faltando}")
 
     registros = []
     for row in rows:
@@ -273,8 +344,9 @@ def carregar_planilha(path):
     return header_map, registros
 
 
-def normalizar_registro(reg, ano_param):
+def normalizar_registro(reg, ano_param, config):
     """Transforma um registro bruto em registro normalizado pronto para análise/carga."""
+    campos_indicadores = montar_campos_indicadores(config)
     linha = {
         "ano": ano_param,
         "ano_origem": texto_limpo(reg["ano"]),
@@ -287,9 +359,10 @@ def normalizar_registro(reg, ano_param):
         "proficiencia_matematica": parse_num(reg["proficiencia_matematica"]),
         "fluxo_indicador_rendimento": parse_num(reg["fluxo_indicador_rendimento"]),
         "ideb": parse_num(reg["ideb"]),
+        "presentes": parse_num(reg.get("presentes")),
         "_raw": reg,
     }
-    status_ideb, detalhe = classificar_status(linha)
+    status_ideb, detalhe = classificar_status(linha, campos_indicadores)
     linha["status_ideb"] = status_ideb
     linha["detalhe_status_ideb"] = detalhe
     return linha
@@ -554,6 +627,7 @@ def amostra_registros(linhas, n=10):
                 "proficiencia_matematica": l["proficiencia_matematica"],
                 "fluxo_indicador_rendimento": l["fluxo_indicador_rendimento"],
                 "ideb": l["ideb"],
+                "presentes": l.get("presentes"),
                 "status_ideb": l["status_ideb"],
                 "detalhe_status_ideb": l["detalhe_status_ideb"],
                 "school_id": l.get("school_id"),
@@ -567,7 +641,7 @@ def gerar_relatorio_md(ctx):
     """Monta o relatório de dry-run em Markdown a partir do contexto consolidado."""
     s = ctx["stats"]
     L = []
-    L.append("# Dry-run — Importador IDEB 2023 (IDEB-03A)")
+    L.append(f"# Dry-run — Importador IDEB {ctx['ano']}")
     L.append("")
     L.append(f"> Gerado em {ctx['timestamp']}. Artefato **local** (não versionado).")
     L.append("> **Nenhuma escrita foi executada no banco.** Modo: dry-run.")
@@ -587,6 +661,7 @@ def gerar_relatorio_md(ctx):
     L.append(f"| Data/hora | {ctx['timestamp']} |")
     L.append(f"| Fonte | `{ctx['source']}` |")
     L.append(f"| Ano de referência | {ctx['ano']} |")
+    L.append(f"| Aba | `{ctx['aba']}` |")
     L.append(f"| Modo | dry-run (sem escrita) |")
     L.append(f"| Conexão com banco | {'sim' if ctx['houve_conexao'] else 'não'} |")
     if ctx["dsn_mascarado"]:
@@ -718,6 +793,7 @@ def gerar_relatorio_json(ctx):
         "timestamp": ctx["timestamp"],
         "source": ctx["source"],
         "ano": ctx["ano"],
+        "aba": ctx["aba"],
         "modo": "dry-run",
         "houve_conexao": ctx["houve_conexao"],
         "escrita_executada": False,
@@ -746,19 +822,21 @@ def gerar_relatorio_json(ctx):
 
 
 # ---------------------------------------------------------------------------
-# Escrita futura (IDEB-03B) — preparada mas NÃO executada nesta etapa
+# Escrita (UPSERT) — carga idempotente
 # ---------------------------------------------------------------------------
 UPSERT_SQL = """
 INSERT INTO ideb_resultados (
     ano, codigo_inep, school_id, nome_escola_origem, etapa,
     total_avaliado, percentual_avaliado, proficiencia_portugues,
     proficiencia_matematica, fluxo_indicador_rendimento, ideb,
+    presentes,
     status_ideb, detalhe_status_ideb, status_vinculo,
     fonte_arquivo, fonte_inep_url, import_batch_id, updated_at
 ) VALUES (
     %(ano)s, %(codigo_inep)s, %(school_id)s, %(nome_escola_origem)s, %(etapa)s,
     %(total_avaliado)s, %(percentual_avaliado)s, %(proficiencia_portugues)s,
     %(proficiencia_matematica)s, %(fluxo_indicador_rendimento)s, %(ideb)s,
+    %(presentes)s,
     %(status_ideb)s, %(detalhe_status_ideb)s, %(status_vinculo)s,
     %(fonte_arquivo)s, %(fonte_inep_url)s, %(import_batch_id)s, CURRENT_TIMESTAMP
 )
@@ -771,6 +849,7 @@ ON CONFLICT (ano, codigo_inep, etapa) DO UPDATE SET
     proficiencia_matematica = EXCLUDED.proficiencia_matematica,
     fluxo_indicador_rendimento = EXCLUDED.fluxo_indicador_rendimento,
     ideb = EXCLUDED.ideb,
+    presentes = EXCLUDED.presentes,
     status_ideb = EXCLUDED.status_ideb,
     detalhe_status_ideb = EXCLUDED.detalhe_status_ideb,
     status_vinculo = EXCLUDED.status_vinculo,
@@ -782,7 +861,7 @@ ON CONFLICT (ano, codigo_inep, etapa) DO UPDATE SET
 
 
 def linha_para_params(linha, ctx):
-    """Converte uma linha normalizada nos parâmetros nomeados do UPSERT (IDEB-03B)."""
+    """Converte uma linha normalizada nos parâmetros nomeados do UPSERT."""
     return {
         "ano": linha["ano"],
         "codigo_inep": linha["codigo_inep"],
@@ -795,11 +874,12 @@ def linha_para_params(linha, ctx):
         "proficiencia_matematica": linha["proficiencia_matematica"],
         "fluxo_indicador_rendimento": linha["fluxo_indicador_rendimento"],
         "ideb": linha["ideb"],
+        "presentes": linha.get("presentes"),
         "status_ideb": linha["status_ideb"],
         "detalhe_status_ideb": linha["detalhe_status_ideb"],
         "status_vinculo": linha.get("status_vinculo", "pendente_validacao"),
         "fonte_arquivo": ctx["fonte_arquivo"],
-        "fonte_inep_url": FONTE_INEP_URL,
+        "fonte_inep_url": ctx["fonte_inep_url"],
         "import_batch_id": ctx["batch_id"],
     }
 
@@ -832,14 +912,20 @@ def executar_apply(linhas, ctx, dsn):
 # ---------------------------------------------------------------------------
 def parse_args(argv):
     p = argparse.ArgumentParser(
-        description="Importador (dry-run) da base IDEB 2023 para ideb_resultados.",
+        description="Importador multi-ano da base oficial do IDEB para ideb_resultados.",
     )
     p.add_argument(
         "--source",
-        default=f"_local/ideb/fontes/{FONTE_ARQUIVO_PADRAO}",
-        help="Caminho da planilha IDEB 2023 (.xlsx). Insumo LOCAL, não versionado.",
+        default=None,
+        help="Caminho da planilha IDEB (.xlsx). Insumo LOCAL, não versionado. "
+             "Se omitido, usa o padrão para o ano informado.",
     )
     p.add_argument("--ano", type=int, default=2023, help="Ano de referência (default: 2023).")
+    p.add_argument(
+        "--aba",
+        default=None,
+        help="Nome da aba na planilha (override). Se omitido, usa 'IDEB {ano}'.",
+    )
     p.add_argument(
         "--dry-run",
         action="store_true",
@@ -890,7 +976,7 @@ def main(argv=None):
         if not args.batch_id:
             print(
                 "[ERRO] --apply exige --batch-id explícito (rastreabilidade/auditoria da carga).\n"
-                "       Ex.: --batch-id ideb_2023_YYYYMMDD_HHMMSS",
+                f"       Ex.: --batch-id ideb_{args.ano}_YYYYMMDD_HHMMSS",
                 file=sys.stderr,
             )
             return 2
@@ -901,35 +987,47 @@ def main(argv=None):
             )
             return 2
 
+    # --- Configuração dinâmica baseada no ano ---
+    config = get_config(args.ano)
+    if args.aba:
+        config["aba"] = args.aba
+    colunas = montar_colunas(config)
+
+    # Resolve caminho da planilha
+    source = args.source
+    if source is None:
+        source = f"_local/ideb/fontes/{config['fonte_arquivo_padrao']}"
+
     # --- Validação da fonte ---
-    if not os.path.isfile(args.source):
+    if not os.path.isfile(source):
         print(
-            f"[ERRO] Planilha não encontrada: {args.source}\n"
-            "       Coloque a base IDEB 2023 em _local/ (não versionado).",
+            f"[ERRO] Planilha não encontrada: {source}\n"
+            f"       Coloque a base IDEB {args.ano} em _local/ (não versionado).",
             file=sys.stderr,
         )
         return 2
 
-    fonte_arquivo = os.path.basename(args.source)
+    fonte_arquivo = os.path.basename(source)
     batch_id = args.batch_id or f"ideb_{args.ano}_{datetime.now():%Y%m%d_%H%M%S}"
 
     modo_label = "apply (CARGA REAL — escreve no banco)" if args.apply else "dry-run (sem escrita)"
     print("=" * 70)
-    print("IDEB — Importador IDEB 2023")
+    print(f"IDEB — Importador multi-ano (IDEB {args.ano})")
     print("=" * 70)
-    print(f"Fonte ............. {args.source}")
+    print(f"Fonte ............. {source}")
     print(f"Ano ............... {args.ano}")
+    print(f"Aba ................ {config['aba']}")
     print(f"Modo .............. {modo_label}")
     print(f"Batch-id .......... {batch_id}")
 
     # --- Leitura e normalização ---
     try:
-        _, registros = carregar_planilha(args.source)
+        _, registros = carregar_planilha(source, config["aba"], colunas)
     except KeyError as e:
         print(f"[ERRO] {e}", file=sys.stderr)
         return 2
 
-    linhas = [normalizar_registro(r, args.ano) for r in registros]
+    linhas = [normalizar_registro(r, args.ano, config) for r in registros]
 
     alertas = []
     # Etapas não mapeadas viram alerta (não bloqueio).
@@ -994,10 +1092,12 @@ def main(argv=None):
 
     ctx = {
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": args.source,
+        "source": source,
         "fonte_arquivo": fonte_arquivo,
+        "fonte_inep_url": config["fonte_inep_url"],
         "batch_id": batch_id,
         "ano": args.ano,
+        "aba": config["aba"],
         "houve_conexao": houve_conexao,
         "dsn_mascarado": dsn_mascarado,
         "stats": stats,
@@ -1041,17 +1141,17 @@ def main(argv=None):
         print(f"Linhas a processar  {len(linhas)}")
         processados = executar_apply(linhas, ctx, dsn)
         print(f"Linhas processadas  {processados} (insert/update)")
-        print("Carga concluída. Valide as contagens read-only de pós-carga (protocolo IDEB-03B).")
+        print("Carga concluída. Valide as contagens read-only de pós-carga.")
         return 0
 
     # --- dry-run: gera relatórios locais (nenhuma escrita no banco) ---
-    os.makedirs(os.path.dirname(RELATORIO_MD), exist_ok=True)
-    with open(RELATORIO_MD, "w", encoding="utf-8") as f:
+    os.makedirs(os.path.dirname(config["relatorio_md"]), exist_ok=True)
+    with open(config["relatorio_md"], "w", encoding="utf-8") as f:
         f.write(gerar_relatorio_md(ctx))
-    with open(RELATORIO_JSON, "w", encoding="utf-8") as f:
+    with open(config["relatorio_json"], "w", encoding="utf-8") as f:
         json.dump(gerar_relatorio_json(ctx), f, ensure_ascii=False, indent=2)
-    print(f"Relatório MD ...... {RELATORIO_MD}")
-    print(f"Relatório JSON .... {RELATORIO_JSON}")
+    print(f"Relatório MD ...... {config['relatorio_md']}")
+    print(f"Relatório JSON .... {config['relatorio_json']}")
     print("Nenhuma escrita executada no banco (dry-run).")
     return 0
 

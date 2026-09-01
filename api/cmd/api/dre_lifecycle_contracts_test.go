@@ -141,13 +141,13 @@ func TestAdminMeReflectsRenameAndStatus(t *testing.T) {
 		t.Fatalf("rename DRE: %v", err)
 	}
 
-	tokStr := createTestJWT("me.user", "dre", "DRE RENAMED")
-	req := httptest.NewRequest("GET", "/v1/admin/me", nil)
-	req.Header.Set("Authorization", "Bearer "+tokStr)
-
 	app := setupTestApp()
 	app.models = m
 	app.logger = nil
+
+	tokStr := createTestJWT("me.user", "dre", "DRE RENAMED")
+	req := httptest.NewRequest("GET", "/v1/admin/me", nil)
+	req.Header.Set("Authorization", "Bearer "+tokStr)
 
 	rr := httptest.NewRecorder()
 	app.routes().ServeHTTP(rr, req)

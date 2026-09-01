@@ -2,22 +2,18 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
-	"time"
 
 	"censo-api/internal/models"
 )
 
 func TestDRECreateWithAtivaFalsePersists(t *testing.T) {
 	ctx := context.Background()
-	db, m := setupDRELifecycleTestDB(t, true)
+	_, m := setupDRELifecycleTestDB(t, true)
 
 	dre, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE TESTE INATIVA", Ativa: false})
 	if err != nil {
@@ -30,7 +26,7 @@ func TestDRECreateWithAtivaFalsePersists(t *testing.T) {
 
 func TestInactiveDRERejectsUserCreation(t *testing.T) {
 	ctx := context.Background()
-	db, m := setupDRELifecycleTestDB(t, true)
+	_, m := setupDRELifecycleTestDB(t, true)
 
 	inactive, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE INATIVA PARA USER", Ativa: false})
 	if err != nil {
@@ -48,14 +44,14 @@ func TestInactiveDRERejectsUserCreation(t *testing.T) {
 
 func TestDREInactiveUserCannotAuthenticate(t *testing.T) {
 	ctx := context.Background()
-	db, m := setupDRELifecycleTestDB(t, true)
+	_, m := setupDRELifecycleTestDB(t, true)
 
 	active, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE ATIVA PARA AUTH", Ativa: true})
 	if err != nil {
 		t.Fatalf("create active DRE: %v", err)
 	}
 
-	user, err := m.AdminUsers.Create(ctx, "auth.user", "password123", "dre", active.Nome)
+	_, err = m.AdminUsers.Create(ctx, "auth.user", "password123", "dre", active.Nome)
 	if err != nil {
 		t.Fatalf("create DRE user: %v", err)
 	}
@@ -86,7 +82,7 @@ func TestRenamePreservesUserAndSchoolLinks(t *testing.T) {
 		t.Fatalf("create DRE A: %v", err)
 	}
 
-	dreB, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE BETA", Ativa: true})
+	_, err = m.DREs.Create(ctx, models.DRE{Nome: "DRE BETA", Ativa: true})
 	if err != nil {
 		t.Fatalf("create DRE B: %v", err)
 	}
@@ -128,14 +124,14 @@ func TestRenamePreservesUserAndSchoolLinks(t *testing.T) {
 
 func TestAdminMeReflectsRenameAndStatus(t *testing.T) {
 	ctx := context.Background()
-	db, m := setupDRELifecycleTestDB(t, true)
+	_, m := setupDRELifecycleTestDB(t, true)
 
 	dre, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE ORIGINAL", Ativa: true})
 	if err != nil {
 		t.Fatalf("create DRE: %v", err)
 	}
 
-	user, err := m.AdminUsers.CreateForDREID(ctx, "me.user", "password123", "dre", dre.ID)
+	_, err = m.AdminUsers.CreateForDREID(ctx, "me.user", "password123", "dre", dre.ID)
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}

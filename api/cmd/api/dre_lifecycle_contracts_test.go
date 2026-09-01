@@ -19,7 +19,7 @@ func TestDRECreateWithAtivaFalsePersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create DRE with ativa=false: %v", err)
 	}
-	if !dre.Ativa {
+	if dre.Ativa {
 		t.Fatalf("expected ativa=false to persist, got ativa=%v", dre.Ativa)
 	}
 }
@@ -150,7 +150,7 @@ func TestAdminMeReflectsRenameAndStatus(t *testing.T) {
 	app.logger = nil
 
 	rr := httptest.NewRecorder()
-	app.AdminMe(rr, req)
+	app.routes().ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d. Body: %s", rr.Code, rr.Body.String())
@@ -186,6 +186,10 @@ func TestDuplicateUsernameByCaseIsRejected(t *testing.T) {
 	`)
 	if err != nil {
 		t.Fatalf("create normalized unique indexes: %v", err)
+	}
+
+	if _, err = m.DREs.Create(ctx, models.DRE{Nome: "DRE TESTE", Ativa: true}); err != nil {
+		t.Fatalf("create DRE TESTE: %v", err)
 	}
 
 	_, err = m.AdminUsers.Create(ctx, "DupUser", "password123", "dre", "DRE TESTE")

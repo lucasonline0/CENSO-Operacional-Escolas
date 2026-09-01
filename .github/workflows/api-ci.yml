@@ -187,23 +187,26 @@ jobs:
         working-directory: api
         run: go mod download
 
-      - name: Initialize PostgreSQL integration schema (with critical admin chain)
+      - name: Initialize PostgreSQL integration schema
         env:
           PGPASSWORD: postgres
         run: |
           set -euo pipefail
-          # infra/init.sql contém o schema/base analítica. As migrations
-          # administrativas críticas (0014, 0018, 0019, 0020, 0021) são
-          # aplicadas explicitamente EM ORDEM para os testes reais de
-          # integração espelharem o runtime. As demais migrations não são
-          # reaplicadas porque parte delas já é espelhada no init.sql e
-          # scripts históricos não são 100% idempotentes.
+          # infra/init.sql contém o schema/base analítica, mas a tabela de
+          # regiões (0014) e as entidades administrativas de perfis DRE
+          # (0018/0019) são carregadas explicitamente para os testes reais.
+          # As migrations 0020/0021 (relações canônicas/unicidade normalizada)
+          # NÃO são reaplicadas aqui: os testes de integração analítica semeiam
+          # schools com `dre` textual não referenciado por dres, e o trigger
+          # canônico de 0020 rejeitaria esse seed. O gate de migrations críticas
+          # (migration-gate) exercita 0020/0021 em ordem via applyMigrations/psql
+          # com ON_ERROR_STOP em schema isolado. As demais migrations não são
+          # reaplicadas porque parte delas já é espelhada no init.sql e scripts
+          # históricos não são 100% idempotentes.
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f infra/init.sql
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0014_reg_integracao.sql
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0018_create_admin_users.sql
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0019_create_dres_master.sql
-          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0020_dre_canonical_relations.sql
-          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0021_dre_normalized_uniqueness.sql
 
       - name: Vet
         working-directory: api

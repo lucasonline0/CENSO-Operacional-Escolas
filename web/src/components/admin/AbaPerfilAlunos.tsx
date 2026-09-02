@@ -234,7 +234,7 @@ export function AbaPerfilAlunos({
       <SectionTitle
         id="sec-alunos-resumo"
         Icon={LayoutDashboard}
-        title="Resumo IDEB 2023"
+        title={`Resumo IDEB ${anoRef}`}
         description="Visão geral dos registros oficiais do IDEB por escola, etapa e recortes administrativos."
       />
       <div data-pres-slide="alunos-resumo-cards" className="space-y-5">
@@ -505,7 +505,7 @@ export function AbaPerfilAlunos({
         id="sec-alunos-qualidade"
         Icon={ShieldCheck}
         title="Qualidade da base"
-        description="Indicadores de consistência, vínculo cadastral e características da importação IDEB 2023."
+        description={`Indicadores de consistência, vínculo cadastral e características da importação IDEB ${anoRef}.`}
         borderTop
       />
       <div data-pres-slide="alunos-qualidade" className="space-y-5">

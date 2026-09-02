@@ -12,40 +12,23 @@ import (
 )
 
 // =========================================================================
-// Perfil dos Alunos e Resultados — IDEB 2023 (IDEB-04)
+// Perfil dos Alunos e Resultados — IDEB (multi-ano)
 //
-// Endpoint analítico que lê EXCLUSIVAMENTE a tabela ideb_resultados (carga
-// IDEB-03B) e devolve agregações para o bloco "Resultados e Desempenho" da aba
-// "Perfil dos Alunos e Resultados":
+// Endpoint analítico que lê EXCLUSIVAMENTE a tabela ideb_resultados e devolve
+// agregações para o bloco "Resultados e Desempenho" da aba "Perfil dos Alunos
+// e Resultados":
 //   GET /v1/admin/analytics/perfil-alunos-resultados/ideb
 //
-// Caminho sob o prefixo /v1/admin/analytics/* (CLAUDE.md), protegido por JWT no
-// grupo `protected` de main.go.
-//
-// Regras metodológicas (docs/dashboard/perfil-alunos-resultados-ideb-2023.md):
-//   * IDEB ausente é NULL, NUNCA zero — ausência é cobertura/elegibilidade.
-//   * `sem_ideb_divulgado` não é desempenho ruim.
-//   * Não há ranking geral misturando etapas: todo ranking é particionado por
-//     etapa (top-N por etapa) e respeita o filtro de etapa quando presente.
-//   * Média simples: AVG(ideb) apenas com ideb IS NOT NULL.
-//   * Média ponderada: SUM(ideb * total_avaliado) / SUM(total_avaliado), apenas
-//     com ideb IS NOT NULL e total_avaliado > 0.
-//   * Agregações por DRE/município são cálculo do dashboard, NÃO IDEB oficial
-//     agregado do INEP.
-//   * percentual_avaliado > 100 é preservado e exposto em `qualidade`.
-//   * NÃO usa census_responses.data nem /v1/admin/indicadores-metrics.
-//   * Filtros territoriais (dre/municipio/zona/regiao_integracao) só funcionam
-//     via LEFT JOIN schools; quando aplicados, registros sem school_id ficam
-//     naturalmente fora do recorte. Sem filtro territorial, sem_match_inep é
-//     mantido.
+// Suporta múltiplos anos (2023, 2025, etc.) via parâmetro `ano`.
 // =========================================================================
 
 const (
-	idebFonteMetodologica   = "https://download.inep.gov.br/ideb/nota_informativa_ideb_2023.pdf"
-	idebFonteArquivoPadrao  = "ideb_2023_iniciais_finais_medio.xlsx"
-	idebGrao                = "INEP × etapa × ano"
-	idebFaixaSemIdeb        = "Sem IDEB divulgado"
-	idebRankingLimitDefault = 10
+	DefaultIdebAno           = 2023
+	idebFonteMetodologica    = "https://download.inep.gov.br/ideb/nota_informativa_ideb_%d.pdf"
+	idebFonteArquivoPadrao   = "ideb_%d_iniciais_finais_medio.xlsx"
+	idebGrao                 = "INEP × etapa × ano"
+	idebFaixaSemIdeb         = "Sem IDEB divulgado"
+	idebRankingLimitDefault  = 10
 )
 
 // Domínios válidos dos filtros enumerados (validação 400 em valor inválido).
@@ -125,9 +108,9 @@ func (f idebFilters) args() []any {
 }
 
 // parseIdebFilters lê e VALIDA os filtros da query string. Valores fora do
-// domínio enumerado resultam em erro (HTTP 400). Ano default = 2023.
+// domínio enumerado resultam em erro (HTTP 400). Ano default = DefaultIdebAno.
 func parseIdebFilters(q url.Values) (idebFilters, error) {
-	f := idebFilters{Ano: 2023}
+	f := idebFilters{Ano: DefaultIdebAno}
 
 	if s := strings.TrimSpace(q.Get("ano")); s != "" {
 		n, err := strconv.Atoi(s)
@@ -237,6 +220,7 @@ type IdebResumo struct {
 	RegistrosSemMatchSchools      int      `json:"registros_sem_match_schools"`
 	IdebMedioSimples              *float64 `json:"ideb_medio_simples"`
 	IdebMedioPonderado            *float64 `json:"ideb_medio_ponderado"`
+	TotalPresentes                *int     `json:"total_presentes"`
 }
 
 type IdebPorEtapa struct {
@@ -481,9 +465,10 @@ func (app *application) AdminAnalyticsPerfilAlunosResultadosIDEB(w http.Response
 func (app *application) idebResumo(ctx context.Context, f idebFilters, res *IdebResumo) error {
 	db := app.models.Schools.DB
 	var (
-		mediaSimples sql.NullFloat64
-		somaProduto  float64
-		somaPeso     float64
+		mediaSimples   sql.NullFloat64
+		somaProduto    float64
+		somaPeso       float64
+		totalPresentes sql.NullInt64
 	)
 	err := db.QueryRowContext(ctx, `
 		SELECT
@@ -495,7 +480,8 @@ func (app *application) idebResumo(ctx context.Context, f idebFilters, res *Ideb
 			COUNT(*) FILTER (WHERE ir.school_id IS NULL),
 			ROUND(AVG(ir.ideb) FILTER (WHERE ir.ideb IS NOT NULL)::numeric, 2),
 			COALESCE(SUM(ir.ideb * ir.total_avaliado) FILTER (WHERE ir.ideb IS NOT NULL AND ir.total_avaliado > 0), 0),
-			COALESCE(SUM(ir.total_avaliado) FILTER (WHERE ir.ideb IS NOT NULL AND ir.total_avaliado > 0), 0)
+			COALESCE(SUM(ir.total_avaliado) FILTER (WHERE ir.ideb IS NOT NULL AND ir.total_avaliado > 0), 0),
+			SUM(ir.presentes)
 		`+idebFromWhere,
 		f.args()...,
 	).Scan(
@@ -508,6 +494,7 @@ func (app *application) idebResumo(ctx context.Context, f idebFilters, res *Ideb
 		&mediaSimples,
 		&somaProduto,
 		&somaPeso,
+		&totalPresentes,
 	)
 	if err != nil {
 		return err
@@ -516,6 +503,10 @@ func (app *application) idebResumo(ctx context.Context, f idebFilters, res *Ideb
 	res.CoberturaIdebPercentual = idebCoberturaPercentual(res.RegistrosComIdeb, res.TotalRegistros)
 	res.IdebMedioSimples = idebNullFloatPtr(mediaSimples)
 	res.IdebMedioPonderado = idebMediaPonderada(somaProduto, somaPeso)
+	if totalPresentes.Valid {
+		v := int(totalPresentes.Int64)
+		res.TotalPresentes = &v
+	}
 	return nil
 }
 
@@ -841,13 +832,13 @@ func (app *application) idebMetadados(ctx context.Context, f idebFilters) (IdebM
 	if err != nil {
 		return IdebMetadados{}, err
 	}
-	fonte := idebFonteArquivoPadrao
+	fonte := fmt.Sprintf(idebFonteArquivoPadrao, f.Ano)
 	if fonteArquivo.Valid && strings.TrimSpace(fonteArquivo.String) != "" {
 		fonte = fonteArquivo.String
 	}
 	return IdebMetadados{
 		FonteArquivo:      fonte,
-		FonteMetodologica: idebFonteMetodologica,
+		FonteMetodologica: fmt.Sprintf(idebFonteMetodologica, f.Ano),
 		Grao:              idebGrao,
 		ImportBatchID:     idebNullStringPtr(batchID),
 		Observacoes: []string{

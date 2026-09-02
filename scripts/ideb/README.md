@@ -1,27 +1,26 @@
-# Importador IDEB 2023 — `scripts/ideb/`
+# Importador IDEB — `scripts/ideb/`
 
-Importador **versionado** da base oficial **IDEB 2023** (INEP) para a tabela
+Importador **multi-ano** da base oficial do **IDEB** (INEP) para a tabela
 `ideb_resultados` do dashboard próprio do Censo Operacional e Estrutural das
 Escolas da Rede Estadual da SEDUC/PA.
 
-Este utilitário cobre os incrementos **IDEB-03A — Importador e dry-run** e
-**IDEB-03B — apply controlado**. O modo padrão continua sendo o **dry-run**
-(não escreve no banco); a carga real (`--apply`) só roda com as três travas
-combinadas `--apply --confirm-apply --batch-id <id>`.
+Suporta múltiplos anos (2023, 2025, etc.) via parâmetro `--ano`. O ano define
+automaticamente o nome da aba, a coluna de IDEB e o mapeamento de colunas.
 
 > Referência metodológica:
-> [`docs/dashboard/perfil-alunos-resultados-ideb-2023.md`](../../docs/dashboard/perfil-alunos-resultados-ideb-2023.md)
-> e a migration [`infra/migrations/0017_create_ideb_resultados.sql`](../../infra/migrations/0017_create_ideb_resultados.sql).
+> - IDEB 2023: [`docs/dashboard/perfil-alunos-resultados-ideb-2023.md`](../../docs/dashboard/perfil-alunos-resultados-ideb-2023.md)
+> - IDEB 2025: [`docs/dashboard/perfil-alunos-resultados-ideb-2025.md`](../../docs/dashboard/perfil-alunos-resultados-ideb-2025.md)
+> - Migration: [`infra/migrations/0017_create_ideb_resultados.sql`](../../infra/migrations/0017_create_ideb_resultados.sql)
 
 ## O que o importador faz
 
-1. lê a planilha oficial do IDEB 2023 (aba `IDEB 2023`);
+1. lê a planilha oficial do IDEB (aba `IDEB {ano}`);
 2. valida as colunas esperadas (falha clara se faltar coluna);
 3. normaliza etapa, INEP e campos numéricos;
 4. classifica `status_ideb` e `detalhe_status_ideb`;
 5. resolve o vínculo com `schools` por `codigo_inep`;
 6. em dry-run, gera um relatório local (Markdown + JSON);
-7. em apply (IDEB-03B), carrega os dados via `INSERT ... ON CONFLICT DO UPDATE`.
+7. em apply, carrega os dados via `INSERT ... ON CONFLICT DO UPDATE`.
 
 ## Dados brutos ficam em `_local/` (NÃO versionado)
 
@@ -57,10 +56,15 @@ ao backend Go nem ao frontend.
 ## Como executar o dry-run
 
 ```bash
+# IDEB 2023:
 python scripts/ideb/import_ideb_resultados.py \
   --source _local/ideb/fontes/ideb_2023_iniciais_finais_medio.xlsx \
-  --ano 2023 \
-  --dry-run
+  --ano 2023 --dry-run
+
+# IDEB 2025:
+python scripts/ideb/import_ideb_resultados.py \
+  --source _local/ideb/fontes/ideb_2025_iniciais_finais_medio.xlsx \
+  --ano 2025 --dry-run
 ```
 
 O modo padrão é seguro: se nenhum modo for informado, o script assume
@@ -94,17 +98,18 @@ Comportamento conforme a disponibilidade de banco:
   match por `codigo_inep`, sem escrever nada;
 - **apply sem banco** → falha com mensagem clara.
 
-## Carga real (IDEB-03B) — habilitada, sob travas
+## Carga real — habilitada, sob travas
 
 A carga real está habilitada, mas protegida por **três travas combinadas**. O
 fluxo é:
 
 ```bash
+# IDEB 2025:
 python scripts/ideb/import_ideb_resultados.py \
-  --source _local/ideb/fontes/ideb_2023_iniciais_finais_medio.xlsx \
-  --ano 2023 \
+  --source _local/ideb/fontes/ideb_2025_iniciais_finais_medio.xlsx \
+  --ano 2025 \
   --apply --confirm-apply \
-  --batch-id ideb_2023_YYYYMMDD_HHMMSS
+  --batch-id ideb_2025_YYYYMMDD_HHMMSS
 ```
 
 Regras de segurança da carga:

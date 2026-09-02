@@ -553,7 +553,7 @@ export interface FiltrosOpcoes {
   escolas: FiltrosEscolaItem[];
 }
 
-// ── Perfil dos Alunos e Resultados — IDEB 2023 (IDEB-05) ────────────────────
+// ── Perfil dos Alunos e Resultados — IDEB (IDEB-05) ─────────────────────────
 // Payload de GET /v1/admin/analytics/perfil-alunos-resultados/ideb.
 // Espelha exatamente o contrato definido em
 // api/cmd/api/analytics_perfil_alunos_ideb.go. IDEB ausente é `null`

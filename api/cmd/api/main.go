@@ -41,6 +41,7 @@ var criticalAdministrativeMigrations = map[string]struct{}{
 	"0019_create_dres_master.sql":        {},
 	"0020_dre_canonical_relations.sql":   {},
 	"0021_dre_normalized_uniqueness.sql": {},
+	"0024_admin_users_auth_version.sql":  {},
 }
 
 type config struct {

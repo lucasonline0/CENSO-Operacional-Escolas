@@ -103,13 +103,13 @@ func TestIdebArgsOrder(t *testing.T) {
 		Ano: 2023, Etapa: "anos_finais", DRE: "d", Municipio: "m", Zona: "z",
 		RegiaoIntegracao: "ri", StatusIdeb: "com_ideb", DetalheStatusIdeb: "outro",
 		StatusVinculo: "match_inep", SomenteComIdeb: true,
-		SchoolID: 42, CodigoINEP: "15000123", RequireLinkedSchool: true,
+		SchoolID: 42, CodigoINEP: "15000123", RequireLinkedSchool: true, DREID: 77,
 	}
 	args := f.args()
-	if len(args) != 13 {
-		t.Fatalf("esperava 13 args, obtive %d", len(args))
+	if len(args) != 14 {
+		t.Fatalf("esperava 14 args, obtive %d", len(args))
 	}
-	if args[0] != 2023 || args[1] != "anos_finais" || args[9] != true || args[10] != 42 || args[11] != "15000123" || args[12] != true {
+	if args[0] != 2023 || args[1] != "anos_finais" || args[9] != true || args[10] != 42 || args[11] != "15000123" || args[12] != true || args[13] != 77 {
 		t.Fatalf("ordem dos args inesperada: %+v", args)
 	}
 }

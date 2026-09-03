@@ -83,6 +83,9 @@ func setupDRELifecycleTestDB(t *testing.T, applyCanonicalMigration bool) (*sql.D
 		if _, err := db.Exec(canonicalMigrationSQL(t)); err != nil {
 			t.Fatalf("apply canonical migration for lifecycle test: %v", err)
 		}
+		if _, err := db.Exec(authVersionMigrationSQL(t)); err != nil {
+			t.Fatalf("apply auth_version migration for lifecycle test: %v", err)
+		}
 	}
 
 	return db, models.NewModels(db)

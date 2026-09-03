@@ -141,6 +141,10 @@ func (m *DREModel) GetByNome(ctx context.Context, nome string) (*DRE, error) {
 
 // List retorna todas as DREs cadastradas, ordenadas pelo nome.
 func (m *DREModel) List(ctx context.Context) ([]*DRE, error) {
+	if m.DB == nil {
+		return nil, errors.New("database not configured")
+	}
+
 	query := `
 		SELECT id, nome, COALESCE(sigla, ''), COALESCE(municipio_sede, ''), COALESCE(polo, ''),
 		       COALESCE(gestor_nome, ''), COALESCE(email, ''), COALESCE(telefone, ''),

@@ -16,6 +16,7 @@ type RuntimeAdminAccess struct {
 	PasswordHash string
 	Role         string
 	UserActive   bool
+	AuthVersion  int
 	DREID        int
 	DRE          string
 	DREActive    bool
@@ -27,6 +28,11 @@ func (m *AdminUserModel) getRuntimeAccess(ctx context.Context, byID bool, id int
 	}
 
 	canonical, err := hasColumn(ctx, m.DB, "admin_users", "dre_id")
+	if err != nil {
+		return nil, err
+	}
+
+	hasAuthVer, err := hasColumn(ctx, m.DB, "admin_users", "auth_version")
 	if err != nil {
 		return nil, err
 	}
@@ -51,9 +57,14 @@ func (m *AdminUserModel) getRuntimeAccess(ctx context.Context, byID bool, id int
 		predicate = "LOWER(u.username) = LOWER($1)"
 	}
 
+	authVerCol := "1 AS auth_version"
+	if hasAuthVer {
+		authVerCol = "COALESCE(u.auth_version, 1)"
+	}
+
 	if canonical {
 		query = `
-			SELECT u.id, u.username, u.password_hash, u.role, u.active,
+			SELECT u.id, u.username, u.password_hash, u.role, u.active, ` + authVerCol + `,
 			       COALESCE(d.id, 0), COALESCE(d.nome, ''), COALESCE(d.ativa, false)
 			FROM admin_users u
 			LEFT JOIN dres d ON d.id = u.dre_id
@@ -63,7 +74,7 @@ func (m *AdminUserModel) getRuntimeAccess(ctx context.Context, byID bool, id int
 		// exclusivamente contra dres e exige exatamente uma correspondência
 		// normalizada; schools nunca participa da identidade/autorização.
 		query = `
-			SELECT u.id, u.username, u.password_hash, u.role, u.active,
+			SELECT u.id, u.username, u.password_hash, u.role, u.active, ` + authVerCol + `,
 			       COALESCE(d.id, 0), COALESCE(d.nome, ''), COALESCE(d.ativa, false)
 			FROM admin_users u
 			LEFT JOIN LATERAL (
@@ -82,6 +93,7 @@ func (m *AdminUserModel) getRuntimeAccess(ctx context.Context, byID bool, id int
 		&access.PasswordHash,
 		&access.Role,
 		&access.UserActive,
+		&access.AuthVersion,
 		&access.DREID,
 		&access.DRE,
 		&access.DREActive,

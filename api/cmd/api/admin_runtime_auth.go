@@ -21,11 +21,12 @@ import (
 // usuário confiável em tokens novos; DRE/DREID são snapshots informativos e o
 // escopo efetivo é sempre reconstruído do PostgreSQL a cada request.
 type runtimeAdminClaims struct {
-	UserID   int    `json:"user_id,omitempty"`
-	DREID    int    `json:"dre_id,omitempty"`
-	Username string `json:"username"`
-	Role     string `json:"role"`
-	DRE      string `json:"dre,omitempty"`
+	UserID      int    `json:"user_id,omitempty"`
+	DREID       int    `json:"dre_id,omitempty"`
+	Username    string `json:"username"`
+	Role        string `json:"role"`
+	DRE         string `json:"dre,omitempty"`
+	AuthVersion int    `json:"auth_version,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -49,7 +50,7 @@ func signRuntimeAdminToken(claims runtimeAdminClaims) (string, error) {
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(jwtSecret())
 }
 
-// AdminLoginRuntime emite tokens com user_id/dre_id para DREs e bloqueia login
+// AdminLoginRuntime emite tokens com user_id/dre_id/auth_version para DREs e bloqueia login
 // quando o usuário ou a entidade mestre da DRE estiver inativa. O admin legado
 // por ENV continua sem dependência do banco.
 func (app *application) AdminLoginRuntime(w http.ResponseWriter, r *http.Request) {
@@ -120,6 +121,11 @@ func (app *application) AdminLoginRuntime(w http.ResponseWriter, r *http.Request
 			return
 		}
 
+		authVer := access.AuthVersion
+		if authVer <= 0 {
+			authVer = 1
+		}
+
 		registered.Subject = "admin-user:" + strconv.Itoa(access.ID)
 		claims = runtimeAdminClaims{
 			UserID:           access.ID,
@@ -127,6 +133,7 @@ func (app *application) AdminLoginRuntime(w http.ResponseWriter, r *http.Request
 			Username:         access.Username,
 			Role:             RoleDRE,
 			DRE:              access.DRE,
+			AuthVersion:      authVer,
 			RegisteredClaims: registered,
 		}
 	}
@@ -191,6 +198,26 @@ func (app *application) resolveRuntimeDREScope(ctx context.Context, claims *runt
 	}
 	if claims.UserID > 0 && claims.Subject != "admin-user:"+strconv.Itoa(access.ID) {
 		return AdminAccessScope{}, fmt.Errorf("subject incompatível com user_id")
+	}
+
+	// Validação de auth_version (versão de credencial/sessão):
+	// Para tokens com auth_version explícita (> 0), mismatch com o banco revoga a sessão imediatamente.
+	// Para tokens legados sem auth_version (claims.AuthVersion == 0), se a conta no banco já
+	// tiver auth_version > 1 (indicando que a senha foi alterada após a introdução da migration),
+	// o token legado é revogado imediatamente; caso contrário (auth_version == 1), é tolerado
+	// durante a janela de transição.
+	currentAuthVer := access.AuthVersion
+	if currentAuthVer <= 0 {
+		currentAuthVer = 1
+	}
+	if claims.AuthVersion > 0 {
+		if claims.AuthVersion != currentAuthVer {
+			return AdminAccessScope{}, fmt.Errorf("sessão DRE revogada por alteração de credencial")
+		}
+	} else {
+		if currentAuthVer > 1 {
+			return AdminAccessScope{}, fmt.Errorf("sessão DRE revogada por alteração de credencial")
+		}
 	}
 
 	return AdminAccessScope{

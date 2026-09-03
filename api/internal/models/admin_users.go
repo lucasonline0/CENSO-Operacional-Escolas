@@ -28,6 +28,7 @@ type AdminUser struct {
 	DRE          string    `json:"dre"`
 	DREID        int       `json:"dre_id,omitempty"`
 	Active       bool      `json:"active"`
+	AuthVersion  int       `json:"auth_version,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
@@ -109,16 +110,36 @@ func (m *AdminUserModel) createForCanonicalDRE(ctx context.Context, username, pl
 		return nil, fmt.Errorf("erro ao gerar hash da senha: %w", err)
 	}
 
-	query := `
-		INSERT INTO admin_users (username, password_hash, role, dre_id, active, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, true, NOW(), NOW())
-		RETURNING id, username, role, COALESCE(dre, ''), dre_id, active, created_at, updated_at`
+	hasAuthVer, err := hasColumn(ctx, m.DB, "admin_users", "auth_version")
+	if err != nil {
+		return nil, err
+	}
 
-	var u AdminUser
-	u.PasswordHash = string(hash)
-	err = m.DB.QueryRowContext(ctx, query, username, u.PasswordHash, role, dre.ID).Scan(
-		&u.ID, &u.Username, &u.Role, &u.DRE, &u.DREID, &u.Active, &u.CreatedAt, &u.UpdatedAt,
+	var (
+		query string
+		u     AdminUser
 	)
+	u.PasswordHash = string(hash)
+
+	if hasAuthVer {
+		query = `
+			INSERT INTO admin_users (username, password_hash, role, dre_id, active, auth_version, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, true, 1, NOW(), NOW())
+			RETURNING id, username, role, COALESCE(dre, ''), dre_id, active, COALESCE(auth_version, 1), created_at, updated_at`
+		err = m.DB.QueryRowContext(ctx, query, username, u.PasswordHash, role, dre.ID).Scan(
+			&u.ID, &u.Username, &u.Role, &u.DRE, &u.DREID, &u.Active, &u.AuthVersion, &u.CreatedAt, &u.UpdatedAt,
+		)
+	} else {
+		query = `
+			INSERT INTO admin_users (username, password_hash, role, dre_id, active, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, true, NOW(), NOW())
+			RETURNING id, username, role, COALESCE(dre, ''), dre_id, active, created_at, updated_at`
+		u.AuthVersion = 1
+		err = m.DB.QueryRowContext(ctx, query, username, u.PasswordHash, role, dre.ID).Scan(
+			&u.ID, &u.Username, &u.Role, &u.DRE, &u.DREID, &u.Active, &u.CreatedAt, &u.UpdatedAt,
+		)
+	}
+
 	if err != nil {
 		msg := strings.ToLower(err.Error())
 		if strings.Contains(msg, "unique") || strings.Contains(msg, "duplicate") {
@@ -132,19 +153,39 @@ func (m *AdminUserModel) createForCanonicalDRE(ctx context.Context, username, pl
 // GetActiveByUsername localiza um usuario ativo pelo username. O nome da DRE
 // retornado e derivado do dre_id sempre que houver relacao canonica.
 func (m *AdminUserModel) GetActiveByUsername(ctx context.Context, username string) (*AdminUser, error) {
-	query := `
-		SELECT u.id, u.username, u.password_hash, u.role,
-		       COALESCE(d.nome, u.dre, ''), COALESCE(u.dre_id, 0),
-		       u.active, u.created_at, u.updated_at
-		FROM admin_users u
-		LEFT JOIN dres d ON d.id = u.dre_id
-		WHERE LOWER(u.username) = LOWER($1) AND u.active = true`
+	hasAuthVer, err := hasColumn(ctx, m.DB, "admin_users", "auth_version")
+	if err != nil {
+		return nil, err
+	}
 
 	var u AdminUser
-	err := m.DB.QueryRowContext(ctx, query, strings.TrimSpace(username)).Scan(
-		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.DRE, &u.DREID,
-		&u.Active, &u.CreatedAt, &u.UpdatedAt,
-	)
+	if hasAuthVer {
+		query := `
+			SELECT u.id, u.username, u.password_hash, u.role,
+			       COALESCE(d.nome, u.dre, ''), COALESCE(u.dre_id, 0),
+			       u.active, COALESCE(u.auth_version, 1), u.created_at, u.updated_at
+			FROM admin_users u
+			LEFT JOIN dres d ON d.id = u.dre_id
+			WHERE LOWER(u.username) = LOWER($1) AND u.active = true`
+		err = m.DB.QueryRowContext(ctx, query, strings.TrimSpace(username)).Scan(
+			&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.DRE, &u.DREID,
+			&u.Active, &u.AuthVersion, &u.CreatedAt, &u.UpdatedAt,
+		)
+	} else {
+		query := `
+			SELECT u.id, u.username, u.password_hash, u.role,
+			       COALESCE(d.nome, u.dre, ''), COALESCE(u.dre_id, 0),
+			       u.active, u.created_at, u.updated_at
+			FROM admin_users u
+			LEFT JOIN dres d ON d.id = u.dre_id
+			WHERE LOWER(u.username) = LOWER($1) AND u.active = true`
+		u.AuthVersion = 1
+		err = m.DB.QueryRowContext(ctx, query, strings.TrimSpace(username)).Scan(
+			&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.DRE, &u.DREID,
+			&u.Active, &u.CreatedAt, &u.UpdatedAt,
+		)
+	}
+
 	if err == sql.ErrNoRows {
 		return nil, ErrUserNotFound
 	}
@@ -156,19 +197,39 @@ func (m *AdminUserModel) GetActiveByUsername(ctx context.Context, username strin
 
 // GetByUsername localiza um usuario ativo ou inativo pelo username.
 func (m *AdminUserModel) GetByUsername(ctx context.Context, username string) (*AdminUser, error) {
-	query := `
-		SELECT u.id, u.username, u.password_hash, u.role,
-		       COALESCE(d.nome, u.dre, ''), COALESCE(u.dre_id, 0),
-		       u.active, u.created_at, u.updated_at
-		FROM admin_users u
-		LEFT JOIN dres d ON d.id = u.dre_id
-		WHERE LOWER(u.username) = LOWER($1)`
+	hasAuthVer, err := hasColumn(ctx, m.DB, "admin_users", "auth_version")
+	if err != nil {
+		return nil, err
+	}
 
 	var u AdminUser
-	err := m.DB.QueryRowContext(ctx, query, strings.TrimSpace(username)).Scan(
-		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.DRE, &u.DREID,
-		&u.Active, &u.CreatedAt, &u.UpdatedAt,
-	)
+	if hasAuthVer {
+		query := `
+			SELECT u.id, u.username, u.password_hash, u.role,
+			       COALESCE(d.nome, u.dre, ''), COALESCE(u.dre_id, 0),
+			       u.active, COALESCE(u.auth_version, 1), u.created_at, u.updated_at
+			FROM admin_users u
+			LEFT JOIN dres d ON d.id = u.dre_id
+			WHERE LOWER(u.username) = LOWER($1)`
+		err = m.DB.QueryRowContext(ctx, query, strings.TrimSpace(username)).Scan(
+			&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.DRE, &u.DREID,
+			&u.Active, &u.AuthVersion, &u.CreatedAt, &u.UpdatedAt,
+		)
+	} else {
+		query := `
+			SELECT u.id, u.username, u.password_hash, u.role,
+			       COALESCE(d.nome, u.dre, ''), COALESCE(u.dre_id, 0),
+			       u.active, u.created_at, u.updated_at
+			FROM admin_users u
+			LEFT JOIN dres d ON d.id = u.dre_id
+			WHERE LOWER(u.username) = LOWER($1)`
+		u.AuthVersion = 1
+		err = m.DB.QueryRowContext(ctx, query, strings.TrimSpace(username)).Scan(
+			&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.DRE, &u.DREID,
+			&u.Active, &u.CreatedAt, &u.UpdatedAt,
+		)
+	}
+
 	if err == sql.ErrNoRows {
 		return nil, ErrUserNotFound
 	}
@@ -240,19 +301,40 @@ func (m *AdminUserModel) GetByID(ctx context.Context, id int) (*AdminUser, error
 	if id <= 0 {
 		return nil, ErrUserNotFound
 	}
-	query := `
-		SELECT u.id, u.username, u.password_hash, u.role,
-		       COALESCE(d.nome, u.dre, ''), COALESCE(u.dre_id, 0),
-		       u.active, u.created_at, u.updated_at
-		FROM admin_users u
-		LEFT JOIN dres d ON d.id = u.dre_id
-		WHERE u.id = $1`
+
+	hasAuthVer, err := hasColumn(ctx, m.DB, "admin_users", "auth_version")
+	if err != nil {
+		return nil, err
+	}
 
 	var u AdminUser
-	err := m.DB.QueryRowContext(ctx, query, id).Scan(
-		&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.DRE, &u.DREID,
-		&u.Active, &u.CreatedAt, &u.UpdatedAt,
-	)
+	if hasAuthVer {
+		query := `
+			SELECT u.id, u.username, u.password_hash, u.role,
+			       COALESCE(d.nome, u.dre, ''), COALESCE(u.dre_id, 0),
+			       u.active, COALESCE(u.auth_version, 1), u.created_at, u.updated_at
+			FROM admin_users u
+			LEFT JOIN dres d ON d.id = u.dre_id
+			WHERE u.id = $1`
+		err = m.DB.QueryRowContext(ctx, query, id).Scan(
+			&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.DRE, &u.DREID,
+			&u.Active, &u.AuthVersion, &u.CreatedAt, &u.UpdatedAt,
+		)
+	} else {
+		query := `
+			SELECT u.id, u.username, u.password_hash, u.role,
+			       COALESCE(d.nome, u.dre, ''), COALESCE(u.dre_id, 0),
+			       u.active, u.created_at, u.updated_at
+			FROM admin_users u
+			LEFT JOIN dres d ON d.id = u.dre_id
+			WHERE u.id = $1`
+		u.AuthVersion = 1
+		err = m.DB.QueryRowContext(ctx, query, id).Scan(
+			&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.DRE, &u.DREID,
+			&u.Active, &u.CreatedAt, &u.UpdatedAt,
+		)
+	}
+
 	if err == sql.ErrNoRows {
 		return nil, ErrUserNotFound
 	}
@@ -262,7 +344,8 @@ func (m *AdminUserModel) GetByID(ctx context.Context, id int) (*AdminUser, error
 	return &u, nil
 }
 
-// UpdatePassword atualiza a senha de um usuario existente usando bcrypt pelo username.
+// UpdatePassword atualiza a senha de um usuario existente usando bcrypt pelo username,
+// incrementando auth_version de forma atomica para invalidar tokens anteriores.
 func (m *AdminUserModel) UpdatePassword(ctx context.Context, username string, newPlainPassword string) error {
 	username = strings.TrimSpace(username)
 	if len(newPlainPassword) < 6 {
@@ -279,12 +362,23 @@ func (m *AdminUserModel) UpdatePassword(ctx context.Context, username string, ne
 		return fmt.Errorf("erro ao gerar hash da senha: %w", err)
 	}
 
-	query := `UPDATE admin_users SET password_hash = $1, updated_at = NOW() WHERE id = $2`
+	hasAuthVer, err := hasColumn(ctx, m.DB, "admin_users", "auth_version")
+	if err != nil {
+		return err
+	}
+
+	var query string
+	if hasAuthVer {
+		query = `UPDATE admin_users SET password_hash = $1, auth_version = COALESCE(auth_version, 1) + 1, updated_at = NOW() WHERE id = $2`
+	} else {
+		query = `UPDATE admin_users SET password_hash = $1, updated_at = NOW() WHERE id = $2`
+	}
 	_, err = m.DB.ExecContext(ctx, query, string(hash), u.ID)
 	return err
 }
 
-// UpdatePasswordByID atualiza a senha de um usuario existente usando bcrypt pelo ID.
+// UpdatePasswordByID atualiza a senha de um usuario existente usando bcrypt pelo ID,
+// incrementando auth_version de forma atomica para invalidar tokens anteriores.
 func (m *AdminUserModel) UpdatePasswordByID(ctx context.Context, id int, newPlainPassword string) error {
 	if id <= 0 {
 		return ErrUserNotFound
@@ -298,7 +392,18 @@ func (m *AdminUserModel) UpdatePasswordByID(ctx context.Context, id int, newPlai
 		return fmt.Errorf("erro ao gerar hash da senha: %w", err)
 	}
 
-	query := `UPDATE admin_users SET password_hash = $1, updated_at = NOW() WHERE id = $2`
+	hasAuthVer, err := hasColumn(ctx, m.DB, "admin_users", "auth_version")
+	if err != nil {
+		return err
+	}
+
+	var query string
+	if hasAuthVer {
+		query = `UPDATE admin_users SET password_hash = $1, auth_version = COALESCE(auth_version, 1) + 1, updated_at = NOW() WHERE id = $2`
+	} else {
+		query = `UPDATE admin_users SET password_hash = $1, updated_at = NOW() WHERE id = $2`
+	}
+
 	result, err := m.DB.ExecContext(ctx, query, string(hash), id)
 	if err != nil {
 		return err
@@ -350,13 +455,33 @@ func (m *AdminUserModel) SetActiveByID(ctx context.Context, id int, active bool)
 // List retorna todas as contas cadastradas sem expor o hash da senha e sempre
 // prefere o nome atual da DRE resolvido pela FK canonica.
 func (m *AdminUserModel) List(ctx context.Context) ([]*AdminUser, error) {
-	query := `
-		SELECT u.id, u.username, u.role,
-		       COALESCE(d.nome, u.dre, ''), COALESCE(u.dre_id, 0),
-		       u.active, u.created_at, u.updated_at
-		FROM admin_users u
-		LEFT JOIN dres d ON d.id = u.dre_id
-		ORDER BY u.username`
+	if m.DB == nil {
+		return nil, errors.New("database not configured")
+	}
+
+	hasAuthVer, err := hasColumn(ctx, m.DB, "admin_users", "auth_version")
+	if err != nil {
+		return nil, err
+	}
+
+	var query string
+	if hasAuthVer {
+		query = `
+			SELECT u.id, u.username, u.role,
+			       COALESCE(d.nome, u.dre, ''), COALESCE(u.dre_id, 0),
+			       u.active, COALESCE(u.auth_version, 1), u.created_at, u.updated_at
+			FROM admin_users u
+			LEFT JOIN dres d ON d.id = u.dre_id
+			ORDER BY u.username`
+	} else {
+		query = `
+			SELECT u.id, u.username, u.role,
+			       COALESCE(d.nome, u.dre, ''), COALESCE(u.dre_id, 0),
+			       u.active, u.created_at, u.updated_at
+			FROM admin_users u
+			LEFT JOIN dres d ON d.id = u.dre_id
+			ORDER BY u.username`
+	}
 
 	rows, err := m.DB.QueryContext(ctx, query)
 	if err != nil {
@@ -367,11 +492,21 @@ func (m *AdminUserModel) List(ctx context.Context) ([]*AdminUser, error) {
 	users := make([]*AdminUser, 0)
 	for rows.Next() {
 		var u AdminUser
-		if err := rows.Scan(
-			&u.ID, &u.Username, &u.Role, &u.DRE, &u.DREID,
-			&u.Active, &u.CreatedAt, &u.UpdatedAt,
-		); err != nil {
-			return nil, err
+		if hasAuthVer {
+			if err := rows.Scan(
+				&u.ID, &u.Username, &u.Role, &u.DRE, &u.DREID,
+				&u.Active, &u.AuthVersion, &u.CreatedAt, &u.UpdatedAt,
+			); err != nil {
+				return nil, err
+			}
+		} else {
+			u.AuthVersion = 1
+			if err := rows.Scan(
+				&u.ID, &u.Username, &u.Role, &u.DRE, &u.DREID,
+				&u.Active, &u.CreatedAt, &u.UpdatedAt,
+			); err != nil {
+				return nil, err
+			}
 		}
 		users = append(users, &u)
 	}

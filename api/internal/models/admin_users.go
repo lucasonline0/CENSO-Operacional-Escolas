@@ -455,6 +455,10 @@ func (m *AdminUserModel) SetActiveByID(ctx context.Context, id int, active bool)
 // List retorna todas as contas cadastradas sem expor o hash da senha e sempre
 // prefere o nome atual da DRE resolvido pela FK canonica.
 func (m *AdminUserModel) List(ctx context.Context) ([]*AdminUser, error) {
+	if m.DB == nil {
+		return nil, errors.New("database not configured")
+	}
+
 	hasAuthVer, err := hasColumn(ctx, m.DB, "admin_users", "auth_version")
 	if err != nil {
 		return nil, err

@@ -18,6 +18,15 @@ func canonicalMigrationSQL(t *testing.T) string {
 	return string(content)
 }
 
+func authVersionMigrationSQL(t *testing.T) string {
+	t.Helper()
+	content, err := fs.ReadFile(migrationsFS, "migrations/0024_admin_users_auth_version.sql")
+	if err != nil {
+		t.Fatalf("read auth_version migration: %v", err)
+	}
+	return string(content)
+}
+
 func setupDRECanonicalSchema(t *testing.T) *sql.Tx {
 	t.Helper()
 	db := openDREIntegrationDB(t)

@@ -274,7 +274,7 @@ const NAV_INDICATORS: NavItem[] = [
   {
     id: "alunos", label: "Perfil dos Alunos e Resultados", Icon: Activity,
     subItems: [
-      { label: "Resumo IDEB 2023", anchor: "sec-alunos-resumo" },
+      { label: "Resumo IDEB", anchor: "sec-alunos-resumo" },
       { label: "Resultado por Etapa", anchor: "sec-alunos-etapa" },
       { label: "Distribuição por Faixas", anchor: "sec-alunos-faixas" },
       { label: "Ranking por Escola", anchor: "sec-alunos-ranking" },

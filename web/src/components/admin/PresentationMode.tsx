@@ -200,7 +200,7 @@ const SLIDES: PresentationSlide[] = [
     contentId: "servicos-governanca-aviso",
   },
 
-  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Resumo IDEB 2023", [
+  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Resumo IDEB", [
     ["alunos-resumo-cards", "Indicadores gerais"],
   ]),
   ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Resultado por Etapa", [

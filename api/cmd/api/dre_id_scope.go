@@ -7,9 +7,9 @@ import (
 
 // canonicalSchoolDREColumnSQL is intentionally schema-compatible with the
 // transitional CI database, which is still initialized only through migration
-// 0019 while #210 is in progress. Production databases that have migration 0020
-// take the canonical branch; the textual branch is reached only when dre_id does
-// not exist at all.
+// 0019 while the canonical CI migration is being completed. Production
+// databases that have migration 0020 take the canonical branch; the textual
+// branch is reached only when dre_id does not exist at all.
 const canonicalSchoolDREColumnSQL = `EXISTS (
 	SELECT 1
 	FROM pg_attribute
@@ -26,10 +26,9 @@ func schoolCanonicalDREIDExpr(alias string) string {
 	return fmt.Sprintf(`NULLIF(to_jsonb(%s)->>'dre_id', '')::int`, alias)
 }
 
-// schoolDRENamePredicate returns a boolean SQL expression that resolves a DRE
-// through dres.id when the canonical column exists. The schools.dre comparison
-// is retained only as a temporary schema-compatibility branch for databases
-// that have not received migration 0020 yet.
+// schoolDRENamePredicate resolves an ADMIN textual filter through the DRE master
+// when the canonical column exists. schools.dre is accepted only on a schema
+// that has not received 0020 yet.
 func schoolDRENamePredicate(alias, nameParam string) string {
 	alias = strings.TrimSpace(alias)
 	nameParam = strings.TrimSpace(nameParam)
@@ -46,9 +45,9 @@ func schoolDRENamePredicate(alias, nameParam string) string {
 )`, canonicalSchoolDREColumnSQL, schoolCanonicalDREIDExpr(alias), nameParam, alias, nameParam)
 }
 
-// schoolDREAuthorizationPredicate is stricter than the ordinary name filter:
-// on a canonical schema a DRE user's scope is compared directly by dres.id.
-// The name is accepted only for the pre-0020 transition schema.
+// schoolDREAuthorizationPredicate is stricter than an ordinary name filter:
+// on a canonical schema a DRE user's scope is compared directly by dre_id. The
+// name parameter exists only to preserve pre-0020 transition compatibility.
 func schoolDREAuthorizationPredicate(alias, dreIDParam, dreNameParam string) string {
 	alias = strings.TrimSpace(alias)
 	return fmt.Sprintf(`(
@@ -59,8 +58,25 @@ func schoolDREAuthorizationPredicate(alias, dreIDParam, dreNameParam string) str
 )`, canonicalSchoolDREColumnSQL, schoolCanonicalDREIDExpr(alias), dreIDParam, alias, dreNameParam)
 }
 
-// schoolDRENameExpr keeps the public API contract textual while deriving that
-// name from the master DRE whenever the canonical relationship exists.
+// schoolDREScopedFilterPredicate selects the correct trust boundary for a
+// request. dreID > 0 means the value came from the authenticated DRE runtime
+// scope, so authorization is by ID. dreID == 0 is the admin path, where a
+// textual query-string filter may optionally resolve through the master DRE.
+func schoolDREScopedFilterPredicate(alias, dreIDParam, dreNameParam string) string {
+	return fmt.Sprintf(`(
+	(%s > 0 AND %s)
+	OR
+	(%s = 0 AND (%s = '' OR %s))
+)`, dreIDParam,
+		schoolDREAuthorizationPredicate(alias, dreIDParam, dreNameParam),
+		dreIDParam, dreNameParam,
+		schoolDRENamePredicate(alias, dreNameParam),
+	)
+}
+
+// schoolDRENameExpr keeps the public API textual while deriving the name from
+// the master DRE whenever the canonical relationship exists. On a canonical
+// schema legacy schools.dre never wins over dre_id, even if forged/divergent.
 func schoolDRENameExpr(alias string) string {
 	alias = strings.TrimSpace(alias)
 	return fmt.Sprintf(`(
@@ -86,10 +102,9 @@ func schoolDREIDExpr(alias string) string {
 )`, canonicalSchoolDREColumnSQL, schoolCanonicalDREIDExpr(alias))
 }
 
-// analyticsDREPredicate is used by the shared analytics view, where only
-// school_id and the legacy textual dre projection are available. On canonical
-// schemas it re-resolves the school through schools.dre_id -> dres.id; the view's
-// textual dre field is ignored for filtering.
+// analyticsDREPredicate is the ADMIN-name equivalent for views that expose
+// school_id plus a legacy textual dre projection. On canonical schemas the view
+// text is ignored and the school is re-resolved through schools.dre_id -> dres.
 func analyticsDREPredicate(schoolIDExpr, legacyDREExpr, nameParam string) string {
 	return fmt.Sprintf(`(
 	CASE
@@ -103,4 +118,59 @@ func analyticsDREPredicate(schoolIDExpr, legacyDREExpr, nameParam string) string
 		ELSE UPPER(TRIM(%s)) = UPPER(TRIM(%s))
 	END
 )`, canonicalSchoolDREColumnSQL, schoolCanonicalDREIDExpr("dre_school"), schoolIDExpr, nameParam, legacyDREExpr, nameParam)
+}
+
+// analyticsDREAuthorizationPredicate authorizes a DRE profile through the
+// stable school relationship even when the analytics view itself only exposes a
+// textual DRE snapshot. The snapshot is used solely before migration 0020.
+func analyticsDREAuthorizationPredicate(schoolIDExpr, legacyDREExpr, dreIDParam, dreNameParam string) string {
+	return fmt.Sprintf(`(
+	CASE
+		WHEN %s THEN EXISTS (
+			SELECT 1
+			FROM schools dre_school
+			WHERE dre_school.id = %s
+			  AND %s = %s
+		)
+		ELSE UPPER(TRIM(%s)) = UPPER(TRIM(%s))
+	END
+)`, canonicalSchoolDREColumnSQL, schoolIDExpr,
+		schoolCanonicalDREIDExpr("dre_school"), dreIDParam,
+		legacyDREExpr, dreNameParam,
+	)
+}
+
+// analyticsDREScopedFilterPredicate mirrors schoolDREScopedFilterPredicate for
+// analytics views. A runtime DRE scope (dreID > 0) is always an ID comparison;
+// an admin may still use the textual filter, resolved through the master table.
+func analyticsDREScopedFilterPredicate(schoolIDExpr, legacyDREExpr, dreIDParam, dreNameParam string) string {
+	return fmt.Sprintf(`(
+	(%s > 0 AND %s)
+	OR
+	(%s = 0 AND (%s = '' OR %s))
+)`, dreIDParam,
+		analyticsDREAuthorizationPredicate(schoolIDExpr, legacyDREExpr, dreIDParam, dreNameParam),
+		dreIDParam, dreNameParam,
+		analyticsDREPredicate(schoolIDExpr, legacyDREExpr, dreNameParam),
+	)
+}
+
+// analyticsDRENameExpr derives a presentation name for a view row from
+// school_id -> schools.dre_id -> dres.nome on canonical schemas. It deliberately
+// refuses to fall back to the view text when dre_id exists but is missing or
+// inconsistent, preventing stale text from becoming authoritative again.
+func analyticsDRENameExpr(schoolIDExpr, legacyDREExpr string) string {
+	return fmt.Sprintf(`(
+	CASE
+		WHEN %s THEN COALESCE((
+			SELECT TRIM(dre_name.nome)
+			FROM schools dre_school
+			JOIN dres dre_name ON dre_name.id = %s
+			WHERE dre_school.id = %s
+		), 'Não informado')
+		ELSE COALESCE(NULLIF(TRIM(%s), ''), 'Não informado')
+	END
+)`, canonicalSchoolDREColumnSQL,
+		schoolCanonicalDREIDExpr("dre_school"), schoolIDExpr, legacyDREExpr,
+	)
 }

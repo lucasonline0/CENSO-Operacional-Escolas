@@ -23,12 +23,12 @@ import (
 // =========================================================================
 
 const (
-	DefaultIdebAno           = 2023
-	idebFonteMetodologica    = "https://download.inep.gov.br/ideb/nota_informativa_ideb_%d.pdf"
-	idebFonteArquivoPadrao   = "ideb_%d_iniciais_finais_medio.xlsx"
-	idebGrao                 = "INEP × etapa × ano"
-	idebFaixaSemIdeb         = "Sem IDEB divulgado"
-	idebRankingLimitDefault  = 10
+	DefaultIdebAno          = 2023
+	idebFonteMetodologica   = "https://download.inep.gov.br/ideb/nota_informativa_ideb_%d.pdf"
+	idebFonteArquivoPadrao  = "ideb_%d_iniciais_finais_medio.xlsx"
+	idebGrao                = "INEP × etapa × ano"
+	idebFaixaSemIdeb        = "Sem IDEB divulgado"
+	idebRankingLimitDefault = 10
 )
 
 // Domínios válidos dos filtros enumerados (validação 400 em valor inválido).
@@ -85,6 +85,7 @@ type idebFilters struct {
 	SchoolID            int
 	CodigoINEP          string
 	RequireLinkedSchool bool
+	DREID               int
 }
 
 // args devolve os argumentos posicionais na ordem esperada por idebFromWhere
@@ -104,6 +105,7 @@ func (f idebFilters) args() []any {
 		f.SchoolID,            // $11
 		f.CodigoINEP,          // $12
 		f.RequireLinkedSchool, // $13
+		f.DREID,               // $14
 	}
 }
 
@@ -168,6 +170,7 @@ func applyIdebAccessScope(r *http.Request, f idebFilters) idebFilters {
 	f.RegiaoIntegracao = shared.RegiaoIntegracao
 	f.SchoolID = shared.SchoolID
 	f.CodigoINEP = shared.CodigoINEP
+	f.DREID = shared.DREID
 	if scope, ok := GetAdminAccessScope(r.Context()); ok && scope.Role == RoleDRE {
 		f.RequireLinkedSchool = true
 	}
@@ -181,12 +184,12 @@ func applyIdebAccessScope(r *http.Request, f idebFilters) idebFilters {
 // registros são mantidos (o OR curto-circuita em $N = ”).
 // $1=ano $2=etapa $3=dre $4=municipio $5=zona $6=regiao_integracao
 // $7=status_ideb $8=detalhe_status_ideb $9=status_vinculo $10=somente_com_ideb.
-const idebFromWhere = `
+var idebFromWhere = `
 	FROM ideb_resultados ir
 	LEFT JOIN schools s ON s.id = ir.school_id
 	WHERE ir.ano = $1
 	  AND ($2 = '' OR ir.etapa = $2)
-	  AND ($3 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($3)))
+	  AND ` + schoolDREScopedFilterPredicate("s", "$14", "$3") + `
 	  AND ($4 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($4)))
 	  AND ($5 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($5)))
 	  AND ($6 = '' OR UPPER(TRIM(s.municipio)) IN (
@@ -657,7 +660,7 @@ func (app *application) idebPorDre(ctx context.Context, f idebFilters) ([]IdebPo
 	db := app.models.Schools.DB
 	rows, err := db.QueryContext(ctx, `
 		SELECT
-			COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado') AS dre,
+			`+schoolDRENameExpr("s")+` AS dre,
 			ir.etapa,
 			COUNT(*),
 			COUNT(DISTINCT ir.codigo_inep),
@@ -741,7 +744,7 @@ func (app *application) idebRankingQuery(ctx context.Context, f idebFilters, ext
 			SELECT
 				ir.codigo_inep, ir.nome_escola_origem, ir.etapa, ir.ideb,
 				ir.total_avaliado, ir.percentual_avaliado,
-				s.dre AS dre, s.municipio AS municipio,
+				`+schoolDRENameExpr("s")+` AS dre, s.municipio AS municipio,
 				ir.status_ideb, ir.status_vinculo,
 				ROW_NUMBER() OVER (PARTITION BY ir.etapa ORDER BY %s) AS rn
 			%s

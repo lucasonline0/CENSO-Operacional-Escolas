@@ -65,6 +65,7 @@ type prodepFilters struct {
 	SchoolID              int
 	CodigoINEP            string
 	RequireLinkedDRE      bool
+	DREID                 int
 }
 
 // args devolve os argumentos posicionais na ordem esperada por prodepWhereSQL.
@@ -80,6 +81,7 @@ func (f prodepFilters) args() []any {
 		f.RequireLinkedDRE,
 		f.SchoolID,
 		f.CodigoINEP,
+		f.DREID,
 	}
 }
 
@@ -126,16 +128,16 @@ var prodepWhereSQL = `
 	WHERE usar_na_carga = true
 	  AND ($1 = 0  OR ano = $1)
 	  AND ($2 = '' OR categoria = $2)
-	  AND ($3 = '' OR ` + sqlNormalizeProdep("COALESCE(dre_prodep, '')", "DRE") + ` = ` + sqlNormalizeProdep("$3::text", "DRE") + `)
+	  AND ($8 = true OR $3 = '' OR ` + sqlNormalizeProdep("COALESCE(dre_prodep, '')", "DRE") + ` = ` + sqlNormalizeProdep("$3::text", "DRE") + `)
 	  AND ($4 = '' OR ` + sqlNormalizeProdep("COALESCE(municipio_resolvido, '')", "") + ` = ` + sqlNormalizeProdep("$4::text", "") + `)
 	  AND ($5 = '' OR ` + sqlNormalizeProdep("COALESCE(ri_prodep, '')", "RI") + ` = ` + sqlNormalizeProdep("$5::text", "RI") + `)
 	  AND ($6 = '' OR match_status = $6)
 	  AND ($7 = '' OR COALESCE(status_prestacao_contas, '') = $7)
-	  AND ($8 = false OR ($3 <> '' AND EXISTS (
+	  AND ($8 = false OR ($11 > 0 AND EXISTS (
 	        SELECT 1
 	        FROM schools scope_s
 	        WHERE (scope_s.id = prodep_repasses.school_id OR scope_s.id = prodep_repasses.school_id_sede)
-	          AND UPPER(TRIM(scope_s.dre)) = UPPER(TRIM($3))
+	          AND ` + schoolDREAuthorizationPredicate("scope_s", "$11", "$3") + `
 	      )))
 	  AND ($9 = 0 OR prodep_repasses.school_id = $9 OR prodep_repasses.school_id_sede = $9)
 	  AND ($10 = '' OR UPPER(TRIM(COALESCE(codigo_inep_prodep, ''))) = UPPER(TRIM($10)))
@@ -300,6 +302,7 @@ func applyProdepAccessScope(r *http.Request, f prodepFilters) prodepFilters {
 	}
 	if scope, ok := GetAdminAccessScope(r.Context()); ok && scope.Role == RoleDRE {
 		f.RequireLinkedDRE = true
+		f.DREID = shared.DREID
 	}
 	return f
 }

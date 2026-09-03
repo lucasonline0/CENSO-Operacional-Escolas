@@ -217,11 +217,11 @@ func TestAdminDREAndUsersRoutesWithMux(t *testing.T) {
 	dreToken := createTestJWT("user_belem", RoleDRE, "DRE BELEM")
 
 	routesToTest := []struct {
-		name       string
-		method     string
-		url        string
-		dreBody    string
-		adminBody  string
+		name      string
+		method    string
+		url       string
+		dreBody   string
+		adminBody string
 	}{
 		{
 			name:      "POST /v1/admin/dres",

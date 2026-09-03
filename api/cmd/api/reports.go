@@ -39,6 +39,7 @@ const reportFormatXLSX = "xlsx"
 // relatório de acompanhamento deve poder consolidar o histórico.
 type reportFilters struct {
 	Year             int // 0 = todos os anos
+	DREID            int
 	DRE              string
 	Municipio        string
 	Zona             string
@@ -74,7 +75,7 @@ func (f reportFilters) args() []any {
 // de identidade. O método args legado é mantido para helpers/testes que ainda
 // exercitam o contrato histórico de cinco argumentos.
 func (f reportFilters) scopedArgs() []any {
-	return []any{f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP}
+	return []any{f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP, f.DREID}
 }
 
 // parseReportFiltersRequest aplica o escopo autenticado antes do dispatch para
@@ -84,6 +85,7 @@ func parseReportFiltersRequest(r *http.Request) reportFilters {
 	f := parseReportFilters(r.URL.Query())
 	shared := parseAnalyticsFilters(r)
 	f.DRE = shared.DRE
+	f.DREID = shared.DREID
 	f.Municipio = shared.Municipio
 	f.Zona = shared.Zona
 	f.RegiaoIntegracao = shared.RegiaoIntegracao
@@ -387,7 +389,7 @@ var censoPreenchimentoReportColumns = []string{
 //
 // A ordenação segue a prioridade gerencial (Pendente, Rascunho, Pendente de
 // Sincronização, Concluído, Verificar) e depois DRE, Município, Escola, INEP.
-const censoPreenchimentoSelectSQL = `
+var censoPreenchimentoSelectSQL = `
 	WITH latest_census AS (
 		SELECT DISTINCT ON (school_id)
 			school_id, status, year, updated_at, sheet_synced_at
@@ -397,7 +399,7 @@ const censoPreenchimentoSelectSQL = `
 	)
 	SELECT
 		COALESCE(ri.regiao_de_integracao, '') AS regiao_integracao,
-		COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado') AS dre,
+		` + schoolDRENameExpr("s") + ` AS dre,
 		COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado') AS municipio,
 		COALESCE(NULLIF(TRIM(s.zona), ''), '') AS zona,
 		COALESCE(s.codigo_inep, '') AS codigo_inep,
@@ -410,7 +412,7 @@ const censoPreenchimentoSelectSQL = `
 	FROM schools s
 	LEFT JOIN latest_census cr ON cr.school_id = s.id
 	LEFT JOIN reg_integracao ri ON UPPER(TRIM(ri.municipio)) = UPPER(TRIM(s.municipio))
-	WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+	WHERE ` + schoolDREScopedFilterPredicate("s", "$8", "$2") + `
 	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
 	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
 	  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
@@ -428,7 +430,7 @@ const censoPreenchimentoSelectSQL = `
 			WHEN cr.status = 'completed' AND cr.sheet_synced_at IS NOT NULL THEN 4
 			ELSE 5
 		END,
-		UPPER(TRIM(s.dre)),
+		UPPER(TRIM(` + schoolDRENameExpr("s") + `)),
 		UPPER(TRIM(s.municipio)),
 		UPPER(TRIM(s.nome_escola)),
 		s.codigo_inep

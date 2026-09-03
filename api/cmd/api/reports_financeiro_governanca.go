@@ -29,7 +29,7 @@ var financeiroGovernancaReportColumns = []string{
 	"% Reprogramado",
 }
 
-const financeiroGovernancaSelectSQL = `
+var financeiroGovernancaSelectSQL = `
 	WITH prodep_agg AS (
 		SELECT
 			school_id,
@@ -49,7 +49,7 @@ const financeiroGovernancaSelectSQL = `
 	)
 	SELECT
 		COALESCE(ri.regiao_de_integracao, '') AS regiao_integracao,
-		COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado') AS dre,
+		` + schoolDRENameExpr("s") + ` AS dre,
 		COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado') AS municipio,
 		COALESCE(NULLIF(TRIM(s.zona), ''), '') AS zona,
 		COALESCE(s.codigo_inep, '') AS codigo_inep,
@@ -67,7 +67,7 @@ const financeiroGovernancaSelectSQL = `
 	LEFT JOIN vw_censo_governanca_institucional gov ON gov.census_id = cr.census_id
 	LEFT JOIN prodep_agg p ON p.school_id = s.id
 	LEFT JOIN reg_integracao ri ON UPPER(TRIM(ri.municipio)) = UPPER(TRIM(s.municipio))
-	WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+	WHERE ` + schoolDREScopedFilterPredicate("s", "$8", "$2") + `
 	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
 	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
 	  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
@@ -78,7 +78,7 @@ const financeiroGovernancaSelectSQL = `
 	  AND ($6 = 0 OR s.id = $6)
 	  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
 	ORDER BY
-		UPPER(TRIM(s.dre)),
+		UPPER(TRIM(` + schoolDRENameExpr("s") + `)),
 		UPPER(TRIM(s.municipio)),
 		UPPER(TRIM(s.nome_escola)),
 		s.codigo_inep

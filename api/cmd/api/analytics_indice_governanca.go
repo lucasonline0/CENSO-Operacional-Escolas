@@ -39,7 +39,7 @@ func (app *application) writeIndiceGovernancaPayload(w http.ResponseWriter, payl
 	return app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: payload})
 }
 
-const indiceGovernancaSelectSQL = `
+var indiceGovernancaSelectSQL = `
 	WITH prodep_agg AS (
 		SELECT
 			school_id,
@@ -58,7 +58,7 @@ const indiceGovernancaSelectSQL = `
 		s.id,
 		s.codigo_inep,
 		COALESCE(NULLIF(TRIM(s.nome_escola), ''), 'Sem nome') AS escola,
-		COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado') AS dre,
+		` + schoolDRENameExpr("s") + ` AS dre,
 		COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado') AS municipio,
 		(cr.census_id IS NOT NULL) AS has_censo,
 		COALESCE(cr.data->>'conselho_escolar' = 'Sim', false) AS conselho_escolar,
@@ -69,7 +69,7 @@ const indiceGovernancaSelectSQL = `
 	FROM schools s
 	LEFT JOIN latest_census cr ON cr.school_id = s.id
 	LEFT JOIN prodep_agg p ON p.school_id = s.id
-	WHERE ($1 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($1)))
+	WHERE ` + schoolDREScopedFilterPredicate("s", "$7", "$1") + `
 	  AND ($2 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($2)))
 	  AND ($3 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($3)))
 	  AND ($4 = '' OR UPPER(TRIM(s.municipio)) IN (
@@ -83,7 +83,7 @@ func (app *application) AdminAnalyticsGovernancaIndiceEscolas(w http.ResponseWri
 	filters := parseAnalyticsFilters(r)
 
 	rows, err := app.models.Schools.DB.QueryContext(r.Context(), indiceGovernancaSelectSQL,
-		filters.DRE, filters.Municipio, filters.Zona, filters.RegiaoIntegracao, filters.SchoolID, filters.CodigoINEP)
+		filters.DRE, filters.Municipio, filters.Zona, filters.RegiaoIntegracao, filters.SchoolID, filters.CodigoINEP, filters.DREID)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro ao consultar indice de governanca: %w", err), http.StatusInternalServerError)
 		return

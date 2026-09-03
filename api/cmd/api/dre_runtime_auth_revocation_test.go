@@ -587,4 +587,3 @@ func TestRuntimeLegacyDRETokenRevokedWhenPasswordIsReset(t *testing.T) {
 		t.Fatalf("legacy token survived password reset: got %d body=%s", rr.Code, rr.Body.String())
 	}
 }
-

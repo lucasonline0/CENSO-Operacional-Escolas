@@ -58,18 +58,18 @@ func parseAnalyticsFiltersFromValues(q url.Values, now time.Time) AnalyticsFilte
 
 // WhereSQL returns a parameterized WHERE fragment (no table alias prefix).
 // $1=year, $2=dre, $3=municipio, $4=zona, $5=regiao_integracao,
-// $6=school_id and $7=codigo_inep. Empty strings and school_id zero disable
+// $6=school_id, $7=codigo_inep and $8=dre_id do escopo autenticado. Empty strings and school_id zero disable
 // the corresponding optional filters.
 //
 // A view ainda expõe `dre` textual por compatibilidade, mas em bancos pós-0020
 // o filtro DRE re-resolve school_id -> schools.dre_id -> dres.id/nome. Assim o
 // texto projetado pela view deixa de determinar escopo ou agregações.
 func (f AnalyticsFilters) WhereSQL() string {
-	drePredicate := analyticsDREPredicate("school_id", "dre", "$2")
+	drePredicate := analyticsDREScopedFilterPredicate("school_id", "dre", "$8", "$2")
 	return `status = 'completed'
       AND year = $1
       AND census_id IS NOT NULL
-      AND ($2 = '' OR ` + drePredicate + `)
+      AND ` + drePredicate + `
       AND ($3 = '' OR UPPER(TRIM(municipio)) = UPPER(TRIM($3)))
       AND ($4 = '' OR UPPER(TRIM(zona)) = UPPER(TRIM($4)))
       AND ($5 = '' OR UPPER(TRIM(municipio)) IN (
@@ -83,7 +83,7 @@ func (f AnalyticsFilters) WhereSQL() string {
 
 // Args returns the positional arguments that match WhereSQL in order.
 func (f AnalyticsFilters) Args() []any {
-	return []any{f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP}
+	return []any{f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP, f.DREID}
 }
 
 // LegacyArgs preserves the original five-argument contract for bespoke

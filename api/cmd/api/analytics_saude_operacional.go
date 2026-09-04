@@ -1104,6 +1104,7 @@ func buildSaudeOperacionalPage(
 // o cadastro de escolas (schools s), antes do LEFT JOIN com os censos do ano.
 // Strings vazias significam "filtro desativado".
 type saudeOperacionalFilters struct {
+	DREID            int
 	DRE              string
 	Municipio        string
 	Zona             string
@@ -1131,6 +1132,7 @@ func parseSaudeOperacionalFilters(q url.Values) saudeOperacionalFilters {
 func saudeOperacionalFiltersFromRequest(r *http.Request) saudeOperacionalFilters {
 	shared := parseAnalyticsFilters(r)
 	return saudeOperacionalFilters{
+		DREID:            shared.DREID,
 		DRE:              shared.DRE,
 		Municipio:        shared.Municipio,
 		Zona:             shared.Zona,
@@ -1212,13 +1214,13 @@ const saudeOperacionalDataProjectionSQL = `jsonb_build_object(
 // Região de Integração depende da compatibilidade entre schools.municipio e
 // reg_integracao.municipio (sem unaccent nesta etapa): municípios com grafia
 // divergente de acentuação podem não casar.
-const saudeOperacionalSelectSQL = `
+var saudeOperacionalSelectSQL = `
 	SELECT
 		s.id,
 		s.codigo_inep,
 		COALESCE(s.nome_escola, ''),
 		COALESCE(s.municipio, ''),
-		COALESCE(s.dre, ''),
+		` + schoolDRENameExpr("s") + `,
 		s.zona,
 		cr.id,
 		CASE WHEN cr.id IS NULL THEN NULL ELSE ` + saudeOperacionalDataProjectionSQL + ` END AS data
@@ -1227,7 +1229,7 @@ const saudeOperacionalSelectSQL = `
 	  ON cr.school_id = s.id
 	 AND cr.year = $1
 	 AND cr.status = 'completed'
-	WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+	WHERE ` + schoolDREScopedFilterPredicate("s", "$8", "$2") + `
 	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
 	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
 	  AND ($5 = '' OR s.municipio IN (
@@ -1252,6 +1254,7 @@ func buildSaudeOperacionalQuery(year int, f saudeOperacionalFilters) (string, []
 		f.RegiaoIntegracao,
 		f.SchoolID,
 		f.CodigoINEP,
+		f.DREID,
 	}
 }
 

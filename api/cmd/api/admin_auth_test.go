@@ -20,8 +20,8 @@ func setupTestApp() *application {
 	return app
 }
 
-// 1. login admin legado continua válido
-func TestLegacyEnvAdminLogin(t *testing.T) {
+// 1. login admin via ENV continua válido (agora via AdminLoginRuntime)
+func TestEnvAdminLogin(t *testing.T) {
 	app := setupTestApp()
 
 	pass := "supersecret123"
@@ -34,7 +34,7 @@ func TestLegacyEnvAdminLogin(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	app.AdminLogin(rr, req)
+	app.AdminLoginRuntime(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d. Body: %s", rr.Code, rr.Body.String())
@@ -51,7 +51,7 @@ func TestLegacyEnvAdminLogin(t *testing.T) {
 	}
 
 	tokenStr := dataMap["token"].(string)
-	claims := &adminClaims{}
+	claims := &runtimeAdminClaims{}
 	tok, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
 		return jwtSecret(), nil
 	})
@@ -77,7 +77,7 @@ func TestWrongPasswordRejection(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	app.AdminLogin(rr, req)
+	app.AdminLoginRuntime(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status 401 for wrong password, got %d", rr.Code)
@@ -88,7 +88,7 @@ func TestWrongPasswordRejection(t *testing.T) {
 func TestDRETokenWithoutDRERejected(t *testing.T) {
 	app := setupTestApp()
 
-	claims := adminClaims{
+	claims := runtimeAdminClaims{
 		Username: "user_dre",
 		Role:     RoleDRE,
 		DRE:      "", // Sem DRE
@@ -109,7 +109,7 @@ func TestDRETokenWithoutDRERejected(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+tokStr)
 	rr := httptest.NewRecorder()
 
-	app.requireAdminAuth(nextHandler).ServeHTTP(rr, req)
+	app.requireRuntimeAdminAuth(nextHandler).ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status 401 for DRE token without DRE, got %d", rr.Code)
@@ -123,7 +123,7 @@ func TestDRETokenWithoutDRERejected(t *testing.T) {
 func TestExpiredTokenRejected(t *testing.T) {
 	app := setupTestApp()
 
-	claims := adminClaims{
+	claims := runtimeAdminClaims{
 		Username: "admin_test",
 		Role:     RoleAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -138,7 +138,7 @@ func TestExpiredTokenRejected(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+tokStr)
 	rr := httptest.NewRecorder()
 
-	app.requireAdminAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(rr, req)
+	app.requireRuntimeAdminAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status 401 for expired token, got %d", rr.Code)
@@ -149,7 +149,7 @@ func TestExpiredTokenRejected(t *testing.T) {
 func TestInvalidSigningAlgorithmRejected(t *testing.T) {
 	app := setupTestApp()
 
-	claims := adminClaims{
+	claims := runtimeAdminClaims{
 		Username: "admin_test",
 		Role:     RoleAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -166,7 +166,7 @@ func TestInvalidSigningAlgorithmRejected(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+tokStr)
 	rr := httptest.NewRecorder()
 
-	app.requireAdminAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(rr, req)
+	app.requireRuntimeAdminAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status 401 for token signed with 'none' algorithm, got %d", rr.Code)
@@ -177,7 +177,7 @@ func TestInvalidSigningAlgorithmRejected(t *testing.T) {
 func TestUnknownRoleRejected(t *testing.T) {
 	app := setupTestApp()
 
-	claims := adminClaims{
+	claims := runtimeAdminClaims{
 		Username: "user_invalid",
 		Role:     "superman",
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -192,7 +192,7 @@ func TestUnknownRoleRejected(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+tokStr)
 	rr := httptest.NewRecorder()
 
-	app.requireAdminAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(rr, req)
+	app.requireRuntimeAdminAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status 401 for unknown role, got %d", rr.Code)

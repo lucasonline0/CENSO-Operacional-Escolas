@@ -33,7 +33,7 @@ func TestInactiveDRERejectsUserCreation(t *testing.T) {
 		t.Fatalf("create inactive DRE: %v", err)
 	}
 
-	_, err = m.AdminUsers.Create(ctx, "inactive.user", "password123", "dre", inactive.Nome)
+	_, err = m.AdminUsers.Create(ctx, "inactive.user", "password1234", "dre", inactive.Nome)
 	if err == nil {
 		t.Fatal("expected inactive DRE to reject user creation, got no error")
 	}
@@ -51,7 +51,7 @@ func TestDREInactiveUserCannotAuthenticate(t *testing.T) {
 		t.Fatalf("create active DRE: %v", err)
 	}
 
-	_, err = m.AdminUsers.Create(ctx, "auth.user", "password123", "dre", active.Nome)
+	_, err = m.AdminUsers.Create(ctx, "auth.user", "password1234", "dre", active.Nome)
 	if err != nil {
 		t.Fatalf("create DRE user: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestDREInactiveUserCannotAuthenticate(t *testing.T) {
 		t.Fatalf("deactivate DRE: %v", err)
 	}
 
-	_, err = m.AdminUsers.CreateForDREID(ctx, "blocked.user", "password123", "dre", active.ID)
+	_, err = m.AdminUsers.CreateForDREID(ctx, "blocked.user", "password1234", "dre", active.ID)
 	if err == nil {
 		t.Fatal("expected inactive DRE to reject user creation by ID, got no error")
 	}
@@ -95,7 +95,7 @@ func TestRenamePreservesUserAndSchoolLinks(t *testing.T) {
 		t.Fatalf("assign school to DRE A: %v", err)
 	}
 
-	user, err := m.AdminUsers.CreateForDREID(ctx, "alpha.user", "password123", "dre", dreA.ID)
+	user, err := m.AdminUsers.CreateForDREID(ctx, "alpha.user", "password1234", "dre", dreA.ID)
 	if err != nil {
 		t.Fatalf("create DRE A user: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestAdminMeReflectsRenameAndStatus(t *testing.T) {
 		t.Fatalf("create DRE: %v", err)
 	}
 
-	_, err = m.AdminUsers.CreateForDREID(ctx, "me.user", "password123", "dre", dre.ID)
+	_, err = m.AdminUsers.CreateForDREID(ctx, "me.user", "password1234", "dre", dre.ID)
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
@@ -192,12 +192,12 @@ func TestDuplicateUsernameByCaseIsRejected(t *testing.T) {
 		t.Fatalf("create DRE TESTE: %v", err)
 	}
 
-	_, err = m.AdminUsers.Create(ctx, "DupUser", "password123", "dre", "DRE TESTE")
+	_, err = m.AdminUsers.Create(ctx, "DupUser", "password1234", "dre", "DRE TESTE")
 	if err != nil {
 		t.Fatalf("create first user: %v", err)
 	}
 
-	_, err = m.AdminUsers.Create(ctx, "dupuser", "password123", "dre", "DRE TESTE")
+	_, err = m.AdminUsers.Create(ctx, "dupuser", "password1234", "dre", "DRE TESTE")
 	if err == nil {
 		t.Fatal("expected duplicate username (case difference) to be rejected")
 	}
@@ -250,7 +250,7 @@ func TestDREEntityAbsentInDresNotValidatedBySchoolsText(t *testing.T) {
 	if valid {
 		t.Fatalf("schools text incorrectly validated a DRE absent from master table")
 	}
-	if _, err := m.AdminUsers.Create(ctx, "ghost.user", "password123", "dre", "DRE FANTASMA"); !errors.Is(err, models.ErrInvalidDRE) {
+	if _, err := m.AdminUsers.Create(ctx, "ghost.user", "password1234", "dre", "DRE FANTASMA"); !errors.Is(err, models.ErrInvalidDRE) {
 		t.Fatalf("master-absent DRE did not return ErrInvalidDRE: %v", err)
 	}
 }

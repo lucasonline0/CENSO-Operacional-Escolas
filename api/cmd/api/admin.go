@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -18,25 +17,42 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // ─── Rate Limiter ────────────────────────────────────────────────────────────
 
+// rateLimiter implementa rate limit por IP com janela deslizante e limpeza
+// periódica de chaves inativas para evitar crescimento indefinido de memória.
 type rateLimiter struct {
-	mu       sync.Mutex
-	attempts map[string][]time.Time
+	mu         sync.Mutex
+	attempts   map[string][]time.Time
+	window     time.Duration
+	lastSweep  time.Time
 }
 
-var loginRL = &rateLimiter{attempts: make(map[string][]time.Time)}
+const rlSweepInterval = 5 * time.Minute
+
+var loginRL = &rateLimiter{
+	attempts:  make(map[string][]time.Time),
+	window:    15 * time.Minute,
+	lastSweep: time.Now(),
+}
 
 // Limitadores para os endpoints públicos de escrita. Os limites são
 // propositalmente generosos para não atrapalhar o preenchimento legítimo
 // do formulário (multi-step + autosave, possivelmente várias escolas atrás
 // do mesmo IP/NAT de uma DRE), mas cortam abuso/enumeração em massa.
 var (
-	censusWriteRL = &rateLimiter{attempts: make(map[string][]time.Time)}
-	uploadRL      = &rateLimiter{attempts: make(map[string][]time.Time)}
+	censusWriteRL = &rateLimiter{
+		attempts:  make(map[string][]time.Time),
+		window:    10 * time.Minute,
+		lastSweep: time.Now(),
+	}
+	uploadRL = &rateLimiter{
+		attempts:  make(map[string][]time.Time),
+		window:    10 * time.Minute,
+		lastSweep: time.Now(),
+	}
 )
 
 const (
@@ -54,11 +70,38 @@ const (
 	uploadWindow = 10 * time.Minute
 )
 
+// sweep remove todas as chaves cujas timestamps são todas anteriores à janela.
+// Deve ser chamado com rl.mu segurado.
+func (rl *rateLimiter) sweep() {
+	now := time.Now()
+	if now.Sub(rl.lastSweep) < rlSweepInterval {
+		return
+	}
+	rl.lastSweep = now
+	cutoff := now.Add(-rl.window)
+	for ip, timestamps := range rl.attempts {
+		// Verifica se há pelo menos uma timestamp dentro da janela.
+		active := false
+		for _, t := range timestamps {
+			if t.After(cutoff) {
+				active = true
+				break
+			}
+		}
+		if !active {
+			delete(rl.attempts, ip)
+		}
+	}
+}
+
 // allow implementa um rate limit de janela deslizante para o IP informado,
-// com limite e janela parametrizáveis.
+// com limite e janela parametrizáveis. Executa sweep periódico para limpar
+// chaves inativas e evitar crescimento indefinido do map.
 func (rl *rateLimiter) allow(ip string, max int, window time.Duration) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
+
+	rl.sweep()
 
 	cutoff := time.Now().Add(-window)
 	var recent []time.Time
@@ -179,152 +222,6 @@ func validateSecurityConfig() error {
 }
 
 // ─── Handlers ────────────────────────────────────────────────────────────────
-
-func (app *application) AdminLogin(w http.ResponseWriter, r *http.Request) {
-	// Limit body to 1KB to prevent DoS
-	r.Body = http.MaxBytesReader(w, r.Body, 1024)
-
-	ip := clientIP(r)
-	if !loginRL.check(ip) {
-		w.Header().Set("Retry-After", "900")
-		app.errorJSON(w, fmt.Errorf("muitas tentativas. Aguarde 15 minutos"), http.StatusTooManyRequests)
-		return
-	}
-
-	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
-	if err := app.readJSON(w, r, &req); err != nil {
-		app.errorJSON(w, fmt.Errorf("dados inválidos"), http.StatusBadRequest)
-		return
-	}
-
-	// Sanitize: reject inputs with control chars or excessive length
-	if len(req.Username) > 64 || len(req.Password) > 128 {
-		app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
-		return
-	}
-
-	adminUser := os.Getenv("ADMIN_USERNAME")
-	adminHash := os.Getenv("ADMIN_PASSWORD_HASH") // bcrypt hash
-
-	isEnvAdmin := adminUser != "" && adminHash != "" && req.Username == adminUser
-
-	var role string
-	var dre string
-
-	if isEnvAdmin {
-		pwErr := bcrypt.CompareHashAndPassword([]byte(adminHash), []byte(req.Password))
-		if pwErr != nil {
-			time.Sleep(600 * time.Millisecond)
-			app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
-			return
-		}
-		role = RoleAdmin
-		dre = ""
-	} else {
-		// Busca usuário ativo no banco de dados (role=dre)
-		u, err := app.models.AdminUsers.GetActiveByUsername(r.Context(), req.Username)
-		if err != nil {
-			// Executa bcrypt fictício para mitigar ataques de tempo em usernames inexistentes
-			if adminHash != "" {
-				_ = bcrypt.CompareHashAndPassword([]byte(adminHash), []byte(req.Password))
-			}
-			time.Sleep(600 * time.Millisecond)
-			app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
-			return
-		}
-
-		pwErr := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password))
-		if pwErr != nil {
-			time.Sleep(600 * time.Millisecond)
-			app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
-			return
-		}
-
-		if u.Role != RoleDRE || strings.TrimSpace(u.DRE) == "" {
-			time.Sleep(600 * time.Millisecond)
-			app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
-			return
-		}
-
-		role = u.Role
-		dre = u.DRE
-	}
-
-	claims := adminClaims{
-		Username: req.Username,
-		Role:     role,
-		DRE:      dre,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(jwtExpiry)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "censo-admin",
-			Subject:   "admin",
-		},
-	}
-	tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(jwtSecret())
-	if err != nil {
-		app.errorJSON(w, fmt.Errorf("erro interno ao gerar token"), http.StatusInternalServerError)
-		return
-	}
-
-	app.writeJSON(w, http.StatusOK, jsonResponse{
-		Error:   false,
-		Message: "Login realizado com sucesso",
-		Data: map[string]interface{}{
-			"token":      tok,
-			"expires_in": int(jwtExpiry.Seconds()),
-		},
-	})
-}
-
-// requireAdminAuth is a chi middleware that validates the Bearer JWT token.
-func (app *application) requireAdminAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if !strings.HasPrefix(authHeader, "Bearer ") {
-			app.errorJSON(w, fmt.Errorf("token de autenticação necessário"), http.StatusUnauthorized)
-			return
-		}
-
-		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-		claims := &adminClaims{}
-
-		tok, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
-			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("algoritmo de assinatura inválido")
-			}
-			return jwtSecret(), nil
-		}, jwt.WithIssuer("censo-admin"), jwt.WithExpirationRequired())
-
-		if err != nil || !tok.Valid {
-			app.errorJSON(w, fmt.Errorf("token inválido ou expirado"), http.StatusUnauthorized)
-			return
-		}
-
-		if claims.Role != RoleAdmin && claims.Role != RoleDRE {
-			app.errorJSON(w, fmt.Errorf("role desconhecida ou inválida"), http.StatusUnauthorized)
-			return
-		}
-
-		if claims.Role == RoleDRE && strings.TrimSpace(claims.DRE) == "" {
-			app.errorJSON(w, fmt.Errorf("token DRE sem DRE válida"), http.StatusUnauthorized)
-			return
-		}
-
-		scope := AdminAccessScope{
-			Username: claims.Username,
-			Role:     claims.Role,
-			DRE:      claims.DRE,
-		}
-
-		ctx := context.WithValue(r.Context(), contextKeyAdminScope, scope)
-		ctx = context.WithValue(ctx, contextKeyAdminUser, claims.Username)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
 
 // AdminMe retorna os dados do perfil do usuário autenticado.
 func (app *application) AdminMe(w http.ResponseWriter, r *http.Request) {
@@ -1050,7 +947,7 @@ func (app *application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 			errors.Is(err, models.ErrInvalidDRE) ||
 			errors.Is(err, models.ErrDREInactive) ||
 			strings.Contains(err.Error(), "não pode ser vazio") ||
-			strings.Contains(err.Error(), "mínimo 6 caracteres") {
+			strings.Contains(err.Error(), "mínimo 12 caracteres") {
 			app.errorJSON(w, err, http.StatusBadRequest)
 			return
 		}
@@ -1189,8 +1086,8 @@ func (app *application) AdminResetUserPassword(w http.ResponseWriter, r *http.Re
 	}
 	newPassword = strings.TrimSpace(newPassword)
 
-	if len(newPassword) < 6 {
-		app.errorJSON(w, fmt.Errorf("nova senha deve ter no mínimo 6 caracteres"), http.StatusBadRequest)
+	if len(newPassword) < 12 {
+		app.errorJSON(w, fmt.Errorf("nova senha deve ter no mínimo 12 caracteres"), http.StatusBadRequest)
 		return
 	}
 
@@ -1200,7 +1097,7 @@ func (app *application) AdminResetUserPassword(w http.ResponseWriter, r *http.Re
 			app.errorJSON(w, fmt.Errorf("usuário não encontrado"), http.StatusNotFound)
 			return
 		}
-		if strings.Contains(err.Error(), "mínimo 6 caracteres") {
+		if strings.Contains(err.Error(), "mínimo 12 caracteres") {
 			app.errorJSON(w, err, http.StatusBadRequest)
 			return
 		}

@@ -67,7 +67,7 @@ func TestAdminDREAndUsersEndpointsForbiddenForDREUser(t *testing.T) {
 			method:  http.MethodPost,
 			url:     "/v1/admin/users",
 			handler: app.AdminCreateUser,
-			body:    `{"username":"user1","password":"password123","role":"dre","dre":"DRE BELEM"}`,
+			body:    `{"username":"user1","password":"password1234","role":"dre","dre":"DRE BELEM"}`,
 		},
 		{
 			name:    "GET /v1/admin/users (listagem de usuários) forbidden for DRE",
@@ -456,7 +456,7 @@ func TestAdminCreateUserValidation(t *testing.T) {
 	t.Run("invalid role", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users", strings.NewReader(`{
 			"username": "user1",
-			"password": "password123",
+			"password": "password1234",
 			"role": "superadmin",
 			"dre": "DRE BELEM"
 		}`))
@@ -474,7 +474,7 @@ func TestAdminCreateUserValidation(t *testing.T) {
 	t.Run("missing DRE", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users", strings.NewReader(`{
 			"username": "user1",
-			"password": "password123",
+			"password": "password1234",
 			"role": "dre",
 			"dre": ""
 		}`))
@@ -492,7 +492,7 @@ func TestAdminCreateUserValidation(t *testing.T) {
 	t.Run("empty username", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users", strings.NewReader(`{
 			"username": "",
-			"password": "password123",
+			"password": "password1234",
 			"role": "dre",
 			"dre": "DRE BELEM"
 		}`))
@@ -510,7 +510,7 @@ func TestAdminCreateUserValidation(t *testing.T) {
 	t.Run("whitespace username", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users", strings.NewReader(`{
 			"username": "   ",
-			"password": "password123",
+			"password": "password1234",
 			"role": "dre",
 			"dre": "DRE BELEM"
 		}`))

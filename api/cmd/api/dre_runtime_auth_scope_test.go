@@ -126,9 +126,9 @@ func TestRuntimeDREUserCannotEscalateRoleOrAccessAdminCRUD(t *testing.T) {
 		body   string
 	}{
 		{name: "create DRE", method: http.MethodPost, path: "/v1/admin/dres", body: `{"nome":"DRE INVASORA"}`},
-		{name: "create user", method: http.MethodPost, path: "/v1/admin/users", body: `{"username":"pwn.user","password":"x12345678"}`},
+		{name: "create user", method: http.MethodPost, path: "/v1/admin/users", body: `{"username":"pwn.user","password":"x123456789012"}`},
 		{name: "set admin status", method: http.MethodPatch, path: fmt.Sprintf("/v1/admin/users/%d/status", targetID), body: `{"active":false}`},
-		{name: "reset admin password", method: http.MethodPost, path: fmt.Sprintf("/v1/admin/users/%d/reset-password", targetID), body: `{"password":"y12345678"}`},
+		{name: "reset admin password", method: http.MethodPost, path: fmt.Sprintf("/v1/admin/users/%d/reset-password", targetID), body: `{"password":"y123456789012"}`},
 		{name: "update DRE", method: http.MethodPut, path: fmt.Sprintf("/v1/admin/dres/%d", dreA.ID), body: `{"nome":"DRE INVALIDA"}`},
 	}
 

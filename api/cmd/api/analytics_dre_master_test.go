@@ -112,18 +112,71 @@ func createDREThroughAPI(t *testing.T, handler http.Handler, token, name string)
 	return decodeDREIntegrationData[models.DRE](t, rr, http.StatusCreated)
 }
 
-func seedIntegrationSchool(t *testing.T, db *sql.DB, inep, name, dre string) int {
+func seedIntegrationDRE(t *testing.T, db *sql.DB, name string) int {
 	t.Helper()
 	var id int
 	err := db.QueryRow(`
-		INSERT INTO schools (nome_escola, codigo_inep, municipio, dre, zona)
+		INSERT INTO dres (nome, ativa)
+		VALUES ($1, true)
+		ON CONFLICT (nome) DO UPDATE SET nome = EXCLUDED.nome
+		RETURNING id
+	`, name).Scan(&id)
+	if err != nil {
+		t.Fatalf("inserir DRE mestre %q: %v", name, err)
+	}
+	return id
+}
+
+func seedIntegrationSchool(t *testing.T, db *sql.DB, inep, name, dre string) int {
+	t.Helper()
+	dreID := seedIntegrationDRE(t, db, dre)
+	var id int
+	err := db.QueryRow(`
+		INSERT INTO schools (nome_escola, codigo_inep, municipio, dre_id, zona)
 		VALUES ($1, $2, 'BELEM', $3, 'Urbana')
 		RETURNING id
-	`, name, inep, dre).Scan(&id)
+	`, name, inep, dreID).Scan(&id)
 	if err != nil {
 		t.Fatalf("inserir escola %s: %v", inep, err)
 	}
 	return id
+}
+
+// TestDREIntegrationSchemaIsCanonicalPost0021 makes the broad integration suite
+// fail when it is accidentally initialized only through 0019. It validates both
+// the 0020 canonical relation and the 0021 normalized identity indexes before
+// any HTTP/stress fixture is exercised.
+func TestDREIntegrationSchemaIsCanonicalPost0021(t *testing.T) {
+	db := openDREIntegrationDB(t)
+	resetDREIntegrationData(t, db)
+
+	var canonicalColumn, relationConstraint, normalizedDREIndex, normalizedUserIndex bool
+	if err := db.QueryRow(`
+		SELECT
+			EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'schools' AND column_name = 'dre_id'),
+			EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'schools'::regclass AND conname = 'fk_schools_dre_id'),
+			to_regclass('uq_dres_nome_normalized') IS NOT NULL,
+			to_regclass('uq_admin_users_username_normalized') IS NOT NULL
+	`).Scan(&canonicalColumn, &relationConstraint, &normalizedDREIndex, &normalizedUserIndex); err != nil {
+		t.Fatalf("inspecionar capacidades do schema de integração: %v", err)
+	}
+	if !canonicalColumn || !relationConstraint || !normalizedDREIndex || !normalizedUserIndex {
+		t.Fatalf("schema de integração não está pós-0021: dre_id=%t fk=%t dres_normalized=%t users_normalized=%t", canonicalColumn, relationConstraint, normalizedDREIndex, normalizedUserIndex)
+	}
+
+	dreID := seedIntegrationDRE(t, db, "DRE SCHEMA CANONICO")
+	var storedID int
+	var storedName string
+	if err := db.QueryRow(`
+		INSERT INTO schools (nome_escola, codigo_inep, municipio, dre_id, zona)
+		VALUES ('Escola Schema Canônico', '15999999', 'BELEM', $1, 'Urbana')
+		RETURNING dre_id, dre
+	`, dreID).Scan(&storedID, &storedName); err != nil {
+		t.Fatalf("seed canônico de escola: %v", err)
+	}
+	if storedID != dreID || storedName != "DRE SCHEMA CANONICO" {
+		t.Fatalf("escola não persistiu relação canônica: dre_id=%d dre=%q", storedID, storedName)
+	}
 }
 
 func seedIntegrationCensus(t *testing.T, db *sql.DB, schoolID int, status string, totalStudents int) {
@@ -242,9 +295,9 @@ func TestDREMasterIntegrationFlow(t *testing.T) {
 	// O escopo role=dre precisa impor a DRE da conta autenticada mesmo sem query param.
 	// A #206 exige que todo token DRE corresponda a um usuário real e ativo no banco.
 	if _, err := db.Exec(`
-		INSERT INTO admin_users (username, password_hash, role, dre, active, created_at, updated_at)
+		INSERT INTO admin_users (username, password_hash, role, dre_id, active, created_at, updated_at)
 		VALUES ($1, 'integration-test-hash', 'dre', $2, true, NOW(), NOW())
-	`, "integration-dre", dreA.Nome); err != nil {
+	`, "integration-dre", dreA.ID); err != nil {
 		t.Fatalf("inserir usuário DRE de integração: %v", err)
 	}
 	dreToken := createTestJWT("integration-dre", RoleDRE, dreA.Nome)
@@ -299,14 +352,15 @@ func TestDREMasterIntegrationBatch1000Schools(t *testing.T) {
 	resetDREIntegrationData(t, db)
 	_, handler, adminToken := newDREIntegrationApp(t, db)
 	dre := createDREThroughAPI(t, handler, adminToken, "DRE STRESS 1000")
+	legacyDREID := seedIntegrationDRE(t, db, "DRE LEGADA STRESS")
 
 	tx, err := db.Begin()
 	if err != nil {
 		t.Fatalf("begin seed stress: %v", err)
 	}
 	stmt, err := tx.Prepare(`
-		INSERT INTO schools (nome_escola, codigo_inep, municipio, dre, zona)
-		VALUES ($1, $2, 'BELEM', 'DRE LEGADA STRESS', 'Urbana') RETURNING id
+		INSERT INTO schools (nome_escola, codigo_inep, municipio, dre_id, zona)
+		VALUES ($1, $2, 'BELEM', $3, 'Urbana') RETURNING id
 	`)
 	if err != nil {
 		_ = tx.Rollback()
@@ -315,7 +369,7 @@ func TestDREMasterIntegrationBatch1000Schools(t *testing.T) {
 	ids := make([]int, 0, 1000)
 	for i := 0; i < 1000; i++ {
 		var id int
-		if err := stmt.QueryRow(fmt.Sprintf("Escola Stress %04d", i), fmt.Sprintf("158%05d", i)).Scan(&id); err != nil {
+		if err := stmt.QueryRow(fmt.Sprintf("Escola Stress %04d", i), fmt.Sprintf("158%05d", i), legacyDREID).Scan(&id); err != nil {
 			_ = stmt.Close()
 			_ = tx.Rollback()
 			t.Fatalf("seed escola stress %d: %v", i, err)
@@ -387,7 +441,7 @@ func TestDREMasterIntegrationBatch1000Schools(t *testing.T) {
 	}
 
 	var canonicalized int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM schools WHERE dre = $1`, dre.Nome).Scan(&canonicalized); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM schools WHERE dre_id = $1 AND dre = $2`, dre.ID, dre.Nome).Scan(&canonicalized); err != nil {
 		t.Fatalf("contar canonicalização stress: %v", err)
 	}
 	if canonicalized != 1000 {

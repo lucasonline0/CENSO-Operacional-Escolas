@@ -4,9 +4,6 @@ on:
   pull_request:
     branches:
       - develop
-    paths:
-      - "web/**"
-      - ".github/workflows/web-ci.yml"
 
 permissions:
   contents: read

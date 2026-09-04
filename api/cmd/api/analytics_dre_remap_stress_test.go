@@ -10,13 +10,14 @@ import (
 
 func seedRemapStressSchools(t *testing.T, db *sql.DB, total int) []int {
 	t.Helper()
+	dreID := seedIntegrationDRE(t, db, "DRE REMAP LEGADA")
 	tx, err := db.Begin()
 	if err != nil {
 		t.Fatalf("begin seed remap: %v", err)
 	}
 	stmt, err := tx.Prepare(`
-		INSERT INTO schools (nome_escola, codigo_inep, municipio, dre, zona)
-		VALUES ($1, $2, 'BELEM', 'DRE REMAP LEGADA', 'Urbana') RETURNING id
+		INSERT INTO schools (nome_escola, codigo_inep, municipio, dre_id, zona)
+		VALUES ($1, $2, 'BELEM', $3, 'Urbana') RETURNING id
 	`)
 	if err != nil {
 		_ = tx.Rollback()
@@ -28,6 +29,7 @@ func seedRemapStressSchools(t *testing.T, db *sql.DB, total int) []int {
 		if err := stmt.QueryRow(
 			fmt.Sprintf("Escola Remap %04d", i),
 			fmt.Sprintf("157%05d", i),
+			dreID,
 		).Scan(&id); err != nil {
 			_ = stmt.Close()
 			_ = tx.Rollback()

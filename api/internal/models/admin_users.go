@@ -95,8 +95,8 @@ func normalizeAdminUserCreateInput(username, plainPassword, role string) (string
 	if username == "" {
 		return "", "", errors.New("username não pode ser vazio")
 	}
-	if len(plainPassword) < 6 {
-		return "", "", errors.New("senha deve ter no mínimo 6 caracteres")
+	if len(plainPassword) < 12 {
+		return "", "", errors.New("senha deve ter no mínimo 12 caracteres")
 	}
 	if role != "dre" {
 		return "", "", ErrInvalidRole
@@ -348,8 +348,8 @@ func (m *AdminUserModel) GetByID(ctx context.Context, id int) (*AdminUser, error
 // incrementando auth_version de forma atomica para invalidar tokens anteriores.
 func (m *AdminUserModel) UpdatePassword(ctx context.Context, username string, newPlainPassword string) error {
 	username = strings.TrimSpace(username)
-	if len(newPlainPassword) < 6 {
-		return errors.New("nova senha deve ter no mínimo 6 caracteres")
+	if len(newPlainPassword) < 12 {
+		return errors.New("nova senha deve ter no mínimo 12 caracteres")
 	}
 
 	u, err := m.GetByUsername(ctx, username)
@@ -383,8 +383,8 @@ func (m *AdminUserModel) UpdatePasswordByID(ctx context.Context, id int, newPlai
 	if id <= 0 {
 		return ErrUserNotFound
 	}
-	if len(newPlainPassword) < 6 {
-		return errors.New("nova senha deve ter no mínimo 6 caracteres")
+	if len(newPlainPassword) < 12 {
+		return errors.New("nova senha deve ter no mínimo 12 caracteres")
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPlainPassword), bcrypt.DefaultCost)

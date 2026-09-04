@@ -143,8 +143,8 @@ export function UserFormModal({
       setError("Informe o nome de usuário.");
       return;
     }
-    if (p.length < 6) {
-      setError("A senha deve ter no mínimo 6 caracteres.");
+    if (p.length < 12) {
+      setError("A senha deve ter no mínimo 12 caracteres.");
       return;
     }
 
@@ -271,10 +271,10 @@ export function UserFormModal({
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Mínimo 6 caracteres"
+                placeholder="Mínimo 12 caracteres"
                 className="w-full font-mono text-sm bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl pl-3.5 pr-20 py-2.5 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
                 required
-                minLength={6}
+                minLength={12}
               />
               <div className="absolute right-2 flex items-center gap-1">
                 <button

@@ -33,6 +33,9 @@ key.json
 
 # Dev Tools (Tests)
 src/dev/
+web/e2e/results/
+web/playwright-report/
+web/test-results/
 
 .claude
 

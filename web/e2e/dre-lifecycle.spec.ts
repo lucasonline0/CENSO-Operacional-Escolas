@@ -62,7 +62,7 @@ test("admin (env) enxerga a rede completa e ações globais", async ({ page, req
   await expect(page.getByText("Gestão de DREs e Acessos")).toBeVisible();
 
   // Seletor de DRE editável para admin.
-  const dreFilter = page.locator("label", { hasText: "DRE" }).locator("select");
+  const dreFilter = page.getByLabel("DRE");
   await expect(dreFilter).toBeEnabled();
 
   // /admin/me reflete role admin (identidade real no backend).
@@ -88,7 +88,7 @@ test("usuário DRE_A vê DRE fixa e escondidas ações globais", async ({ page, 
   await expect(page.getByText("Gestão de DREs e Acessos")).toHaveCount(0);
 
   // DRE fixa: select desabilitado com o valor da conta.
-  const dreFilter = page.locator("label", { hasText: "DRE" }).locator("select");
+  const dreFilter = page.getByLabel("DRE");
   await expect(dreFilter).toBeDisabled();
   expect(await dreFilter.inputValue()).toBe(acc.name);
 
@@ -187,7 +187,7 @@ test("usuário DRE_B tem escopo próprio e não herda dados de DRE_A", async ({ 
   const tokenB = await loginViaUI(page, acc.username, acc.password);
 
   await expect(page.getByText(/Acesso restrito à DRE:/)).toBeVisible();
-  const dreFilter = page.locator("label", { hasText: "DRE" }).locator("select");
+  const dreFilter = page.getByLabel("DRE");
   await expect(dreFilter).toBeDisabled();
   expect(await dreFilter.inputValue()).toBe(acc.name);
 
@@ -200,7 +200,7 @@ test("usuário DRE_B tem escopo próprio e não herda dados de DRE_A", async ({ 
   expect(me.dre).toBe(acc.name);
 });
 
-test("sessão restaurada via token real (sessionStorage) abandona cache e escopa analytics", async ({ request }) => {
+test("sessão restaurada via token real (sessionStorage) abandona cache e escopa analytics", async ({ browser, request }) => {
   expect(dreAToken).toBeTruthy();
   const page = await openDashboard(browser, dreAToken!);
   await expect(page.getByText(/Acesso restrito à DRE:/)).toBeVisible();

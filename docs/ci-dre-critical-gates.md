@@ -6,7 +6,7 @@ Todos rodam contra PostgreSQL 16 real efêmero e não dependem de estado externo
 ## API CI (`.github/workflows/api-ci.yml`)
 
 1. **DRE critical migrations gate**
-   - Aplica a cadeia administrativa crítica em ordem (`0014` → `0018` → `0019` → `0020` → `0021`) com `ON_ERROR_STOP=1`.
+   - Aplica a cadeia administrativa crítica em ordem (`0014` → `0018` → `0019` → `0020` → `0021` → `0024`) com `ON_ERROR_STOP=1`.
    - Roda `applyMigrations` (loader real de runtime) e os testes de fail-closed/idempotência em schemas isolados.
    - Falha de migration administrativa crítica — inclusive futura — torna o CI vermelho.
 
@@ -23,8 +23,7 @@ Todos rodam contra PostgreSQL 16 real efêmero e não dependem de estado externo
 
 4. **Web build & lint**
    - `npm ci` (lockfile) + `npm run lint` + `npm run build`.
-   - Roda em todo pull request para `develop`, para que o contexto requerido
-     exista também quando a alteração não tocar `web/**`.
+   - Roda em todo pull request para `develop`, para que o contexto requerido exista também quando a alteração não tocar `web/**`.
 
 ## DRE E2E CI (`.github/workflows/dre-e2e-ci.yml`)
 

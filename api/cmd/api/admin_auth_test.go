@@ -199,7 +199,7 @@ func TestUnknownRoleRejected(t *testing.T) {
 	}
 }
 
-// 8. /admin/me retorna o perfil correto
+// 8. /admin/me retorna o perfil correto (via AdminMeCanonical)
 func TestAdminMeEndpoint(t *testing.T) {
 	app := setupTestApp()
 
@@ -211,7 +211,7 @@ func TestAdminMeEndpoint(t *testing.T) {
 		req = req.WithContext(ctx)
 
 		rr := httptest.NewRecorder()
-		app.AdminMe(rr, req)
+		app.AdminMeCanonical(rr, req)
 
 		if rr.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", rr.Code)
@@ -221,20 +221,20 @@ func TestAdminMeEndpoint(t *testing.T) {
 		json.Unmarshal(rr.Body.Bytes(), &resp)
 		data := resp.Data.(map[string]interface{})
 
-		if data["username"] != "admin_env" || data["role"] != RoleAdmin || data["dre"] != nil {
+		if data["username"] != "admin_env" || data["role"] != RoleAdmin || data["dre"] != nil || data["dre_id"] != nil {
 			t.Fatalf("admin /me response invalid: %+v", data)
 		}
 	})
 
 	t.Run("dre role profile", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/v1/admin/me", nil)
-		scope := AdminAccessScope{Username: "user_belem", Role: RoleDRE, DRE: "DRE BELEM"}
+		scope := AdminAccessScope{Username: "user_belem", Role: RoleDRE, DREID: 42, DRE: "DRE BELEM"}
 		ctx := req.Context()
 		ctx = context.WithValue(ctx, contextKeyAdminScope, scope)
 		req = req.WithContext(ctx)
 
 		rr := httptest.NewRecorder()
-		app.AdminMe(rr, req)
+		app.AdminMeCanonical(rr, req)
 
 		if rr.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", rr.Code)
@@ -246,6 +246,10 @@ func TestAdminMeEndpoint(t *testing.T) {
 
 		if data["username"] != "user_belem" || data["role"] != RoleDRE || data["dre"] != "DRE BELEM" {
 			t.Fatalf("dre /me response invalid: %+v", data)
+		}
+		dreID, ok := data["dre_id"].(float64)
+		if !ok || int(dreID) != 42 {
+			t.Fatalf("expected dre_id=42, got %v", data["dre_id"])
 		}
 	})
 }

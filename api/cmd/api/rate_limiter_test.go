@@ -105,6 +105,65 @@ func TestRateLimiterSweepIsThreadSafe(t *testing.T) {
 	}
 }
 
+// TestRateLimiterSweepNowDeterministicCleanup verifies that SweepNow removes
+// all IPs whose timestamps are expired, without requiring a request to trigger
+// the sweep.
+func TestRateLimiterSweepNowDeterministicCleanup(t *testing.T) {
+	rl := &rateLimiter{
+		attempts: make(map[string][]time.Time),
+		window:   1 * time.Minute,
+	}
+
+	// Seed with timestamps that are already expired.
+	rl.mu.Lock()
+	rl.attempts["expired-a"] = []time.Time{time.Now().Add(-5 * time.Minute)}
+	rl.attempts["expired-b"] = []time.Time{time.Now().Add(-3 * time.Minute)}
+	rl.attempts["active-c"] = []time.Time{time.Now().Add(-30 * time.Second)}
+	rl.mu.Unlock()
+
+	// SweepNow should clear expired IPs and preserve the active one.
+	rl.SweepNow()
+
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	if len(rl.attempts) != 1 {
+		t.Fatalf("expected 1 tracked IP after SweepNow, got %d (keys: %v)", len(rl.attempts), mapKeys(rl.attempts))
+	}
+	if _, ok := rl.attempts["active-c"]; !ok {
+		t.Fatalf("expected active-c to remain, got %v", mapKeys(rl.attempts))
+	}
+}
+
+// TestRateLimiterSweepNowCleansEmptySlices verifies that IPs whose slice
+// was trimmed to empty (all timestamps expired) are also removed.
+func TestRateLimiterSweepNowCleansEmptySlices(t *testing.T) {
+	rl := &rateLimiter{
+		attempts: make(map[string][]time.Time),
+		window:   1 * time.Minute,
+	}
+
+	// Simulate IPs whose timestamps were individually trimmed by allow()
+	// but the map key was never deleted.
+	rl.mu.Lock()
+	rl.attempts["stale-ip"] = nil
+	rl.attempts["other-stale"] = []time.Time{}
+	rl.attempts["living"] = []time.Time{time.Now().Add(-10 * time.Second)}
+	rl.mu.Unlock()
+
+	rl.SweepNow()
+
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	if len(rl.attempts) != 1 {
+		t.Fatalf("expected 1 tracked IP, got %d (keys: %v)", len(rl.attempts), mapKeys(rl.attempts))
+	}
+	if _, ok := rl.attempts["living"]; !ok {
+		t.Fatalf("expected living to remain, got %v", mapKeys(rl.attempts))
+	}
+}
+
 func mapKeys(m map[string][]time.Time) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {

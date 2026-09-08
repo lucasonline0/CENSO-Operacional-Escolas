@@ -46,6 +46,10 @@ jobs:
         working-directory: web
         run: npm ci
 
+      - name: Install Playwright browsers
+        working-directory: web
+        run: npx playwright install --with-deps chromium chromium-headless-shell
+
       - name: Download Go dependencies
         working-directory: api
         run: go mod download

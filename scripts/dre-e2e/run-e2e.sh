@@ -195,12 +195,15 @@ curl -fsS "$WEB_URL/admin/" >/dev/null 2>&1 \
     || { tail -n 60 "$LOGS/web.log"; fail "frontend não subiu"; }
 
 # ─── 9. Playwright ──────────────────────────────────────────────────────
-log "instalando/verificando chromium (Playwright)"
+# O chromium-headless-shell é obrigatório: é o executável usado pelo modo
+# headless padrão do Playwright. Sem ele a suíte falha em runtime com
+# "Executable doesn't exist at .../chromium_headless_shell-XXXX/...".
+log "instalando/verificando chromium e chromium-headless-shell (Playwright)"
 cd "$ROOT/web"
 if [ "$CI" = "true" ]; then
-    sudo npx playwright install --with-deps chromium
+    sudo npx playwright install --with-deps chromium chromium-headless-shell
 else
-    npx playwright install chromium
+    npx playwright install chromium chromium-headless-shell
 fi
 
 log "rodando E2E de perfil DRE (stack real; portas ${API_PORT}/${WEB_PORT})"

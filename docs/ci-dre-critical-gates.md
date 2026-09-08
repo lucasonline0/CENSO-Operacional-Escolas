@@ -26,6 +26,21 @@ Todos rodam contra PostgreSQL 16 real efêmero e não dependem de estado externo
    - Roda em todo pull request para `develop`, para que o contexto requerido
      exista também quando a alteração não tocar `web/**`.
 
+## DRE E2E CI (`.github/workflows/dre-e2e-ci.yml`)
+
+5. **DRE E2E gate (stack real)**
+   - Executa `scripts/dre-e2e/run-e2e.sh` com `CI=true`.
+   - Stack real, sem mocks: PostgreSQL 16 efêmero (docker) + `infra/init.sql`
+     + API Go (migrations reais 0001–0024 no startup, `applyMigrations`) +
+     seed canônico (`dres`, `schools.dre_id`, `census_responses`, usuários DRE
+     via CLI real) + Next.js production + Playwright
+     (`web/e2e/dre-lifecycle.spec.ts`).
+   - Falha de migration, startup (API/frontend) ou de qualquer assert da suíte
+     reprova o PR; artefatos (`web/playwright-report/**`, `web/test-results/**`)
+     são anexados ao job em caso de falha.
+   - Sem mocks de autenticação: todos os logins são reais (`/v1/admin/login`),
+     dentro do orçamento de 5 tentativas/15min por IP do rate limiter.
+
 ## Proteção obrigatória da `develop`
 
 No estado verificado em 2026-09-04, `develop` não está protegida e a conta que
@@ -40,3 +55,4 @@ deleção da branch. Os contextos exatos a selecionar são:
 - `DRE lifecycle & auth gate`
 - `API integration gate`
 - `Web build & lint`
+- `DRE E2E gate (PG16 + API + Next + Playwright)`

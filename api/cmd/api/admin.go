@@ -70,6 +70,15 @@ const (
 	uploadWindow = 10 * time.Minute
 )
 
+// SweepNow executa uma limpeza imediata de chaves inativas sem depender de
+// uma nova chamada a allow(). Pode ser chamado de qualquer goroutine.
+func (rl *rateLimiter) SweepNow() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.lastSweep = time.Time{} // reseta para forçar sweep imediato
+	rl.sweep()
+}
+
 // sweep remove todas as chaves cujas timestamps são todas anteriores à janela.
 // Deve ser chamado com rl.mu segurado.
 func (rl *rateLimiter) sweep() {
@@ -192,6 +201,9 @@ func (app *application) requirePublicAPIKey(next http.Handler) http.Handler {
 
 // ─── JWT ─────────────────────────────────────────────────────────────────────
 
+// adminClaims é o tipo legacy de JWT claims, anterior ao fluxo runtime.
+// NÃO usar para emitir tokens novos — utilise runtimeAdminClaims.
+// Mantido apenas para compatibilidade de parsing de tokens antigos em testes.
 type adminClaims struct {
 	Username string `json:"username"`
 	Role     string `json:"role"`
@@ -219,32 +231,6 @@ func validateSecurityConfig() error {
 		return fmt.Errorf("ADMIN_JWT_SECRET ausente ou curto demais (mínimo %d caracteres; gere com: openssl rand -hex 32)", minJWTSecretLen)
 	}
 	return nil
-}
-
-// ─── Handlers ────────────────────────────────────────────────────────────────
-
-// AdminMe retorna os dados do perfil do usuário autenticado.
-func (app *application) AdminMe(w http.ResponseWriter, r *http.Request) {
-	scope, ok := GetAdminAccessScope(r.Context())
-	if !ok {
-		app.errorJSON(w, fmt.Errorf("escopo de acesso não encontrado"), http.StatusUnauthorized)
-		return
-	}
-
-	var drePtr *string
-	if scope.Role == RoleDRE && scope.DRE != "" {
-		dreVal := scope.DRE
-		drePtr = &dreVal
-	}
-
-	app.writeJSON(w, http.StatusOK, jsonResponse{
-		Error: false,
-		Data: map[string]interface{}{
-			"username": scope.Username,
-			"role":     scope.Role,
-			"dre":      drePtr,
-		},
-	})
 }
 
 // ─── Dashboard data types ─────────────────────────────────────────────────────

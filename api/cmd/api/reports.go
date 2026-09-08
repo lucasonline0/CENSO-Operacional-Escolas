@@ -17,7 +17,7 @@ import (
 // =====================================================================
 // Relatórios gerenciais — handler HTTP e relatório piloto
 // =====================================================================
-// Rota: GET /v1/admin/reports/{report_id} (protegida por requireAdminAuth).
+// Rota: GET /v1/admin/reports/{report_id} (protegida por requireRuntimeAdminAuth).
 // Respostas:
 //   - 401: token ausente/inválido (tratado pelo middleware).
 //   - 404: report_id não consta no catálogo.

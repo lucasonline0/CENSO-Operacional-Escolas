@@ -210,3 +210,47 @@ test("sessão restaurada via token real (sessionStorage) abandona cache e escopa
   expect(opts.dres).toEqual([dreA().name]);
   await page.close();
 });
+
+test("revogação remota (reset de senha) encerra a sessão no cliente sem F5", async ({ browser, request }) => {
+  expect(adminToken).toBeTruthy();
+  expect(dreAToken).toBeTruthy();
+  const acc = dreA();
+
+  // Painel aberto com o token DRE_A ainda válido.
+  const page = await openDashboard(browser, dreAToken!);
+
+  // Nenhuma navegação de página (reload/F5) é permitida para corrigir o estado:
+  // a sessão precisa encerrar sozinha, via revalidação (heartbeat/focus).
+  let reloaded = false;
+  page.on("framenavigated", (frame) => {
+    if (frame === page.mainFrame()) reloaded = true;
+  });
+
+  // Admin redefine a senha de DRE_A => auth_version incrementa => token revogado.
+  const users = await apiGet<Array<AdminUserRow>>(request, adminToken!, "/v1/admin/users");
+  const target = users.find((u) => u.username === acc.username);
+  expect(target).toBeTruthy();
+  const reset = await apiRawPost(request, adminToken!, `/v1/admin/users/${target!.id}/reset-password`, {
+    password: await randomPassword(),
+  });
+  expect(reset.ok()).toBeTruthy();
+
+  // Retorno à aba/janela força revalidação da sessão (fora do cache).
+  await page.bringToFront();
+  await page.evaluate(() => {
+    document.dispatchEvent(new Event("visibilitychange"));
+    window.dispatchEvent(new Event("focus"));
+  });
+
+  // Painel volta sozinho para a tela de login, sem F5.
+  await expect(page.locator("input[autocomplete='username']")).toBeVisible();
+  await expect(page.locator(".ca-sidebar")).toHaveCount(0);
+
+  // Token revogado removido da sessão e nada da conta anterior segue renderizado.
+  const token = await page.evaluate((key) => sessionStorage.getItem(key), "censo_admin_token");
+  expect(token).toBeNull();
+
+  // A revalidação não dependeu de reload da página.
+  expect(reloaded).toBe(false);
+  await page.close();
+});

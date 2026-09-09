@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   LogOut, RefreshCw, AlertCircle, Loader2, PanelLeftClose, BarChart2,
   UsersRound, MonitorSmartphone, ShieldCheck, Utensils,
@@ -16,7 +16,8 @@ import "./admin.css";
 
 import { API, C } from "@/components/admin/shared/constants";
 import {
-  apiFetch, saveToken, loadToken, clearToken, clearApiCache, sanitize, prefetchDashboard, fetchAdminMe,
+  apiFetch, saveToken, loadToken, clearToken, clearApiCache, sanitize, prefetchDashboard,
+  fetchAdminMeFresh, setUnauthorizedHandler,
 } from "@/components/admin/shared/api";
 import { JsonModal } from "@/components/admin/shared/JsonModal";
 import { AbaTodosCensos } from "@/components/admin/AbaTodosCensos";
@@ -64,9 +65,12 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
       saveToken(token);
       setStatus("prefetch");
       try {
-        const prof = await fetchAdminMe(token);
+        const prof = await fetchAdminMeFresh(token);
         await prefetchDashboard(token, prof.role);
       } catch {
+        // Um 401 aqui (raro: falha entre login e /admin/me) limpa token/cache
+        // em apiFetch; re-grava o token para o mont do dashboard revalidar.
+        saveToken(token);
         await prefetchDashboard(token);
       }
       onLogin(token);
@@ -402,10 +406,69 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const logout = useCallback(() => { 
     setFilters({});
     setFiltrosOpcoes(null);
+    setCensusPage(null);
     clearToken(); 
     clearApiCache(); 
     onLogout(); 
   }, [onLogout]);
+
+  // Guard de revalidação de sessão: evita requisições sobrepostas/tempestade
+  // (intervalo + visibilitychange/focus podem disparar próximos uns dos outros).
+  const revalidatingRef = useRef(false);
+  const profileRef = useRef<AdminProfile | null>(null);
+  useEffect(() => { profileRef.current = profile; }, [profile]);
+
+  // Revalida a sessão com /admin/me FORA do cache. 401 (reset de senha,
+  // usuário inativo, DRE inativa) => logout imediato, sem reload. Um perfil com
+  // identidade diferente também zera estado sensível antes de atualizar.
+  const revalidateSession = useCallback(async () => {
+    if (revalidatingRef.current) return;
+    revalidatingRef.current = true;
+    try {
+      const fresh = await fetchAdminMeFresh(token);
+      const prev = profileRef.current;
+      const identityChanged =
+        prev !== null &&
+        (prev.username !== fresh.username || prev.role !== fresh.role || prev.dre !== fresh.dre || prev.dre_id !== fresh.dre_id);
+      if (identityChanged) {
+        setFilters({});
+        setFiltrosOpcoes(null);
+        setCensusPage(null);
+        if (fresh.role === "dre" && fresh.dre) {
+          setFilters((f) => ({ ...f, dre: fresh.dre ?? undefined }));
+        }
+      }
+      setProfile(fresh);
+    } catch (e) {
+      if ((e as Error).message === "UNAUTHORIZED") { logout(); return; }
+    } finally {
+      revalidatingRef.current = false;
+    }
+  }, [token, logout]);
+
+  // Heartbeat de sessão: valida a sessão na rede a cada intervalo e ao retornar
+  // à aba/janela (visibilitychange/focus). Qualquer revogação remota encerra a
+  // sessão no cliente sem depender de F5. Registra também o handler global de
+  // 401 para que qualquer request do dashboard dispare o mesmo logout.
+  useEffect(() => {
+    setUnauthorizedHandler(logout);
+    const HEARTBEAT_MS = 60_000;
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") revalidateSession();
+    };
+    const onFocus = () => {
+      if (document.visibilityState === "visible") revalidateSession();
+    };
+    const interval = setInterval(revalidateSession, HEARTBEAT_MS);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      setUnauthorizedHandler(null);
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [revalidateSession, logout]);
 
   // O endpoint legado /v1/admin/dashboard segue sendo consultado para gatear o
   // estado de carregamento/erro do painel operacional. O payload (incl. by_dre)
@@ -444,9 +507,10 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
      let active = true;
      async function init() {
        try {
-         const userProfile = await fetchAdminMe(token);
+         const userProfile = await fetchAdminMeFresh(token);
          if (!active) return;
          setProfile(userProfile);
+        profileRef.current = userProfile;
         
          if (userProfile.role === "dre" && userProfile.dre) {
             setFilters((prev) => ({ ...prev, dre: userProfile.dre ?? undefined }));

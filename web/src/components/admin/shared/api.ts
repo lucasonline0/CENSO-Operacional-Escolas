@@ -10,44 +10,74 @@ export const clearToken = () => { try { sessionStorage.removeItem(TOKEN_KEY); } 
 export const sanitize   = (s: string) => s.replace(/[\x00-\x1F\x7F]/g, "");
 
 // Cache em memória para requisições GET — evita re-fetch ao trocar de aba.
+// O cache é NAMESPACED pelo token: dados de uma sessão/conta nunca são
+// reutilizados por outra identidade. Troca de token => namespace novo.
 interface CacheEntry { data: unknown; expiresAt: number }
-const apiCache = new Map<string, CacheEntry>();
+const apiCache = new Map<string, Map<string, CacheEntry>>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
+function namespaceFor(token: string): Map<string, CacheEntry> {
+  let ns = apiCache.get(token);
+  if (!ns) {
+    ns = new Map();
+    apiCache.set(token, ns);
+  }
+  return ns;
+}
 
 export function clearApiCache() { apiCache.clear(); }
 
-export function getCached<T>(path: string): T | null {
-  const entry = apiCache.get(path);
+export function getCached<T>(path: string, token: string): T | null {
+  const ns = apiCache.get(token);
+  if (!ns) return null;
+  const entry = ns.get(path);
   if (entry && entry.expiresAt > Date.now()) return entry.data as T;
   return null;
 }
 
-export function allCached(paths: string[]): boolean {
+export function allCached(paths: string[], token: string): boolean {
   const now = Date.now();
+  const ns = apiCache.get(token);
   return paths.every((p) => {
-    const e = apiCache.get(p);
+    const e = ns?.get(p);
     return e !== undefined && e.expiresAt > now;
   });
 }
 
-export async function apiFetch<T>(path: string, token: string, opts?: RequestInit): Promise<T> {
-  const isGet = !opts?.method || opts.method.toUpperCase() === "GET";
+export interface ApiFetchOptions extends RequestInit {
+  // Quando true, ignora o cache em memória e força uma requisição à rede.
+  // Usado para revalidação de sessão (/admin/me) e leituras que precisam do
+  // estado mais recente do backend.
+  bypassCache?: boolean;
+}
 
-  if (isGet) {
-    const cached = apiCache.get(path);
+// Handler global de 401: permite ao dashboard limpar token, cache e estado
+// sensível SEM depender de window.location.reload(). Qualquer chamada 401
+// dispara o logout imediato a partir de qualquer componente.
+let unauthorizedHandler: (() => void) | null = null;
+export function setUnauthorizedHandler(h: (() => void) | null) { unauthorizedHandler = h; }
+
+export async function apiFetch<T>(path: string, token: string, opts?: ApiFetchOptions): Promise<T> {
+  const isGet = !opts?.method || opts.method.toUpperCase() === "GET";
+  const useCache = isGet && !opts?.bypassCache;
+
+  if (useCache) {
+    const ns = apiCache.get(token);
+    const cached = ns?.get(path);
     if (cached && cached.expiresAt > Date.now()) return cached.data as T;
   }
 
+  const fetchOpts = { ...(opts ?? {}) } as ApiFetchOptions;
+  delete fetchOpts.bypassCache;
+
   const res = await fetch(`${API}${path}`, {
-    ...opts,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(opts?.headers ?? {}) },
+    ...fetchOpts,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(fetchOpts.headers ?? {}) },
   });
   if (res.status === 401) {
     clearApiCache();
     clearToken();
-    if (typeof window !== "undefined") {
-      window.location.reload();
-    }
+    unauthorizedHandler?.();
     throw new Error("UNAUTHORIZED");
   }
   if (!res.ok) {
@@ -55,7 +85,7 @@ export async function apiFetch<T>(path: string, token: string, opts?: RequestIni
     throw new Error((b as { message?: string }).message ?? `HTTP ${res.status}`);
   }
   const data = (await res.json()).data as T;
-  if (isGet) apiCache.set(path, { data, expiresAt: Date.now() + CACHE_TTL });
+  if (useCache) namespaceFor(token).set(path, { data, expiresAt: Date.now() + CACHE_TTL });
   return data;
 }
 
@@ -69,6 +99,13 @@ async function apiMutation<T>(path: string, token: string, opts: RequestInit): P
 
 export async function fetchAdminMe(token: string): Promise<AdminProfile> {
   return apiFetch<AdminProfile>("/v1/admin/me", token);
+}
+
+// Heartbeat de sessão: consulta /admin/me FORA do cache, na rede, para que
+// revogação remota (reset de senha, usuário inativo, DRE inativa) resulte em
+// 401 imediato — nunca dados cacheados apresentados como sessão válida.
+export async function fetchAdminMeFresh(token: string): Promise<AdminProfile> {
+  return apiFetch<AdminProfile>("/v1/admin/me", token, { bypassCache: true });
 }
 
 export async function fetchDREs(token: string): Promise<DREItem[]> {

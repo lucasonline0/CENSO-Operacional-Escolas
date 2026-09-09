@@ -126,13 +126,13 @@ export function AbaPerfilAlunos({
     [filters, etapa],
   );
 
-  const [data, setData] = useState<IdebAnalytics | null>(() => getCached<IdebAnalytics>(path));
-  const [loading, setLoading] = useState<boolean>(() => getCached<IdebAnalytics>(path) === null);
+  const [data, setData] = useState<IdebAnalytics | null>(() => getCached<IdebAnalytics>(path, token));
+  const [loading, setLoading] = useState<boolean>(() => getCached<IdebAnalytics>(path, token) === null);
   const [err, setErr] = useState("");
 
   useEffect(() => {
     let cancelled = false;
-    const cached = getCached<IdebAnalytics>(path);
+    const cached = getCached<IdebAnalytics>(path, token);
     setErr("");
     if (cached) {
       setData(cached);

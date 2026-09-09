@@ -20,6 +20,13 @@ concurrency:
 # Nenhum check depende de estado externo; todos usam PostgreSQL 16 efêmero.
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Gate 1 — Migrations administrativas críticas.
+  # Exercita o caminho real de runtime: o loader aplica o fs embed em ordem
+  # (applyMigrations) e os testes de fail-closed/idempotência rodam em schemas
+  # isolados determinísticos. O passo psql com ON_ERROR_STOP converte qualquer
+  # falha de migration crítica (inclusive futuras) em CI vermelho.
+  # ---------------------------------------------------------------------------
   migration-gate:
     name: DRE critical migrations gate
     runs-on: ubuntu-latest
@@ -64,6 +71,9 @@ jobs:
           PGPASSWORD: postgres
         run: |
           set -euo pipefail
+          # Base analítica + cadeia administrativa crítica na MESMA ordem do runtime.
+          # ON_ERROR_STOP=1 faz qualquer falha de migration (inclusive futura)
+          # reprovar o workflow imediatamente.
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f infra/init.sql
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0014_reg_integracao.sql
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0018_create_admin_users.sql
@@ -80,6 +90,11 @@ jobs:
           '^(TestCriticalAdministrativeMigrationsCleanAndIdempotent|TestCriticalMigrationFailsClosedOnLegacyUsernameCollision|TestCriticalMigrationFailsClosedOnAmbiguousDRENames|TestDRECanonicalRelationsMigration.*|TestDRESessionRevocationMigrationIsCritical)$'
           -count=1
 
+  # ---------------------------------------------------------------------------
+  # Gate 2 — Lifecycle DRE + autenticação (check identificável; cobre #209/#241).
+  # Os testes criam schemas isolados, portanto o job só exige PostgreSQL 16
+  # real e é determinístico (nenhuma dependência de schema/estado externo).
+  # ---------------------------------------------------------------------------
   dre-lifecycle-auth:
     name: DRE lifecycle & auth gate
     runs-on: ubuntu-latest
@@ -126,6 +141,11 @@ jobs:
           '^(TestDRELifecycle|TestDRECreateWithAtivaFalsePersists|TestInactiveDRE|TestDREInactiveUserCannotAuthenticate|TestRenamePreserves|TestAdminMeReflects|TestDuplicate.*ByCaseIsRejected|TestDREEntityAbsentInDresNotValidatedBySchoolsText|TestDREUserDeactivation|TestDREDeactivationViaUpdate|TestRuntimeDRE|TestRuntimeEnvAdmin|TestRuntimeLegacyDRE|TestRuntimeTransitionSchema)'
           -count=1
 
+  # ---------------------------------------------------------------------------
+  # Gate 3 — Suíte completa de integração (vet + go test + stress/race).
+  # Schema de integração compartilhado via init.sql + cadeia administrativa
+  # crítica em ordem (0014/0018/0019/0020/0021/0024/0025) para espelhar o runtime.
+  # ---------------------------------------------------------------------------
   integration:
     name: API integration gate
     runs-on: ubuntu-latest
@@ -170,6 +190,12 @@ jobs:
           PGPASSWORD: postgres
         run: |
           set -euo pipefail
+          # infra/init.sql contém o schema/base analítica. A cadeia administrativa
+          # é aplicada integralmente no banco compartilhado da suíte para que
+          # go test, stress e race exercitem exatamente o schema pós-0025.
+          # Fixtures de integração devem criar dres e relacionar schools por
+          # dre_id; TestDREIntegrationSchemaIsCanonicalPost0021 falha se este
+          # passo parar em 0019.
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f infra/init.sql
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0014_reg_integracao.sql
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0018_create_admin_users.sql

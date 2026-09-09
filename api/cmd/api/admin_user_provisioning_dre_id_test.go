@@ -40,19 +40,6 @@ func decodeAdminCreateUserResponse(t *testing.T, rr *httptest.ResponseRecorder) 
 	return resp
 }
 
-func assertNoAdminUser(t *testing.T, dbQuery interface {
-	QueryRowContext(context.Context, string, ...any) *sql.Row
-}, username string) {
-	t.Helper()
-	var count int
-	if err := dbQuery.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM admin_users WHERE username = $1`, username).Scan(&count); err != nil {
-		t.Fatalf("count admin user %q: %v", username, err)
-	}
-	if count != 0 {
-		t.Fatalf("user %q was persisted despite rejected provisioning", username)
-	}
-}
-
 func TestDRELifecycleCanonicalUserProvisioningByID(t *testing.T) {
 	ctx := context.Background()
 	db, m := setupDRELifecycleTestDB(t, true)

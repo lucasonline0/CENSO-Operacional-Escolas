@@ -898,7 +898,9 @@ func (app *application) AdminUpdateDRE(w http.ResponseWriter, r *http.Request) {
 
 // ─── Gestão de Usuários Administrativos (role=admin) ─────────────────────────
 
-// AdminCreateUser cria um novo usuário DRE com hash bcrypt e validação de DRE (exclusivo para role=admin).
+// AdminCreateUser cria um novo usuário DRE. dre_id é a identidade canônica;
+// o campo dre textual é mantido somente como compatibilidade para clientes
+// legados que ainda não migraram para o contrato por ID.
 func (app *application) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 	scope, ok := GetAdminAccessScope(r.Context())
 	if !ok || scope.Role != RoleAdmin {
@@ -911,6 +913,7 @@ func (app *application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		Password string `json:"password"`
 		Role     string `json:"role"`
 		DRE      string `json:"dre"`
+		DREID    *int   `json:"dre_id"`
 	}
 
 	if err := app.readJSON(w, r, &req); err != nil {
@@ -922,7 +925,37 @@ func (app *application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		req.Role = RoleDRE
 	}
 
-	user, err := app.models.AdminUsers.Create(r.Context(), req.Username, req.Password, req.Role, req.DRE)
+	var (
+		user *models.AdminUser
+		err  error
+	)
+
+	if req.DREID != nil {
+		// Quando ambos os campos são enviados, dre é somente uma asserção de
+		// consistência. O vínculo continua sendo decidido exclusivamente por
+		// dre_id; nunca fazemos fallback textual quando o ID está presente.
+		if strings.TrimSpace(req.DRE) != "" {
+			canonical, lookupErr := app.models.DREs.GetByID(r.Context(), *req.DREID)
+			if lookupErr != nil {
+				if errors.Is(lookupErr, models.ErrDRENotFound) || errors.Is(lookupErr, models.ErrDREInvalidID) {
+					app.errorJSON(w, fmt.Errorf("DRE não encontrada"), http.StatusBadRequest)
+					return
+				}
+				app.errorJSON(w, fmt.Errorf("erro ao validar dre_id: %w", lookupErr), http.StatusInternalServerError)
+				return
+			}
+			if !strings.EqualFold(strings.TrimSpace(req.DRE), strings.TrimSpace(canonical.Nome)) {
+				app.errorJSON(w, fmt.Errorf("dre e dre_id referenciam DREs diferentes"), http.StatusBadRequest)
+				return
+			}
+		}
+		user, err = app.models.AdminUsers.CreateForDREID(r.Context(), req.Username, req.Password, req.Role, *req.DREID)
+	} else {
+		// Compatibilidade temporária: clientes antigos ainda podem enviar apenas
+		// dre textual. Novos clientes devem enviar dre_id.
+		user, err = app.models.AdminUsers.Create(r.Context(), req.Username, req.Password, req.Role, req.DRE)
+	}
+
 	if err != nil {
 		if errors.Is(err, models.ErrUsernameExists) {
 			app.errorJSON(w, err, http.StatusConflict)

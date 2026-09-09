@@ -32,7 +32,14 @@ func setupRuntimeAuthTest(t *testing.T) (*application, http.Handler, models.Mode
 	t.Setenv("TRUSTED_PROXY_COUNT", "0")
 	resetRuntimeLoginLimiter()
 
-	_, m := setupDRELifecycleTestDB(t, true)
+	db, m := setupDRELifecycleTestDB(t, true)
+	revocationMigration, err := migrationsFS.ReadFile("migrations/0025_dre_session_revocation.sql")
+	if err != nil {
+		t.Fatalf("read DRE session revocation migration: %v", err)
+	}
+	if _, err := db.Exec(string(revocationMigration)); err != nil {
+		t.Fatalf("apply DRE session revocation migration: %v", err)
+	}
 	app := &application{models: m}
 	return app, app.routes(), m
 }
@@ -139,8 +146,6 @@ func TestRuntimeDRETokenStableIdentityAndMeTracksCurrentDatabaseState(t *testing
 		t.Fatalf("rename username fixture: %v", err)
 	}
 
-	// O JWT continua contendo snapshots antigos. O resultado correto só pode vir
-	// de uma resolução runtime por identidade estável.
 	staleClaims, err := parseRuntimeAdminToken(token)
 	if err != nil {
 		t.Fatalf("parse stale token: %v", err)
@@ -165,36 +170,41 @@ func TestRuntimeDREImmediateRevocationForUserAndDREStatus(t *testing.T) {
 	password := "runtime-status-password"
 	dre, user := createRuntimeDREUser(t, m, "DRE STATUS", "status.user", password)
 
-	_, token := runtimeLoginRequest(t, handler, user.Username, password, "10.20.30.2:5002")
-	if token == "" {
+	_, tokenA := runtimeLoginRequest(t, handler, user.Username, password, "10.20.30.2:5002")
+	if tokenA == "" {
 		t.Fatalf("expected initial token")
 	}
-	if rr := runtimeMeRequest(handler, token); rr.Code != http.StatusOK {
+	if rr := runtimeMeRequest(handler, tokenA); rr.Code != http.StatusOK {
 		t.Fatalf("baseline request failed: %d %s", rr.Code, rr.Body.String())
 	}
 
 	if err := m.AdminUsers.SetActiveByID(ctx, user.ID, false); err != nil {
 		t.Fatalf("deactivate user: %v", err)
 	}
-	if rr := runtimeMeRequest(handler, token); rr.Code != http.StatusUnauthorized {
+	if rr := runtimeMeRequest(handler, tokenA); rr.Code != http.StatusUnauthorized {
 		t.Fatalf("same token survived user deactivation: status=%d body=%s", rr.Code, rr.Body.String())
 	}
 
 	if err := m.AdminUsers.SetActiveByID(ctx, user.ID, true); err != nil {
 		t.Fatalf("reactivate user: %v", err)
 	}
-	if rr := runtimeMeRequest(handler, token); rr.Code != http.StatusOK {
-		t.Fatalf("same token did not recover after user reactivation: %d %s", rr.Code, rr.Body.String())
+	if rr := runtimeMeRequest(handler, tokenA); rr.Code != http.StatusUnauthorized {
+		t.Fatalf("old token resurrected after user reactivation: %d %s", rr.Code, rr.Body.String())
+	}
+
+	loginB, tokenB := runtimeLoginRequest(t, handler, user.Username, password, "10.20.30.3:5003")
+	if loginB.Code != http.StatusOK || tokenB == "" {
+		t.Fatalf("reactivated user did not accept new login: status=%d body=%s", loginB.Code, loginB.Body.String())
 	}
 
 	if err := m.DREs.SetActive(ctx, dre.ID, false); err != nil {
 		t.Fatalf("deactivate DRE: %v", err)
 	}
-	if rr := runtimeMeRequest(handler, token); rr.Code != http.StatusUnauthorized {
+	if rr := runtimeMeRequest(handler, tokenB); rr.Code != http.StatusUnauthorized {
 		t.Fatalf("same token survived DRE deactivation: status=%d body=%s", rr.Code, rr.Body.String())
 	}
 
-	loginInactive, inactiveToken := runtimeLoginRequest(t, handler, user.Username, password, "10.20.30.3:5003")
+	loginInactive, inactiveToken := runtimeLoginRequest(t, handler, user.Username, password, "10.20.30.4:5004")
 	if loginInactive.Code != http.StatusUnauthorized || inactiveToken != "" {
 		t.Fatalf("inactive DRE accepted login: status=%d body=%s", loginInactive.Code, loginInactive.Body.String())
 	}
@@ -202,12 +212,15 @@ func TestRuntimeDREImmediateRevocationForUserAndDREStatus(t *testing.T) {
 	if err := m.DREs.SetActive(ctx, dre.ID, true); err != nil {
 		t.Fatalf("reactivate DRE: %v", err)
 	}
-	if rr := runtimeMeRequest(handler, token); rr.Code != http.StatusOK {
-		t.Fatalf("same old token did not recover after DRE reactivation: %d %s", rr.Code, rr.Body.String())
+	if rr := runtimeMeRequest(handler, tokenB); rr.Code != http.StatusUnauthorized {
+		t.Fatalf("old token resurrected after DRE reactivation: %d %s", rr.Code, rr.Body.String())
 	}
-	loginActive, newToken := runtimeLoginRequest(t, handler, user.Username, password, "10.20.30.4:5004")
-	if loginActive.Code != http.StatusOK || newToken == "" {
-		t.Fatalf("reactivated DRE did not accept login: status=%d body=%s", loginActive.Code, loginActive.Body.String())
+	loginC, tokenC := runtimeLoginRequest(t, handler, user.Username, password, "10.20.30.5:5005")
+	if loginC.Code != http.StatusOK || tokenC == "" {
+		t.Fatalf("reactivated DRE did not accept new login: status=%d body=%s", loginC.Code, loginC.Body.String())
+	}
+	if rr := runtimeMeRequest(handler, tokenC); rr.Code != http.StatusOK {
+		t.Fatalf("fresh token after DRE reactivation failed: %d %s", rr.Code, rr.Body.String())
 	}
 }
 
@@ -414,7 +427,6 @@ func TestRuntimeDREAuthorizationStress6000RequestsWithStaleClaims(t *testing.T) 
 		t.Fatalf("authorized calls=%d want=6000", calls)
 	}
 
-	// O snapshot original continuou propositalmente stale durante todo o stress.
 	parsed, err := parseRuntimeAdminToken(token)
 	if err != nil {
 		t.Fatalf("parse stress token: %v", err)
@@ -424,27 +436,14 @@ func TestRuntimeDREAuthorizationStress6000RequestsWithStaleClaims(t *testing.T) 
 	}
 }
 
-// TestRuntimeDREPasswordResetRevokesPriorTokensImmediately cobre os 10 passos obrigatórios da feature:
-// 1. login DRE e emissão de token A;
-// 2. token A acessa /v1/admin/me com 200;
-// 3. admin redefine senha;
-// 4. token A passa a receber 401 imediatamente;
-// 5. senha antiga não autentica;
-// 6. nova senha autentica e gera token B;
-// 7. token B funciona;
-// 8. reset subsequente invalida B;
-// 9. desativação/reativação existente continua com comportamento esperado;
-// 10. rename de DRE não invalida sessão por engano.
 func TestRuntimeDREPasswordResetRevokesPriorTokensImmediately(t *testing.T) {
 	app, handler, m := setupRuntimeAuthTest(t)
 	_ = app
 	ctx := context.Background()
 
-	// 0. Setup: DRE e Usuário DRE
 	initialPassword := "initial-password-123"
 	dre, user := createRuntimeDREUser(t, m, "DRE REVOGACAO TESTE", "user.reset.test", initialPassword)
 
-	// 1. login DRE e emissão de token A
 	loginA, tokenA := runtimeLoginRequest(t, handler, user.Username, initialPassword, "10.80.1.1:7001")
 	if loginA.Code != http.StatusOK || tokenA == "" {
 		t.Fatalf("passo 1 falhou: login A retornou code=%d body=%s", loginA.Code, loginA.Body.String())
@@ -458,31 +457,26 @@ func TestRuntimeDREPasswordResetRevokesPriorTokensImmediately(t *testing.T) {
 		t.Fatalf("passo 1 auth_version esperado 1, obteve %d", claimsA.AuthVersion)
 	}
 
-	// 2. token A acessa /v1/admin/me com 200
 	meA := runtimeMeRequest(handler, tokenA)
 	if meA.Code != http.StatusOK {
 		t.Fatalf("passo 2 falhou: token A /me status=%d body=%s", meA.Code, meA.Body.String())
 	}
 
-	// 3. admin redefine senha (via UpdatePasswordByID / endpoint)
 	newPassword1 := "new-password-step3-456"
 	if err := m.AdminUsers.UpdatePasswordByID(ctx, user.ID, newPassword1); err != nil {
 		t.Fatalf("passo 3 falhou: reset de senha: %v", err)
 	}
 
-	// 4. token A passa a receber 401 imediatamente (sem depender do TTL)
 	meAAfterReset := runtimeMeRequest(handler, tokenA)
 	if meAAfterReset.Code != http.StatusUnauthorized {
 		t.Fatalf("passo 4 falhou: token A deveria receber 401 apos reset, mas recebeu %d body=%s", meAAfterReset.Code, meAAfterReset.Body.String())
 	}
 
-	// 5. senha antiga não autentica
 	loginOld, _ := runtimeLoginRequest(t, handler, user.Username, initialPassword, "10.80.1.2:7002")
 	if loginOld.Code != http.StatusUnauthorized {
 		t.Fatalf("passo 5 falhou: senha antiga deveria receber 401, recebeu %d body=%s", loginOld.Code, loginOld.Body.String())
 	}
 
-	// 6. nova senha autentica e gera token B
 	loginB, tokenB := runtimeLoginRequest(t, handler, user.Username, newPassword1, "10.80.1.3:7003")
 	if loginB.Code != http.StatusOK || tokenB == "" {
 		t.Fatalf("passo 6 falhou: nova senha nao autenticou: code=%d body=%s", loginB.Code, loginB.Body.String())
@@ -496,13 +490,11 @@ func TestRuntimeDREPasswordResetRevokesPriorTokensImmediately(t *testing.T) {
 		t.Fatalf("passo 6 auth_version esperado 2, obteve %d", claimsB.AuthVersion)
 	}
 
-	// 7. token B funciona
 	meB := runtimeMeRequest(handler, tokenB)
 	if meB.Code != http.StatusOK {
 		t.Fatalf("passo 7 falhou: token B /me status=%d body=%s", meB.Code, meB.Body.String())
 	}
 
-	// 8. reset subsequente invalida B
 	newPassword2 := "third-password-step8-789"
 	if err := m.AdminUsers.UpdatePasswordByID(ctx, user.ID, newPassword2); err != nil {
 		t.Fatalf("passo 8 falhou: reset subsequente: %v", err)
@@ -512,7 +504,6 @@ func TestRuntimeDREPasswordResetRevokesPriorTokensImmediately(t *testing.T) {
 		t.Fatalf("passo 8 falhou: token B deveria receber 401 apos 2o reset, mas recebeu %d body=%s", meBAfterReset2.Code, meBAfterReset2.Body.String())
 	}
 
-	// Emitir token C com a senha do passo 8
 	loginC, tokenC := runtimeLoginRequest(t, handler, user.Username, newPassword2, "10.80.1.4:7004")
 	if loginC.Code != http.StatusOK || tokenC == "" {
 		t.Fatalf("login C falhou: code=%d body=%s", loginC.Code, loginC.Body.String())
@@ -521,7 +512,6 @@ func TestRuntimeDREPasswordResetRevokesPriorTokensImmediately(t *testing.T) {
 		t.Fatalf("token C baseline /me falhou: %d %s", rr.Code, rr.Body.String())
 	}
 
-	// 9. desativação/reativação existente continua com comportamento esperado
 	if err := m.AdminUsers.SetActiveByID(ctx, user.ID, false); err != nil {
 		t.Fatalf("passo 9 desativar usuario: %v", err)
 	}
@@ -531,20 +521,24 @@ func TestRuntimeDREPasswordResetRevokesPriorTokensImmediately(t *testing.T) {
 	if err := m.AdminUsers.SetActiveByID(ctx, user.ID, true); err != nil {
 		t.Fatalf("passo 9 reativar usuario: %v", err)
 	}
-	if rr := runtimeMeRequest(handler, tokenC); rr.Code != http.StatusOK {
-		t.Fatalf("passo 9 falhou: token C nao recuperou apos reativacao do usuario: status=%d", rr.Code)
+	if rr := runtimeMeRequest(handler, tokenC); rr.Code != http.StatusUnauthorized {
+		t.Fatalf("passo 9 falhou: token C ressuscitou apos reativacao do usuario: status=%d", rr.Code)
 	}
 
-	// 10. rename de DRE não invalida sessão por engano
+	loginD, tokenD := runtimeLoginRequest(t, handler, user.Username, newPassword2, "10.80.1.5:7005")
+	if loginD.Code != http.StatusOK || tokenD == "" {
+		t.Fatalf("novo login apos reativacao falhou: code=%d body=%s", loginD.Code, loginD.Body.String())
+	}
+
 	dre.Nome = "DRE REVOGACAO RENOMEADA"
 	if _, err := m.DREs.Update(ctx, *dre); err != nil {
 		t.Fatalf("passo 10 renomear DRE: %v", err)
 	}
-	meCAfterRename := runtimeMeRequest(handler, tokenC)
-	if meCAfterRename.Code != http.StatusOK {
-		t.Fatalf("passo 10 falhou: rename da DRE invalidou sessao por engano: status=%d body=%s", meCAfterRename.Code, meCAfterRename.Body.String())
+	meDAfterRename := runtimeMeRequest(handler, tokenD)
+	if meDAfterRename.Code != http.StatusOK {
+		t.Fatalf("passo 10 falhou: rename da DRE invalidou sessao por engano: status=%d body=%s", meDAfterRename.Code, meDAfterRename.Body.String())
 	}
-	mePayload := decodeRuntimeMe(t, meCAfterRename)
+	mePayload := decodeRuntimeMe(t, meDAfterRename)
 	if mePayload.Data.DRE == nil || *mePayload.Data.DRE != "DRE REVOGACAO RENOMEADA" {
 		t.Fatalf("passo 10 falhou: DRE renomeada nao refletida no /me: %+v", mePayload.Data)
 	}
@@ -555,7 +549,6 @@ func TestRuntimeLegacyDRETokenRevokedWhenPasswordIsReset(t *testing.T) {
 	ctx := context.Background()
 	dre, user := createRuntimeDREUser(t, m, "DRE LEGACY RESET", "legacy.reset.user", "legacy-pass-123")
 
-	// Token legado emitido sem claim auth_version (versão 0)
 	legacy := adminClaims{
 		Username: user.Username,
 		Role:     RoleDRE,
@@ -572,17 +565,14 @@ func TestRuntimeLegacyDRETokenRevokedWhenPasswordIsReset(t *testing.T) {
 		t.Fatalf("sign legacy token: %v", err)
 	}
 
-	// Token legado com auth_version no banco == 1 deve funcionar na janela de transição
 	if rr := runtimeMeRequest(handler, token); rr.Code != http.StatusOK {
 		t.Fatalf("legacy token should be accepted before password reset, got %d body=%s", rr.Code, rr.Body.String())
 	}
 
-	// Ao redefinir a senha do usuário, auth_version incrementa para 2
 	if err := m.AdminUsers.UpdatePasswordByID(ctx, user.ID, "new-legacy-pass-456"); err != nil {
 		t.Fatalf("update password: %v", err)
 	}
 
-	// Token legado agora DEVE ser revogado imediatamente (401)
 	if rr := runtimeMeRequest(handler, token); rr.Code != http.StatusUnauthorized {
 		t.Fatalf("legacy token survived password reset: got %d body=%s", rr.Code, rr.Body.String())
 	}

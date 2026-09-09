@@ -265,10 +265,18 @@ func TestRuntimeAuth401Vs403Consistency(t *testing.T) {
 		t.Fatalf("reactivate DRE: %v", err)
 	}
 
-	// Autorização: admin CRUD exige role=admin; o token DRE não pode promover
-	// role nem acessar CRUD. O 403 é emitido pelo guard de role no handler.
+	loginFresh, freshToken := runtimeLoginRequest(t, handler, "status.code", "code-password", "10.70.4.2:6005")
+	if loginFresh.Code != http.StatusOK || freshToken == "" {
+		t.Fatalf("fresh login after reactivation failed: code=%d body=%s", loginFresh.Code, loginFresh.Body.String())
+	}
+	if rr := runtimeMeRequest(handler, token); rr.Code != http.StatusUnauthorized {
+		t.Fatalf("revoked token resurrected after reactivation: got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	// Autorização: admin CRUD exige role=admin; um token DRE válido não pode
+	// promover role nem acessar CRUD. O 403 é emitido pelo guard de role.
 	req := httptest.NewRequest(http.MethodPost, "/v1/admin/dres", strings.NewReader(`{"nome":"DRE X"}`))
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", "Bearer "+freshToken)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	if rr.Code != http.StatusForbidden {

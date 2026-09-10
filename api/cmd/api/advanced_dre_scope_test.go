@@ -15,6 +15,7 @@ func advancedDRERequest(path string) *http.Request {
 		Username: "dre-a",
 		Role:     RoleDRE,
 		DRE:      "DRE_A",
+		DREID:    77,
 	})
 	return req.WithContext(ctx)
 }
@@ -70,9 +71,10 @@ func TestAdvancedScopeIDEBFailsClosedForDREUnlinkedRows(t *testing.T) {
 
 func TestAdvancedScopePRODEPFailsClosedWithoutReliableDRELink(t *testing.T) {
 	required := []string{
-		"$8 = false OR ($3 <> '' AND EXISTS",
+		"$8 = false OR ($11 > 0 AND EXISTS",
 		"scope_s.id = prodep_repasses.school_id",
 		"scope_s.id = prodep_repasses.school_id_sede",
+		"dre_id",
 		"$9 = 0 OR prodep_repasses.school_id = $9",
 		"codigo_inep_prodep",
 	}
@@ -131,7 +133,7 @@ func TestAdvancedScopeReportRequestCannotOverrideTokenDRE(t *testing.T) {
 		t.Fatalf("report honored hostile DRE query: %q", f.DRE)
 	}
 	args := f.scopedArgs()
-	if len(args) != 7 || args[1] != "DRE_A" || args[5] != 99 || args[6] != "X" {
+	if len(args) != 8 || args[1] != "DRE_A" || args[5] != 99 || args[6] != "X" || args[7] != 77 {
 		t.Fatalf("unexpected scoped report args: %#v", args)
 	}
 }

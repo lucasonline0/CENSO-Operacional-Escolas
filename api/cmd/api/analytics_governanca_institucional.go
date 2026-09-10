@@ -58,8 +58,8 @@ func parseGovernancaInstitucionalFilters(q url.Values) governancaInstitucionalFi
 // governancaInstitucionalWhereSQL é a cláusula WHERE parametrizada aplicada
 // sobre a view (que já restringe a status = 'completed'). Comparações
 // case-insensitive com TRIM. $1=dre $2=municipio $3=zona.
-const governancaInstitucionalWhereSQL = `
-	WHERE ($1 = '' OR UPPER(TRIM(dre)) = UPPER(TRIM($1)))
+var governancaInstitucionalWhereSQL = `
+	WHERE ($1 = '' OR ` + analyticsDREPredicate("school_id", "dre", "$1") + `)
 	  AND ($2 = '' OR UPPER(TRIM(municipio)) = UPPER(TRIM($2)))
 	  AND ($3 = '' OR UPPER(TRIM(zona)) = UPPER(TRIM($3)))
 `
@@ -67,8 +67,8 @@ const governancaInstitucionalWhereSQL = `
 // governancaInstitucionalScopedWhereSQL é a variante usada pelo handler HTTP:
 // além dos filtros territoriais, aplica o recorte obrigatório do perfil DRE e
 // os filtros Escola/INEP antes dos COUNTs.
-const governancaInstitucionalScopedWhereSQL = `
-	WHERE ($1 = '' OR UPPER(TRIM(dre)) = UPPER(TRIM($1)))
+var governancaInstitucionalScopedWhereSQL = `
+	WHERE ` + analyticsDREScopedFilterPredicate("school_id", "dre", "$7", "$1") + `
 	  AND ($2 = '' OR UPPER(TRIM(municipio)) = UPPER(TRIM($2)))
 	  AND ($3 = '' OR UPPER(TRIM(zona)) = UPPER(TRIM($3)))
 	  AND ($4 = '' OR UPPER(TRIM(municipio)) IN (
@@ -145,6 +145,7 @@ func (app *application) AdminAnalyticsFinanceiroGovernancaInstitucional(w http.R
 		shared.RegiaoIntegracao,
 		shared.SchoolID,
 		shared.CodigoINEP,
+		shared.DREID,
 	}
 
 	var (

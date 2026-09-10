@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -123,8 +124,9 @@ type fakeSchoolDRETx struct {
 type fakeSchoolDREStmt struct{ conn *fakeSchoolDREConn }
 
 type fakeSchoolDRERows struct {
-	values []driver.Value
-	done   bool
+	columns []string
+	values  []driver.Value
+	done    bool
 }
 
 func (fakeSchoolDREDriver) Open(name string) (driver.Conn, error) {
@@ -153,7 +155,14 @@ func (c *fakeSchoolDREConn) BeginTx(context.Context, driver.TxOptions) (driver.T
 func (c *fakeSchoolDREConn) PrepareContext(context.Context, string) (driver.Stmt, error) {
 	return &fakeSchoolDREStmt{conn: c}, nil
 }
-func (c *fakeSchoolDREConn) QueryContext(_ context.Context, _ string, args []driver.NamedValue) (driver.Rows, error) {
+func (c *fakeSchoolDREConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if strings.Contains(query, "information_schema.columns") {
+		if len(args) != 2 {
+			return nil, fmt.Errorf("expected table/column args, got %d", len(args))
+		}
+		return &fakeSchoolDRERows{columns: []string{"exists"}, values: []driver.Value{true}}, nil
+	}
+
 	if len(args) != 1 {
 		return nil, fmt.Errorf("expected one DRE arg, got %d", len(args))
 	}
@@ -165,9 +174,9 @@ func (c *fakeSchoolDREConn) QueryContext(_ context.Context, _ string, args []dri
 	dre, exists := c.state.dres[int(id)]
 	c.state.mu.Unlock()
 	if !exists {
-		return &fakeSchoolDRERows{}, nil
+		return &fakeSchoolDRERows{columns: []string{"nome", "ativa"}}, nil
 	}
-	return &fakeSchoolDRERows{values: []driver.Value{dre.name, dre.active}}, nil
+	return &fakeSchoolDRERows{columns: []string{"nome", "ativa"}, values: []driver.Value{dre.name, dre.active}}, nil
 }
 
 func (tx *fakeSchoolDRETx) Commit() error {
@@ -210,10 +219,23 @@ func (s *fakeSchoolDREStmt) ExecContext(_ context.Context, args []driver.NamedVa
 	if len(args) != 2 {
 		return nil, fmt.Errorf("expected 2 update args, got %d", len(args))
 	}
-	dreName, ok := args[0].Value.(string)
-	if !ok {
-		return nil, fmt.Errorf("unexpected DRE name type %T", args[0].Value)
+
+	var dreName string
+	switch value := args[0].Value.(type) {
+	case string:
+		dreName = value
+	case int64:
+		s.conn.state.mu.Lock()
+		dre, ok := s.conn.state.dres[int(value)]
+		s.conn.state.mu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown canonical DRE id %d", value)
+		}
+		dreName = strings.TrimSpace(dre.name)
+	default:
+		return nil, fmt.Errorf("unexpected DRE value type %T", args[0].Value)
 	}
+
 	id64, ok := args[1].Value.(int64)
 	if !ok {
 		return nil, fmt.Errorf("unexpected school ID type %T", args[1].Value)
@@ -226,8 +248,13 @@ func (s *fakeSchoolDREStmt) ExecContext(_ context.Context, args []driver.NamedVa
 	return driver.RowsAffected(1), nil
 }
 
-func (r *fakeSchoolDRERows) Columns() []string { return []string{"nome", "ativa"} }
-func (r *fakeSchoolDRERows) Close() error      { return nil }
+func (r *fakeSchoolDRERows) Columns() []string {
+	if len(r.columns) > 0 {
+		return r.columns
+	}
+	return []string{"nome", "ativa"}
+}
+func (r *fakeSchoolDRERows) Close() error { return nil }
 func (r *fakeSchoolDRERows) Next(dest []driver.Value) error {
 	if r.done || len(r.values) == 0 {
 		return io.EOF

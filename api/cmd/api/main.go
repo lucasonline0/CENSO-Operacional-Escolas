@@ -36,6 +36,14 @@ var migrationsFS embed.FS
 
 const version = "1.1.0"
 
+var criticalAdministrativeMigrations = map[string]struct{}{
+	"0018_create_admin_users.sql":        {},
+	"0019_create_dres_master.sql":        {},
+	"0020_dre_canonical_relations.sql":   {},
+	"0021_dre_normalized_uniqueness.sql": {},
+	"0024_admin_users_auth_version.sql":  {},
+}
+
 type config struct {
 	port string
 	env  string
@@ -61,10 +69,10 @@ func main() {
 
 	// PROCURA O .ENV DE FORMA INTELIGENTE EM VÁRIOS LUGARES
 	envPaths := []string{
-		".env",                                    // Tenta na mesma pasta de onde o comando rodou
-		filepath.Join(cwd, ".env"),                // Tenta no caminho absoluto atual
-		filepath.Join(cwd, "..", ".env"),          // Tenta um nível acima (raiz do projeto)
-		filepath.Join(cwd, "..", "infra", ".env"), // Tenta na pasta infra
+		".env",
+		filepath.Join(cwd, ".env"),
+		filepath.Join(cwd, "..", ".env"),
+		filepath.Join(cwd, "..", "infra", ".env"),
 	}
 
 	envLoaded := false
@@ -72,7 +80,7 @@ func main() {
 		if err := godotenv.Load(p); err == nil {
 			logger.Printf("Arquivo .env carregado com sucesso de: %s", p)
 			envLoaded = true
-			break // Para de procurar assim que encontrar e carregar um .env válido
+			break
 		}
 	}
 
@@ -83,10 +91,6 @@ func main() {
 	}
 
 	var cfg config
-
-	// Valida configuração de segurança crítica antes de subir o servidor.
-	// Aborta cedo (em vez de cair num segredo default inseguro) se o JWT
-	// não estiver corretamente configurado.
 	if err := validateSecurityConfig(); err != nil {
 		logger.Fatal("ERRO FATAL SEGURANÇA: ", err)
 	}
@@ -104,12 +108,9 @@ func main() {
 	if dsn == "" {
 		dsn = os.Getenv("DB_DSN")
 	}
-
 	if dsn == "" {
 		dbHost := os.Getenv("DB_HOST")
 		if dbHost != "" {
-			// sslmode configurável: padrão "disable" para o docker local sem TLS,
-			// mas permite exigir TLS (DB_SSLMODE=require) em produção.
 			sslmode := os.Getenv("DB_SSLMODE")
 			if sslmode == "" {
 				sslmode = "disable"
@@ -118,7 +119,6 @@ func main() {
 				os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"), sslmode)
 		}
 	}
-
 	if dsn == "" {
 		logger.Fatal("ERRO FATAL: Variáveis de banco (DB_HOST ou DSN) não foram encontradas.")
 	}
@@ -132,7 +132,6 @@ func main() {
 	defer db.Close()
 	logger.Println("Banco conectado!")
 
-	// Migração: garante que a coluna sheet_synced_at existe (bancos antigos não a têm).
 	_, err = db.Exec(`ALTER TABLE census_responses ADD COLUMN IF NOT EXISTS sheet_synced_at TIMESTAMP DEFAULT NULL`)
 	if err != nil {
 		logger.Printf("AVISO: migração sheet_synced_at: %v", err)
@@ -140,15 +139,10 @@ func main() {
 		logger.Println("Migração sheet_synced_at OK")
 	}
 
-	// Aplica as migrations idempotentes embarcadas no binário via
-	// go:embed (api/cmd/api/migrations/*.sql). Todas devem usar
-	// CREATE OR REPLACE / IF NOT EXISTS e poder rodar várias vezes
-	// sem efeito colateral.
 	if err = applyMigrations(db, logger); err != nil {
-		logger.Printf("AVISO: applyMigrations: %v", err)
+		logger.Fatal("ERRO FATAL MIGRATIONS: ", err)
 	}
 
-	// ... (Resto do seu código permanece igual)
 	sheetsService, err := services.NewSheetsService()
 	if err != nil {
 		logger.Println("AVISO: SheetsService erro:", err)
@@ -171,8 +165,6 @@ func main() {
 		drive:  driveService,
 	}
 
-	// Job de retry: a cada 10 minutos re-sincroniza censos completed que
-	// não chegaram à planilha (goroutine falhou silenciosamente antes).
 	go app.sheetSyncRetryJob()
 
 	srv := &http.Server{
@@ -193,62 +185,59 @@ func openDB(cfg config) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	db.SetMaxOpenConns(25)
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(5 * time.Minute)
 	db.SetConnMaxIdleTime(2 * time.Minute)
-
 	if err = db.Ping(); err != nil {
 		return nil, err
 	}
 	return db, nil
 }
 
-// applyMigrations executa, em ordem alfabética, todos os arquivos .sql
-// embarcados em migrationsFS (api/cmd/api/migrations/*.sql). Cada arquivo
-// deve ser idempotente (CREATE OR REPLACE VIEW, IF NOT EXISTS, etc.) —
-// não há tabela de controle de versão nesta fase.
-//
-// Como o conteúdo está embarcado no binário via go:embed, o resultado é
-// independente do working directory do processo — funciona igual no
-// docker local, no Railway e em qualquer outro ambiente.
-//
-// Erros ao aplicar uma migration individual são logados com detalhe e
-// não derrubam o servidor: o startup segue, e o operador vê no log
-// qual arquivo falhou e por quê.
+func isCriticalAdministrativeMigration(name string) bool {
+	_, ok := criticalAdministrativeMigrations[name]
+	return ok
+}
+
 func applyMigrations(db *sql.DB, logger *log.Logger) error {
 	entries, err := fs.ReadDir(migrationsFS, "migrations")
 	if err != nil {
 		return fmt.Errorf("applyMigrations: ler embed migrations/: %w", err)
 	}
-
 	files := make([]string, 0, len(entries))
+	seen := make(map[string]bool, len(entries))
 	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		if filepath.Ext(e.Name()) != ".sql" {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".sql" {
 			continue
 		}
 		files = append(files, e.Name())
+		seen[e.Name()] = true
 	}
 	sort.Strings(files)
-
+	for name := range criticalAdministrativeMigrations {
+		if !seen[name] {
+			return fmt.Errorf("applyMigrations: migration administrativa crítica ausente do binário: %s", name)
+		}
+	}
 	if len(files) == 0 {
 		logger.Println("applyMigrations: nenhum .sql embarcado, pulando.")
 		return nil
 	}
-
 	logger.Printf("applyMigrations: %d migration(s) encontrada(s): %v", len(files), files)
-
 	for _, name := range files {
 		content, err := fs.ReadFile(migrationsFS, "migrations/"+name)
 		if err != nil {
+			if isCriticalAdministrativeMigration(name) {
+				return fmt.Errorf("applyMigrations: erro lendo migration crítica %s: %w", name, err)
+			}
 			logger.Printf("applyMigrations: ERRO lendo %s do embed: %v", name, err)
 			continue
 		}
 		if _, err := db.Exec(string(content)); err != nil {
+			if isCriticalAdministrativeMigration(name) {
+				return fmt.Errorf("applyMigrations: migration administrativa crítica %s falhou: %w", name, err)
+			}
 			logger.Printf("applyMigrations: ERRO aplicando %s: %v", name, err)
 			continue
 		}
@@ -311,9 +300,6 @@ func (app *application) routes() http.Handler {
 		r.Get("/health", app.HealthCheck)
 		r.Get("/census/status", app.CensusStatus)
 
-		// Endpoints públicos do formulário. Ficam atrás do gate opcional de
-		// X-API-Key (requirePublicAPIKey): inerte até PUBLIC_API_KEY ser
-		// definido no servidor, então não quebra nada em produção.
 		r.Group(func(pub chi.Router) {
 			pub.Use(app.requirePublicAPIKey)
 			pub.Get("/locations", app.GetLocations)
@@ -324,19 +310,17 @@ func (app *application) routes() http.Handler {
 			pub.With(app.requireCensusSubmissions).Post("/upload", app.uploadPhoto)
 		})
 
-		// Admin: login público + rotas protegidas por JWT
-		r.Post("/admin/login", app.AdminLogin)
+		r.Post("/admin/login", app.AdminLoginRuntime)
 		r.Group(func(protected chi.Router) {
-			protected.Use(app.requireAdminAuth)
-			protected.Get("/admin/me", app.AdminMe)
-			protected.Get("/admin/dashboard", app.AdminDashboard)
+			protected.Use(app.requireRuntimeAdminAuth)
+			protected.Get("/admin/me", app.AdminMeCanonical)
+			protected.Get("/admin/dashboard", app.AdminDashboardCanonical)
 			protected.Get("/admin/sheet-metrics", app.AdminSheetMetrics)
 			protected.Get("/admin/indicadores-metrics", app.AdminIndicadoresMetrics)
-			protected.Get("/admin/census", app.AdminGetCensus)
-			protected.Get("/admin/census/{id}", app.AdminGetCensusByID)
+			protected.Get("/admin/census", app.AdminGetCensusCanonical)
+			protected.Get("/admin/census/{id}", app.AdminGetCensusByIDCanonical)
 			protected.Post("/admin/sync-sheets", app.AdminSyncSheets)
 
-			// Gestão de DREs (exclusivo role=admin)
 			protected.Post("/admin/dres", app.AdminCreateDRE)
 			protected.Get("/admin/dres", app.AdminListDREs)
 			protected.Put("/admin/dres/{id}", app.AdminUpdateDRE)
@@ -344,31 +328,21 @@ func (app *application) routes() http.Handler {
 			protected.Post("/admin/dres/{id}/schools", app.AdminAssignSchoolsToDRE)
 			protected.Patch("/admin/schools/{id}/dre", app.AdminMoveSchoolToDRE)
 
-			// Gestão de Usuários Administrativos (exclusivo role=admin)
 			protected.Post("/admin/users", app.AdminCreateUser)
 			protected.Get("/admin/users", app.AdminListUsers)
 			protected.Patch("/admin/users/{id}/status", app.AdminUpdateUserStatus)
 			protected.Post("/admin/users/{id}/reset-password", app.AdminResetUserPassword)
 
-			// Fase 1 — camada analítica baseada em PostgreSQL.
-			// Endpoints adicionais; não substituem sheet-metrics nem indicadores-metrics.
 			protected.Get("/admin/analytics/overview", app.AdminAnalyticsOverview)
-
-			// Fase 2A — backend analítico da Caracterização da Rede.
-			// Adicionais; a UI segue consumindo sheet-metrics até a Fase 2B.
 			protected.Get("/admin/analytics/caracterizacao/perfil", app.AdminAnalyticsCaracterizacaoPerfil)
 			protected.Get("/admin/analytics/caracterizacao/dre", app.AdminAnalyticsCaracterizacaoDRE)
 			protected.Get("/admin/analytics/caracterizacao/oferta-funcionamento", app.AdminAnalyticsCaracterizacaoOfertaFuncionamento)
 			protected.Get("/admin/analytics/caracterizacao/infraestrutura-educacional", app.AdminAnalyticsCaracterizacaoInfraEducacional)
-
-			// Frente 1 — Pessoal e Gestão Escolar + Tecnologia
 			protected.Get("/admin/analytics/pessoal-gestao/estrutura", app.AdminAnalyticsPessoalEstrutura)
 			protected.Get("/admin/analytics/pessoal-gestao/coordenacao", app.AdminAnalyticsPessoalCoordenacao)
 			protected.Get("/admin/analytics/pessoal-gestao/quadro-pessoal", app.AdminAnalyticsPessoalQuadro)
 			protected.Get("/admin/analytics/tecnologia/infraestrutura", app.AdminAnalyticsTecnologiaInfra)
 			protected.Get("/admin/analytics/tecnologia/uso-pedagogico", app.AdminAnalyticsTecnologiaUso)
-
-			// Frente 2 — Infraestrutura/Segurança + Merenda + Serviços Terceirizados.
 			protected.Get("/admin/analytics/infraestrutura/condicoes", app.AdminAnalyticsInfraCondicoes)
 			protected.Get("/admin/analytics/infraestrutura/seguranca", app.AdminAnalyticsInfraSeguranca)
 			protected.Get("/admin/analytics/infraestrutura/energia", app.AdminAnalyticsInfraEnergia)
@@ -381,31 +355,18 @@ func (app *application) routes() http.Handler {
 			protected.Get("/admin/analytics/servicos-terceirizados/portaria", app.AdminAnalyticsServicosPortaria)
 			protected.Get("/admin/analytics/servicos-terceirizados/manipuladores-alimentos", app.AdminAnalyticsServicosManipuladoresAlimentos)
 			protected.Get("/admin/analytics/escolas/saude-operacional", app.AdminAnalyticsSaudeOperacionalEscolas)
-
-			// tabelas escola-a-escola para todas as abas analíticas
 			protected.Get("/admin/analytics/infraestrutura/escolas", app.AdminAnalyticsInfraEscolas)
 			protected.Get("/admin/analytics/merenda/escolas", app.AdminAnalyticsMerendaEscolas)
 			protected.Get("/admin/analytics/servicos-terceirizados/escolas", app.AdminAnalyticsServicosTerceirizadosEscolas)
 			protected.Get("/admin/analytics/pessoal-gestao/escolas", app.AdminAnalyticsPessoalEscolas)
 			protected.Get("/admin/analytics/tecnologia/escolas", app.AdminAnalyticsTecnologiaEscolas)
 			protected.Get("/admin/analytics/caracterizacao/escolas", app.AdminAnalyticsCaracterizacaoEscolas)
-
-			// Gestão Financeira e Governança — repasses PRODEP (PR técnico 2).
 			protected.Get("/admin/analytics/financeiro-governanca/prodep", app.AdminAnalyticsFinanceiroGovernancaProdep)
 			protected.Get("/admin/analytics/financeiro-governanca/institucional", app.AdminAnalyticsFinanceiroGovernancaInstitucional)
 			protected.Get("/admin/analytics/financeiro-governanca/indice-escolas", app.AdminAnalyticsGovernancaIndiceEscolas)
-
-			// Perfil dos Alunos e Resultados — IDEB 2023 (IDEB-04, lê ideb_resultados).
 			protected.Get("/admin/analytics/perfil-alunos-resultados/ideb", app.AdminAnalyticsPerfilAlunosResultadosIDEB)
-
-			// Andamento do preenchimento do censo por DRE.
 			protected.Get("/admin/analytics/preenchimento/dre", app.AdminAnalyticsPreenchimentoDre)
-
-			// Filtros globais do dashboard.
 			protected.Get("/admin/analytics/filtros/opcoes", app.AdminAnalyticsFiltrosOpcoes)
-
-			// Relatórios gerenciais por aba (XLSX). Camada extensível; o
-			// report_id é resolvido contra reportsCatalog.
 			protected.Get("/admin/reports/{report_id}", app.AdminGetReport)
 		})
 	})

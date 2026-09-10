@@ -10,45 +10,90 @@ export const clearToken = () => { try { sessionStorage.removeItem(TOKEN_KEY); } 
 export const sanitize   = (s: string) => s.replace(/[\x00-\x1F\x7F]/g, "");
 
 // Cache em memória para requisições GET — evita re-fetch ao trocar de aba.
+// O cache é NAMESPACED pelo token: dados de uma sessão/conta nunca são
+// reutilizados por outra identidade. Troca de token => namespace novo.
 interface CacheEntry { data: unknown; expiresAt: number }
-const apiCache = new Map<string, CacheEntry>();
+const apiCache = new Map<string, Map<string, CacheEntry>>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
+function namespaceFor(token: string): Map<string, CacheEntry> {
+  let ns = apiCache.get(token);
+  if (!ns) {
+    ns = new Map();
+    apiCache.set(token, ns);
+  }
+  return ns;
+}
 
 export function clearApiCache() { apiCache.clear(); }
 
-export function getCached<T>(path: string): T | null {
-  const entry = apiCache.get(path);
+export function getCached<T>(path: string, token: string): T | null {
+  const ns = apiCache.get(token);
+  if (!ns) return null;
+  const entry = ns.get(path);
   if (entry && entry.expiresAt > Date.now()) return entry.data as T;
   return null;
 }
 
-export function allCached(paths: string[]): boolean {
+export function allCached(paths: string[], token: string): boolean {
   const now = Date.now();
+  const ns = apiCache.get(token);
   return paths.every((p) => {
-    const e = apiCache.get(p);
+    const e = ns?.get(p);
     return e !== undefined && e.expiresAt > now;
   });
 }
 
-export async function apiFetch<T>(path: string, token: string, opts?: RequestInit): Promise<T> {
-  const isGet = !opts?.method || opts.method.toUpperCase() === "GET";
+export interface ApiFetchOptions extends RequestInit {
+  // Quando true, ignora o cache em memória e força uma requisição à rede.
+  // Usado para revalidação de sessão (/admin/me) e leituras que precisam do
+  // estado mais recente do backend.
+  bypassCache?: boolean;
+}
 
-  if (isGet) {
-    const cached = apiCache.get(path);
+// Handler global de 401: permite ao dashboard limpar token, cache e estado
+// sensível SEM depender de window.location.reload(). Qualquer chamada 401
+// dispara o logout imediato a partir de qualquer componente.
+let unauthorizedHandler: (() => void) | null = null;
+export function setUnauthorizedHandler(h: (() => void) | null) { unauthorizedHandler = h; }
+
+export async function apiFetch<T>(path: string, token: string, opts?: ApiFetchOptions): Promise<T> {
+  const isGet = !opts?.method || opts.method.toUpperCase() === "GET";
+  const useCache = isGet && !opts?.bypassCache;
+
+  if (useCache) {
+    const ns = apiCache.get(token);
+    const cached = ns?.get(path);
     if (cached && cached.expiresAt > Date.now()) return cached.data as T;
   }
 
+  const fetchOpts = { ...(opts ?? {}) } as ApiFetchOptions;
+  delete fetchOpts.bypassCache;
+
   const res = await fetch(`${API}${path}`, {
-    ...opts,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(opts?.headers ?? {}) },
+    ...fetchOpts,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(fetchOpts.headers ?? {}) },
   });
-  if (res.status === 401) throw new Error("UNAUTHORIZED");
+  if (res.status === 401) {
+    clearApiCache();
+    clearToken();
+    unauthorizedHandler?.();
+    throw new Error("UNAUTHORIZED");
+  }
   if (!res.ok) {
     const b = await res.json().catch(() => ({}));
     throw new Error((b as { message?: string }).message ?? `HTTP ${res.status}`);
   }
   const data = (await res.json()).data as T;
-  if (isGet) apiCache.set(path, { data, expiresAt: Date.now() + CACHE_TTL });
+  if (useCache) namespaceFor(token).set(path, { data, expiresAt: Date.now() + CACHE_TTL });
+  return data;
+}
+
+// Mutations invalidam o cache somente após sucesso. Assim, uma escrita que falha
+// não descarta dados válidos nem força refetch desnecessário no dashboard.
+async function apiMutation<T>(path: string, token: string, opts: RequestInit): Promise<T> {
+  const data = await apiFetch<T>(path, token, opts);
+  clearApiCache();
   return data;
 }
 
@@ -56,21 +101,26 @@ export async function fetchAdminMe(token: string): Promise<AdminProfile> {
   return apiFetch<AdminProfile>("/v1/admin/me", token);
 }
 
+// Heartbeat de sessão: consulta /admin/me FORA do cache, na rede, para que
+// revogação remota (reset de senha, usuário inativo, DRE inativa) resulte em
+// 401 imediato — nunca dados cacheados apresentados como sessão válida.
+export async function fetchAdminMeFresh(token: string): Promise<AdminProfile> {
+  return apiFetch<AdminProfile>("/v1/admin/me", token, { bypassCache: true });
+}
+
 export async function fetchDREs(token: string): Promise<DREItem[]> {
   return apiFetch<DREItem[]>("/v1/admin/dres", token);
 }
 
 export async function createDRE(token: string, payload: Partial<DREItem>): Promise<DREItem> {
-  clearApiCache();
-  return apiFetch<DREItem>("/v1/admin/dres", token, {
+  return apiMutation<DREItem>("/v1/admin/dres", token, {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
 export async function updateDRE(token: string, id: number, payload: Partial<DREItem>): Promise<DREItem> {
-  clearApiCache();
-  return apiFetch<DREItem>(`/v1/admin/dres/${id}`, token, {
+  return apiMutation<DREItem>(`/v1/admin/dres/${id}`, token, {
     method: "PUT",
     body: JSON.stringify(payload),
   });
@@ -84,8 +134,7 @@ export async function createAdminUser(
   token: string,
   payload: { username: string; password: string; role?: string; dre_id: number }
 ): Promise<AdminUserItem> {
-  clearApiCache();
-  return apiFetch<AdminUserItem>("/v1/admin/users", token, {
+  return apiMutation<AdminUserItem>("/v1/admin/users", token, {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -96,8 +145,7 @@ export async function updateAdminUserStatus(
   id: number,
   active: boolean
 ): Promise<AdminUserItem> {
-  clearApiCache();
-  return apiFetch<AdminUserItem>(`/v1/admin/users/${id}/status`, token, {
+  return apiMutation<AdminUserItem>(`/v1/admin/users/${id}/status`, token, {
     method: "PATCH",
     body: JSON.stringify({ active }),
   });
@@ -108,7 +156,7 @@ export async function resetAdminUserPassword(
   id: number,
   password: string
 ): Promise<{ message?: string }> {
-  return apiFetch<{ message?: string }>(`/v1/admin/users/${id}/reset-password`, token, {
+  return apiMutation<{ message?: string }>(`/v1/admin/users/${id}/reset-password`, token, {
     method: "POST",
     body: JSON.stringify({ password }),
   });
@@ -148,7 +196,7 @@ const DASHBOARD_ENDPOINTS = [
 
 export async function prefetchDashboard(token: string, role?: string): Promise<void> {
   const endpoints = role === "dre"
-    ? DASHBOARD_ENDPOINTS.filter((ep) => !ep.includes("sheet-metrics"))
+    ? DASHBOARD_ENDPOINTS.filter((ep) => !ep.includes("sheet-metrics") && !ep.includes("indicadores-metrics"))
     : DASHBOARD_ENDPOINTS;
 
   const fetches = Promise.allSettled(endpoints.map((ep) => apiFetch(ep, token)));
@@ -158,11 +206,10 @@ export async function prefetchDashboard(token: string, role?: string): Promise<v
 
 // ── Escrita: Gestão de DREs ─────────────────────────────────────────────────
 
-// Criação de nova DRE — contrato do backend definido em POST /v1/admin/dres.
-// O formulário usa nomes amigáveis para os dados do responsável; o mapeamento
-// abaixo mantém o contrato HTTP centralizado neste helper.
+// Compatibilidade com o payload legado do modal: mapeia os nomes amigáveis e
+// reutiliza o caminho canônico de criação para manter uma única regra de cache.
 export async function createDre(token: string, payload: DreCreatePayload): Promise<DreRecord> {
-  const backendPayload = {
+  return createDRE(token, {
     nome: payload.nome,
     sigla: payload.sigla,
     municipio_sede: payload.municipio_sede,
@@ -170,11 +217,6 @@ export async function createDre(token: string, payload: DreCreatePayload): Promi
     gestor_nome: payload.responsavel_nome,
     email: payload.responsavel_email,
     telefone: payload.responsavel_telefone,
-  };
-
-  return apiFetch<DreRecord>("/v1/admin/dres", token, {
-    method: "POST",
-    body: JSON.stringify(backendPayload),
   });
 }
 

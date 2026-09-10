@@ -171,6 +171,7 @@ function FilterSelect({
         {label}
       </label>
       <select
+        aria-label={label}
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}

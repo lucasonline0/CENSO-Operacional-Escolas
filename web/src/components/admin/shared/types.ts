@@ -59,6 +59,7 @@ export interface AdminProfile {
   username: string;
   role: "admin" | "dre";
   dre: string | null;
+  dre_id: number | null;
 }
 
 export interface DREItem {
@@ -80,6 +81,7 @@ export interface AdminUserItem {
   username: string;
   role: "admin" | "dre";
   dre: string;
+  dre_id: number | null;
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -551,7 +553,7 @@ export interface FiltrosOpcoes {
   escolas: FiltrosEscolaItem[];
 }
 
-// ── Perfil dos Alunos e Resultados — IDEB 2023 (IDEB-05) ────────────────────
+// ── Perfil dos Alunos e Resultados — IDEB (IDEB-05) ─────────────────────────
 // Payload de GET /v1/admin/analytics/perfil-alunos-resultados/ideb.
 // Espelha exatamente o contrato definido em
 // api/cmd/api/analytics_perfil_alunos_ideb.go. IDEB ausente é `null`
@@ -568,6 +570,7 @@ export interface IdebResumo {
   registros_sem_match_schools: number;
   ideb_medio_simples: number | null;
   ideb_medio_ponderado: number | null;
+  total_presentes: number | null;
 }
 
 export interface IdebPorEtapa {

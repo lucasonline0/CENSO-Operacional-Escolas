@@ -907,31 +907,31 @@ func TestSaudeOperacionalBuildQueryArgs(t *testing.T) {
 		{
 			name: "sem filtros",
 			year: 2026,
-			want: []any{2026, "", "", "", "", 0, ""},
+			want: []any{2026, "", "", "", "", 0, "", 0},
 		},
 		{
 			name:    "dre filtra o universo",
 			year:    2026,
-			filters: saudeOperacionalFilters{DRE: "CASTANHAL"},
-			want:    []any{2026, "CASTANHAL", "", "", "", 0, ""},
+			filters: saudeOperacionalFilters{DRE: "CASTANHAL", DREID: 77},
+			want:    []any{2026, "CASTANHAL", "", "", "", 0, "", 77},
 		},
 		{
 			name:    "municipio filtra o universo",
 			year:    2026,
 			filters: saudeOperacionalFilters{Municipio: "BELEM"},
-			want:    []any{2026, "", "BELEM", "", "", 0, ""},
+			want:    []any{2026, "", "BELEM", "", "", 0, "", 0},
 		},
 		{
 			name:    "zona filtra o universo",
 			year:    2026,
 			filters: saudeOperacionalFilters{Zona: "Urbana"},
-			want:    []any{2026, "", "", "Urbana", "", 0, ""},
+			want:    []any{2026, "", "", "Urbana", "", 0, "", 0},
 		},
 		{
 			name:    "regiao_integracao filtra o universo",
 			year:    2026,
 			filters: saudeOperacionalFilters{RegiaoIntegracao: "GUAJARA"},
-			want:    []any{2026, "", "", "", "GUAJARA", 0, ""},
+			want:    []any{2026, "", "", "", "GUAJARA", 0, "", 0},
 		},
 		{
 			name: "multiplos filtros combinados por AND",
@@ -942,7 +942,7 @@ func TestSaudeOperacionalBuildQueryArgs(t *testing.T) {
 				Zona:             "Urbana",
 				RegiaoIntegracao: "GUAJARA",
 			},
-			want: []any{2025, "BELEM", "BELEM", "Urbana", "GUAJARA", 0, ""},
+			want: []any{2025, "BELEM", "BELEM", "Urbana", "GUAJARA", 0, "", 0},
 		},
 	}
 
@@ -975,7 +975,8 @@ func TestSaudeOperacionalQueryShape(t *testing.T) {
 		"LEFT JOIN census_responses cr",
 		"AND cr.year = $1",
 		"AND cr.status = 'completed'",
-		"($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))",
+		"dre_id",
+		"$8",
 		"($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))",
 		"($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))",
 		"FROM reg_integracao",

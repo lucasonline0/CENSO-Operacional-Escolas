@@ -1,0 +1,10 @@
+{
+  "format": "source-provenance/v1",
+  "maintainer": "Lucas Madureira (@lucasonline0)",
+  "repository": "lucasonline0/CENSO-Operacional-Escolas",
+  "canonical_url": "https://github.com/lucasonline0/CENSO-Operacional-Escolas",
+  "fingerprint": "LM-PROV-2026-B9330B82D65E",
+  "recorded_on": "2026-09-01",
+  "scope": "repository lineage and maintained source",
+  "note": "This marker is not a claim of exclusive authorship; Git history and pull requests remain authoritative for individual contributions."
+}

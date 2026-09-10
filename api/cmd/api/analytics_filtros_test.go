@@ -143,12 +143,13 @@ func TestAnalyticsFilters_ArgsOrder(t *testing.T) {
 		RegiaoIntegracao: "r",
 		SchoolID:         99,
 		CodigoINEP:       "15000001",
+		DREID:            77,
 	}
 	args := f.Args()
-	if len(args) != 7 {
-		t.Fatalf("expected 7 args, got %d", len(args))
+	if len(args) != 8 {
+		t.Fatalf("expected 8 args, got %d", len(args))
 	}
-	want := []any{2024, "d", "m", "z", "r", 99, "15000001"}
+	want := []any{2024, "d", "m", "z", "r", 99, "15000001", 77}
 	for i := range want {
 		if args[i] != want[i] {
 			t.Fatalf("arg %d: expected %v, got %v", i, want[i], args[i])

@@ -143,7 +143,7 @@ func (app *application) AdminAnalyticsOverview(w http.ResponseWriter, r *http.Re
 		WITH scoped_schools AS (
 			SELECT s.id
 			FROM schools s
-			WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+			WHERE `+schoolDREScopedFilterPredicate("s", "$8", "$2")+`
 			  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
 			  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
 			  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
@@ -190,7 +190,7 @@ func (app *application) AdminAnalyticsOverview(w http.ResponseWriter, r *http.Re
 			COALESCE(NULLIF(TRIM(s.zona), ''), 'Não informado') AS zona,
 			COUNT(*) AS total
 		FROM schools s
-		WHERE ($1 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($1)))
+		WHERE `+schoolDREScopedFilterPredicate("s", "$7", "$1")+`
 		  AND ($2 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($2)))
 		  AND ($3 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($3)))
 		  AND ($4 = '' OR UPPER(TRIM(s.municipio)) IN (
@@ -202,7 +202,7 @@ func (app *application) AdminAnalyticsOverview(w http.ResponseWriter, r *http.Re
 		  AND ($6 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($6)))
 		GROUP BY 1
 		ORDER BY 2 DESC, 1
-	`, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP)
+	`, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP, f.DREID)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro ao agrupar por zona: %v", err), http.StatusInternalServerError)
 		return
@@ -463,7 +463,7 @@ type CaracterizacaoInfraEducacional struct {
 // coberturaEssenciaisCTEParam monta o conjunto "por_escola" com filtros
 // parametrizados ($1=year, $2=dre, $3=municipio, $4=zona, $5=regiao_integracao).
 // Cada caller deve passar AnalyticsFilters.Args() como argumentos do query.
-const coberturaEssenciaisCTEParam = `
+var coberturaEssenciaisCTEParam = `
 WITH escolas AS (
     SELECT
         e.school_id,
@@ -473,7 +473,7 @@ WITH escolas AS (
     WHERE e.status = 'completed'
       AND e.year   = $1
       AND e.census_id IS NOT NULL
-      AND ($2 = '' OR e.dre = $2)
+      AND ` + analyticsDREScopedFilterPredicate("e.school_id", "e.dre", "$8", "$2") + `
       AND ($3 = '' OR e.municipio = $3)
       AND ($4 = '' OR e.zona = $4)
       AND ($5 = '' OR e.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
@@ -571,7 +571,7 @@ func (app *application) AdminAnalyticsCaracterizacaoInfraEducacional(w http.Resp
 		WHERE a.status = 'completed'
 		  AND a.year   = $1
 		  AND a.census_id IS NOT NULL
-		  AND ($2 = '' OR a.dre = $2)
+		  AND `+analyticsDREScopedFilterPredicate("a.school_id", "a.dre", "$8", "$2")+`
 		  AND ($3 = '' OR a.municipio = $3)
 		  AND ($4 = '' OR a.zona = $4)
 		  AND ($5 = '' OR a.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
@@ -806,7 +806,7 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 			JOIN schools s ON s.id = cr.school_id
 			WHERE cr.status = 'completed'
 			  AND cr.year = $1
-			  AND ($2 = '' OR s.dre = $2)
+			  AND `+schoolDREScopedFilterPredicate("s", "$8", "$2")+`
 			  AND ($3 = '' OR s.municipio = $3)
 			  AND ($4 = '' OR s.zona = $4)
 			  AND ($5 = '' OR s.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
@@ -866,7 +866,7 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 			JOIN schools s ON s.id = cr.school_id
 			WHERE cr.status = 'completed'
 			  AND cr.year = $1
-			  AND ($2 = '' OR s.dre = $2)
+			  AND `+schoolDREScopedFilterPredicate("s", "$8", "$2")+`
 			  AND ($3 = '' OR s.municipio = $3)
 			  AND ($4 = '' OR s.zona = $4)
 			  AND ($5 = '' OR s.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
@@ -926,7 +926,7 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 			JOIN schools s ON s.id = cr.school_id
 			WHERE cr.status = 'completed'
 			  AND cr.year = $1
-			  AND ($2 = '' OR s.dre = $2)
+			  AND ` + schoolDREScopedFilterPredicate("s", "$8", "$2") + `
 			  AND ($3 = '' OR s.municipio = $3)
 			  AND ($4 = '' OR s.zona = $4)
 			  AND ($5 = '' OR s.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
@@ -994,7 +994,7 @@ func (app *application) AdminAnalyticsCaracterizacaoOfertaFuncionamento(w http.R
 			JOIN schools s ON s.id = cr.school_id
 			WHERE cr.status = 'completed'
 			  AND cr.year = $1
-			  AND ($2 = '' OR s.dre = $2)
+			  AND `+schoolDREScopedFilterPredicate("s", "$8", "$2")+`
 			  AND ($3 = '' OR s.municipio = $3)
 			  AND ($4 = '' OR s.zona = $4)
 			  AND ($5 = '' OR s.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $5))
@@ -1107,10 +1107,10 @@ type CaracterizacaoEscolasPayload struct {
 	Escolas       []CaracterizacaoEscolaRow `json:"escolas"`
 }
 
-const caracterizacaoEscolasSelectSQL = `
+var caracterizacaoEscolasSelectSQL = `
 	SELECT
 		COALESCE(ri.regiao_de_integracao, '')                            AS regiao_integracao,
-		COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado')              AS dre,
+		` + schoolDRENameExpr("s") + `                                      AS dre,
 		COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado')        AS municipio,
 		COALESCE(NULLIF(TRIM(s.zona), ''), '')                          AS zona,
 		COALESCE(s.codigo_inep, '')                                     AS codigo_inep,
@@ -1124,7 +1124,7 @@ const caracterizacaoEscolasSelectSQL = `
 	LEFT JOIN census_responses cr
 		ON cr.school_id = s.id AND cr.year = $1 AND cr.status = 'completed'
 	LEFT JOIN reg_integracao ri ON UPPER(TRIM(ri.municipio)) = UPPER(TRIM(s.municipio))
-	WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+	WHERE ` + schoolDREScopedFilterPredicate("s", "$8", "$2") + `
 	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
 	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
 	  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
@@ -1134,7 +1134,7 @@ const caracterizacaoEscolasSelectSQL = `
 	      ))
 	  AND ($6 = 0 OR s.id = $6)
 	  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
-	ORDER BY UPPER(TRIM(s.dre)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
+	ORDER BY UPPER(TRIM(` + schoolDRENameExpr("s") + `)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
 `
 
 var caracterizacaoEscolasValidSort = map[string]bool{
@@ -1174,7 +1174,7 @@ func (app *application) AdminAnalyticsCaracterizacaoEscolas(w http.ResponseWrite
 
 	ctx := r.Context()
 	dbRows, err := app.models.Schools.DB.QueryContext(ctx, caracterizacaoEscolasSelectSQL,
-		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP)
+		f.Args()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("caracterizacao escolas: %w", err), http.StatusInternalServerError)
 		return

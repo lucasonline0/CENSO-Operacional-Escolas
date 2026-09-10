@@ -1,0 +1,71 @@
+name: DRE E2E CI (real stack)
+
+on:
+  pull_request:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dre-e2e-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# Gate E2E de PERFIL DRE contra a STACK REAL (sem mocks):
+# PostgreSQL 16 efêmero + infra/init.sql + API Go (migrations reais 0001-0024
+# no startup via applyMigrations) + Next.js production + Playwright.
+# Falha de migration, de startup (API/frontend) ou de qualquer assert da
+# suíte reprova o PR. Artefatos (playwright-report/test-results) são anexados
+# ao job em caso de falha. Ver scripts/dre-e2e/run-e2e.sh.
+jobs:
+  dre-e2e-real-stack:
+    name: DRE E2E gate (PG16 + API + Next + Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: api/go.mod
+          cache: true
+          cache-dependency-path: api/go.sum
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: web
+        run: npx playwright install --with-deps chromium chromium-headless-shell
+
+      - name: Download Go dependencies
+        working-directory: api
+        run: go mod download
+
+      - name: DRE lifecycle E2E on the real stack
+        env:
+          CI: "true"
+        run: scripts/dre-e2e/run-e2e.sh
+
+      - name: Upload E2E artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dre-e2e-artifacts
+          path: |
+            web/playwright-report/**
+            web/test-results/**
+          if-no-files-found: ignore
+          retention-days: 7

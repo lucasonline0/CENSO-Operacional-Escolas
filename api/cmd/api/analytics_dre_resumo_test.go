@@ -22,6 +22,7 @@ func TestPreenchimentoMasterQueryShape(t *testing.T) {
 		"legacy_rows AS",
 		"d.id IS NULL",
 		"UNION ALL",
+		"WHEN m.canonical AND $8 > 0 THEN NULLIF(to_jsonb(s)->>'dre_id', '')::int = $8",
 	}
 	for _, fragment := range mustContain {
 		if !strings.Contains(query, fragment) {
@@ -36,6 +37,7 @@ func TestPreenchimentoMasterQueryShape(t *testing.T) {
 func TestPreenchimentoScopedArgs(t *testing.T) {
 	f := preenchimentoDreFilters{
 		Year:             2026,
+		DREID:            77,
 		DRE:              "DRE BELEM",
 		Municipio:        "BELEM",
 		Zona:             "URBANA",
@@ -47,7 +49,7 @@ func TestPreenchimentoScopedArgs(t *testing.T) {
 	if query != preenchimentoDreScopedSelectSQL {
 		t.Fatal("buildPreenchimentoDreScopedQuery retornou SQL inesperado")
 	}
-	want := []any{2026, "DRE BELEM", "BELEM", "URBANA", "GUAJARA", 42, "15000000"}
+	want := []any{2026, "DRE BELEM", "BELEM", "URBANA", "GUAJARA", 42, "15000000", 77}
 	if len(args) != len(want) {
 		t.Fatalf("len(args)=%d; want %d", len(args), len(want))
 	}
@@ -64,6 +66,7 @@ func TestDRESummaryQueryShape(t *testing.T) {
 		"WHERE id = $1",
 		"WHERE cr.year = $2",
 		"LEFT JOIN schools s",
+		"NULLIF(to_jsonb(s)->>'dre_id', '')::int = d.id",
 		"UPPER(TRIM(s.dre)) = UPPER(TRIM(d.nome))",
 		"cr.status = 'completed'",
 		"cr.data->>'total_alunos'",

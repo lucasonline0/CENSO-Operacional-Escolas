@@ -132,7 +132,7 @@ export async function fetchAdminUsers(token: string): Promise<AdminUserItem[]> {
 
 export async function createAdminUser(
   token: string,
-  payload: { username: string; password: string; role?: string; dre: string }
+  payload: { username: string; password: string; role?: string; dre_id: number }
 ): Promise<AdminUserItem> {
   return apiMutation<AdminUserItem>("/v1/admin/users", token, {
     method: "POST",

@@ -64,7 +64,7 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
   const [dreToEdit, setDreToEdit] = useState<DREItem | null>(null);
 
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
-  const [preselectedDreForUser, setPreselectedDreForUser] = useState<string | null>(null);
+  const [preselectedDreIdForUser, setPreselectedDreIdForUser] = useState<number | null>(null);
 
   const [userToResetPass, setUserToResetPass] = useState<AdminUserItem | null>(null);
 
@@ -291,9 +291,9 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
     setIsDreModalOpen(true);
   };
 
-  const handleOpenNewUser = (dreNome?: string, e?: React.MouseEvent) => {
+  const handleOpenNewUser = (dreId?: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setPreselectedDreForUser(dreNome || null);
+    setPreselectedDreIdForUser(dreId ?? null);
     setIsUserModalOpen(true);
   };
 
@@ -751,7 +751,7 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
                             <button
                               type="button"
                               title="Adicionar usuário para esta DRE"
-                              onClick={(e) => handleOpenNewUser(dre.nome, e)}
+                              onClick={(e) => handleOpenNewUser(dre.id, e)}
                               className="p-1.5 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors"
                             >
                               <UserPlus size={15} />
@@ -788,7 +788,7 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
 
                                 <button
                                   type="button"
-                                  onClick={(e) => handleOpenNewUser(dre.nome, e)}
+                                  onClick={(e) => handleOpenNewUser(dre.id, e)}
                                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors shadow-xs self-start sm:self-auto"
                                 >
                                   <UserPlus size={13} />
@@ -805,7 +805,7 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
                                   </p>
                                   <button
                                     type="button"
-                                    onClick={(e) => handleOpenNewUser(dre.nome, e)}
+                                    onClick={(e) => handleOpenNewUser(dre.id, e)}
                                     className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
                                   >
                                     Clique aqui para cadastrar o primeiro usuário desta regional
@@ -925,7 +925,7 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
         onSuccess={handleUserSuccess}
         token={token}
         dres={dres}
-        preselectedDre={preselectedDreForUser}
+        preselectedDreId={preselectedDreIdForUser}
       />
 
       {/* Modal: Redefinir Senha */}

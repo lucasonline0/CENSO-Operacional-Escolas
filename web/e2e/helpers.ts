@@ -83,6 +83,36 @@ export function apiRawPost(request: APIRequestContext, token: string, path: stri
   });
 }
 
+export function apiRawPut(request: APIRequestContext, token: string, path: string, data?: unknown) {
+  return request.put(`${apiURL}${path}`, {
+    headers: bearer(token),
+    data: data === undefined ? undefined : JSON.stringify(data),
+  });
+}
+
+export function apiRawPatch(request: APIRequestContext, token: string, path: string, data?: unknown) {
+  return request.patch(`${apiURL}${path}`, {
+    headers: bearer(token),
+    data: data === undefined ? undefined : JSON.stringify(data),
+  });
+}
+
+// Login direto via API (POST /v1/admin/login) — não renderiza UI, economiza
+// tempo e é ideal para reautenticação controlada dentro dos testes.
+export async function loginViaAPI(
+  request: APIRequestContext, username: string, password: string,
+): Promise<string> {
+  const res = await request.post(`${apiURL}/v1/admin/login`, {
+    data: JSON.stringify({ username, password }),
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok()) {
+    throw new Error(`E2E: login via API falhou (HTTP ${res.status()})`);
+  }
+  const body = (await res.json()) as { data: { token: string } };
+  return body.data.token;
+}
+
 export async function randomPassword(): Promise<string> {
   const { webcrypto } = await import("node:crypto");
   const bytes = webcrypto.getRandomValues(new Uint8Array(18));

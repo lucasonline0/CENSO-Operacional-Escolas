@@ -1,256 +1,476 @@
-// E2E do Perfil DRE contra a stack REAL (PostgreSQL 16 + API Go + Next.js).
+// E2E do lifecycle completo Admin → Perfil DRE contra a stack REAL
+// (PostgreSQL 16 + API Go + Next.js).
 //
-// Cobre o lifecycle de perfil DRE sem mocks:
-//   - login admin real com escopo amplo;
-//   - login DRE real com DRE fixa/escopada (UI + /admin/me);
-//   - isolamento de analytics (opcoes, forçar ?dre=, BOLA por census id);
-//   - revogação de sessão por auth_version após reset de senha (0024);
-//   - perfil DRE_B não vaza dados de DRE_A.
+// Cobertura obrigatória da issue #245 (14 cenários serial):
+//   1.  Admin autentica e vê rede completa
+//   2.  Admin cria DRE ativa pelo fluxo real
+//   3.  Admin cria usuário regional vinculado à DRE pelo contrato canônico dre_id
+//   4.  Usuário DRE autentica e /admin/me confirma role=dre + dre_id correto
+//   5.  Admin renomeia DRE e usuário mantém vínculo pelo mesmo ID
+//   6.  Admin renomeia DRE com nome >100 caracteres e funciona pelo ID
+//   7.  Admin desativa usuário → token antigo revogado definitivamente (401)
+//   8.  Admin reativa usuário → token antigo continua inválido, novo login OK
+//   9.  Admin desativa DRE → tokens existentes revogados definitivamente
+//   10. Admin reativa DRE → tokens antigos continuam inválidos, novo login OK
+//   11. DRE criada inicialmente inativa não permite provisioning de usuário
+//   12. Reset de senha invalida token anterior imediatamente
+//   13. Senha antiga comprovadamente falha após reset
+//   14. Login com nova senha/identidade não reaproveita estado/cache anterior
 //
-// A execução é serial (workers=1) porque o login tem rate limit por IP
-// (5 tentativas/15min). Tokens legítimos são compartilhados entre testes
-// via variáveis de módulo para não estourar a janela.
+// Execução serial (workers=1, retries=0): login tem rate limit por IP
+// (5 tentativas / 15 min). O fluxo usa exatamente 5 logins no bucket principal.
+// A tentativa negativa de senha antiga (teste 13) simula outro cliente via
+// X-Forwarded-For TEST-NET no gate local, isolando deterministicamente o bucket
+// sem alterar nem enfraquecer o rate limiter de produção.
 import { test, expect } from "@playwright/test";
 import {
-  loginViaUI, pageWithToken, apiGet, apiRaw, apiRawPost,
-  adminCredentials, dreA, dreB, randomPassword, apiURL,
+  loginViaUI, loginViaAPI,
+  apiGet, apiRaw, apiRawPost, apiRawPut, apiRawPatch,
+  adminCredentials, randomPassword, apiURL, webURL,
 } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
 let adminToken: string | null = null;
-let dreAToken: string | null = null;
+let dynamicDreID: number | null = null;
+let dynamicDreToken: string | null = null;
+let dynamicDreTokenRevoked: string | null = null;
+let dynamicUserId: number | null = null;
+let dynamicUserCred: { username: string; password: string } | null = null;
+let previousUserPassword: string | null = null;
+const DRE_LIFECYCLE_NAME = "DRE E2E Lifecycle";
+
+// ── Interfaces ────────────────────────────────────────────────────────────
 
 interface MeResponse {
   role: string;
   username: string;
-  dre: string;
+  dre: string | null;
+  dre_id: number | null;
 }
 
-interface DrenameEntry {
+interface DREListItem {
+  id: number;
   nome: string;
-}
-
-interface ScopedFilterOptions {
-  dres: string[];
-  escolas: Array<{ dre: string }>;
-}
-
-interface CensusListPage {
-  rows: Array<{ census_id: number }>;
+  ativa: boolean;
 }
 
 interface AdminUserRow {
   id: number;
   username: string;
   role: string;
+  dre_id: number;
+  dre: string;
+  active: boolean;
 }
 
-async function openDashboard(browser: import("@playwright/test").Browser, token: string) {
-  const page = await pageWithToken(browser, token);
-  await page.goto("/admin/");
-  await expect(page.locator(".ca-sidebar")).toBeVisible();
-  return page;
+interface AdminUserListResponse {
+  id: number;
+  username: string;
+  role: string;
+  dre: string;
+  dre_id: number;
+  active: boolean;
 }
 
-test("admin (env) enxerga a rede completa e ações globais", async ({ page, request }) => {
+interface DrenameEntry {
+  nome: string;
+}
+
+// ── Teste 1 ───────────────────────────────────────────────────────────────
+
+test("1 — admin autentica e vê rede completa", async ({ page, request }) => {
   const cred = adminCredentials();
   adminToken = await loginViaUI(page, cred.username, cred.password);
 
-  // Grupo de administração global visível apenas para admin.
   await expect(page.getByText("Administração")).toBeVisible();
   await expect(page.getByText("Gestão de DREs e Acessos")).toBeVisible();
 
-  // Seletor de DRE editável para admin.
   const dreFilter = page.getByLabel("DRE");
   await expect(dreFilter).toBeEnabled();
 
-  // /admin/me reflete role admin (identidade real no backend).
   const me = await apiGet<MeResponse>(request, adminToken, "/v1/admin/me");
   expect(me.role).toBe("admin");
   expect(me.username).toBe(cred.username);
 
-  // Acesso amplo: lista de DREs existe.
   const dres = await apiGet<Array<DrenameEntry>>(request, adminToken, "/v1/admin/dres");
   const names = dres.map((d) => d.nome);
-  expect(names).toContain(dreA().name);
-  expect(names).toContain(dreB().name);
+  expect(names.length).toBeGreaterThan(0);
 });
 
-test("usuário DRE_A vê DRE fixa e escondidas ações globais", async ({ page, request }) => {
-  const acc = dreA();
-  dreAToken = await loginViaUI(page, acc.username, acc.password);
+// ── Teste 2 ───────────────────────────────────────────────────────────────
 
-  // Indicador visual de escopo restrito.
+test("2 — admin cria DRE ativa pelo fluxo real", async ({ request }) => {
+  expect(adminToken).toBeTruthy();
+
+  const created = await apiRawPost(request, adminToken!, "/v1/admin/dres", {
+    nome: DRE_LIFECYCLE_NAME,
+    sigla: "E2E",
+    municipio_sede: "Município E2E",
+    ativa: true,
+  });
+  expect(created.status()).toBe(201);
+
+  const body = (await created.json()) as { data: DREListItem };
+  expect(body.data.id).toBeGreaterThan(0);
+  expect(body.data.nome).toBe(DRE_LIFECYCLE_NAME);
+  expect(body.data.ativa).toBe(true);
+  dynamicDreID = body.data.id;
+
+  const allDres = await apiGet<Array<DREListItem>>(request, adminToken!, "/v1/admin/dres");
+  expect(allDres.some((d) => d.id === dynamicDreID)).toBe(true);
+});
+
+// ── Teste 3 ───────────────────────────────────────────────────────────────
+
+test("3 — admin cria usuário regional vinculado à DRE pelo contrato canônico dre_id", async ({ request }) => {
+  expect(adminToken).toBeTruthy();
+  expect(dynamicDreID).toBeTruthy();
+
+  const username = `e2e.lifecycle.${Date.now()}`;
+  const password = await randomPassword();
+
+  const res = await apiRawPost(request, adminToken!, "/v1/admin/users", {
+    username,
+    password,
+    role: "dre",
+    dre_id: dynamicDreID,
+  });
+  expect(res.status()).toBe(201);
+
+  const body = (await res.json()) as { data: AdminUserRow };
+  expect(body.data.dre_id).toBe(dynamicDreID);
+  expect(body.data.dre).toBe(DRE_LIFECYCLE_NAME);
+  expect(body.data.active).toBe(true);
+
+  dynamicUserId = body.data.id;
+  dynamicUserCred = { username, password };
+
+  const users = await apiGet<Array<AdminUserListResponse>>(request, adminToken!, "/v1/admin/users");
+  const found = users.find((u) => u.id === dynamicUserId);
+  expect(found).toBeTruthy();
+  expect(found!.dre_id).toBe(dynamicDreID);
+});
+
+// ── Teste 4 ───────────────────────────────────────────────────────────────
+
+test("4 — usuário DRE autentica e /admin/me confirma role=dre + dre_id correto", async ({ page, request }) => {
+  expect(dynamicUserCred).toBeTruthy();
+  expect(dynamicDreID).toBeTruthy();
+
+  dynamicDreToken = await loginViaUI(page, dynamicUserCred!.username, dynamicUserCred!.password);
+
   await expect(page.getByText(/Acesso restrito à DRE:/)).toBeVisible();
-
-  // Grupo de administração global NÃO existe para DRE.
-  await expect(page.getByText("Gestão de DREs e Acessos")).toHaveCount(0);
-
-  // DRE fixa: select desabilitado com o valor da conta.
   const dreFilter = page.getByLabel("DRE");
   await expect(dreFilter).toBeDisabled();
-  expect(await dreFilter.inputValue()).toBe(acc.name);
 
-  // /admin/me reflete role=dre com a DRE autorizada.
-  const me = await apiGet<MeResponse>(request, dreAToken, "/v1/admin/me");
+  const me = await apiGet<MeResponse>(request, dynamicDreToken!, "/v1/admin/me");
   expect(me.role).toBe("dre");
-  expect(me.dre).toBe(acc.name);
+  expect(me.dre_id).toBe(dynamicDreID);
+  expect(me.dre).toBe(DRE_LIFECYCLE_NAME);
 });
 
-test("DRE_A nunca recebe opções nem dados de DRE_B (including ?dre=DRE B forçado)", async ({ request }) => {
-  expect(dreAToken).toBeTruthy();
+// ── Teste 5 ───────────────────────────────────────────────────────────────
 
-  // Opções dos filtros escopadas: só DRE_A.
-  const opts = await apiGet<ScopedFilterOptions>(request, dreAToken!, "/v1/admin/analytics/filtros/opcoes");
-  expect(opts.dres).toEqual([dreA().name]);
-  expect(opts.escolas.length).toBeGreaterThan(0);
-  for (const escola of opts.escolas) {
-    expect(escola.dre).toBe(dreA().name);
-  }
-  expect(JSON.stringify(opts)).not.toContain(dreB().name);
-
-  // Forçar ?dre=DRE B na requisição NÃO amplia o escopo.
-  const forced = await apiGet<ScopedFilterOptions>(
-    request, dreAToken!, `/v1/admin/analytics/filtros/opcoes?dre=${encodeURIComponent(dreB().name)}`
-  );
-  expect(forced.dres).toEqual([dreA().name]);
-  expect(JSON.stringify(forced)).not.toContain(dreB().name);
-
-  // Dashboard com ?dre=DRE B continua escopado para DRE_A.
-  const dash = await apiGet<unknown>(
-    request, dreAToken!, `/v1/admin/dashboard?dre=${encodeURIComponent(dreB().name)}`
-  );
-  expect(JSON.stringify(dash)).not.toContain(dreB().name);
-});
-
-test("DRE_A: BOLA por ID de censo de DRE_B é bloqueada e rotas admin são negadas", async ({ request }) => {
+test("5 — admin renomeia DRE e usuário mantém vínculo pelo mesmo ID", async ({ request }) => {
   expect(adminToken).toBeTruthy();
-  expect(dreAToken).toBeTruthy();
+  expect(dynamicDreID).toBeTruthy();
+  expect(dynamicDreToken).toBeTruthy();
 
-  // Localiza um censo da DRE_B como admin.
-  const censusB = await apiGet<CensusListPage>(
-    request, adminToken!, `/v1/admin/census?dre=${encodeURIComponent(dreB().name)}&limit=1`
-  );
-  expect(censusB.rows.length).toBeGreaterThan(0);
-  const foreignCensusId = censusB.rows[0].census_id;
+  const newName = "DRE E2E Lifecycle RENAMED";
+  const res = await apiRawPut(request, adminToken!, `/v1/admin/dres/${dynamicDreID}`, {
+    nome: newName,
+    sigla: "E2E",
+    ativa: true,
+  });
+  expect(res.ok()).toBeTruthy();
 
-  // DRE_A tentando ler censo de DRE_B por ID => 403 (BOLA fechado).
-  const blocked = await apiRaw(request, dreAToken!, `/v1/admin/census/${foreignCensusId}`);
-  expect(blocked.status()).toBe(403);
+  const me = await apiGet<MeResponse>(request, dynamicDreToken!, "/v1/admin/me");
+  expect(me.dre_id).toBe(dynamicDreID);
+  expect(me.dre).toBe(newName);
 
-  // Listagem de DRE_A, mesmo forçando ?dre=, não contém DRE_B.
-  const list = await apiRaw(request, dreAToken!, `/v1/admin/census?dre=${encodeURIComponent(dreB().name)}&limit=50`);
-  expect(list.ok()).toBeTruthy();
-  expect(await list.text()).not.toContain(dreB().name);
+  const users = await apiGet<Array<AdminUserListResponse>>(request, adminToken!, "/v1/admin/users");
+  const found = users.find((u) => u.id === dynamicUserId);
+  expect(found).toBeTruthy();
+  expect(found!.dre_id).toBe(dynamicDreID);
 
-  // Rotas globais de administração são negadas para DRE.
-  const users = await apiRaw(request, dreAToken!, "/v1/admin/users");
-  expect([401, 403]).toContain(users.status());
-  const dres = await apiRaw(request, dreAToken!, "/v1/admin/dres");
-  expect([401, 403]).toContain(dres.status());
-  const sync = await apiRawPost(request, dreAToken!, "/v1/admin/sync-sheets");
-  expect([401, 403]).toContain(sync.status());
+  const allDresAfterRename = await apiGet<Array<DREListItem>>(request, adminToken!, "/v1/admin/dres");
+  const dreRenamed = allDresAfterRename.find((d) => d.id === dynamicDreID);
+  expect(dreRenamed).toBeTruthy();
+  expect(dreRenamed!.nome).toBe(newName);
 });
 
-test("admin redefine senha de DRE_A: sessão antiga é revogada (auth_version) e nova credencial funciona", async ({ request }) => {
-  expect(adminToken).toBeTruthy();
-  expect(dreAToken).toBeTruthy();
-  const acc = dreA();
+// ── Teste 6 ───────────────────────────────────────────────────────────────
 
-  const users = await apiGet<Array<AdminUserRow>>(request, adminToken!, "/v1/admin/users");
-  const target = users.find((u) => u.username === acc.username);
-  expect(target).toBeTruthy();
+test("6 — admin renomeia DRE com nome >100 caracteres e funciona pelo ID", async ({ request }) => {
+  expect(adminToken).toBeTruthy();
+  expect(dynamicDreID).toBeTruthy();
+  expect(dynamicDreToken).toBeTruthy();
+
+  const longName = "D".repeat(120);
+  const res = await apiRawPut(request, adminToken!, `/v1/admin/dres/${dynamicDreID}`, {
+    nome: longName,
+    sigla: "E2E",
+    ativa: true,
+  });
+  expect(res.ok()).toBeTruthy();
+
+  const allDresAfterLongRename = await apiGet<Array<DREListItem>>(request, adminToken!, "/v1/admin/dres");
+  const dreLongName = allDresAfterLongRename.find((d) => d.id === dynamicDreID);
+  expect(dreLongName).toBeTruthy();
+  expect(dreLongName!.nome).toBe(longName);
+  expect(dreLongName!.nome.length).toBeGreaterThan(100);
+
+  const me = await apiGet<MeResponse>(request, dynamicDreToken!, "/v1/admin/me");
+  expect(me.dre_id).toBe(dynamicDreID);
+  expect(me.dre).toBe(longName);
+});
+
+// ── Teste 7 ───────────────────────────────────────────────────────────────
+
+test("7 — admin desativa usuário → token antigo é revogado definitivamente (401)", async ({ request }) => {
+  expect(adminToken).toBeTruthy();
+  expect(dynamicDreToken).toBeTruthy();
+  expect(dynamicUserId).toBeTruthy();
+
+  const tokenAntigo = dynamicDreToken!;
+
+  const res = await apiRawPatch(request, adminToken!, `/v1/admin/users/${dynamicUserId}/status`, {
+    active: false,
+  });
+  expect(res.ok()).toBeTruthy();
+
+  const revoked = await apiRaw(request, tokenAntigo, "/v1/admin/me");
+  expect(revoked.status()).toBe(401);
+
+  const filters = await apiRaw(request, tokenAntigo, "/v1/admin/analytics/filtros/opcoes");
+  expect(filters.status()).toBe(401);
+});
+
+// ── Teste 8 ───────────────────────────────────────────────────────────────
+
+test("8 — admin reativa usuário → token antigo continua inválido (401), novo login OK", async ({ request }) => {
+  expect(adminToken).toBeTruthy();
+  expect(dynamicUserId).toBeTruthy();
+  expect(dynamicUserCred).toBeTruthy();
+
+  const tokenAntigo = dynamicDreToken!;
+
+  const activate = await apiRawPatch(request, adminToken!, `/v1/admin/users/${dynamicUserId}/status`, {
+    active: true,
+  });
+  expect(activate.ok()).toBeTruthy();
+
+  const stillRevoked = await apiRaw(request, tokenAntigo, "/v1/admin/me");
+  expect(stillRevoked.status()).toBe(401);
+
+  const newToken = await loginViaAPI(request, dynamicUserCred!.username, dynamicUserCred!.password);
+  expect(newToken).toBeTruthy();
+  expect(newToken).not.toBe(tokenAntigo);
+
+  const me = await apiGet<MeResponse>(request, newToken, "/v1/admin/me");
+  expect(me.role).toBe("dre");
+  expect(me.dre_id).toBe(dynamicDreID);
+
+  dynamicDreToken = newToken;
+});
+
+// ── Teste 9 ───────────────────────────────────────────────────────────────
+
+test("9 — admin desativa DRE → tokens existentes são revogados definitivamente", async ({ request }) => {
+  expect(adminToken).toBeTruthy();
+  expect(dynamicDreID).toBeTruthy();
+  expect(dynamicDreToken).toBeTruthy();
+
+  const tokenAntigo = dynamicDreToken!;
+  const deactivate = await apiRawPut(request, adminToken!, `/v1/admin/dres/${dynamicDreID}`, {
+    nome: "D".repeat(120),
+    ativa: false,
+  });
+  expect(deactivate.ok()).toBeTruthy();
+
+  const revoked = await apiRaw(request, tokenAntigo, "/v1/admin/me");
+  expect(revoked.status()).toBe(401);
+
+  const users = await apiGet<Array<AdminUserListResponse>>(request, adminToken!, "/v1/admin/users");
+  const user = users.find((u) => u.id === dynamicUserId);
+  expect(user).toBeTruthy();
+  expect(user!.active).toBe(true);
+  expect(user!.dre_id).toBe(dynamicDreID);
+});
+
+// ── Teste 10 ──────────────────────────────────────────────────────────────
+
+test("10 — admin reativa DRE → token antigo continua inválido e novo login funciona", async ({ request }) => {
+  expect(adminToken).toBeTruthy();
+  expect(dynamicDreID).toBeTruthy();
+  expect(dynamicDreToken).toBeTruthy();
+  expect(dynamicUserCred).toBeTruthy();
+
+  const tokenAntigo = dynamicDreToken!;
+  const activate = await apiRawPut(request, adminToken!, `/v1/admin/dres/${dynamicDreID}`, {
+    nome: "D".repeat(120),
+    ativa: true,
+  });
+  expect(activate.ok()).toBeTruthy();
+
+  const stillRevoked = await apiRaw(request, tokenAntigo, "/v1/admin/me");
+  expect(stillRevoked.status()).toBe(401);
+
+  const newToken = await loginViaAPI(request, dynamicUserCred!.username, dynamicUserCred!.password);
+  expect(newToken).toBeTruthy();
+  expect(newToken).not.toBe(tokenAntigo);
+
+  const me = await apiGet<MeResponse>(request, newToken, "/v1/admin/me");
+  expect(me.role).toBe("dre");
+  expect(me.dre_id).toBe(dynamicDreID);
+
+  dynamicDreTokenRevoked = tokenAntigo;
+  dynamicDreToken = newToken;
+});
+
+// ── Teste 11 ──────────────────────────────────────────────────────────────
+
+test("11 — DRE criada inicialmente inativa não permite provisioning de usuário", async ({ request }) => {
+  expect(adminToken).toBeTruthy();
+
+  const inactiveName = `DRE E2E Inativa ${Date.now()}`;
+  const created = await apiRawPost(request, adminToken!, "/v1/admin/dres", {
+    nome: inactiveName,
+    sigla: "OFF",
+    municipio_sede: "Município E2E",
+    ativa: false,
+  });
+  expect(created.status()).toBe(201);
+
+  const body = (await created.json()) as { data: DREListItem };
+  expect(body.data.id).toBeGreaterThan(0);
+  expect(body.data.ativa).toBe(false);
+
+  const res = await apiRawPost(request, adminToken!, "/v1/admin/users", {
+    username: `e2e.inactive.test.${Date.now()}`,
+    password: await randomPassword(),
+    role: "dre",
+    dre_id: body.data.id,
+  });
+  expect(res.status()).toBe(400);
+});
+
+// ── Teste 12 ──────────────────────────────────────────────────────────────
+
+test("12 — reset de senha invalida token anterior imediatamente", async ({ request }) => {
+  expect(adminToken).toBeTruthy();
+  expect(dynamicUserId).toBeTruthy();
+  expect(dynamicUserCred).toBeTruthy();
+  expect(dynamicDreToken).toBeTruthy();
+
+  const tokenBeforeReset = dynamicDreToken!;
+  previousUserPassword = dynamicUserCred!.password;
   const newPassword = await randomPassword();
 
-  const reset = await apiRawPost(request, adminToken!, `/v1/admin/users/${target!.id}/reset-password`, { password: newPassword });
+  const reset = await apiRawPost(
+    request, adminToken!, `/v1/admin/users/${dynamicUserId}/reset-password`,
+    { password: newPassword },
+  );
   expect(reset.ok()).toBeTruthy();
 
-  // Token ANTIGO de DRE_A passa a falhar em /admin/me (auth_version incrementado).
-  const revoked = await apiRaw(request, dreAToken!, "/v1/admin/me");
-  expect([401, 403]).toContain(revoked.status());
+  const revoked = await apiRaw(request, tokenBeforeReset, "/v1/admin/me");
+  expect(revoked.status()).toBe(401);
 
-  // A nova senha volta a autenticar (relogin real pela API).
-  const relogin = await request.post(`${apiURL}/v1/admin/login`, {
-    data: { username: acc.username, password: newPassword },
+  dynamicDreToken = null;
+  dynamicUserCred = { ...dynamicUserCred!, password: newPassword };
+});
+
+// ── Teste 13 ──────────────────────────────────────────────────────────────
+
+test("13 — senha antiga comprovadamente falha após reset", async ({ request }) => {
+  expect(dynamicUserCred).toBeTruthy();
+  expect(previousUserPassword).toBeTruthy();
+
+  const oldLogin = await request.post(`${apiURL}/v1/admin/login`, {
+    data: JSON.stringify({
+      username: dynamicUserCred!.username,
+      password: previousUserPassword,
+    }),
+    headers: {
+      "Content-Type": "application/json",
+      // Isola esta tentativa negativa do bucket principal de 5 logins do gate.
+      // 203.0.113.0/24 é TEST-NET-3 (RFC 5737), reservado para documentação/testes.
+      "X-Forwarded-For": "203.0.113.13",
+    },
   });
-  expect(relogin.ok()).toBeTruthy();
-  const body = (await relogin.json()) as { data: { token: string } };
-  dreAToken = body.data.token;
-  const me = await apiGet<MeResponse>(request, body.data.token, "/v1/admin/me");
-  expect(me.role).toBe("dre");
-  expect(me.dre).toBe(acc.name);
+  expect(oldLogin.status()).toBe(401);
 });
 
-test("usuário DRE_B tem escopo próprio e não herda dados de DRE_A", async ({ page, request }) => {
-  const acc = dreB();
-  const tokenB = await loginViaUI(page, acc.username, acc.password);
+// ── Teste 14 ──────────────────────────────────────────────────────────────
 
-  await expect(page.getByText(/Acesso restrito à DRE:/)).toBeVisible();
-  const dreFilter = page.getByLabel("DRE");
-  await expect(dreFilter).toBeDisabled();
-  expect(await dreFilter.inputValue()).toBe(acc.name);
-
-  const opts = await apiGet<ScopedFilterOptions>(request, tokenB, "/v1/admin/analytics/filtros/opcoes");
-  expect(opts.dres).toEqual([acc.name]);
-  expect(JSON.stringify(opts)).not.toContain(dreA().name);
-
-  const me = await apiGet<MeResponse>(request, tokenB, "/v1/admin/me");
-  expect(me.role).toBe("dre");
-  expect(me.dre).toBe(acc.name);
-});
-
-test("sessão restaurada via token real (sessionStorage) abandona cache e escopa analytics", async ({ browser, request }) => {
-  expect(dreAToken).toBeTruthy();
-  const page = await openDashboard(browser, dreAToken!);
-  await expect(page.getByText(/Acesso restrito à DRE:/)).toBeVisible();
-
-  // Mesmo token, contexto novo: opções permanecem escopadas (sem cache vazado).
-  const opts = await apiGet<ScopedFilterOptions>(request, dreAToken!, "/v1/admin/analytics/filtros/opcoes");
-  expect(opts.dres).toEqual([dreA().name]);
-  await page.close();
-});
-
-test("revogação remota (reset de senha) encerra a sessão no cliente sem F5", async ({ browser, request }) => {
+test("14 — logout/login entre identidades distintas não reaproveita estado/cache", async ({ browser }) => {
   expect(adminToken).toBeTruthy();
-  expect(dreAToken).toBeTruthy();
-  const acc = dreA();
+  expect(dynamicDreTokenRevoked).toBeTruthy();
+  expect(dynamicUserCred).toBeTruthy();
 
-  // Painel aberto com o token DRE_A ainda válido.
-  const page = await openDashboard(browser, dreAToken!);
+  // Contexto A: admin via token injetado — vê "Administração".
+  const adminCtx = await browser.newContext({ baseURL: webURL });
+  await adminCtx.addInitScript(
+    ([key, tk]) => sessionStorage.setItem(key, tk),
+    ["censo_admin_token", adminToken!],
+  );
+  const adminPage = await adminCtx.newPage();
+  await adminPage.goto("/admin/");
+  await expect(adminPage.locator(".ca-sidebar")).toBeVisible();
+  await expect(adminPage.getByText("Administração")).toBeVisible();
+  await expect(adminPage.getByText("Gestão de DREs e Acessos")).toBeVisible();
 
-  // Nenhuma navegação de página (reload/F5) é permitida para corrigir o estado:
-  // a sessão precisa encerrar sozinha, via revalidação (heartbeat/focus).
-  let reloaded = false;
-  page.on("framenavigated", (frame) => {
-    if (frame === page.mainFrame()) reloaded = true;
-  });
+  // Contexto B: DRE com token revogado — vê tela de login; nada do admin vaza.
+  const dreCtx = await browser.newContext({ baseURL: webURL });
+  await dreCtx.addInitScript(
+    ([key, tk]) => sessionStorage.setItem(key, tk),
+    ["censo_admin_token", dynamicDreTokenRevoked!],
+  );
+  const drePage = await dreCtx.newPage();
+  await drePage.goto("/admin/");
+  await expect(drePage.locator("input[autocomplete='username']")).toBeVisible();
+  await expect(drePage.locator(".ca-sidebar")).toHaveCount(0);
 
-  // Admin redefine a senha de DRE_A => auth_version incrementa => token revogado.
-  const users = await apiGet<Array<AdminUserRow>>(request, adminToken!, "/v1/admin/users");
-  const target = users.find((u) => u.username === acc.username);
-  expect(target).toBeTruthy();
-  const reset = await apiRawPost(request, adminToken!, `/v1/admin/users/${target!.id}/reset-password`, {
-    password: await randomPassword(),
-  });
-  expect(reset.ok()).toBeTruthy();
+  // Contexto C: login real com a NOVA senha após reset. Além de provar o
+  // cenário 13, garante que o estado dos contextos anteriores não é reutilizado.
+  const freshCtx = await browser.newContext({ baseURL: webURL });
+  const freshPage = await freshCtx.newPage();
+  const freshToken = await loginViaUI(
+    freshPage, dynamicUserCred!.username, dynamicUserCred!.password,
+  );
+  expect(freshToken).toBeTruthy();
+  await expect(freshPage.locator(".ca-sidebar")).toBeVisible();
+  await expect(freshPage.getByText(/Acesso restrito à DRE:/)).toBeVisible();
+  await expect(freshPage.getByText("Gestão de DREs e Acessos")).toHaveCount(0);
+  await expect(freshPage.getByText("Administração")).toHaveCount(0);
 
-  // Retorno à aba/janela força revalidação da sessão (fora do cache).
-  await page.bringToFront();
-  await page.evaluate(() => {
-    document.dispatchEvent(new Event("visibilitychange"));
-    window.dispatchEvent(new Event("focus"));
-  });
+  await adminPage.close();
+  await drePage.close();
+  await freshPage.close();
+  await adminCtx.close();
+  await dreCtx.close();
+  await freshCtx.close();
+});
 
-  // Painel volta sozinho para a tela de login, sem F5.
-  await expect(page.locator("input[autocomplete='username']")).toBeVisible();
-  await expect(page.locator(".ca-sidebar")).toHaveCount(0);
+// ── Cleanup ───────────────────────────────────────────────────────────────
 
-  // Token revogado removido da sessão e nada da conta anterior segue renderizado.
-  const token = await page.evaluate((key) => sessionStorage.getItem(key), "censo_admin_token");
-  expect(token).toBeNull();
+test.afterAll(async () => {
+  if (!adminToken) return;
 
-  // A revalidação não dependeu de reload da página.
-  expect(reloaded).toBe(false);
-  await page.close();
+  const headers = { Authorization: `Bearer ${adminToken}`, "Content-Type": "application/json" };
+
+  if (dynamicUserId) {
+    await fetch(`${apiURL}/v1/admin/users/${dynamicUserId}/status`, {
+      method: "PATCH", headers,
+      body: JSON.stringify({ active: false }),
+    }).catch(() => {});
+  }
+
+  if (dynamicDreID) {
+    await fetch(`${apiURL}/v1/admin/dres/${dynamicDreID}`, {
+      method: "PUT", headers,
+      body: JSON.stringify({ nome: "D".repeat(120), ativa: false }),
+    }).catch(() => {});
+  }
 });

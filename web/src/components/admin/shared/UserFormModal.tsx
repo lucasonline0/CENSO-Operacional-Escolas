@@ -26,7 +26,7 @@ interface UserFormModalProps {
   onSuccess: (user: AdminUserItem, passwordGenerated: string) => void;
   token: string;
   dres: DREItem[];
-  preselectedDre?: string | null;
+  preselectedDreId?: number | null;
 }
 
 export function UserFormModal({
@@ -35,9 +35,9 @@ export function UserFormModal({
   onSuccess,
   token,
   dres,
-  preselectedDre,
+  preselectedDreId,
 }: UserFormModalProps) {
-  const [selectedDre, setSelectedDre] = useState("");
+  const [selectedDreId, setSelectedDreId] = useState<number | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(true);
@@ -45,21 +45,36 @@ export function UserFormModal({
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
 
+  const selectedDreObj = selectedDreId != null
+    ? dres.find((d) => d.id === selectedDreId)
+    : undefined;
+
   useEffect(() => {
     if (isOpen) {
       const activeDres = dres.filter((d) => d.ativa);
-      const defaultDre = preselectedDre || (activeDres.length > 0 ? activeDres[0].nome : (dres[0]?.nome ?? ""));
-      setSelectedDre(defaultDre);
-      
-      // Gerar sugestão de username com base na DRE se aplicável
-      if (defaultDre) {
-        const clean = defaultDre
-          .toLowerCase()
-          .replace(/^dre\s*[-_]?\s*/i, "")
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-z0-9]/g, "");
-        setUsername(`dre.${clean}`);
+      const preselectedValid = preselectedDreId != null
+        ? dres.some((d) => d.id === preselectedDreId && d.ativa)
+        : false;
+      const defaultDreId = preselectedValid && preselectedDreId != null
+        ? preselectedDreId
+        : preselectedDreId != null
+          ? null
+          : (activeDres[0]?.id ?? null);
+      setSelectedDreId(defaultDreId);
+
+      if (defaultDreId != null) {
+        const dre = dres.find((d) => d.id === defaultDreId);
+        if (dre) {
+          const clean = dre.nome
+            .toLowerCase()
+            .replace(/^dre\s*[-_]?\s*/i, "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9]/g, "");
+          setUsername(`dre.${clean}`);
+        } else {
+          setUsername("");
+        }
       } else {
         setUsername("");
       }
@@ -67,11 +82,15 @@ export function UserFormModal({
       const initialPass = generateSecurePassword(12);
       setPassword(initialPass);
       setShowPassword(true);
-      setError("");
+      setError(
+        preselectedDreId != null && !preselectedValid
+          ? "A DRE selecionada está inativa. Escolha uma DRE ativa para criar o usuário."
+          : ""
+      );
       setLoading(false);
       setCopied(false);
     }
-  }, [isOpen, preselectedDre, dres]);
+  }, [isOpen, preselectedDreId, dres]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -85,11 +104,13 @@ export function UserFormModal({
 
   if (!isOpen) return null;
 
-  const handleDreChange = (dreNome: string) => {
-    setSelectedDre(dreNome);
-    // Ajustar sugestão de username caso o usuário não tenha personalizado muito
-    if (dreNome) {
-      const clean = dreNome
+  const handleDreChange = (dreIdStr: string) => {
+    const dreId = Number(dreIdStr);
+    setSelectedDreId(Number.isFinite(dreId) ? dreId : null);
+    setError("");
+    const dre = dres.find((d) => d.id === dreId);
+    if (dre) {
+      const clean = dre.nome
         .toLowerCase()
         .replace(/^dre\s*[-_]?\s*/i, "")
         .normalize("NFD")
@@ -119,8 +140,13 @@ export function UserFormModal({
     const u = username.trim().toLowerCase();
     const p = password.trim();
 
-    if (!selectedDre) {
+    if (selectedDreId == null) {
       setError("Selecione uma DRE.");
+      return;
+    }
+    const activeDre = dres.find((d) => d.id === selectedDreId);
+    if (!activeDre || !activeDre.ativa) {
+      setError("Não é possível criar usuário para uma DRE inativa.");
       return;
     }
     if (!u) {
@@ -140,7 +166,7 @@ export function UserFormModal({
         username: u,
         password: p,
         role: "dre",
-        dre: selectedDre,
+        dre_id: selectedDreId,
       });
       onSuccess(created, p);
     } catch (err: unknown) {
@@ -149,6 +175,8 @@ export function UserFormModal({
       setLoading(false);
     }
   };
+
+  const selectedDreIsActive = Boolean(selectedDreObj?.ativa);
 
   return (
     <div
@@ -194,7 +222,7 @@ export function UserFormModal({
               DRE Vinculada <span className="text-rose-500">*</span>
             </label>
             <select
-              value={selectedDre}
+              value={selectedDreId != null ? String(selectedDreId) : ""}
               onChange={(e) => handleDreChange(e.target.value)}
               className="w-full text-sm bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
               required
@@ -203,7 +231,7 @@ export function UserFormModal({
                 Selecione a DRE correspondente…
               </option>
               {dres.map((d) => (
-                <option key={d.id} value={d.nome} disabled={!d.ativa}>
+                <option key={d.id} value={String(d.id)} disabled={!d.ativa}>
                   {d.nome} {d.sigla ? `(${d.sigla})` : ""} {!d.ativa ? "· [Inativa]" : ""}
                 </option>
               ))}
@@ -312,7 +340,7 @@ export function UserFormModal({
             </button>
             <button
               type="submit"
-              disabled={loading || !username.trim() || !password.trim()}
+              disabled={loading || !username.trim() || !password.trim() || !selectedDreIsActive}
               className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold transition-colors disabled:opacity-50 shadow-sm"
             >
               {loading ? (

@@ -11,15 +11,17 @@
 //   7.  Admin desativa usuário → token antigo revogado definitivamente (401)
 //   8.  Admin reativa usuário → token antigo continua inválido, novo login OK
 //   9.  Admin desativa DRE → tokens existentes revogados definitivamente
-//   10. Admin reativa DRE → tokens antigos continuam inválidos
-//   11. DRE inativa não permite provisioning de usuário (400)
+//   10. Admin reativa DRE → tokens antigos continuam inválidos, novo login OK
+//   11. DRE criada inicialmente inativa não permite provisioning de usuário
 //   12. Reset de senha invalida token anterior imediatamente
-//   13. Senha antiga falha autenticação e nova autentica com sucesso
-//   14. Logout/login entre identidades distintas não reaproveita estado/cache
+//   13. Senha antiga comprovadamente falha após reset
+//   14. Login com nova senha/identidade não reaproveita estado/cache anterior
 //
 // Execução serial (workers=1, retries=0): login tem rate limit por IP
-// (5 tentativas / 15 min). "Novo login OK" do teste 10 é coberto pelo
-// teste 14 Context C. Total: exatamente 5 logins.
+// (5 tentativas / 15 min). O fluxo usa exatamente 5 logins no bucket principal.
+// A tentativa negativa de senha antiga (teste 13) simula outro cliente via
+// X-Forwarded-For TEST-NET no gate local, isolando deterministicamente o bucket
+// sem alterar nem enfraquecer o rate limiter de produção.
 import { test, expect } from "@playwright/test";
 import {
   loginViaUI, loginViaAPI,
@@ -35,6 +37,7 @@ let dynamicDreToken: string | null = null;
 let dynamicDreTokenRevoked: string | null = null;
 let dynamicUserId: number | null = null;
 let dynamicUserCred: { username: string; password: string } | null = null;
+let previousUserPassword: string | null = null;
 const DRE_LIFECYCLE_NAME = "DRE E2E Lifecycle";
 
 // ── Interfaces ────────────────────────────────────────────────────────────
@@ -277,14 +280,14 @@ test("8 — admin reativa usuário → token antigo continua inválido (401), no
 test("9 — admin desativa DRE → tokens existentes são revogados definitivamente", async ({ request }) => {
   expect(adminToken).toBeTruthy();
   expect(dynamicDreID).toBeTruthy();
+  expect(dynamicDreToken).toBeTruthy();
 
+  const tokenAntigo = dynamicDreToken!;
   const deactivate = await apiRawPut(request, adminToken!, `/v1/admin/dres/${dynamicDreID}`, {
     nome: "D".repeat(120),
     ativa: false,
   });
   expect(deactivate.ok()).toBeTruthy();
-
-  const tokenAntigo = dynamicDreToken!;
 
   const revoked = await apiRaw(request, tokenAntigo, "/v1/admin/me");
   expect(revoked.status()).toBe(401);
@@ -298,14 +301,13 @@ test("9 — admin desativa DRE → tokens existentes são revogados definitivame
 
 // ── Teste 10 ──────────────────────────────────────────────────────────────
 
-// "novo login OK" pós-reativação da DRE é coberto pelo teste 14
-// Context C (loginViaUI com nova senha → DRE UI).
-test("10 — admin reativa DRE → tokens antigos continuam inválidos", async ({ request }) => {
+test("10 — admin reativa DRE → token antigo continua inválido e novo login funciona", async ({ request }) => {
   expect(adminToken).toBeTruthy();
   expect(dynamicDreID).toBeTruthy();
+  expect(dynamicDreToken).toBeTruthy();
+  expect(dynamicUserCred).toBeTruthy();
 
   const tokenAntigo = dynamicDreToken!;
-
   const activate = await apiRawPut(request, adminToken!, `/v1/admin/dres/${dynamicDreID}`, {
     nome: "D".repeat(120),
     ativa: true,
@@ -315,38 +317,43 @@ test("10 — admin reativa DRE → tokens antigos continuam inválidos", async (
   const stillRevoked = await apiRaw(request, tokenAntigo, "/v1/admin/me");
   expect(stillRevoked.status()).toBe(401);
 
+  const newToken = await loginViaAPI(request, dynamicUserCred!.username, dynamicUserCred!.password);
+  expect(newToken).toBeTruthy();
+  expect(newToken).not.toBe(tokenAntigo);
+
+  const me = await apiGet<MeResponse>(request, newToken, "/v1/admin/me");
+  expect(me.role).toBe("dre");
+  expect(me.dre_id).toBe(dynamicDreID);
+
   dynamicDreTokenRevoked = tokenAntigo;
-  dynamicDreToken = null;
+  dynamicDreToken = newToken;
 });
 
 // ── Teste 11 ──────────────────────────────────────────────────────────────
 
-test("11 — DRE inativa não permite provisioning de usuário (validação de erro)", async ({ request }) => {
+test("11 — DRE criada inicialmente inativa não permite provisioning de usuário", async ({ request }) => {
   expect(adminToken).toBeTruthy();
-  expect(dynamicDreID).toBeTruthy();
 
-  await apiRawPut(request, adminToken!, `/v1/admin/dres/${dynamicDreID}`, {
-    nome: "D".repeat(120),
+  const inactiveName = `DRE E2E Inativa ${Date.now()}`;
+  const created = await apiRawPost(request, adminToken!, "/v1/admin/dres", {
+    nome: inactiveName,
+    sigla: "OFF",
+    municipio_sede: "Município E2E",
     ativa: false,
   });
+  expect(created.status()).toBe(201);
+
+  const body = (await created.json()) as { data: DREListItem };
+  expect(body.data.id).toBeGreaterThan(0);
+  expect(body.data.ativa).toBe(false);
 
   const res = await apiRawPost(request, adminToken!, "/v1/admin/users", {
     username: `e2e.inactive.test.${Date.now()}`,
     password: await randomPassword(),
     role: "dre",
-    dre_id: dynamicDreID,
+    dre_id: body.data.id,
   });
   expect(res.status()).toBe(400);
-
-  await apiRawPut(request, adminToken!, `/v1/admin/dres/${dynamicDreID}`, {
-    nome: "D".repeat(120),
-    ativa: true,
-  });
-
-  const statusRes = await apiRawPatch(request, adminToken!, `/v1/admin/users/${dynamicUserId}/status`, {
-    active: false,
-  });
-  expect(statusRes.ok()).toBeTruthy();
 });
 
 // ── Teste 12 ──────────────────────────────────────────────────────────────
@@ -355,37 +362,42 @@ test("12 — reset de senha invalida token anterior imediatamente", async ({ req
   expect(adminToken).toBeTruthy();
   expect(dynamicUserId).toBeTruthy();
   expect(dynamicUserCred).toBeTruthy();
+  expect(dynamicDreToken).toBeTruthy();
 
+  const tokenBeforeReset = dynamicDreToken!;
+  previousUserPassword = dynamicUserCred!.password;
   const newPassword = await randomPassword();
+
   const reset = await apiRawPost(
     request, adminToken!, `/v1/admin/users/${dynamicUserId}/reset-password`,
     { password: newPassword },
   );
   expect(reset.ok()).toBeTruthy();
 
+  const revoked = await apiRaw(request, tokenBeforeReset, "/v1/admin/me");
+  expect(revoked.status()).toBe(401);
+
   dynamicDreToken = null;
-
-  const reactivate = await apiRawPatch(request, adminToken!, `/v1/admin/users/${dynamicUserId}/status`, {
-    active: true,
-  });
-  expect(reactivate.ok()).toBeTruthy();
-
   dynamicUserCred = { ...dynamicUserCred!, password: newPassword };
 });
 
 // ── Teste 13 ──────────────────────────────────────────────────────────────
 
-test("13 — senha antiga falha autenticação e nova senha autentica com sucesso", async ({ request }) => {
+test("13 — senha antiga comprovadamente falha após reset", async ({ request }) => {
   expect(dynamicUserCred).toBeTruthy();
-
-  const oldPassword = "e2e-DEPRECATED-OLD-PASSWORD-DO-NOT-USE";
+  expect(previousUserPassword).toBeTruthy();
 
   const oldLogin = await request.post(`${apiURL}/v1/admin/login`, {
     data: JSON.stringify({
       username: dynamicUserCred!.username,
-      password: oldPassword,
+      password: previousUserPassword,
     }),
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      // Isola esta tentativa negativa do bucket principal de 5 logins do gate.
+      // 203.0.113.0/24 é TEST-NET-3 (RFC 5737), reservado para documentação/testes.
+      "X-Forwarded-For": "203.0.113.13",
+    },
   });
   expect(oldLogin.status()).toBe(401);
 });
@@ -397,7 +409,7 @@ test("14 — logout/login entre identidades distintas não reaproveita estado/ca
   expect(dynamicDreTokenRevoked).toBeTruthy();
   expect(dynamicUserCred).toBeTruthy();
 
-  // Contexto A: admin via token injetado — vê "Administração"
+  // Contexto A: admin via token injetado — vê "Administração".
   const adminCtx = await browser.newContext({ baseURL: webURL });
   await adminCtx.addInitScript(
     ([key, tk]) => sessionStorage.setItem(key, tk),
@@ -409,8 +421,7 @@ test("14 — logout/login entre identidades distintas não reaproveita estado/ca
   await expect(adminPage.getByText("Administração")).toBeVisible();
   await expect(adminPage.getByText("Gestão de DREs e Acessos")).toBeVisible();
 
-  // Contexto B: DRE com token revogado — vê tela de login (prova que token
-  // antigo não reaproveita estado do contexto admin).
+  // Contexto B: DRE com token revogado — vê tela de login; nada do admin vaza.
   const dreCtx = await browser.newContext({ baseURL: webURL });
   await dreCtx.addInitScript(
     ([key, tk]) => sessionStorage.setItem(key, tk),
@@ -421,11 +432,14 @@ test("14 — logout/login entre identidades distintas não reaproveita estado/ca
   await expect(drePage.locator("input[autocomplete='username']")).toBeVisible();
   await expect(drePage.locator(".ca-sidebar")).toHaveCount(0);
 
-  // Contexto C: login DRE fresh com nova senha — prova que nova senha funciona
-  // e que o estado do contexto B (tela de login) não vaza para este contexto.
+  // Contexto C: login real com a NOVA senha após reset. Além de provar o
+  // cenário 13, garante que o estado dos contextos anteriores não é reutilizado.
   const freshCtx = await browser.newContext({ baseURL: webURL });
   const freshPage = await freshCtx.newPage();
-  await loginViaUI(freshPage, dynamicUserCred!.username, dynamicUserCred!.password);
+  const freshToken = await loginViaUI(
+    freshPage, dynamicUserCred!.username, dynamicUserCred!.password,
+  );
+  expect(freshToken).toBeTruthy();
   await expect(freshPage.locator(".ca-sidebar")).toBeVisible();
   await expect(freshPage.getByText(/Acesso restrito à DRE:/)).toBeVisible();
   await expect(freshPage.getByText("Gestão de DREs e Acessos")).toHaveCount(0);

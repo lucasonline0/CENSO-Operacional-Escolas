@@ -143,7 +143,7 @@ END $$;
 SQL
 
 # ─── 7. Seed canônico ───────────────────────────────────────────────────
-log "semeadura: dres -> schools (dre_id) -> census_responses"
+log "semeadura: dres -> schools (dre_id) -> census_responses -> divergência legado -> ideb"
 pg_sql >"$LOGS/seed.log" 2>&1 <<SQL
 INSERT INTO dres (nome) VALUES ('$E2E_DRE_A_NAME') ON CONFLICT (nome) DO NOTHING;
 INSERT INTO dres (nome) VALUES ('$E2E_DRE_B_NAME') ON CONFLICT (nome) DO NOTHING;
@@ -169,6 +169,49 @@ JOIN dres d ON d.nome = '$E2E_DRE_B_NAME';
 INSERT INTO census_responses (school_id, year, status, data)
 SELECT s.id, 2026, 'completed', '{"total_alunos":"120","alunos_pcd":"4","turmas_manha":"6"}'::jsonb
 FROM schools s;
+
+-- ── Fixture: divergência legado schools.dre vs dre_id canônico ──────────
+-- Insere escola com dre_id canônico da DRE A, depois corrompe o texto
+-- legado 'dre' para 'DRE B' (desabilitando o trigger pontualmente).
+-- Prova que o sistema autoriza por dre_id, não pelo texto.
+INSERT INTO schools (nome_escola, codigo_inep, municipio, zona, dre_id)
+SELECT 'Escola Divergente', '260099E1', 'Municipio A1', 'Urbana', d.id
+FROM dres d WHERE d.nome = '$E2E_DRE_A_NAME';
+
+ALTER TABLE schools DISABLE TRIGGER USER;
+UPDATE schools SET dre = '$E2E_DRE_B_NAME'
+  WHERE codigo_inep = '260099E1'
+    AND dre_id = (SELECT id FROM dres WHERE nome = '$E2E_DRE_A_NAME');
+ALTER TABLE schools ENABLE TRIGGER USER;
+
+INSERT INTO census_responses (school_id, year, status, data)
+SELECT s.id, 2026, 'completed', '{"total_alunos":"50","alunos_pcd":"2","turmas_manha":"3"}'::jsonb
+FROM schools s WHERE s.codigo_inep = '260099E1';
+
+-- ── Fixture: ideb_resultados para abas de Perfil dos Alunos / IDEB ──────
+INSERT INTO ideb_resultados (ano, codigo_inep, school_id, nome_escola_origem,
+  etapa, total_avaliado, ideb, status_ideb, status_vinculo)
+SELECT 2023, s.codigo_inep, s.id, s.nome_escola,
+  'anos_iniciais', 120, 4.50, 'com_ideb', 'match_inep'
+FROM schools s WHERE s.codigo_inep = '260001E1';
+
+INSERT INTO ideb_resultados (ano, codigo_inep, school_id, nome_escola_origem,
+  etapa, total_avaliado, ideb, status_ideb, status_vinculo)
+SELECT 2023, s.codigo_inep, s.id, s.nome_escola,
+  'anos_iniciais', 80, 3.80, 'com_ideb', 'match_inep'
+FROM schools s WHERE s.codigo_inep = '260002E1';
+
+INSERT INTO ideb_resultados (ano, codigo_inep, school_id, nome_escola_origem,
+  etapa, total_avaliado, ideb, status_ideb, status_vinculo)
+SELECT 2023, s.codigo_inep, s.id, s.nome_escola,
+  'anos_finais', 95, 3.20, 'com_ideb', 'match_inep'
+FROM schools s WHERE s.codigo_inep = '260003E1';
+
+INSERT INTO ideb_resultados (ano, codigo_inep, school_id, nome_escola_origem,
+  etapa, total_avaliado, ideb, status_ideb, status_vinculo)
+SELECT 2023, s.codigo_inep, s.id, s.nome_escola,
+  'anos_iniciais', 100, 5.10, 'com_ideb', 'match_inep'
+FROM schools s WHERE s.codigo_inep = '260101E1';
 SQL
 
 log "criando usuários DRE no banco canônico (CLI real)"

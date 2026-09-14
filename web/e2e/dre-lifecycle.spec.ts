@@ -29,6 +29,10 @@ import {
   adminCredentials, randomPassword, apiURL, webURL,
 } from "./helpers";
 
+// IPs TEST-NET (RFC 5737) para isolar logins de API do bucket principal
+// quando múltiplos specs rodam no mesmo worker e o rate limit está no limite.
+const TL_API_IPS = ["203.0.113.40", "203.0.113.41"];
+
 test.describe.configure({ mode: "serial" });
 
 let adminToken: string | null = null;
@@ -264,7 +268,7 @@ test("8 — admin reativa usuário → token antigo continua inválido (401), no
   const stillRevoked = await apiRaw(request, tokenAntigo, "/v1/admin/me");
   expect(stillRevoked.status()).toBe(401);
 
-  const newToken = await loginViaAPI(request, dynamicUserCred!.username, dynamicUserCred!.password);
+  const newToken = await loginViaAPI(request, dynamicUserCred!.username, dynamicUserCred!.password, TL_API_IPS[0]);
   expect(newToken).toBeTruthy();
   expect(newToken).not.toBe(tokenAntigo);
 
@@ -317,7 +321,7 @@ test("10 — admin reativa DRE → token antigo continua inválido e novo login 
   const stillRevoked = await apiRaw(request, tokenAntigo, "/v1/admin/me");
   expect(stillRevoked.status()).toBe(401);
 
-  const newToken = await loginViaAPI(request, dynamicUserCred!.username, dynamicUserCred!.password);
+  const newToken = await loginViaAPI(request, dynamicUserCred!.username, dynamicUserCred!.password, TL_API_IPS[0]);
   expect(newToken).toBeTruthy();
   expect(newToken).not.toBe(tokenAntigo);
 

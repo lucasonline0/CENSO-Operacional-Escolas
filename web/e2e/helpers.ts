@@ -99,12 +99,17 @@ export function apiRawPatch(request: APIRequestContext, token: string, path: str
 
 // Login direto via API (POST /v1/admin/login) — não renderiza UI, economiza
 // tempo e é ideal para reautenticação controlada dentro dos testes.
+// O opcional `ip` permite injetar X-Forwarded-For para isolar o login
+// em bucket de rate limit diferente (usado quando múltiplos specs rodam
+// no mesmo worker e IP).
 export async function loginViaAPI(
-  request: APIRequestContext, username: string, password: string,
+  request: APIRequestContext, username: string, password: string, ip?: string,
 ): Promise<string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (ip) headers["X-Forwarded-For"] = ip;
   const res = await request.post(`${apiURL}/v1/admin/login`, {
     data: JSON.stringify({ username, password }),
-    headers: { "Content-Type": "application/json" },
+    headers,
   });
   if (!res.ok()) {
     throw new Error(`E2E: login via API falhou (HTTP ${res.status()})`);

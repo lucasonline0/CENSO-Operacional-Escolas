@@ -194,10 +194,21 @@ const DASHBOARD_ENDPOINTS = [
   "/v1/admin/analytics/filtros/opcoes",
 ];
 
+const ADMIN_ONLY_PREFETCH_ENDPOINTS = new Set([
+  "/v1/admin/sheet-metrics",
+  "/v1/admin/indicadores-metrics",
+]);
+
+export function dashboardEndpointsForRole(role?: string): string[] {
+  // Fail closed while /admin/me is unresolved: a DRE session must never issue
+  // speculative requests to endpoints that are restricted to role=admin.
+  // Confirmed admins keep the complete warm-up set.
+  if (role === "admin") return [...DASHBOARD_ENDPOINTS];
+  return DASHBOARD_ENDPOINTS.filter((ep) => !ADMIN_ONLY_PREFETCH_ENDPOINTS.has(ep));
+}
+
 export async function prefetchDashboard(token: string, role?: string): Promise<void> {
-  const endpoints = role === "dre"
-    ? DASHBOARD_ENDPOINTS.filter((ep) => !ep.includes("sheet-metrics") && !ep.includes("indicadores-metrics"))
-    : DASHBOARD_ENDPOINTS;
+  const endpoints = dashboardEndpointsForRole(role);
 
   const fetches = Promise.allSettled(endpoints.map((ep) => apiFetch(ep, token)));
   const timeout = new Promise<void>((resolve) => setTimeout(resolve, 6000));

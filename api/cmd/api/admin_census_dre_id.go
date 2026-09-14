@@ -91,7 +91,7 @@ func canonicalCensusSummarySQL() string {
 	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
 	      ))
 	  AND ($6 = 0 OR s.id = $6)
-	  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7))`
+	  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))`
 }
 
 func canonicalCensusSchoolFilters(r *http.Request) (int, string) {

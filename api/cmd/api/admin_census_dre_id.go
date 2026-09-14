@@ -12,8 +12,8 @@ import (
 
 func canonicalCensusListWhereSQL() string {
 	dreFilter := `(
-		$8 > 0 AND ` + schoolDREAuthorizationPredicate("s", "$8", "$3") + `
-		OR $8 = 0 AND ($3 = '' OR ` + schoolDRENamePredicate("s", "$3") + `)
+		$10 > 0 AND ` + schoolDREAuthorizationPredicate("s", "$10", "$3") + `
+		OR $10 = 0 AND ($3 = '' OR ` + schoolDRENamePredicate("s", "$3") + `)
 	)`
 	dreSearch := schoolDRENameExpr("s")
 	return `
@@ -27,6 +27,8 @@ func canonicalCensusListWhereSQL() string {
 	        FROM reg_integracao
 	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($6))
 	      ))
+	  AND ($8 = 0 OR s.id = $8)
+	  AND ($9 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($9)))
 	  AND ($7 = ''
 	       OR s.nome_escola ILIKE '%' || $7 || '%'
 	       OR s.codigo_inep ILIKE '%' || $7 || '%'
@@ -36,18 +38,29 @@ func canonicalCensusListWhereSQL() string {
 	       OR cr.year::text ILIKE '%' || $7 || '%')`
 }
 
-func canonicalCensusWhereArgs(p censusListParams, scope AdminAccessScope) []any {
+func canonicalCensusWhereArgs(p censusListParams, scope AdminAccessScope, schoolID int, codigoINEP string) []any {
 	dreID := 0
 	if scope.Role == RoleDRE {
 		dreID = scope.DREID
 	}
-	return []any{p.Status, p.Year, p.DRE, p.Municipio, p.Zona, p.RegiaoIntegracao, p.Search, dreID}
+	return []any{
+		p.Status,
+		p.Year,
+		p.DRE,
+		p.Municipio,
+		p.Zona,
+		p.RegiaoIntegracao,
+		p.Search,
+		schoolID,
+		strings.TrimSpace(codigoINEP),
+		dreID,
+	}
 }
 
 func canonicalCensusSummarySQL() string {
 	dreFilter := `(
-		$6 > 0 AND ` + schoolDREAuthorizationPredicate("s", "$6", "$2") + `
-		OR $6 = 0 AND ($2 = '' OR ` + schoolDRENamePredicate("s", "$2") + `)
+		$8 > 0 AND ` + schoolDREAuthorizationPredicate("s", "$8", "$2") + `
+		OR $8 = 0 AND ($2 = '' OR ` + schoolDRENamePredicate("s", "$2") + `)
 	)`
 	return `
 	SELECT
@@ -60,7 +73,9 @@ func canonicalCensusSummarySQL() string {
 		         SELECT UPPER(TRIM(municipio))
 		         FROM reg_integracao
 		         WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
-		       ))),
+		       ))
+		   AND ($6 = 0 OR s.id = $6)
+		   AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7))),
 		COUNT(*) FILTER (WHERE cr.status = 'completed'),
 		COUNT(*) FILTER (WHERE cr.status = 'draft'),
 		COUNT(*) FILTER (WHERE cr.status = 'completed' AND cr.sheet_synced_at IS NULL)
@@ -74,12 +89,23 @@ func canonicalCensusSummarySQL() string {
 	        SELECT UPPER(TRIM(municipio))
 	        FROM reg_integracao
 	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
-	      ))`
+	      ))
+	  AND ($6 = 0 OR s.id = $6)
+	  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7))`
+}
+
+func canonicalCensusSchoolFilters(r *http.Request) (int, string) {
+	schoolID := 0
+	if v, err := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("school_id"))); err == nil && v > 0 {
+		schoolID = v
+	}
+	return schoolID, strings.TrimSpace(r.URL.Query().Get("codigo_inep"))
 }
 
 // AdminGetCensusCanonical é o caminho roteado da lista. A autorização de DRE
 // usa a identidade runtime por ID; filtros administrativos por nome são
-// resolvidos contra a entidade mestre e o vínculo canônico.
+// resolvidos contra a entidade mestre e o vínculo canônico. school_id e
+// codigo_inep refinam o recorte, mas nunca substituem o escopo territorial.
 func (app *application) AdminGetCensusCanonical(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	db := app.models.Schools.DB
@@ -89,7 +115,8 @@ func (app *application) AdminGetCensusCanonical(w http.ResponseWriter, r *http.R
 	if scope.Role == RoleDRE {
 		p.DRE = strings.TrimSpace(scope.DRE)
 	}
-	whereArgs := canonicalCensusWhereArgs(p, scope)
+	schoolID, codigoINEP := canonicalCensusSchoolFilters(r)
+	whereArgs := canonicalCensusWhereArgs(p, scope, schoolID, codigoINEP)
 	whereSQL := canonicalCensusListWhereSQL()
 
 	countSQL := `SELECT COUNT(*) FROM census_responses cr JOIN schools s ON s.id = cr.school_id` + whereSQL
@@ -107,7 +134,7 @@ func (app *application) AdminGetCensusCanonical(w http.ResponseWriter, r *http.R
 		FROM census_responses cr
 		JOIN schools s ON s.id = cr.school_id` + whereSQL + `
 		ORDER BY cr.updated_at DESC
-		LIMIT $9 OFFSET $10`
+		LIMIT $11 OFFSET $12`
 	offset := (p.Page - 1) * p.Limit
 	rows, err := db.QueryContext(ctx, selectSQL, append(whereArgs, p.Limit, offset)...)
 	if err != nil {
@@ -137,7 +164,8 @@ func (app *application) AdminGetCensusCanonical(w http.ResponseWriter, r *http.R
 	}
 	var summary CensusSummary
 	if err := db.QueryRowContext(ctx, canonicalCensusSummarySQL(),
-		p.Year, p.DRE, p.Municipio, p.Zona, p.RegiaoIntegracao, dreID).Scan(
+		p.Year, p.DRE, p.Municipio, p.Zona, p.RegiaoIntegracao,
+		schoolID, codigoINEP, dreID).Scan(
 		&summary.TotalSchools, &summary.CompletedCensuses,
 		&summary.DraftCensuses, &summary.PendingSync); err != nil {
 		app.errorJSON(w, fmt.Errorf("erro ao resumir censos"), http.StatusInternalServerError)

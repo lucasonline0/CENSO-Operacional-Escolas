@@ -1404,6 +1404,8 @@ func infraEscolaSortVal(r InfraEscolaRow, key string) string {
 	}
 }
 
+var infraestruturaAnalyticsSelectSQL = infraestruturaSelectSQL
+
 // AdminAnalyticsInfraEscolas retorna a listagem escola-a-escola de infraestrutura e
 // segurança com busca textual, ordenação e paginação server-side.
 // Parâmetros: year, dre, municipio, zona, regiao_integracao, q, page, page_size, sort, direction.
@@ -1420,8 +1422,8 @@ func (app *application) AdminAnalyticsInfraEscolas(w http.ResponseWriter, r *htt
 	direction := parseEscolasDirection(q.Get("direction"))
 
 	ctx := r.Context()
-	dbRows, err := app.models.Schools.DB.QueryContext(ctx, infraestruturaSelectSQL,
-		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao)
+	dbRows, err := app.models.Schools.DB.QueryContext(ctx, infraestruturaAnalyticsSelectSQL,
+		f.Args()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("infra escolas: %w", err), http.StatusInternalServerError)
 		return
@@ -1554,10 +1556,10 @@ type MerendaEscolasPayload struct {
 	Escolas       []MerendaEscolaRow `json:"escolas"`
 }
 
-const merendaEscolasSelectSQL = `
+var merendaEscolasSelectSQL = `
 	SELECT
 		COALESCE(ri.regiao_de_integracao, '')                            AS regiao_integracao,
-		COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado')              AS dre,
+		` + schoolDRENameExpr("s") + `                                      AS dre,
 		COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado')        AS municipio,
 		COALESCE(NULLIF(TRIM(s.zona), ''), '')                          AS zona,
 		COALESCE(s.codigo_inep, '')                                     AS codigo_inep,
@@ -1576,7 +1578,7 @@ const merendaEscolasSelectSQL = `
 	LEFT JOIN census_responses cr
 		ON cr.school_id = s.id AND cr.year = $1 AND cr.status = 'completed'
 	LEFT JOIN reg_integracao ri ON UPPER(TRIM(ri.municipio)) = UPPER(TRIM(s.municipio))
-	WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+	WHERE ` + schoolDREScopedFilterPredicate("s", "$8", "$2") + `
 	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
 	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
 	  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
@@ -1584,7 +1586,9 @@ const merendaEscolasSelectSQL = `
 	        FROM reg_integracao
 	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
 	      ))
-	ORDER BY UPPER(TRIM(s.dre)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
+	  AND ($6 = 0 OR s.id = $6)
+	  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
+	ORDER BY UPPER(TRIM(` + schoolDRENameExpr("s") + `)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
 `
 
 var merendaEscolasValidSort = map[string]bool{
@@ -1626,7 +1630,7 @@ func (app *application) AdminAnalyticsMerendaEscolas(w http.ResponseWriter, r *h
 
 	ctx := r.Context()
 	dbRows, err := app.models.Schools.DB.QueryContext(ctx, merendaEscolasSelectSQL,
-		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao)
+		f.Args()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("merenda escolas: %w", err), http.StatusInternalServerError)
 		return
@@ -1737,10 +1741,10 @@ type ServicosEscolasPayload struct {
 	Escolas       []ServicosEscolaRow `json:"escolas"`
 }
 
-const servicosEscolasSelectSQL = `
+var servicosEscolasSelectSQL = `
 	SELECT
 		COALESCE(ri.regiao_de_integracao, '')                                 AS regiao_integracao,
-		COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado')                   AS dre,
+		` + schoolDRENameExpr("s") + `                                           AS dre,
 		COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado')              AS municipio,
 		COALESCE(NULLIF(TRIM(s.zona), ''), '')                                AS zona,
 		COALESCE(s.codigo_inep, '')                                           AS codigo_inep,
@@ -1756,7 +1760,7 @@ const servicosEscolasSelectSQL = `
 	LEFT JOIN census_responses cr
 		ON cr.school_id = s.id AND cr.year = $1 AND cr.status = 'completed'
 	LEFT JOIN reg_integracao ri ON UPPER(TRIM(ri.municipio)) = UPPER(TRIM(s.municipio))
-	WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+	WHERE ` + schoolDREScopedFilterPredicate("s", "$8", "$2") + `
 	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
 	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
 	  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
@@ -1764,7 +1768,9 @@ const servicosEscolasSelectSQL = `
 	        FROM reg_integracao
 	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
 	      ))
-	ORDER BY UPPER(TRIM(s.dre)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
+	  AND ($6 = 0 OR s.id = $6)
+	  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
+	ORDER BY UPPER(TRIM(` + schoolDRENameExpr("s") + `)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
 `
 
 var servicosEscolasValidSort = map[string]bool{
@@ -1807,7 +1813,7 @@ func (app *application) AdminAnalyticsServicosTerceirizadosEscolas(w http.Respon
 
 	ctx := r.Context()
 	dbRows, err := app.models.Schools.DB.QueryContext(ctx, servicosEscolasSelectSQL,
-		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao)
+		f.Args()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("servicos escolas: %w", err), http.StatusInternalServerError)
 		return

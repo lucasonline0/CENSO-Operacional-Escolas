@@ -17,7 +17,7 @@ type PessoalEstrutura struct {
 
 // PessoalCoordenacao é o payload de GET /v1/admin/analytics/pessoal-gestao/coordenacao.
 type PessoalCoordenacao struct {
-	PorArea       []CategoricStat `json:"por_area"`
+	PorArea        []CategoricStat `json:"por_area"`
 	CoberturaMedia float64         `json:"cobertura_media"`
 }
 
@@ -49,22 +49,34 @@ func (app *application) AdminAnalyticsPessoalEstrutura(w http.ResponseWriter, r 
 		}
 	}
 
+	sharedFilters := parseAnalyticsFilters(r)
+	year = sharedFilters.Year
+	dre = sharedFilters.DRE
+	municipio = sharedFilters.Municipio
+	zona = sharedFilters.Zona
+	regiaoIntegracao = sharedFilters.RegiaoIntegracao
+	schoolID := sharedFilters.SchoolID
+	codigoINEP := sharedFilters.CodigoINEP
+	scopeArgs := []any{year, dre, municipio, zona, porte, regiaoIntegracao, schoolID, codigoINEP, sharedFilters.DREID}
+
 	out := PessoalEstrutura{
 		ComposicaoGestao: []CategoricStat{},
 	}
 
 	// SQL base com filtros parametrizados
 	// Nota: Unimos com vw_censo_enriquecida para suportar o filtro de porte_escola
-	const baseQuery = `
+	baseQuery := `
 		FROM vw_censo_direcao_escolar v
 		JOIN vw_censo_enriquecida e ON e.census_id = v.census_id
 		WHERE v.status = 'completed'
 		  AND v.year = $1
-		  AND ($2 = '' OR v.dre = $2)
+		  AND ` + analyticsDREScopedFilterPredicate("v.school_id", "v.dre", "$9", "$2") + `
 		  AND ($3 = '' OR v.municipio = $3)
 		  AND ($4 = '' OR v.zona = $4)
 		  AND ($5 = '' OR e.porte_escola_nome = $5)
 		  AND ($6 = '' OR v.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $6))
+		  AND ($7 = 0 OR e.school_id = $7)
+		  AND ($8 = '' OR UPPER(TRIM(COALESCE(e.codigo_inep, ''))) = UPPER(TRIM($8)))
 	`
 
 	// 1) Composição da Gestão (% de Sim por cargo)
@@ -83,7 +95,7 @@ func (app *application) AdminAnalyticsPessoalEstrutura(w http.ResponseWriter, r 
 		FROM base CROSS JOIN tot_escolas
 		GROUP BY cargo, ordem, tot_escolas.n
 		ORDER BY ordem
-	`, baseQuery), year, dre, municipio, zona, porte, regiaoIntegracao)
+	`, baseQuery), scopeArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("composicao_gestao: %v", err), http.StatusInternalServerError)
 		return
@@ -114,12 +126,14 @@ func (app *application) AdminAnalyticsPessoalEstrutura(w http.ResponseWriter, r 
 		JOIN vw_censo_enriquecida e ON e.census_id = b.census_id
 		WHERE b.status = 'completed'
 		  AND b.year = $1
-		  AND ($2 = '' OR b.dre = $2)
+		  AND `+analyticsDREScopedFilterPredicate("b.school_id", "b.dre", "$9", "$2")+`
 		  AND ($3 = '' OR b.municipio = $3)
 		  AND ($4 = '' OR b.zona = $4)
 		  AND ($5 = '' OR e.porte_escola_nome = $5)
 		  AND ($6 = '' OR b.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $6))
-	`, year, dre, municipio, zona, porte, regiaoIntegracao).Scan(&out.TotalCoordenadoresPedagog)
+		  AND ($7 = 0 OR e.school_id = $7)
+		  AND ($8 = '' OR UPPER(TRIM(COALESCE(e.codigo_inep, ''))) = UPPER(TRIM($8)))
+	`, scopeArgs...).Scan(&out.TotalCoordenadoresPedagog)
 
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("total_coordenadores: %v", err), http.StatusInternalServerError)
@@ -152,21 +166,33 @@ func (app *application) AdminAnalyticsPessoalCoordenacao(w http.ResponseWriter, 
 		}
 	}
 
+	sharedFilters := parseAnalyticsFilters(r)
+	year = sharedFilters.Year
+	dre = sharedFilters.DRE
+	municipio = sharedFilters.Municipio
+	zona = sharedFilters.Zona
+	regiaoIntegracao = sharedFilters.RegiaoIntegracao
+	schoolID := sharedFilters.SchoolID
+	codigoINEP := sharedFilters.CodigoINEP
+	scopeArgs := []any{year, dre, municipio, zona, porte, regiaoIntegracao, schoolID, codigoINEP, sharedFilters.DREID}
+
 	out := PessoalCoordenacao{
 		PorArea: []CategoricStat{},
 	}
 
 	// SQL base com filtros parametrizados
-	const baseQuery = `
+	baseQuery := `
 		FROM vw_censo_coordenacao_area v
 		JOIN vw_censo_enriquecida e ON e.census_id = v.census_id
 		WHERE v.status = 'completed'
 		  AND v.year = $1
-		  AND ($2 = '' OR v.dre = $2)
+		  AND ` + analyticsDREScopedFilterPredicate("v.school_id", "v.dre", "$9", "$2") + `
 		  AND ($3 = '' OR v.municipio = $3)
 		  AND ($4 = '' OR v.zona = $4)
 		  AND ($5 = '' OR e.porte_escola_nome = $5)
 		  AND ($6 = '' OR v.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $6))
+		  AND ($7 = 0 OR e.school_id = $7)
+		  AND ($8 = '' OR UPPER(TRIM(COALESCE(e.codigo_inep, ''))) = UPPER(TRIM($8)))
 	`
 
 	// 1) Distribuição por Área (% de Sim por área)
@@ -185,7 +211,7 @@ func (app *application) AdminAnalyticsPessoalCoordenacao(w http.ResponseWriter, 
 		FROM base CROSS JOIN tot_escolas
 		GROUP BY area, ordem, tot_escolas.n
 		ORDER BY ordem
-	`, baseQuery), year, dre, municipio, zona, porte, regiaoIntegracao)
+	`, baseQuery), scopeArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("por_area: %v", err), http.StatusInternalServerError)
 		return
@@ -210,7 +236,7 @@ func (app *application) AdminAnalyticsPessoalCoordenacao(w http.ResponseWriter, 
 		)
 		SELECT COALESCE(ROUND(AVG(qtd_areas), 2), 0)::float8
 		FROM base
-	`, baseQuery), year, dre, municipio, zona, porte, regiaoIntegracao).Scan(&out.CoberturaMedia)
+	`, baseQuery), scopeArgs...).Scan(&out.CoberturaMedia)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("cobertura_media: %v", err), http.StatusInternalServerError)
 		return
@@ -238,12 +264,12 @@ type QuadroPessoalDRE struct {
 }
 
 type QuadroPessoal struct {
-	TotalEfetivos        float64              `json:"total_professores_efetivos"`
-	TotalTemporarios     float64              `json:"total_professores_temporarios"`
-	TotalAdministrativos float64              `json:"total_servidores_administrativos"`
-	TotalReadaptados     float64              `json:"total_professores_readaptados"`
-	MediaPorEscola       QuadroPessoalMedias  `json:"media_por_escola"`
-	PorDRE               []QuadroPessoalDRE   `json:"por_dre"`
+	TotalEfetivos        float64             `json:"total_professores_efetivos"`
+	TotalTemporarios     float64             `json:"total_professores_temporarios"`
+	TotalAdministrativos float64             `json:"total_servidores_administrativos"`
+	TotalReadaptados     float64             `json:"total_professores_readaptados"`
+	MediaPorEscola       QuadroPessoalMedias `json:"media_por_escola"`
+	PorDRE               []QuadroPessoalDRE  `json:"por_dre"`
 }
 
 // AdminAnalyticsPessoalQuadro retorna indicadores quantitativos do quadro de pessoal.
@@ -268,18 +294,30 @@ func (app *application) AdminAnalyticsPessoalQuadro(w http.ResponseWriter, r *ht
 		}
 	}
 
+	sharedFilters := parseAnalyticsFilters(r)
+	year = sharedFilters.Year
+	dre = sharedFilters.DRE
+	municipio = sharedFilters.Municipio
+	zona = sharedFilters.Zona
+	regiaoIntegracao = sharedFilters.RegiaoIntegracao
+	schoolID := sharedFilters.SchoolID
+	codigoINEP := sharedFilters.CodigoINEP
+	scopeArgs := []any{year, dre, municipio, zona, porte, regiaoIntegracao, schoolID, codigoINEP, sharedFilters.DREID}
+
 	out := QuadroPessoal{PorDRE: []QuadroPessoalDRE{}}
 
-	const baseWhere = `
+	baseWhere := `
 		FROM vw_censo_quadro_pessoal v
 		JOIN vw_censo_enriquecida e ON e.census_id = v.census_id
 		WHERE v.status = 'completed'
 		  AND v.year = $1
-		  AND ($2 = '' OR v.dre = $2)
+		  AND ` + analyticsDREScopedFilterPredicate("v.school_id", "v.dre", "$9", "$2") + `
 		  AND ($3 = '' OR v.municipio = $3)
 		  AND ($4 = '' OR v.zona = $4)
 		  AND ($5 = '' OR e.porte_escola_nome = $5)
 		  AND ($6 = '' OR v.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $6))
+		  AND ($7 = 0 OR e.school_id = $7)
+		  AND ($8 = '' OR UPPER(TRIM(COALESCE(e.codigo_inep, ''))) = UPPER(TRIM($8)))
 	`
 
 	// 1) Totais e médias globais
@@ -294,7 +332,7 @@ func (app *application) AdminAnalyticsPessoalQuadro(w http.ResponseWriter, r *ht
 			COALESCE(ROUND(AVG(qtd_servidores_administrativos), 2), 0)::float8,
 			COALESCE(ROUND(AVG(qtd_professor_readaptado), 2), 0)::float8
 		%s
-	`, baseWhere), year, dre, municipio, zona, porte, regiaoIntegracao).Scan(
+	`, baseWhere), scopeArgs...).Scan(
 		&out.TotalEfetivos,
 		&out.TotalTemporarios,
 		&out.TotalAdministrativos,
@@ -312,15 +350,15 @@ func (app *application) AdminAnalyticsPessoalQuadro(w http.ResponseWriter, r *ht
 	// 2) Distribuição por DRE (top 20, ordem desc por total de professores)
 	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
 		SELECT
-			v.dre,
+			`+analyticsDRENameExpr("v.school_id", "v.dre")+` AS dre,
 			COALESCE(SUM(qtd_professores_efetivos), 0)::float8,
 			COALESCE(SUM(qtd_professores_temporarios), 0)::float8,
 			COALESCE(ROUND(AVG(total_professores), 2), 0)::float8
 		%s
-		GROUP BY v.dre
+		GROUP BY `+analyticsDRENameExpr("v.school_id", "v.dre")+`
 		ORDER BY SUM(total_professores) DESC
 		LIMIT 20
-	`, baseWhere), year, dre, municipio, zona, porte, regiaoIntegracao)
+	`, baseWhere), scopeArgs...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("quadro_pessoal por_dre: %v", err), http.StatusInternalServerError)
 		return
@@ -350,20 +388,20 @@ type MediaEquipamentoStat struct {
 }
 
 type TecnologiaInfra struct {
-	EscolasComInternet         int64                    `json:"escolas_com_internet"`
-	PercentualInternet         float64                  `json:"percentual_internet"`
-	DisponibilidadeInternet    []CategoricStat          `json:"disponibilidade_internet"`
-	PorProvedor                []CategoricStat          `json:"por_provedor"`
-	PorQualidade               []CategoricStat          `json:"por_qualidade"`
-	TotalDesktopsAdm           float64                  `json:"total_desktops_adm"`
-	TotalDesktopsAlunos        float64                  `json:"total_desktops_alunos"`
-	TotalNotebooks             float64                  `json:"total_notebooks"`
-	TotalChromebooks           float64                  `json:"total_chromebooks"`
-	MediaEquipamentos          []MediaEquipamentoStat   `json:"media_equipamentos_por_escola"`
-	EscolasComInoperantes      int64                    `json:"escolas_com_computadores_inoperantes"`
-	TotalInoperantes           float64                  `json:"total_computadores_inoperantes"`
-	PercentualAtendeDemanda    float64                  `json:"percentual_computadores_atendem"`
-	ComputadoresAtendemDemanda []CategoricStat          `json:"computadores_atendem_demanda"`
+	EscolasComInternet         int64                  `json:"escolas_com_internet"`
+	PercentualInternet         float64                `json:"percentual_internet"`
+	DisponibilidadeInternet    []CategoricStat        `json:"disponibilidade_internet"`
+	PorProvedor                []CategoricStat        `json:"por_provedor"`
+	PorQualidade               []CategoricStat        `json:"por_qualidade"`
+	TotalDesktopsAdm           float64                `json:"total_desktops_adm"`
+	TotalDesktopsAlunos        float64                `json:"total_desktops_alunos"`
+	TotalNotebooks             float64                `json:"total_notebooks"`
+	TotalChromebooks           float64                `json:"total_chromebooks"`
+	MediaEquipamentos          []MediaEquipamentoStat `json:"media_equipamentos_por_escola"`
+	EscolasComInoperantes      int64                  `json:"escolas_com_computadores_inoperantes"`
+	TotalInoperantes           float64                `json:"total_computadores_inoperantes"`
+	PercentualAtendeDemanda    float64                `json:"percentual_computadores_atendem"`
+	ComputadoresAtendemDemanda []CategoricStat        `json:"computadores_atendem_demanda"`
 }
 
 type TecnologiaUso struct {
@@ -399,6 +437,16 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 		}
 	}
 
+	sharedFilters := parseAnalyticsFilters(r)
+	year = sharedFilters.Year
+	dre = sharedFilters.DRE
+	municipio = sharedFilters.Municipio
+	zona = sharedFilters.Zona
+	regiaoIntegracao = sharedFilters.RegiaoIntegracao
+	schoolID := sharedFilters.SchoolID
+	codigoINEP := sharedFilters.CodigoINEP
+	scopeArgs := []any{year, dre, municipio, zona, porte, regiaoIntegracao, schoolID, codigoINEP, sharedFilters.DREID}
+
 	out := TecnologiaInfra{
 		DisponibilidadeInternet:    []CategoricStat{},
 		PorProvedor:                []CategoricStat{},
@@ -407,16 +455,18 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 		ComputadoresAtendemDemanda: []CategoricStat{},
 	}
 
-	const baseWhere = `
+	baseWhere := `
 		FROM vw_censo_equipamentos_tecnologia v
 		JOIN vw_censo_enriquecida e ON e.census_id = v.census_id
 		WHERE v.status = 'completed'
 		  AND v.year = $1
-		  AND ($2 = '' OR v.dre = $2)
+		  AND ` + analyticsDREScopedFilterPredicate("v.school_id", "v.dre", "$9", "$2") + `
 		  AND ($3 = '' OR v.municipio = $3)
 		  AND ($4 = '' OR v.zona = $4)
 		  AND ($5 = '' OR e.porte_escola_nome = $5)
 		  AND ($6 = '' OR v.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $6))
+		  AND ($7 = 0 OR e.school_id = $7)
+		  AND ($8 = '' OR UPPER(TRIM(COALESCE(e.codigo_inep, ''))) = UPPER(TRIM($8)))
 	`
 
 	// 1) Totais de internet e equipamentos (inclui total absoluto de inoperantes)
@@ -434,7 +484,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 			COALESCE(SUM(qtd_computadores_inoperantes), 0)::float8,
 			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE computadores_atendem = 'Sim') / NULLIF(MAX(tot.n), 0), 1), 0)::float8
 		FROM base CROSS JOIN tot
-	`, baseWhere), year, dre, municipio, zona, porte, regiaoIntegracao).Scan(
+	`, baseWhere), scopeArgs...).Scan(
 		&out.EscolasComInternet,
 		&out.PercentualInternet,
 		&out.TotalDesktopsAdm,
@@ -465,7 +515,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 				COUNT(DISTINCT school_id) FILTER (WHERE NOT internet_disponivel)::int,
 				COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE NOT internet_disponivel) / NULLIF(MAX(tot.n), 0), 1), 0)::float8
 			FROM base CROSS JOIN tot
-		`, baseWhere), year, dre, municipio, zona, porte, regiaoIntegracao).Scan(&simEsc, &simPct, &naoEsc, &naoPct); e != nil {
+		`, baseWhere), scopeArgs...).Scan(&simEsc, &simPct, &naoEsc, &naoPct); e != nil {
 			app.errorJSON(w, fmt.Errorf("disponibilidade_internet: %v", e), http.StatusInternalServerError)
 			return
 		}
@@ -491,7 +541,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 				COALESCE(ROUND(AVG(COALESCE(qtd_desktop_adm, 0)), 2), 0)::float8,
 				COALESCE(ROUND(AVG(COALESCE(qtd_notebooks, 0)), 2), 0)::float8
 			FROM base
-		`, baseWhere), year, dre, municipio, zona, porte, regiaoIntegracao).Scan(&medChromebooks, &medDesktopAlunos, &medDesktopAdm, &medNotebooks); e != nil {
+		`, baseWhere), scopeArgs...).Scan(&medChromebooks, &medDesktopAlunos, &medDesktopAdm, &medNotebooks); e != nil {
 			app.errorJSON(w, fmt.Errorf("media_equipamentos: %v", e), http.StatusInternalServerError)
 			return
 		}
@@ -516,7 +566,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 			WHERE %s IS NOT NULL
 			GROUP BY %s, tot.n
 			ORDER BY escolas DESC
-		`, baseWhere, campo, campo, campo), year, dre, municipio, zona, porte, regiaoIntegracao)
+		`, baseWhere, campo, campo, campo), scopeArgs...)
 		if err != nil {
 			return nil, err
 		}
@@ -561,7 +611,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 			FROM base CROSS JOIN tot
 			GROUP BY COALESCE(computadores_atendem, 'Não informado'), tot.n
 			ORDER BY escolas DESC
-		`, baseWhere), year, dre, municipio, zona, porte, regiaoIntegracao)
+		`, baseWhere), scopeArgs...)
 		if err != nil {
 			app.errorJSON(w, fmt.Errorf("computadores_atendem_demanda: %v", err), http.StatusInternalServerError)
 			return
@@ -602,21 +652,33 @@ func (app *application) AdminAnalyticsTecnologiaUso(w http.ResponseWriter, r *ht
 		}
 	}
 
+	sharedFilters := parseAnalyticsFilters(r)
+	year = sharedFilters.Year
+	dre = sharedFilters.DRE
+	municipio = sharedFilters.Municipio
+	zona = sharedFilters.Zona
+	regiaoIntegracao = sharedFilters.RegiaoIntegracao
+	schoolID := sharedFilters.SchoolID
+	codigoINEP := sharedFilters.CodigoINEP
+	scopeArgs := []any{year, dre, municipio, zona, porte, regiaoIntegracao, schoolID, codigoINEP, sharedFilters.DREID}
+
 	out := TecnologiaUso{
 		PossuiProjetorDist:     []CategoricStat{},
 		PossuiLousaDigitalDist: []CategoricStat{},
 	}
 
-	const baseWhere = `
+	baseWhere := `
 		FROM vw_censo_equipamentos_tecnologia v
 		JOIN vw_censo_enriquecida e ON e.census_id = v.census_id
 		WHERE v.status = 'completed'
 		  AND v.year = $1
-		  AND ($2 = '' OR v.dre = $2)
+		  AND ` + analyticsDREScopedFilterPredicate("v.school_id", "v.dre", "$9", "$2") + `
 		  AND ($3 = '' OR v.municipio = $3)
 		  AND ($4 = '' OR v.zona = $4)
 		  AND ($5 = '' OR e.porte_escola_nome = $5)
 		  AND ($6 = '' OR v.municipio IN (SELECT municipio FROM reg_integracao WHERE regiao_de_integracao = $6))
+		  AND ($7 = 0 OR e.school_id = $7)
+		  AND ($8 = '' OR UPPER(TRIM(COALESCE(e.codigo_inep, ''))) = UPPER(TRIM($8)))
 	`
 
 	// 1) KPIs de projetor/lousa e média de projetores por escola.
@@ -633,7 +695,7 @@ func (app *application) AdminAnalyticsTecnologiaUso(w http.ResponseWriter, r *ht
 			COUNT(DISTINCT school_id) FILTER (WHERE possui_lousa_digital)::bigint,
 			COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE possui_lousa_digital) / NULLIF(MAX(tot.n), 0), 1), 0)::float8
 		FROM base CROSS JOIN tot
-	`, baseWhere), year, dre, municipio, zona, porte, regiaoIntegracao).Scan(
+	`, baseWhere), scopeArgs...).Scan(
 		&out.EscolasComProjetor,
 		&out.PercentualComProjetor,
 		&out.TotalProjetores,
@@ -660,7 +722,7 @@ func (app *application) AdminAnalyticsTecnologiaUso(w http.ResponseWriter, r *ht
 				COUNT(DISTINCT school_id) FILTER (WHERE NOT %s)::int,
 				COALESCE(ROUND(100.0 * COUNT(DISTINCT school_id) FILTER (WHERE NOT %s) / NULLIF(MAX(tot.n), 0), 1), 0)::float8
 			FROM base CROSS JOIN tot
-		`, baseWhere, campo, campo, campo, campo), year, dre, municipio, zona, porte, regiaoIntegracao).Scan(&simEsc, &simPct, &naoEsc, &naoPct); e != nil {
+		`, baseWhere, campo, campo, campo, campo), scopeArgs...).Scan(&simEsc, &simPct, &naoEsc, &naoPct); e != nil {
 			return nil, e
 		}
 		return []CategoricStat{
@@ -694,19 +756,19 @@ func (app *application) AdminAnalyticsTecnologiaUso(w http.ResponseWriter, r *ht
 
 // PessoalEscolaRow é uma linha da tabela escola-a-escola de Pessoal e Gestão Escolar.
 type PessoalEscolaRow struct {
-	CodigoINEP                    string `json:"codigo_inep"`
-	NomeEscola                    string `json:"nome_escola"`
-	DRE                           string `json:"dre"`
-	Municipio                     string `json:"municipio"`
-	Zona                          string `json:"zona"`
-	RegiaoIntegracao              string `json:"regiao_integracao"`
-	HasCenso                      bool   `json:"has_censo"`
-	NomeDiretor                   string `json:"nome_diretor"`
-	PossuiDirecao                 string `json:"possui_direcao"`
-	PossuiCoordPedagogico         string `json:"possui_coord_pedagogico"`
-	QtdProfessoresEfetivos        string `json:"qtd_professores_efetivos"`
-	QtdProfessoresTemporarios     string `json:"qtd_professores_temporarios"`
-	QtdServidoresAdministrativos  string `json:"qtd_servidores_administrativos"`
+	CodigoINEP                   string `json:"codigo_inep"`
+	NomeEscola                   string `json:"nome_escola"`
+	DRE                          string `json:"dre"`
+	Municipio                    string `json:"municipio"`
+	Zona                         string `json:"zona"`
+	RegiaoIntegracao             string `json:"regiao_integracao"`
+	HasCenso                     bool   `json:"has_censo"`
+	NomeDiretor                  string `json:"nome_diretor"`
+	PossuiDirecao                string `json:"possui_direcao"`
+	PossuiCoordPedagogico        string `json:"possui_coord_pedagogico"`
+	QtdProfessoresEfetivos       string `json:"qtd_professores_efetivos"`
+	QtdProfessoresTemporarios    string `json:"qtd_professores_temporarios"`
+	QtdServidoresAdministrativos string `json:"qtd_servidores_administrativos"`
 }
 
 // PessoalEscolasPayload é o envelope de resposta de GET /admin/analytics/pessoal-gestao/escolas.
@@ -720,10 +782,10 @@ type PessoalEscolasPayload struct {
 	Escolas       []PessoalEscolaRow `json:"escolas"`
 }
 
-const pessoalEscolasSelectSQL = `
+var pessoalEscolasSelectSQL = `
 	SELECT
 		COALESCE(ri.regiao_de_integracao, '')                                 AS regiao_integracao,
-		COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado')                   AS dre,
+		` + schoolDRENameExpr("s") + `                                           AS dre,
 		COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado')              AS municipio,
 		COALESCE(NULLIF(TRIM(s.zona), ''), '')                                AS zona,
 		COALESCE(s.codigo_inep, '')                                           AS codigo_inep,
@@ -739,7 +801,7 @@ const pessoalEscolasSelectSQL = `
 	LEFT JOIN census_responses cr
 		ON cr.school_id = s.id AND cr.year = $1 AND cr.status = 'completed'
 	LEFT JOIN reg_integracao ri ON UPPER(TRIM(ri.municipio)) = UPPER(TRIM(s.municipio))
-	WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+	WHERE ` + schoolDREScopedFilterPredicate("s", "$8", "$2") + `
 	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
 	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
 	  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
@@ -747,7 +809,9 @@ const pessoalEscolasSelectSQL = `
 	        FROM reg_integracao
 	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
 	      ))
-	ORDER BY UPPER(TRIM(s.dre)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
+	  AND ($6 = 0 OR s.id = $6)
+	  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
+	ORDER BY UPPER(TRIM(` + schoolDRENameExpr("s") + `)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
 `
 
 var pessoalEscolasValidSort = map[string]bool{
@@ -787,7 +851,7 @@ func (app *application) AdminAnalyticsPessoalEscolas(w http.ResponseWriter, r *h
 
 	ctx := r.Context()
 	dbRows, err := app.models.Schools.DB.QueryContext(ctx, pessoalEscolasSelectSQL,
-		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao)
+		f.Args()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("pessoal escolas: %w", err), http.StatusInternalServerError)
 		return
@@ -899,10 +963,10 @@ type TecnologiaEscolasPayload struct {
 	Escolas       []TecnologiaEscolaRow `json:"escolas"`
 }
 
-const tecnologiaEscolasSelectSQL = `
+var tecnologiaEscolasSelectSQL = `
 	SELECT
 		COALESCE(ri.regiao_de_integracao, '')                            AS regiao_integracao,
-		COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado')              AS dre,
+		` + schoolDRENameExpr("s") + `                                      AS dre,
 		COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado')        AS municipio,
 		COALESCE(NULLIF(TRIM(s.zona), ''), '')                          AS zona,
 		COALESCE(s.codigo_inep, '')                                     AS codigo_inep,
@@ -920,7 +984,7 @@ const tecnologiaEscolasSelectSQL = `
 	LEFT JOIN census_responses cr
 		ON cr.school_id = s.id AND cr.year = $1 AND cr.status = 'completed'
 	LEFT JOIN reg_integracao ri ON UPPER(TRIM(ri.municipio)) = UPPER(TRIM(s.municipio))
-	WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+	WHERE ` + schoolDREScopedFilterPredicate("s", "$8", "$2") + `
 	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
 	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
 	  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
@@ -928,7 +992,9 @@ const tecnologiaEscolasSelectSQL = `
 	        FROM reg_integracao
 	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
 	      ))
-	ORDER BY UPPER(TRIM(s.dre)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
+	  AND ($6 = 0 OR s.id = $6)
+	  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
+	ORDER BY UPPER(TRIM(` + schoolDRENameExpr("s") + `)), UPPER(TRIM(s.municipio)), UPPER(TRIM(s.nome_escola)), s.codigo_inep
 `
 
 var tecnologiaEscolasValidSort = map[string]bool{
@@ -970,7 +1036,7 @@ func (app *application) AdminAnalyticsTecnologiaEscolas(w http.ResponseWriter, r
 
 	ctx := r.Context()
 	dbRows, err := app.models.Schools.DB.QueryContext(ctx, tecnologiaEscolasSelectSQL,
-		f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao)
+		f.Args()...)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("tecnologia escolas: %w", err), http.StatusInternalServerError)
 		return

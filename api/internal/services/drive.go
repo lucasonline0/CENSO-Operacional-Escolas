@@ -20,7 +20,7 @@ type DriveService struct {
 func NewDriveService() (*DriveService, error) {
 	ctx := context.Background()
 	var creds []byte
-	
+
 	envCreds := os.Getenv("GOOGLE_CREDENTIALS_JSON")
 	if envCreds != "" {
 		creds = []byte(envCreds)
@@ -41,7 +41,7 @@ func NewDriveService() (*DriveService, error) {
 	// Tenta ler o email para Impersonation (Solução para Erro 403 Quota)
 	// Isso faz o bot agir em nome de um usuário com espaço (Workspace)
 	impersonateEmail := os.Getenv("GOOGLE_IMPERSONATE_EMAIL")
-	
+
 	var srv *drive.Service
 	var err error
 
@@ -52,7 +52,7 @@ func NewDriveService() (*DriveService, error) {
 			return nil, fmt.Errorf("erro config JWT para delegação: %v", err)
 		}
 		config.Subject = impersonateEmail
-		
+
 		log.Printf("[Drive] Iniciando serviço com delegação (Impersonation) para: %s", impersonateEmail)
 		srv, err = drive.NewService(ctx, option.WithTokenSource(config.TokenSource(ctx)))
 	} else {
@@ -89,7 +89,7 @@ func (s *DriveService) UploadSchoolPhoto(folderName string, fileName string, con
 
 	// 1. Encontrar ou Criar a Pasta da Escola
 	query := fmt.Sprintf("name = '%s' and '%s' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false", folderName, rootFolderID)
-	
+
 	list, err := s.srv.Files.List().
 		Q(query).
 		Fields("files(id, name)").

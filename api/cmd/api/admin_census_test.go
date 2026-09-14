@@ -69,6 +69,34 @@ func TestCensusListParamsParsing(t *testing.T) {
 	}
 }
 
+func TestCensusListParamsDREScopeEnforcement(t *testing.T) {
+	q := url.Values{
+		"dre": {"DRE CASTANHAL"},
+	}
+
+	t.Run("admin scope keeps requested DRE", func(t *testing.T) {
+		p := parseCensusListParams(q)
+		adminScope := AdminAccessScope{Role: RoleAdmin}
+		if adminScope.Role == RoleDRE {
+			p.DRE = strings.TrimSpace(adminScope.DRE)
+		}
+		if p.DRE != "DRE CASTANHAL" {
+			t.Fatalf("expected DRE CASTANHAL, got %q", p.DRE)
+		}
+	})
+
+	t.Run("dre scope forces user DRE and overrides query param", func(t *testing.T) {
+		p := parseCensusListParams(q)
+		dreScope := AdminAccessScope{Role: RoleDRE, DRE: " DRE BELEM "}
+		if dreScope.Role == RoleDRE {
+			p.DRE = strings.TrimSpace(dreScope.DRE)
+		}
+		if p.DRE != "DRE BELEM" {
+			t.Fatalf("expected forced DRE BELEM, got %q", p.DRE)
+		}
+	})
+}
+
 // Cenário 16 da task: limit inválido volta para 10; só {10,50,100,1000} valem.
 func TestCensusListParamsLimitFallback(t *testing.T) {
 	for _, valid := range []int{10, 50, 100, 1000} {

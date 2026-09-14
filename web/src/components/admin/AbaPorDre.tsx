@@ -19,6 +19,8 @@ function buildEndpoint(filters?: DashboardFilters): string {
   if (filters?.municipio)         params.set("municipio", filters.municipio);
   if (filters?.zona)              params.set("zona", filters.zona);
   if (filters?.regiao_integracao) params.set("regiao_integracao", filters.regiao_integracao);
+  if (filters?.school_id)         params.set("school_id", String(filters.school_id));
+  if (filters?.codigo_inep)       params.set("codigo_inep", filters.codigo_inep);
   return `${ENDPOINT_BASE}?${params.toString()}`;
 }
 
@@ -34,6 +36,8 @@ function buildRecorteBadges(filters: DashboardFilters | undefined, anoReferencia
   if (filters?.dre)               badges.push(`DRE ${filters.dre}`);
   if (filters?.municipio)         badges.push(`Município ${filters.municipio}`);
   if (filters?.zona)              badges.push(`Zona ${filters.zona}`);
+  if (filters?.school_id)         badges.push(`Escola ID ${filters.school_id}`);
+  if (filters?.codigo_inep)       badges.push(`INEP ${filters.codigo_inep}`);
 
   const hasTerritorial = Boolean(
     filters?.regiao_integracao || filters?.dre || filters?.municipio || filters?.zona,

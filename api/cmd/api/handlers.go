@@ -235,7 +235,7 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 
 		if len(matches) > 0 {
 			tempFilePath := matches[0]
-			
+
 			school, err := app.models.Schools.Get(req.SchoolID)
 			if err == nil && app.drive != nil {
 				// Função anônima para garantir fechamento do arquivo
@@ -265,12 +265,12 @@ func (app *application) CreateOrUpdateCenso(w http.ResponseWriter, r *http.Reque
 						}, s)
 					}
 					folderName := fmt.Sprintf("%s - %s - %s", sanitize(school.Nome), sanitize(school.Dre), sanitize(school.NomeDiretor))
-					
+
 					// Detecta Content-Type e reseta ponteiro
 					buffer := make([]byte, 512)
 					n, _ := file.Read(buffer)
 					contentType := http.DetectContentType(buffer[:n])
-					
+
 					// RESET CRÍTICO: Garante que o arquivo seja lido do início no upload
 					if _, err := file.Seek(0, 0); err != nil {
 						return fmt.Errorf("falha ao resetar arquivo: %v", err)
@@ -407,6 +407,12 @@ func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 // completed que ainda não foram gravados na planilha.
 // Protegido por SYNC_SECRET para evitar uso não autorizado.
 func (app *application) AdminSyncSheets(w http.ResponseWriter, r *http.Request) {
+	scope, _ := GetAdminAccessScope(r.Context())
+	if scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
+
 	secret := os.Getenv("SYNC_SECRET")
 	if secret != "" && r.Header.Get("X-Sync-Secret") != secret {
 		app.errorJSON(w, fmt.Errorf("não autorizado"), http.StatusUnauthorized)

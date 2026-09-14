@@ -240,7 +240,8 @@ func TestInfraestruturaSelectSQLShape(t *testing.T) {
 		"(cr.id IS NOT NULL) AS has_censo",
 		"cr.data->>'situacao_estrutura'",
 		"cr.data->>'plano_evacuacao'",
-		"($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))",
+		"dre_id",
+		"$8",
 	}
 	for _, frag := range mustContain {
 		if !strings.Contains(q, frag) {

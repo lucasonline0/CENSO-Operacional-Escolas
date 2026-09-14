@@ -38,3 +38,8 @@ src/dev/
 
 # Bases e artefatos locais de trabalho
 _local/
+
+# Playwright (E2E) artifacts
+web/test-results
+web/playwright-report
+web/blob-report

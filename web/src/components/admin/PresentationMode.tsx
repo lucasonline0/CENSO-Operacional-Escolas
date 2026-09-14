@@ -200,7 +200,7 @@ const SLIDES: PresentationSlide[] = [
     contentId: "servicos-governanca-aviso",
   },
 
-  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Resumo IDEB 2023", [
+  ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Resumo IDEB", [
     ["alunos-resumo-cards", "Indicadores gerais"],
   ]),
   ...createSlides("alunos", "Perfil dos Alunos e Resultados", "Resultado por Etapa", [
@@ -522,7 +522,7 @@ export default function PresentationMode({ onClose, onNavigateTab }: Presentatio
     }
 
     const intervalMs = 50;
-    let timer: any = null;
+    let timer: ReturnType<typeof setInterval> | null = null;
 
     timer = setInterval(() => {
       setProgress((prev) => {

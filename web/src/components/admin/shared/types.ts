@@ -55,6 +55,39 @@ export interface CaracterizacaoPerfilPg {
   por_zona:              CaracterizacaoZonaPg[];
   matriculas_por_porte:  CaracterizacaoMatPortePg[];
 }
+export interface AdminProfile {
+  username: string;
+  role: "admin" | "dre";
+  dre: string | null;
+  dre_id: number | null;
+}
+
+export interface DREItem {
+  id: number;
+  nome: string;
+  sigla: string;
+  municipio_sede: string;
+  polo: string;
+  gestor_nome: string;
+  email: string;
+  telefone: string;
+  ativa: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AdminUserItem {
+  id: number;
+  username: string;
+  role: "admin" | "dre";
+  dre: string;
+  dre_id: number | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+
 export interface DreCountPg   { dre: string; escolas: number; }
 export interface DreSummaryPg {
   dre:                     string;
@@ -496,6 +529,8 @@ export interface DashboardFilters {
   dre?: string;
   municipio?: string;
   zona?: string;
+  school_id?: number;
+  codigo_inep?: string;
 }
 
 // Filtros globais do dashboard.
@@ -518,7 +553,7 @@ export interface FiltrosOpcoes {
   escolas: FiltrosEscolaItem[];
 }
 
-// ── Perfil dos Alunos e Resultados — IDEB 2023 (IDEB-05) ────────────────────
+// ── Perfil dos Alunos e Resultados — IDEB (IDEB-05) ─────────────────────────
 // Payload de GET /v1/admin/analytics/perfil-alunos-resultados/ideb.
 // Espelha exatamente o contrato definido em
 // api/cmd/api/analytics_perfil_alunos_ideb.go. IDEB ausente é `null`
@@ -535,6 +570,7 @@ export interface IdebResumo {
   registros_sem_match_schools: number;
   ideb_medio_simples: number | null;
   ideb_medio_ponderado: number | null;
+  total_presentes: number | null;
 }
 
 export interface IdebPorEtapa {
@@ -702,4 +738,25 @@ export interface CaracterizacaoEscolaRow extends EscolasBaseRow {
   turnos_texto: string;
   etapas_texto: string;
   modalidades_texto: string;
+}
+
+// ── Gestão de DREs ──────────────────────────────────────────────────────────
+// Payload de criação de nova DRE (modal da aba "Gestão de DREs e Acessos").
+// Contrato provisório — aguardando definição final do endpoint pelo backend.
+export interface DreCreatePayload {
+  nome:               string;
+  sigla:              string;
+  municipio_sede:     string;
+  polo:               string;
+  responsavel_nome:   string;
+  responsavel_email:  string;
+  responsavel_telefone: string;
+}
+
+// Registro de DRE retornado pelo backend após a criação (campos mínimos
+// esperados; o contrato final pode trazer campos adicionais).
+export interface DreRecord {
+  id:    number | string;
+  nome:  string;
+  sigla: string;
 }

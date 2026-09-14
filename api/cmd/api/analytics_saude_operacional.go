@@ -1104,10 +1104,13 @@ func buildSaudeOperacionalPage(
 // o cadastro de escolas (schools s), antes do LEFT JOIN com os censos do ano.
 // Strings vazias significam "filtro desativado".
 type saudeOperacionalFilters struct {
+	DREID            int
 	DRE              string
 	Municipio        string
 	Zona             string
 	RegiaoIntegracao string
+	SchoolID         int
+	CodigoINEP       string
 }
 
 // parseSaudeOperacionalFilters lê os filtros globais da query string. Espaços em
@@ -1119,6 +1122,23 @@ func parseSaudeOperacionalFilters(q url.Values) saudeOperacionalFilters {
 		Municipio:        strings.TrimSpace(q.Get("municipio")),
 		Zona:             strings.TrimSpace(q.Get("zona")),
 		RegiaoIntegracao: strings.TrimSpace(q.Get("regiao_integracao")),
+	}
+}
+
+// saudeOperacionalFiltersFromRequest reaproveita o parser compartilhado para
+// aplicar o escopo de autorização DRE antes de carregar o dataset. School/INEP
+// também entram na consulta base, portanto totais, resumo, ordenação e paginação
+// nunca são calculados sobre linhas fora do recorte.
+func saudeOperacionalFiltersFromRequest(r *http.Request) saudeOperacionalFilters {
+	shared := parseAnalyticsFilters(r)
+	return saudeOperacionalFilters{
+		DREID:            shared.DREID,
+		DRE:              shared.DRE,
+		Municipio:        shared.Municipio,
+		Zona:             shared.Zona,
+		RegiaoIntegracao: shared.RegiaoIntegracao,
+		SchoolID:         shared.SchoolID,
+		CodigoINEP:       shared.CodigoINEP,
 	}
 }
 
@@ -1194,13 +1214,13 @@ const saudeOperacionalDataProjectionSQL = `jsonb_build_object(
 // Região de Integração depende da compatibilidade entre schools.municipio e
 // reg_integracao.municipio (sem unaccent nesta etapa): municípios com grafia
 // divergente de acentuação podem não casar.
-const saudeOperacionalSelectSQL = `
+var saudeOperacionalSelectSQL = `
 	SELECT
 		s.id,
 		s.codigo_inep,
 		COALESCE(s.nome_escola, ''),
 		COALESCE(s.municipio, ''),
-		COALESCE(s.dre, ''),
+		` + schoolDRENameExpr("s") + `,
 		s.zona,
 		cr.id,
 		CASE WHEN cr.id IS NULL THEN NULL ELSE ` + saudeOperacionalDataProjectionSQL + ` END AS data
@@ -1209,7 +1229,7 @@ const saudeOperacionalSelectSQL = `
 	  ON cr.school_id = s.id
 	 AND cr.year = $1
 	 AND cr.status = 'completed'
-	WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+	WHERE ` + schoolDREScopedFilterPredicate("s", "$8", "$2") + `
 	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
 	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
 	  AND ($5 = '' OR s.municipio IN (
@@ -1217,6 +1237,8 @@ const saudeOperacionalSelectSQL = `
 	        FROM reg_integracao
 	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
 	      ))
+	  AND ($6 = 0 OR s.id = $6)
+	  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
 	ORDER BY s.nome_escola, s.id
 `
 
@@ -1230,6 +1252,9 @@ func buildSaudeOperacionalQuery(year int, f saudeOperacionalFilters) (string, []
 		f.Municipio,
 		f.Zona,
 		f.RegiaoIntegracao,
+		f.SchoolID,
+		f.CodigoINEP,
+		f.DREID,
 	}
 }
 
@@ -1380,7 +1405,7 @@ func (app *application) AdminAnalyticsSaudeOperacionalEscolas(w http.ResponseWri
 		return
 	}
 
-	filters := parseSaudeOperacionalFilters(q)
+	filters := saudeOperacionalFiltersFromRequest(r)
 
 	localFilters, err := parseSaudeOperacionalLocalFilters(q)
 	if err != nil {

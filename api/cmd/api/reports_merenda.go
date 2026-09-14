@@ -167,10 +167,10 @@ func merendaSemRefrigeracao(r merendaReportRow) bool {
 // schools s. Não pagina; a ordenação final por prioridade operacional é em Go.
 //
 // $1=year (sempre específico), $2=dre, $3=municipio, $4=zona, $5=regiao.
-const merendaSelectSQL = `
+var merendaSelectSQL = `
 	SELECT
 		COALESCE(ri.regiao_de_integracao, '') AS regiao_integracao,
-		COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado') AS dre,
+		` + schoolDRENameExpr("s") + ` AS dre,
 		COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado') AS municipio,
 		COALESCE(NULLIF(TRIM(s.zona), ''), '') AS zona,
 		COALESCE(s.codigo_inep, '') AS codigo_inep,
@@ -199,7 +199,7 @@ const merendaSelectSQL = `
 	LEFT JOIN census_responses cr
 		ON cr.school_id = s.id AND cr.year = $1 AND cr.status = 'completed'
 	LEFT JOIN reg_integracao ri ON UPPER(TRIM(ri.municipio)) = UPPER(TRIM(s.municipio))
-	WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
+	WHERE ` + schoolDREScopedFilterPredicate("s", "$8", "$2") + `
 	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
 	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
 	  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
@@ -207,8 +207,10 @@ const merendaSelectSQL = `
 	        FROM reg_integracao
 	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
 	      ))
+	  AND ($6 = 0 OR s.id = $6)
+	  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
 	ORDER BY
-		UPPER(TRIM(s.dre)),
+		UPPER(TRIM(` + schoolDRENameExpr("s") + `)),
 		UPPER(TRIM(s.municipio)),
 		UPPER(TRIM(s.nome_escola)),
 		s.codigo_inep
@@ -218,7 +220,7 @@ const merendaSelectSQL = `
 // cada escola, ordena por prioridade operacional e projeta as colunas do XLSX.
 // Não pagina.
 func (app *application) buildMerendaReportData(ctx context.Context, def ReportDefinition, f reportFilters) (reportData, error) {
-	dbRows, err := app.models.Schools.DB.QueryContext(ctx, merendaSelectSQL, f.args()...)
+	dbRows, err := app.models.Schools.DB.QueryContext(ctx, merendaSelectSQL, f.scopedArgs()...)
 	if err != nil {
 		return reportData{}, fmt.Errorf("consultar merenda: %w", err)
 	}

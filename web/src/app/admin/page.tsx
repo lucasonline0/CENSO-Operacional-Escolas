@@ -1,15 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
-  LogOut, Search, RefreshCw, CloudUpload, Lock, User as UserIcon,
-  AlertCircle, Loader2, PanelLeftClose, Eye, EyeOff, ArrowRight,
-  BarChart2, UsersRound, MonitorSmartphone, ShieldCheck, Utensils,
+  LogOut, RefreshCw, AlertCircle, Loader2, PanelLeftClose, BarChart2,
+  UsersRound, MonitorSmartphone, ShieldCheck, Utensils,
   ClipboardCheck, Activity, Landmark, Database, MapPinned,
   Menu, X, ChevronDown, HeartPulse,
   MonitorPlay,
   Sun,
   Moon,
+  UserCog,
 } from "lucide-react";
 
 import "./admin.css";
@@ -17,6 +17,7 @@ import "./admin.css";
 import { API, C } from "@/components/admin/shared/constants";
 import {
   apiFetch, saveToken, loadToken, clearToken, clearApiCache, sanitize, prefetchDashboard,
+  fetchAdminMeFresh, setUnauthorizedHandler,
 } from "@/components/admin/shared/api";
 import { JsonModal } from "@/components/admin/shared/JsonModal";
 import { AbaTodosCensos } from "@/components/admin/AbaTodosCensos";
@@ -30,10 +31,11 @@ import { AbaMerenda } from "@/components/admin/AbaMerenda";
 import { AbaServicosTerceirizados } from "@/components/admin/AbaServicosTerceirizados";
 import { AbaGestaoFinanceiraGovernanca } from "@/components/admin/AbaGestaoFinanceiraGovernanca";
 import { AbaSaudeOperacionalEscolas } from "@/components/admin/AbaSaudeOperacionalEscolas";
+import { AbaGestaoDres } from "@/components/admin/AbaGestaoDres";
 import { FiltrosGlobais } from "@/components/admin/FiltrosGlobais";
 import PresentationMode from "@/components/admin/PresentationMode";
 import type {
-  CensusPage, DashboardData, DashboardFilters, FiltrosOpcoes,
+  CensusPage, DashboardData, DashboardFilters, FiltrosOpcoes, AdminProfile,
 } from "@/components/admin/shared/types";
 
 // ─── Login ────────────────────────────────────────────────────────────────────
@@ -62,7 +64,15 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
       const token = (json.data as { token: string }).token;
       saveToken(token);
       setStatus("prefetch");
-      await prefetchDashboard(token);
+      try {
+        const prof = await fetchAdminMeFresh(token);
+        await prefetchDashboard(token, prof.role);
+      } catch {
+        // Um 401 aqui (raro: falha entre login e /admin/me) limpa token/cache
+        // em apiFetch; re-grava o token para o mont do dashboard revalidar.
+        saveToken(token);
+        await prefetchDashboard(token);
+      }
       onLogin(token);
     } catch { setError("Não foi possível conectar ao servidor."); setStatus("idle"); }
   }
@@ -114,7 +124,6 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
                     className="login__input login__input--icon"
                     disabled={loading || blocked} value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="admin_seduc_pa" required
                   />
                 </div>
               </label>
@@ -135,7 +144,6 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
                     className="login__input login__input--icon"
                     disabled={loading || blocked} value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••••••" required
                   />
                   <button
                     type="button" className="login__input-toggle" tabIndex={-1}
@@ -188,7 +196,8 @@ type Tab =
   | "governanca"
   | "saude"
   | "census"
-  | "dre";
+  | "dre"
+  | "gestao";
 
 const PAGE_META: Record<Tab, { title: string }> = {
   perfil: { title: "Caracterização da Rede" },
@@ -202,6 +211,7 @@ const PAGE_META: Record<Tab, { title: string }> = {
   saude: { title: "Índice de Saúde Operacional por escola" },
   census: { title: "Registros de Preenchimento do Censo" },
   dre: { title: "Andamento do Preenchimento por DRE" },
+  gestao: { title: "Gestão de DREs e Acessos" },
 };
 
 type SubItem = { label: string; anchor: string };
@@ -268,7 +278,7 @@ const NAV_INDICATORS: NavItem[] = [
   {
     id: "alunos", label: "Perfil dos Alunos e Resultados", Icon: Activity,
     subItems: [
-      { label: "Resumo IDEB 2023", anchor: "sec-alunos-resumo" },
+      { label: "Resumo IDEB", anchor: "sec-alunos-resumo" },
       { label: "Resultado por Etapa", anchor: "sec-alunos-etapa" },
       { label: "Distribuição por Faixas", anchor: "sec-alunos-faixas" },
       { label: "Ranking por Escola", anchor: "sec-alunos-ranking" },
@@ -292,6 +302,11 @@ const NAV_OPERACIONAL: NavItem[] = [
   { id: "saude", label: "Saúde Operacional", Icon: HeartPulse },
   { id: "census", label: "Registros do Censo", Icon: Database },
   { id: "dre", label: "Preenchimento por DRE", Icon: MapPinned },
+];
+
+// Exclusivo para usuários com role "admin" — renderizado condicionalmente na sidebar.
+const NAV_ADMIN: NavItem[] = [
+  { id: "gestao", label: "Gestão de DREs e Acessos", Icon: UserCog },
 ];
 
 function NavGroup({
@@ -366,6 +381,7 @@ function NavGroup({
 }
 
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
+  const [profile, setProfile] = useState<AdminProfile | null>(null);
   const [censusPage, setCensusPage] = useState<CensusPage | null>(null);
   const [tab, setTab] = useState<Tab>("perfil");
   const [filterStatus, setFilterStatus] = useState("");
@@ -383,8 +399,76 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const [filtrosOpcoes, setFiltrosOpcoes] = useState<FiltrosOpcoes | null>(null);
   const [presentationMode, setPresentationMode] = useState(false);
   const [showMobilePresAlert, setShowMobilePresAlert] = useState(false);
+  const [dataVersion, setDataVersion] = useState(0);
+  const handleDataChanged = useCallback(() => setDataVersion((v) => v + 1), []);
 
-  const logout = useCallback(() => { clearToken(); clearApiCache(); onLogout(); }, [onLogout]);
+  /* const logout = useCallback(() => { clearToken(); clearApiCache(); onLogout(); }, [onLogout]); */
+  const logout = useCallback(() => { 
+    setFilters({});
+    setFiltrosOpcoes(null);
+    setCensusPage(null);
+    clearToken(); 
+    clearApiCache(); 
+    onLogout(); 
+  }, [onLogout]);
+
+  // Guard de revalidação de sessão: evita requisições sobrepostas/tempestade
+  // (intervalo + visibilitychange/focus podem disparar próximos uns dos outros).
+  const revalidatingRef = useRef(false);
+  const profileRef = useRef<AdminProfile | null>(null);
+  useEffect(() => { profileRef.current = profile; }, [profile]);
+
+  // Revalida a sessão com /admin/me FORA do cache. 401 (reset de senha,
+  // usuário inativo, DRE inativa) => logout imediato, sem reload. Um perfil com
+  // identidade diferente também zera estado sensível antes de atualizar.
+  const revalidateSession = useCallback(async () => {
+    if (revalidatingRef.current) return;
+    revalidatingRef.current = true;
+    try {
+      const fresh = await fetchAdminMeFresh(token);
+      const prev = profileRef.current;
+      const identityChanged =
+        prev !== null &&
+        (prev.username !== fresh.username || prev.role !== fresh.role || prev.dre !== fresh.dre || prev.dre_id !== fresh.dre_id);
+      if (identityChanged) {
+        setFilters({});
+        setFiltrosOpcoes(null);
+        setCensusPage(null);
+        if (fresh.role === "dre" && fresh.dre) {
+          setFilters((f) => ({ ...f, dre: fresh.dre ?? undefined }));
+        }
+      }
+      setProfile(fresh);
+    } catch (e) {
+      if ((e as Error).message === "UNAUTHORIZED") { logout(); return; }
+    } finally {
+      revalidatingRef.current = false;
+    }
+  }, [token, logout]);
+
+  // Heartbeat de sessão: valida a sessão na rede a cada intervalo e ao retornar
+  // à aba/janela (visibilitychange/focus). Qualquer revogação remota encerra a
+  // sessão no cliente sem depender de F5. Registra também o handler global de
+  // 401 para que qualquer request do dashboard dispare o mesmo logout.
+  useEffect(() => {
+    setUnauthorizedHandler(logout);
+    const HEARTBEAT_MS = 60_000;
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") revalidateSession();
+    };
+    const onFocus = () => {
+      if (document.visibilityState === "visible") revalidateSession();
+    };
+    const interval = setInterval(revalidateSession, HEARTBEAT_MS);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      setUnauthorizedHandler(null);
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [revalidateSession, logout]);
 
   // O endpoint legado /v1/admin/dashboard segue sendo consultado para gatear o
   // estado de carregamento/erro do painel operacional. O payload (incl. by_dre)
@@ -410,6 +494,8 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     if (filters.municipio) p.set("municipio", filters.municipio);
     if (filters.zona) p.set("zona", filters.zona);
     if (filters.regiao_integracao) p.set("regiao_integracao", filters.regiao_integracao);
+    if (filters.school_id) p.set("school_id", String(filters.school_id));
+    if (filters.codigo_inep) p.set("codigo_inep", filters.codigo_inep);
     if (search) p.set("search", search);
     p.set("limit", String(limit));
     p.set("page", String(page));
@@ -417,7 +503,31 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     catch (e) { if ((e as Error).message === "UNAUTHORIZED") logout(); }
   }, [token, filterStatus, filters, search, censusLimit, censusPageNum, logout]);
 
-  useEffect(() => { loadDb(); }, [loadDb]);
+   useEffect(() => {
+     let active = true;
+     async function init() {
+       try {
+         const userProfile = await fetchAdminMeFresh(token);
+         if (!active) return;
+         setProfile(userProfile);
+        profileRef.current = userProfile;
+        
+         if (userProfile.role === "dre" && userProfile.dre) {
+            setFilters((prev) => ({ ...prev, dre: userProfile.dre ?? undefined }));
+         }
+       } catch (e) {
+        if ((e as Error).message === "UNAUTHORIZED") {
+            logout();
+            return;
+          }
+       }
+       loadDb();
+     }
+     init();
+     return () => { active = false; };
+   }, [token, logout, loadDb]);
+
+
   // Pequeno debounce: a busca textual agora dispara requisição ao backend e o
   // timeout evita uma chamada por tecla digitada.
   useEffect(() => {
@@ -431,11 +541,13 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     if (filters.municipio) qs.set("municipio", filters.municipio);
     if (filters.zona) qs.set("zona", filters.zona);
     if (filters.regiao_integracao) qs.set("regiao_integracao", filters.regiao_integracao);
+    if (filters.school_id) qs.set("school_id", String(filters.school_id));
+    if (filters.codigo_inep) qs.set("codigo_inep", filters.codigo_inep);
     const url = `/v1/admin/analytics/filtros/opcoes${qs.toString() ? `?${qs}` : ""}`;
     apiFetch<FiltrosOpcoes>(url, token)
       .then(setFiltrosOpcoes)
       .catch((e) => { if ((e as Error).message === "UNAUTHORIZED") logout(); });
-  }, [filters, token, logout]);
+  }, [filters, token, logout, dataVersion]);
 
 
   async function handleSync() {
@@ -455,9 +567,21 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   // Mudanças de recorte (filtros globais, status ou busca) voltam para a página 1.
   const updateSearch = (s: string) => { setSearch(s); setCensusPageNum(1); };
   const updateFilterStatus = (s: string) => { setFilterStatus(s); setCensusPageNum(1); };
-  const updateFilters = (f: DashboardFilters) => { setFilters(f); setCensusPageNum(1); };
+  const updateFilters = (f: DashboardFilters) => {
+    if (profile?.role === "dre" && profile.dre) {
+      f = { ...f, dre: profile.dre };
+    }
+    setFilters(f);
+    setCensusPageNum(1);
+  };
 
-  const handleNav = (id: Tab) => { setTab(id); updateSearch(""); setVisited((prev) => new Set([...prev, id])); setMobileNavOpen(false); };
+  const handleNav = (id: Tab) => {
+    if (id === "gestao" && profile?.role !== "admin") return;
+    setTab(id);
+    updateSearch("");
+    setVisited((prev) => new Set([...prev, id]));
+    setMobileNavOpen(false);
+  };
 
   const [dark, setDark] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -521,15 +645,24 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             <NavGroup items={NAV_OPERACIONAL} active={tab} onNav={handleNav} mobileOpen={mobileNavOpen} />
           </div>
 
-          <div className="ca-side-footer">
-            <div className="ca-sf-icon">
-              <RefreshCw size={16} />
+          {profile?.role === "admin" && (
+            <div className="ca-nav-group">
+              <div className="ca-nav-group-label">Administração</div>
+              <NavGroup items={NAV_ADMIN} active={tab} onNav={handleNav} mobileOpen={mobileNavOpen} />
             </div>
-            <div>
-              <div className="ca-sf-t">Dados do censo</div>
-              <div className="ca-sf-s">Atualizado em 27/05/2026</div>
+          )}
+
+          {profile?.role !== "dre" && (
+            <div className="ca-side-footer" onClick={handleSync} style={{ cursor: "pointer" }}>
+              <div className="ca-sf-icon">
+                <RefreshCw size={16} className={syncing ? "animate-spin" : ""} />
+              </div>
+              <div>
+                <div className="ca-sf-t">Dados do censo</div>
+                <div className="ca-sf-s">Atualizado em 27/05/2026</div>
+              </div>
             </div>
-          </div>
+          )}
         </aside>
 
         {/* ── Main ─────────────────────────────────────────────── */}
@@ -593,19 +726,24 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               </div>
             )}
 
-            {tab !== "saude" && (
+            {tab !== "saude" && tab !== "gestao" && (
               <div className="ca-filters-wrap">
                 <FiltrosGlobais
                   opcoes={filtrosOpcoes}
                   filters={filters}
                   onFiltersChange={updateFilters}
+                  profile={profile}
                 />
               </div>
             )}
-            {/* Renderiza todas as abas já visitadas. Quando volta para uma aba os dados já são carregados*/}
             {visited.has("perfil") && (
               <div style={{ display: tab === "perfil" ? undefined : "none" }}>
-                <AbaCaracterizacao token={token} onUnauth={logout} filters={filters} />
+                <AbaCaracterizacao 
+                  token={token} 
+                  onUnauth={logout} 
+                  filters={filters} 
+                  userRole={profile?.role}
+                />
               </div>
             )}
             {visited.has("pessoal") && (
@@ -674,6 +812,12 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             {visited.has("dre") && (
               <div style={{ display: tab === "dre" ? undefined : "none" }}>
                 <AbaPorDre token={token} onUnauth={logout} filters={filters} />
+              </div>
+            )}
+
+            {profile?.role === "admin" && visited.has("gestao") && (
+              <div style={{ display: tab === "gestao" ? undefined : "none" }}>
+                <AbaGestaoDres token={token} onUnauth={logout} onDataChanged={handleDataChanged} />
               </div>
             )}
           </div>

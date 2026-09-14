@@ -206,10 +206,13 @@ func optStringCell(v *string) any {
 // criticidade decrescente e projeta as colunas do XLSX. Não pagina.
 func (app *application) buildSaudeOperacionalReportData(ctx context.Context, def ReportDefinition, f reportFilters) (reportData, error) {
 	soFilters := saudeOperacionalFilters{
+		DREID:            f.DREID,
 		DRE:              f.DRE,
 		Municipio:        f.Municipio,
 		Zona:             f.Zona,
 		RegiaoIntegracao: f.RegiaoIntegracao,
+		SchoolID:         f.SchoolID,
+		CodigoINEP:       f.CodigoINEP,
 	}
 
 	escolas, _, err := app.buildSaudeOperacionalDataset(ctx, f.Year, soFilters)

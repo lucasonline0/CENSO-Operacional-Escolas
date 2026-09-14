@@ -27,6 +27,8 @@ function buildFilterParams(filters?: DashboardFilters): string {
   if (filters.dre) p.set("dre", filters.dre);
   if (filters.municipio) p.set("municipio", filters.municipio);
   if (filters.zona) p.set("zona", filters.zona);
+  if (filters.school_id) p.set("school_id", String(filters.school_id));
+  if (filters.codigo_inep) p.set("codigo_inep", filters.codigo_inep);
   const s = p.toString();
   return s ? `?${s}` : "";
 }
@@ -70,7 +72,7 @@ const CARACT_ESCOLAS_COLUMNS: DataTableColumn<CaracterizacaoEscolaRow>[] = [
   },
 ];
 
-export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string; onUnauth: () => void; filters?: DashboardFilters }) {
+export function AbaCaracterizacao({ token, onUnauth, filters, userRole }: { token: string; onUnauth: () => void; filters?: DashboardFilters; userRole?: string }) {
   // Fase 2B.1: a aba "Caracterização da Rede" passa a consumir PostgreSQL via
   // /v1/admin/analytics/caracterizacao/perfil e /caracterizacao/dre. Os dados
   // legados de /v1/admin/sheet-metrics continuam carregados em paralelo como
@@ -129,9 +131,11 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
       .then((d) => { if (!cancelled) setInfraPg(d); })
       .catch(handleErr(setInfraErr));
 
-    const pSheet = apiFetch<SheetMetrics>("/v1/admin/sheet-metrics", token)
-      .then((m) => { if (!cancelled) setMetrics(m); })
-      .catch(handleErr(setSheetErr));
+      const pSheet = userRole === "dre" 
+      ? Promise.resolve(null)
+      : apiFetch<SheetMetrics>("/v1/admin/sheet-metrics", token)
+          .then((m) => { if (!cancelled) setMetrics(m); })
+          .catch(handleErr(setSheetErr));
 
     Promise.all([pPerfil, pDre, pOferta, pInfra, pSheet]).finally(() => {
       if (!cancelled) setLoading(false);
@@ -163,6 +167,8 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
     if (filters?.dre)               p.set("dre",               filters.dre);
     if (filters?.municipio)         p.set("municipio",         filters.municipio);
     if (filters?.zona)              p.set("zona",              filters.zona);
+    if (filters?.school_id)         p.set("school_id",         String(filters.school_id));
+    if (filters?.codigo_inep)       p.set("codigo_inep",       filters.codigo_inep);
     if (esSearch.trim())            p.set("q",                 esSearch.trim());
     p.set("page",      String(esPage));
     p.set("page_size", String(esPageSize));
@@ -191,8 +197,10 @@ export function AbaCaracterizacao({ token, onUnauth, filters }: { token: string;
 
   // Cenário catastrófico: PG falhou nas duas pontas e a planilha também.
   // Sem dados nenhuma fonte → erro fatal.
-  if (!perfilPg && !drePg && !metrics) {
-    const msg = sheetErr || perfilErr || dreErr || "Não foi possível carregar indicadores.";
+  const isDre = userRole === "dre";
+
+  if ((isDre && !perfilPg) || (!perfilPg && !drePg && !metrics)) {
+    const msg = perfilErr || dreErr || sheetErr || "Não foi possível carregar os indicadores do PostgreSQL.";
     return (
       <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl px-4 py-3 text-sm">
         <AlertCircle size={16} /> {msg}

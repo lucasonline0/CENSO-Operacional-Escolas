@@ -1,0 +1,43 @@
+name: IDEB Importer CI
+
+on:
+  pull_request:
+    paths:
+      - "scripts/ideb/**"
+      - "api/cmd/api/migrations/*ideb*"
+      - "infra/migrations/*ideb*"
+      - ".github/workflows/ideb-importer-ci.yml"
+  push:
+    branches:
+      - develop
+    paths:
+      - "scripts/ideb/**"
+      - "api/cmd/api/migrations/*ideb*"
+      - "infra/migrations/*ideb*"
+      - ".github/workflows/ideb-importer-ci.yml"
+
+jobs:
+  importer-tests:
+    name: Python importer tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/ideb/requirements.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r scripts/ideb/requirements.txt
+
+      - name: Compile importer
+        run: python -m compileall -q scripts/ideb
+
+      - name: Unit tests
+        run: python -m unittest discover -s scripts/ideb -p "test_*.py" -v

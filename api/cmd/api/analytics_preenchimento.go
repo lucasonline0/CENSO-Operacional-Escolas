@@ -34,20 +34,18 @@ type PreenchimentoDrePayload struct {
 }
 
 // preenchimentoDreFilters reúne os filtros globais do dashboard aplicados sobre
-// o cadastro de escolas (schools s). Strings vazias significam "filtro
-// desativado". O ano de referência segue a mesma regra dos demais endpoints
-// analíticos: usa o year enviado quando válido, senão o ano corrente.
+// o cadastro de escolas. DREID é preenchido somente pelo escopo autenticado.
 type preenchimentoDreFilters struct {
 	Year             int
+	DREID            int
 	DRE              string
 	Municipio        string
 	Zona             string
 	RegiaoIntegracao string
+	SchoolID         int
+	CodigoINEP       string
 }
 
-// parsePreenchimentoDreFilters lê os filtros globais da query string. Espaços em
-// branco são removidos (um valor só com espaços equivale a ausência de filtro).
-// O ano segue parseAnalyticsFilters: year inválido/ausente cai no ano corrente.
 func parsePreenchimentoDreFilters(q url.Values, now time.Time) preenchimentoDreFilters {
 	f := preenchimentoDreFilters{
 		Year:             now.Year(),
@@ -62,50 +60,92 @@ func parsePreenchimentoDreFilters(q url.Values, now time.Time) preenchimentoDreF
 	return f
 }
 
-// preenchimentoDreSelectSQL agrega o andamento do preenchimento por DRE partindo
-// de schools s (não de census_responses), de modo que escolas sem censo no ano
-// permaneçam no recorte e sejam contadas como pendentes via LEFT JOIN.
-//
-// A CTE latest_census colapsa eventuais respostas duplicadas por escola/ano em
-// uma única linha (DISTINCT ON school_id, mantendo a mais recente). Há a
-// constraint unique_school_year que já garante unicidade; o DISTINCT ON é uma
-// salvaguarda defensiva caso isso mude.
-//
-// Os filtros globais incidem sobre schools s e por isso este endpoint NÃO
-// reutiliza AnalyticsFilters.WhereSQL(), que exige status = 'completed' AND
-// census_id IS NOT NULL — o que excluiria rascunhos e pendentes que precisamos
-// contar. A comparação usa UPPER(TRIM(...)) para tolerar caixa e espaços.
+// A query-base mantém o contrato histórico de cinco argumentos usado pelos
+// testes auxiliares. Em schema pós-0020, porém, filtros, join e agregação são
+// resolvidos por schools.dre_id -> dres.id. O texto de schools.dre só é
+// consultado quando a coluna dre_id ainda não existe no schema de transição.
 const preenchimentoDreSelectSQL = `
-	WITH latest_census AS (
+	WITH schema_mode AS (
+		SELECT EXISTS (
+			SELECT 1 FROM pg_attribute
+			WHERE attrelid = to_regclass('schools')
+			  AND attname = 'dre_id'
+			  AND NOT attisdropped
+		) AS canonical
+	),
+	latest_census AS (
 		SELECT DISTINCT ON (school_id)
 			school_id,
 			status
 		FROM census_responses
 		WHERE year = $1
 		ORDER BY school_id, updated_at DESC, id DESC
+	),
+	filtered_schools AS (
+		SELECT
+			s.id,
+			s.dre,
+			CASE WHEN m.canonical THEN NULLIF(to_jsonb(s)->>'dre_id', '')::int ELSE NULL END AS dre_id,
+			m.canonical
+		FROM schools s
+		CROSS JOIN schema_mode m
+		WHERE ($2 = '' OR CASE
+			WHEN m.canonical THEN EXISTS (
+				SELECT 1 FROM dres fd
+				WHERE fd.id = NULLIF(to_jsonb(s)->>'dre_id', '')::int
+				  AND UPPER(TRIM(fd.nome)) = UPPER(TRIM($2))
+			)
+			ELSE UPPER(TRIM(s.dre)) = UPPER(TRIM($2))
+		END)
+		  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
+		  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
+		  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
+		        SELECT UPPER(TRIM(municipio))
+		        FROM reg_integracao
+		        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
+		      ))
+	),
+	master_rows AS (
+		SELECT
+			TRIM(d.nome) AS dre,
+			COUNT(s.id) AS total,
+			COUNT(s.id) FILTER (WHERE cr.status = 'completed') AS completed,
+			COUNT(s.id) FILTER (WHERE cr.status = 'draft') AS draft
+		FROM dres d
+		LEFT JOIN filtered_schools s
+		  ON CASE WHEN s.canonical THEN s.dre_id = d.id
+		          ELSE UPPER(TRIM(s.dre)) = UPPER(TRIM(d.nome)) END
+		LEFT JOIN latest_census cr ON cr.school_id = s.id
+		WHERE d.ativa = TRUE
+		  AND NULLIF(TRIM(d.nome), '') IS NOT NULL
+		  AND ($2 = '' OR UPPER(TRIM(d.nome)) = UPPER(TRIM($2)))
+		GROUP BY d.id, d.nome
+		HAVING (($3 = '' AND $4 = '' AND $5 = '') OR COUNT(s.id) > 0)
+	),
+	legacy_rows AS (
+		SELECT
+			COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado') AS dre,
+			COUNT(s.id) AS total,
+			COUNT(s.id) FILTER (WHERE cr.status = 'completed') AS completed,
+			COUNT(s.id) FILTER (WHERE cr.status = 'draft') AS draft
+		FROM filtered_schools s
+		LEFT JOIN dres d
+		  ON CASE WHEN s.canonical THEN s.dre_id = d.id
+		          ELSE UPPER(TRIM(s.dre)) = UPPER(TRIM(d.nome)) END
+		LEFT JOIN latest_census cr ON cr.school_id = s.id
+		WHERE d.id IS NULL
+		  AND ($2 = '' OR UPPER(TRIM(COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado'))) = UPPER(TRIM($2)))
+		GROUP BY COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado')
 	)
-	SELECT
-		COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado') AS dre,
-		COUNT(*) AS total,
-		COUNT(*) FILTER (WHERE cr.status = 'completed') AS completed,
-		COUNT(*) FILTER (WHERE cr.status = 'draft') AS draft
-	FROM schools s
-	LEFT JOIN latest_census cr ON cr.school_id = s.id
-	WHERE ($2 = '' OR UPPER(TRIM(s.dre)) = UPPER(TRIM($2)))
-	  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
-	  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
-	  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
-	        SELECT UPPER(TRIM(municipio))
-	        FROM reg_integracao
-	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
-	      ))
-	GROUP BY COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado')
-	ORDER BY dre
+	SELECT dre, total, completed, draft
+	FROM (
+		SELECT 0 AS sort_order, dre, total, completed, draft FROM master_rows
+		UNION ALL
+		SELECT 1 AS sort_order, dre, total, completed, draft FROM legacy_rows
+	) rows_union
+	ORDER BY sort_order, UPPER(dre), dre
 `
 
-// buildPreenchimentoDreQuery devolve a query e os argumentos posicionais na
-// ordem esperada por preenchimentoDreSelectSQL: $1=year, $2=dre, $3=municipio,
-// $4=zona, $5=regiao_integracao.
 func buildPreenchimentoDreQuery(f preenchimentoDreFilters) (string, []any) {
 	return preenchimentoDreSelectSQL, []any{
 		f.Year,
@@ -116,9 +156,121 @@ func buildPreenchimentoDreQuery(f preenchimentoDreFilters) (string, []any) {
 	}
 }
 
-// completionPercentage devolve o percentual inteiro de conclusão (completed /
-// total * 100), arredondado, espelhando o que a UI atual já faz com Math.round.
-// Retorna 0 quando não há escolas no recorte.
+// A variante scoped adiciona school_id/codigo_inep e recebe $8=dre_id do
+// escopo autenticado. Quando $8 > 0 e 0020 existe, o filtro territorial usa o
+// ID diretamente; o nome não participa da decisão de autorização.
+const preenchimentoDreScopedSelectSQL = `
+	WITH schema_mode AS (
+		SELECT EXISTS (
+			SELECT 1 FROM pg_attribute
+			WHERE attrelid = to_regclass('schools')
+			  AND attname = 'dre_id'
+			  AND NOT attisdropped
+		) AS canonical
+	),
+	latest_census AS (
+		SELECT DISTINCT ON (school_id)
+			school_id,
+			status
+		FROM census_responses
+		WHERE year = $1
+		ORDER BY school_id, updated_at DESC, id DESC
+	),
+	filtered_schools AS (
+		SELECT
+			s.id,
+			s.dre,
+			CASE WHEN m.canonical THEN NULLIF(to_jsonb(s)->>'dre_id', '')::int ELSE NULL END AS dre_id,
+			m.canonical
+		FROM schools s
+		CROSS JOIN schema_mode m
+		WHERE ($2 = '' OR CASE
+			WHEN m.canonical AND $8 > 0 THEN NULLIF(to_jsonb(s)->>'dre_id', '')::int = $8
+			WHEN m.canonical THEN EXISTS (
+				SELECT 1 FROM dres fd
+				WHERE fd.id = NULLIF(to_jsonb(s)->>'dre_id', '')::int
+				  AND UPPER(TRIM(fd.nome)) = UPPER(TRIM($2))
+			)
+			ELSE UPPER(TRIM(s.dre)) = UPPER(TRIM($2))
+		END)
+		  AND ($3 = '' OR UPPER(TRIM(s.municipio)) = UPPER(TRIM($3)))
+		  AND ($4 = '' OR UPPER(TRIM(s.zona)) = UPPER(TRIM($4)))
+		  AND ($5 = '' OR UPPER(TRIM(s.municipio)) IN (
+		        SELECT UPPER(TRIM(municipio))
+		        FROM reg_integracao
+		        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
+		      ))
+		  AND ($6 = 0 OR s.id = $6)
+		  AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))
+	),
+	master_rows AS (
+		SELECT
+			TRIM(d.nome) AS dre,
+			COUNT(s.id) AS total,
+			COUNT(s.id) FILTER (WHERE cr.status = 'completed') AS completed,
+			COUNT(s.id) FILTER (WHERE cr.status = 'draft') AS draft
+		FROM dres d
+		LEFT JOIN filtered_schools s
+		  ON CASE WHEN s.canonical THEN s.dre_id = d.id
+		          ELSE UPPER(TRIM(s.dre)) = UPPER(TRIM(d.nome)) END
+		LEFT JOIN latest_census cr ON cr.school_id = s.id
+		WHERE d.ativa = TRUE
+		  AND NULLIF(TRIM(d.nome), '') IS NOT NULL
+		  AND ($2 = '' OR CASE WHEN $8 > 0 THEN d.id = $8 ELSE UPPER(TRIM(d.nome)) = UPPER(TRIM($2)) END)
+		GROUP BY d.id, d.nome
+		HAVING (($3 = '' AND $4 = '' AND $5 = '' AND $6 = 0 AND $7 = '') OR COUNT(s.id) > 0)
+	),
+	legacy_rows AS (
+		SELECT
+			COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado') AS dre,
+			COUNT(s.id) AS total,
+			COUNT(s.id) FILTER (WHERE cr.status = 'completed') AS completed,
+			COUNT(s.id) FILTER (WHERE cr.status = 'draft') AS draft
+		FROM filtered_schools s
+		LEFT JOIN dres d
+		  ON CASE WHEN s.canonical THEN s.dre_id = d.id
+		          ELSE UPPER(TRIM(s.dre)) = UPPER(TRIM(d.nome)) END
+		LEFT JOIN latest_census cr ON cr.school_id = s.id
+		WHERE d.id IS NULL
+		  AND $8 = 0
+		  AND ($2 = '' OR UPPER(TRIM(COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado'))) = UPPER(TRIM($2)))
+		GROUP BY COALESCE(NULLIF(TRIM(s.dre), ''), 'Não informado')
+	)
+	SELECT dre, total, completed, draft
+	FROM (
+		SELECT 0 AS sort_order, dre, total, completed, draft FROM master_rows
+		UNION ALL
+		SELECT 1 AS sort_order, dre, total, completed, draft FROM legacy_rows
+	) rows_union
+	ORDER BY sort_order, UPPER(dre), dre
+`
+
+func preenchimentoDreFiltersFromRequest(r *http.Request, now time.Time) preenchimentoDreFilters {
+	f := parsePreenchimentoDreFilters(r.URL.Query(), now)
+	shared := parseAnalyticsFilters(r)
+	f.DREID = shared.DREID
+	f.DRE = shared.DRE
+	f.Municipio = shared.Municipio
+	f.Zona = shared.Zona
+	f.RegiaoIntegracao = shared.RegiaoIntegracao
+	f.SchoolID = shared.SchoolID
+	f.CodigoINEP = shared.CodigoINEP
+	return f
+}
+
+func buildPreenchimentoDreScopedQuery(f preenchimentoDreFilters) (string, []any) {
+	return preenchimentoDreScopedSelectSQL, []any{
+		f.Year,
+		f.DRE,
+		f.Municipio,
+		f.Zona,
+		f.RegiaoIntegracao,
+		f.SchoolID,
+		f.CodigoINEP,
+		f.DREID,
+	}
+}
+
 func completionPercentage(completed, total int) int {
 	if total <= 0 {
 		return 0
@@ -126,8 +278,6 @@ func completionPercentage(completed, total int) int {
 	return int(math.Round(float64(completed) / float64(total) * 100))
 }
 
-// buildPreenchimentoDreRow monta uma linha do payload calculando pendentes e
-// percentual a partir dos totais agregados no banco.
 func buildPreenchimentoDreRow(dre string, total, completed, draft int) PreenchimentoDreRow {
 	pending := total - completed - draft
 	if pending < 0 {
@@ -143,12 +293,9 @@ func buildPreenchimentoDreRow(dre string, total, completed, draft int) Preenchim
 	}
 }
 
-// AdminAnalyticsPreenchimentoDre retorna o andamento do preenchimento do censo
-// por DRE, respeitando os filtros globais (year, dre, municipio, zona,
-// regiao_integracao). Recorte vazio devolve payload válido com totais zerados.
 func (app *application) AdminAnalyticsPreenchimentoDre(w http.ResponseWriter, r *http.Request) {
-	filters := parsePreenchimentoDreFilters(r.URL.Query(), time.Now())
-	query, args := buildPreenchimentoDreQuery(filters)
+	filters := preenchimentoDreFiltersFromRequest(r, time.Now())
+	query, args := buildPreenchimentoDreScopedQuery(filters)
 
 	rows, err := app.models.Schools.DB.QueryContext(r.Context(), query, args...)
 	if err != nil {

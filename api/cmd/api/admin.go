@@ -1,9 +1,9 @@
 package main
 
 import (
-	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -13,27 +13,46 @@ import (
 	"sync"
 	"time"
 
+	"censo-api/internal/models"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // ─── Rate Limiter ────────────────────────────────────────────────────────────
 
+// rateLimiter implementa rate limit por IP com janela deslizante e limpeza
+// periódica de chaves inativas para evitar crescimento indefinido de memória.
 type rateLimiter struct {
-	mu       sync.Mutex
-	attempts map[string][]time.Time
+	mu         sync.Mutex
+	attempts   map[string][]time.Time
+	window     time.Duration
+	lastSweep  time.Time
 }
 
-var loginRL = &rateLimiter{attempts: make(map[string][]time.Time)}
+const rlSweepInterval = 5 * time.Minute
+
+var loginRL = &rateLimiter{
+	attempts:  make(map[string][]time.Time),
+	window:    15 * time.Minute,
+	lastSweep: time.Now(),
+}
 
 // Limitadores para os endpoints públicos de escrita. Os limites são
 // propositalmente generosos para não atrapalhar o preenchimento legítimo
 // do formulário (multi-step + autosave, possivelmente várias escolas atrás
 // do mesmo IP/NAT de uma DRE), mas cortam abuso/enumeração em massa.
 var (
-	censusWriteRL = &rateLimiter{attempts: make(map[string][]time.Time)}
-	uploadRL      = &rateLimiter{attempts: make(map[string][]time.Time)}
+	censusWriteRL = &rateLimiter{
+		attempts:  make(map[string][]time.Time),
+		window:    10 * time.Minute,
+		lastSweep: time.Now(),
+	}
+	uploadRL = &rateLimiter{
+		attempts:  make(map[string][]time.Time),
+		window:    10 * time.Minute,
+		lastSweep: time.Now(),
+	}
 )
 
 const (
@@ -51,11 +70,47 @@ const (
 	uploadWindow = 10 * time.Minute
 )
 
+// SweepNow executa uma limpeza imediata de chaves inativas sem depender de
+// uma nova chamada a allow(). Pode ser chamado de qualquer goroutine.
+func (rl *rateLimiter) SweepNow() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.lastSweep = time.Time{} // reseta para forçar sweep imediato
+	rl.sweep()
+}
+
+// sweep remove todas as chaves cujas timestamps são todas anteriores à janela.
+// Deve ser chamado com rl.mu segurado.
+func (rl *rateLimiter) sweep() {
+	now := time.Now()
+	if now.Sub(rl.lastSweep) < rlSweepInterval {
+		return
+	}
+	rl.lastSweep = now
+	cutoff := now.Add(-rl.window)
+	for ip, timestamps := range rl.attempts {
+		// Verifica se há pelo menos uma timestamp dentro da janela.
+		active := false
+		for _, t := range timestamps {
+			if t.After(cutoff) {
+				active = true
+				break
+			}
+		}
+		if !active {
+			delete(rl.attempts, ip)
+		}
+	}
+}
+
 // allow implementa um rate limit de janela deslizante para o IP informado,
-// com limite e janela parametrizáveis.
+// com limite e janela parametrizáveis. Executa sweep periódico para limpar
+// chaves inativas e evitar crescimento indefinido do map.
 func (rl *rateLimiter) allow(ip string, max int, window time.Duration) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
+
+	rl.sweep()
 
 	cutoff := time.Now().Add(-window)
 	var recent []time.Time
@@ -146,8 +201,13 @@ func (app *application) requirePublicAPIKey(next http.Handler) http.Handler {
 
 // ─── JWT ─────────────────────────────────────────────────────────────────────
 
+// adminClaims é o tipo legacy de JWT claims, anterior ao fluxo runtime.
+// NÃO usar para emitir tokens novos — utilise runtimeAdminClaims.
+// Mantido apenas para compatibilidade de parsing de tokens antigos em testes.
 type adminClaims struct {
 	Username string `json:"username"`
+	Role     string `json:"role"`
+	DRE      string `json:"dre,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -173,122 +233,15 @@ func validateSecurityConfig() error {
 	return nil
 }
 
-// ─── Handlers ────────────────────────────────────────────────────────────────
-
-func (app *application) AdminLogin(w http.ResponseWriter, r *http.Request) {
-	// Limit body to 1KB to prevent DoS
-	r.Body = http.MaxBytesReader(w, r.Body, 1024)
-
-	ip := clientIP(r)
-	if !loginRL.check(ip) {
-		w.Header().Set("Retry-After", "900")
-		app.errorJSON(w, fmt.Errorf("muitas tentativas. Aguarde 15 minutos"), http.StatusTooManyRequests)
-		return
-	}
-
-	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
-	if err := app.readJSON(w, r, &req); err != nil {
-		app.errorJSON(w, fmt.Errorf("dados inválidos"), http.StatusBadRequest)
-		return
-	}
-
-	// Sanitize: reject inputs with control chars or excessive length
-	if len(req.Username) > 64 || len(req.Password) > 128 {
-		app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
-		return
-	}
-
-	adminUser := os.Getenv("ADMIN_USERNAME")
-	adminHash := os.Getenv("ADMIN_PASSWORD_HASH") // bcrypt hash
-
-	if adminUser == "" || adminHash == "" {
-		app.logger.Println("AVISO SEGURANÇA: ADMIN_USERNAME ou ADMIN_PASSWORD_HASH não definidos")
-		app.errorJSON(w, fmt.Errorf("autenticação não configurada no servidor"), http.StatusInternalServerError)
-		return
-	}
-
-	// Always run bcrypt (even on wrong username) to prevent timing attacks
-	hashToCheck := adminHash
-	usernameOK := req.Username == adminUser
-	pwErr := bcrypt.CompareHashAndPassword([]byte(hashToCheck), []byte(req.Password))
-
-	if !usernameOK || pwErr != nil {
-		// Artificial delay discourages automated brute force
-		time.Sleep(600 * time.Millisecond)
-		app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
-		return
-	}
-
-	claims := adminClaims{
-		Username: req.Username,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(jwtExpiry)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "censo-admin",
-			Subject:   "admin",
-		},
-	}
-	tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(jwtSecret())
-	if err != nil {
-		app.errorJSON(w, fmt.Errorf("erro interno ao gerar token"), http.StatusInternalServerError)
-		return
-	}
-
-	app.writeJSON(w, http.StatusOK, jsonResponse{
-		Error:   false,
-		Message: "Login realizado com sucesso",
-		Data: map[string]interface{}{
-			"token":      tok,
-			"expires_in": int(jwtExpiry.Seconds()),
-		},
-	})
-}
-
-// requireAdminAuth is a chi middleware that validates the Bearer JWT token.
-func (app *application) requireAdminAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if !strings.HasPrefix(authHeader, "Bearer ") {
-			app.errorJSON(w, fmt.Errorf("token de autenticação necessário"), http.StatusUnauthorized)
-			return
-		}
-
-		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-		claims := &adminClaims{}
-
-		tok, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
-			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("algoritmo de assinatura inválido")
-			}
-			return jwtSecret(), nil
-		}, jwt.WithIssuer("censo-admin"), jwt.WithExpirationRequired())
-
-		if err != nil || !tok.Valid {
-			app.errorJSON(w, fmt.Errorf("token inválido ou expirado"), http.StatusUnauthorized)
-			return
-		}
-
-		ctx := context.WithValue(r.Context(), contextKeyAdminUser, claims.Username)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-type contextKey string
-
-const contextKeyAdminUser contextKey = "admin_username"
-
 // ─── Dashboard data types ─────────────────────────────────────────────────────
 
 type DashboardStats struct {
-	TotalSchools      int              `json:"total_schools"`
-	CompletedCensuses int              `json:"completed_censuses"`
-	DraftCensuses     int              `json:"draft_censuses"`
-	PendingSync       int              `json:"pending_sync"`
-	ByDre             []DreStats       `json:"by_dre"`
-	Recent            []CensusRow      `json:"recent"`
+	TotalSchools      int         `json:"total_schools"`
+	CompletedCensuses int         `json:"completed_censuses"`
+	DraftCensuses     int         `json:"draft_censuses"`
+	PendingSync       int         `json:"pending_sync"`
+	ByDre             []DreStats  `json:"by_dre"`
+	Recent            []CensusRow `json:"recent"`
 }
 
 type DreStats struct {
@@ -299,16 +252,16 @@ type DreStats struct {
 }
 
 type CensusRow struct {
-	CensusID   int       `json:"census_id"`
-	SchoolID   int       `json:"school_id"`
-	Nome       string    `json:"nome_escola"`
-	INEP       string    `json:"codigo_inep"`
-	Municipio  string    `json:"municipio"`
-	Dre        string    `json:"dre"`
-	Year       int       `json:"year"`
-	Status     string    `json:"status"`
-	UpdatedAt  time.Time `json:"updated_at"`
-	Synced     bool      `json:"synced"`
+	CensusID  int       `json:"census_id"`
+	SchoolID  int       `json:"school_id"`
+	Nome      string    `json:"nome_escola"`
+	INEP      string    `json:"codigo_inep"`
+	Municipio string    `json:"municipio"`
+	Dre       string    `json:"dre"`
+	Year      int       `json:"year"`
+	Status    string    `json:"status"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Synced    bool      `json:"synced"`
 }
 
 // ─── AdminDashboard ───────────────────────────────────────────────────────────
@@ -316,74 +269,142 @@ type CensusRow struct {
 func (app *application) AdminDashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	db := app.models.Schools.DB // same *sql.DB for both models
+	scope, _ := GetAdminAccessScope(ctx)
 
 	s := DashboardStats{
 		ByDre:  []DreStats{},
 		Recent: []CensusRow{},
 	}
 
-	// Counts — single query avoids multiple round-trips
-	err := db.QueryRowContext(ctx, `
-		SELECT
-			(SELECT COUNT(*) FROM schools),
-			COUNT(*) FILTER (WHERE cr.status = 'completed'),
-			COUNT(*) FILTER (WHERE cr.status = 'draft'),
-			COUNT(*) FILTER (WHERE cr.status = 'completed' AND cr.sheet_synced_at IS NULL)
-		FROM census_responses cr`).Scan(
-		&s.TotalSchools, &s.CompletedCensuses, &s.DraftCensuses, &s.PendingSync)
-	if err != nil {
-		app.errorJSON(w, fmt.Errorf("erro ao buscar totais"), http.StatusInternalServerError)
-		return
-	}
-
-	// By DRE — parameterized, no interpolation
-	rows, err := db.QueryContext(ctx, `
-		SELECT
-			s.dre,
-			COUNT(DISTINCT s.id)                                              AS total,
-			COUNT(DISTINCT s.id) FILTER (WHERE cr.status = 'completed')      AS completed,
-			COUNT(DISTINCT s.id) FILTER (WHERE cr.status = 'draft')          AS draft
-		FROM schools s
-		LEFT JOIN census_responses cr ON cr.school_id = s.id
-		GROUP BY s.dre
-		ORDER BY s.dre`)
-	if err != nil {
-		app.errorJSON(w, fmt.Errorf("erro ao buscar por DRE"), http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var d DreStats
-		if err := rows.Scan(&d.Dre, &d.Total, &d.Completed, &d.Draft); err != nil {
-			app.errorJSON(w, err, http.StatusInternalServerError)
+	if scope.Role == RoleDRE {
+		dreFilter := strings.TrimSpace(scope.DRE)
+		err := db.QueryRowContext(ctx, `
+			SELECT
+				(SELECT COUNT(*) FROM schools s WHERE UPPER(TRIM(s.dre)) = UPPER(TRIM($1))),
+				COUNT(*) FILTER (WHERE cr.status = 'completed' AND UPPER(TRIM(s.dre)) = UPPER(TRIM($1))),
+				COUNT(*) FILTER (WHERE cr.status = 'draft' AND UPPER(TRIM(s.dre)) = UPPER(TRIM($1))),
+				COUNT(*) FILTER (WHERE cr.status = 'completed' AND cr.sheet_synced_at IS NULL AND UPPER(TRIM(s.dre)) = UPPER(TRIM($1)))
+			FROM census_responses cr
+			JOIN schools s ON s.id = cr.school_id`, dreFilter).Scan(
+			&s.TotalSchools, &s.CompletedCensuses, &s.DraftCensuses, &s.PendingSync)
+		if err != nil {
+			app.errorJSON(w, fmt.Errorf("erro ao buscar totais"), http.StatusInternalServerError)
 			return
 		}
-		s.ByDre = append(s.ByDre, d)
-	}
 
-	// Recent 50 census submissions
-	rows2, err := db.QueryContext(ctx, `
-		SELECT
-			cr.id, cr.school_id, s.nome_escola, s.codigo_inep, s.municipio, s.dre,
-			cr.year, cr.status, cr.updated_at,
-			(cr.sheet_synced_at IS NOT NULL)
-		FROM census_responses cr
-		JOIN schools s ON s.id = cr.school_id
-		ORDER BY cr.updated_at DESC
-		LIMIT 50`)
-	if err != nil {
-		app.errorJSON(w, fmt.Errorf("erro ao buscar censos recentes"), http.StatusInternalServerError)
-		return
-	}
-	defer rows2.Close()
-	for rows2.Next() {
-		var c CensusRow
-		if err := rows2.Scan(&c.CensusID, &c.SchoolID, &c.Nome, &c.INEP, &c.Municipio,
-			&c.Dre, &c.Year, &c.Status, &c.UpdatedAt, &c.Synced); err != nil {
-			app.errorJSON(w, err, http.StatusInternalServerError)
+		rows, err := db.QueryContext(ctx, `
+			SELECT
+				s.dre,
+				COUNT(DISTINCT s.id)                                              AS total,
+				COUNT(DISTINCT s.id) FILTER (WHERE cr.status = 'completed')      AS completed,
+				COUNT(DISTINCT s.id) FILTER (WHERE cr.status = 'draft')          AS draft
+			FROM schools s
+			LEFT JOIN census_responses cr ON cr.school_id = s.id
+			WHERE UPPER(TRIM(s.dre)) = UPPER(TRIM($1))
+			GROUP BY s.dre
+			ORDER BY s.dre`, dreFilter)
+		if err != nil {
+			app.errorJSON(w, fmt.Errorf("erro ao buscar por DRE"), http.StatusInternalServerError)
 			return
 		}
-		s.Recent = append(s.Recent, c)
+		defer rows.Close()
+		for rows.Next() {
+			var d DreStats
+			if err := rows.Scan(&d.Dre, &d.Total, &d.Completed, &d.Draft); err != nil {
+				app.errorJSON(w, err, http.StatusInternalServerError)
+				return
+			}
+			s.ByDre = append(s.ByDre, d)
+		}
+
+		rows2, err := db.QueryContext(ctx, `
+			SELECT
+				cr.id, cr.school_id, s.nome_escola, s.codigo_inep, s.municipio, s.dre,
+				cr.year, cr.status, cr.updated_at,
+				(cr.sheet_synced_at IS NOT NULL)
+			FROM census_responses cr
+			JOIN schools s ON s.id = cr.school_id
+			WHERE UPPER(TRIM(s.dre)) = UPPER(TRIM($1))
+			ORDER BY cr.updated_at DESC
+			LIMIT 50`, dreFilter)
+		if err != nil {
+			app.errorJSON(w, fmt.Errorf("erro ao buscar censos recentes"), http.StatusInternalServerError)
+			return
+		}
+		defer rows2.Close()
+		for rows2.Next() {
+			var c CensusRow
+			if err := rows2.Scan(&c.CensusID, &c.SchoolID, &c.Nome, &c.INEP, &c.Municipio,
+				&c.Dre, &c.Year, &c.Status, &c.UpdatedAt, &c.Synced); err != nil {
+				app.errorJSON(w, err, http.StatusInternalServerError)
+				return
+			}
+			s.Recent = append(s.Recent, c)
+		}
+	} else {
+		// Counts — single query avoids multiple round-trips
+		err := db.QueryRowContext(ctx, `
+			SELECT
+				(SELECT COUNT(*) FROM schools),
+				COUNT(*) FILTER (WHERE cr.status = 'completed'),
+				COUNT(*) FILTER (WHERE cr.status = 'draft'),
+				COUNT(*) FILTER (WHERE cr.status = 'completed' AND cr.sheet_synced_at IS NULL)
+			FROM census_responses cr`).Scan(
+			&s.TotalSchools, &s.CompletedCensuses, &s.DraftCensuses, &s.PendingSync)
+		if err != nil {
+			app.errorJSON(w, fmt.Errorf("erro ao buscar totais"), http.StatusInternalServerError)
+			return
+		}
+
+		// By DRE — parameterized, no interpolation
+		rows, err := db.QueryContext(ctx, `
+			SELECT
+				s.dre,
+				COUNT(DISTINCT s.id)                                              AS total,
+				COUNT(DISTINCT s.id) FILTER (WHERE cr.status = 'completed')      AS completed,
+				COUNT(DISTINCT s.id) FILTER (WHERE cr.status = 'draft')          AS draft
+			FROM schools s
+			LEFT JOIN census_responses cr ON cr.school_id = s.id
+			GROUP BY s.dre
+			ORDER BY s.dre`)
+		if err != nil {
+			app.errorJSON(w, fmt.Errorf("erro ao buscar por DRE"), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var d DreStats
+			if err := rows.Scan(&d.Dre, &d.Total, &d.Completed, &d.Draft); err != nil {
+				app.errorJSON(w, err, http.StatusInternalServerError)
+				return
+			}
+			s.ByDre = append(s.ByDre, d)
+		}
+
+		// Recent 50 census submissions
+		rows2, err := db.QueryContext(ctx, `
+			SELECT
+				cr.id, cr.school_id, s.nome_escola, s.codigo_inep, s.municipio, s.dre,
+				cr.year, cr.status, cr.updated_at,
+				(cr.sheet_synced_at IS NOT NULL)
+			FROM census_responses cr
+			JOIN schools s ON s.id = cr.school_id
+			ORDER BY cr.updated_at DESC
+			LIMIT 50`)
+		if err != nil {
+			app.errorJSON(w, fmt.Errorf("erro ao buscar censos recentes"), http.StatusInternalServerError)
+			return
+		}
+		defer rows2.Close()
+		for rows2.Next() {
+			var c CensusRow
+			if err := rows2.Scan(&c.CensusID, &c.SchoolID, &c.Nome, &c.INEP, &c.Municipio,
+				&c.Dre, &c.Year, &c.Status, &c.UpdatedAt, &c.Synced); err != nil {
+				app.errorJSON(w, err, http.StatusInternalServerError)
+				return
+			}
+			s.Recent = append(s.Recent, c)
+		}
 	}
 
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: s})
@@ -552,8 +573,13 @@ func (p censusListParams) summaryArgs() []any {
 func (app *application) AdminGetCensus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	db := app.models.Schools.DB
+	scope, _ := GetAdminAccessScope(ctx)
 
 	p := parseCensusListParams(r.URL.Query())
+	if scope.Role == RoleDRE {
+		p.DRE = strings.TrimSpace(scope.DRE)
+	}
+
 	whereArgs := p.whereArgs()
 	offset := (p.Page - 1) * p.Limit
 
@@ -613,8 +639,13 @@ type CensusFullRecord struct {
 	Synced    bool            `json:"synced"`
 }
 
-// AdminSheetMetrics retorna os indicadores calculados a partir da planilha Base_dados.
+// AdminSheetMetrics retorna os indicadores calculados a partir da planilha Base_dados (apenas admin).
 func (app *application) AdminSheetMetrics(w http.ResponseWriter, r *http.Request) {
+	scope, _ := GetAdminAccessScope(r.Context())
+	if scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
 	if app.sheets == nil {
 		app.errorJSON(w, fmt.Errorf("serviço de planilhas não configurado"), http.StatusServiceUnavailable)
 		return
@@ -628,8 +659,13 @@ func (app *application) AdminSheetMetrics(w http.ResponseWriter, r *http.Request
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: metrics})
 }
 
-// AdminIndicadoresMetrics retorna métricas de perfil dos alunos da aba Indicadores_Flags.
+// AdminIndicadoresMetrics retorna métricas de perfil dos alunos da aba Indicadores_Flags (apenas admin).
 func (app *application) AdminIndicadoresMetrics(w http.ResponseWriter, r *http.Request) {
+	scope, _ := GetAdminAccessScope(r.Context())
+	if scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
 	if app.sheets == nil {
 		app.errorJSON(w, fmt.Errorf("serviço de planilhas não configurado"), http.StatusServiceUnavailable)
 		return
@@ -643,9 +679,10 @@ func (app *application) AdminIndicadoresMetrics(w http.ResponseWriter, r *http.R
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: metrics})
 }
 
-// AdminGetCensusByID retorna o JSON completo de uma resposta de censo específica.
-// Usado pelo botão "Ver JSON" no painel admin.
+// AdminGetCensusByID retorna o JSON completo de uma resposta de censo específica com verificação BOLA por DRE.
 func (app *application) AdminGetCensusByID(w http.ResponseWriter, r *http.Request) {
+	scope, _ := GetAdminAccessScope(r.Context())
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil || id <= 0 {
@@ -671,6 +708,424 @@ func (app *application) AdminGetCensusByID(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if !scope.IsAuthorizedForDRE(c.Dre) {
+		app.errorJSON(w, fmt.Errorf("acesso não permitido para esta DRE"), http.StatusForbidden)
+		return
+	}
+
 	c.Data = json.RawMessage(rawData)
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: c})
+}
+
+// ─── Gestão de DREs (role=admin) ─────────────────────────────────────────────
+
+// AdminCreateDRE cria uma nova DRE no sistema (exclusivo para role=admin).
+func (app *application) AdminCreateDRE(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		Nome          string `json:"nome"`
+		Sigla         string `json:"sigla"`
+		MunicipioSede string `json:"municipio_sede"`
+		Polo          string `json:"polo"`
+		GestorNome    string `json:"gestor_nome"`
+		Email         string `json:"email"`
+		Telefone      string `json:"telefone"`
+		Ativa         *bool  `json:"ativa"`
+	}
+
+	if err := app.readJSON(w, r, &req); err != nil {
+		app.errorJSON(w, fmt.Errorf("dados inválidos: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	if strings.TrimSpace(req.Nome) == "" {
+		app.errorJSON(w, fmt.Errorf("nome da DRE não pode ser vazio"), http.StatusBadRequest)
+		return
+	}
+
+	ativa := true
+	if req.Ativa != nil {
+		ativa = *req.Ativa
+	}
+
+	dre := models.DRE{
+		Nome:          req.Nome,
+		Sigla:         req.Sigla,
+		MunicipioSede: req.MunicipioSede,
+		Polo:          req.Polo,
+		GestorNome:    req.GestorNome,
+		Email:         req.Email,
+		Telefone:      req.Telefone,
+		Ativa:         ativa,
+	}
+
+	created, err := app.models.DREs.Create(r.Context(), dre)
+	if err != nil {
+		if errors.Is(err, models.ErrDREExists) {
+			app.errorJSON(w, err, http.StatusConflict)
+			return
+		}
+		if errors.Is(err, models.ErrDRENameRequired) {
+			app.errorJSON(w, err, http.StatusBadRequest)
+			return
+		}
+		app.errorJSON(w, fmt.Errorf("erro ao criar DRE: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	app.writeJSON(w, http.StatusCreated, jsonResponse{
+		Error:   false,
+		Message: "DRE criada com sucesso",
+		Data:    created,
+	})
+}
+
+// AdminListDREs lista todas as DREs cadastradas (exclusivo para role=admin).
+func (app *application) AdminListDREs(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
+
+	dres, err := app.models.DREs.List(r.Context())
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao listar DREs: %w", err), http.StatusInternalServerError)
+		return
+	}
+	if dres == nil {
+		dres = []*models.DRE{}
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{
+		Error: false,
+		Data:  dres,
+	})
+}
+
+// AdminUpdateDRE atualiza os dados de uma DRE existente (exclusivo para role=admin).
+func (app *application) AdminUpdateDRE(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		app.errorJSON(w, fmt.Errorf("ID de DRE inválido"), http.StatusBadRequest)
+		return
+	}
+
+	existing, err := app.models.DREs.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, models.ErrDRENotFound) {
+			app.errorJSON(w, fmt.Errorf("DRE não encontrada"), http.StatusNotFound)
+			return
+		}
+		app.errorJSON(w, fmt.Errorf("erro ao buscar DRE: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	var req struct {
+		Nome          string `json:"nome"`
+		Sigla         string `json:"sigla"`
+		MunicipioSede string `json:"municipio_sede"`
+		Polo          string `json:"polo"`
+		GestorNome    string `json:"gestor_nome"`
+		Email         string `json:"email"`
+		Telefone      string `json:"telefone"`
+		Ativa         *bool  `json:"ativa"`
+	}
+
+	if err := app.readJSON(w, r, &req); err != nil {
+		app.errorJSON(w, fmt.Errorf("dados inválidos: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	if strings.TrimSpace(req.Nome) == "" {
+		app.errorJSON(w, fmt.Errorf("nome da DRE não pode ser vazio"), http.StatusBadRequest)
+		return
+	}
+
+	ativa := existing.Ativa
+	if req.Ativa != nil {
+		ativa = *req.Ativa
+	}
+
+	dre := models.DRE{
+		ID:            id,
+		Nome:          req.Nome,
+		Sigla:         req.Sigla,
+		MunicipioSede: req.MunicipioSede,
+		Polo:          req.Polo,
+		GestorNome:    req.GestorNome,
+		Email:         req.Email,
+		Telefone:      req.Telefone,
+		Ativa:         ativa,
+	}
+
+	updated, err := app.models.DREs.Update(r.Context(), dre)
+	if err != nil {
+		if errors.Is(err, models.ErrDRENotFound) {
+			app.errorJSON(w, err, http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, models.ErrDREExists) {
+			app.errorJSON(w, err, http.StatusConflict)
+			return
+		}
+		if errors.Is(err, models.ErrDRENameRequired) || errors.Is(err, models.ErrDREInvalidID) {
+			app.errorJSON(w, err, http.StatusBadRequest)
+			return
+		}
+		app.errorJSON(w, fmt.Errorf("erro ao atualizar DRE: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{
+		Error:   false,
+		Message: "DRE atualizada com sucesso",
+		Data:    updated,
+	})
+}
+
+// ─── Gestão de Usuários Administrativos (role=admin) ─────────────────────────
+
+// AdminCreateUser cria um novo usuário DRE. dre_id é a identidade canônica;
+// o campo dre textual é mantido somente como compatibilidade para clientes
+// legados que ainda não migraram para o contrato por ID.
+func (app *application) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+		Role     string `json:"role"`
+		DRE      string `json:"dre"`
+		DREID    *int   `json:"dre_id"`
+	}
+
+	if err := app.readJSON(w, r, &req); err != nil {
+		app.errorJSON(w, fmt.Errorf("dados inválidos: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	if strings.TrimSpace(req.Role) == "" {
+		req.Role = RoleDRE
+	}
+
+	var (
+		user *models.AdminUser
+		err  error
+	)
+
+	if req.DREID != nil {
+		// Quando ambos os campos são enviados, dre é somente uma asserção de
+		// consistência. O vínculo continua sendo decidido exclusivamente por
+		// dre_id; nunca fazemos fallback textual quando o ID está presente.
+		if strings.TrimSpace(req.DRE) != "" {
+			canonical, lookupErr := app.models.DREs.GetByID(r.Context(), *req.DREID)
+			if lookupErr != nil {
+				if errors.Is(lookupErr, models.ErrDRENotFound) || errors.Is(lookupErr, models.ErrDREInvalidID) {
+					app.errorJSON(w, fmt.Errorf("DRE não encontrada"), http.StatusBadRequest)
+					return
+				}
+				app.errorJSON(w, fmt.Errorf("erro ao validar dre_id: %w", lookupErr), http.StatusInternalServerError)
+				return
+			}
+			if !strings.EqualFold(strings.TrimSpace(req.DRE), strings.TrimSpace(canonical.Nome)) {
+				app.errorJSON(w, fmt.Errorf("dre e dre_id referenciam DREs diferentes"), http.StatusBadRequest)
+				return
+			}
+		}
+		user, err = app.models.AdminUsers.CreateForDREID(r.Context(), req.Username, req.Password, req.Role, *req.DREID)
+	} else {
+		// Compatibilidade temporária: clientes antigos ainda podem enviar apenas
+		// dre textual. Novos clientes devem enviar dre_id.
+		user, err = app.models.AdminUsers.Create(r.Context(), req.Username, req.Password, req.Role, req.DRE)
+	}
+
+	if err != nil {
+		if errors.Is(err, models.ErrUsernameExists) {
+			app.errorJSON(w, err, http.StatusConflict)
+			return
+		}
+		if errors.Is(err, models.ErrInvalidRole) ||
+			errors.Is(err, models.ErrDRERequiredForDRE) ||
+			errors.Is(err, models.ErrInvalidDRE) ||
+			errors.Is(err, models.ErrDREInactive) ||
+			strings.Contains(err.Error(), "não pode ser vazio") ||
+			strings.Contains(err.Error(), "mínimo 12 caracteres") {
+			app.errorJSON(w, err, http.StatusBadRequest)
+			return
+		}
+		app.errorJSON(w, fmt.Errorf("erro ao criar usuário: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	app.writeJSON(w, http.StatusCreated, jsonResponse{
+		Error:   false,
+		Message: "Usuário criado com sucesso",
+		Data:    user,
+	})
+}
+
+// AdminListUsers lista todos os usuários administrativos sem expor senhas (exclusivo para role=admin).
+func (app *application) AdminListUsers(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
+
+	users, err := app.models.AdminUsers.List(r.Context())
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao listar usuários: %w", err), http.StatusInternalServerError)
+		return
+	}
+	if users == nil {
+		users = []*models.AdminUser{}
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{
+		Error: false,
+		Data:  users,
+	})
+}
+
+// AdminUpdateUserStatus ativa ou desativa um usuário pelo ID (exclusivo para role=admin).
+func (app *application) AdminUpdateUserStatus(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		app.errorJSON(w, fmt.Errorf("ID de usuário inválido"), http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Active *bool   `json:"active"`
+		Status *string `json:"status"`
+	}
+
+	if err := app.readJSON(w, r, &req); err != nil {
+		app.errorJSON(w, fmt.Errorf("dados inválidos: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	var active bool
+	if req.Active != nil {
+		active = *req.Active
+	} else if req.Status != nil {
+		st := strings.ToLower(strings.TrimSpace(*req.Status))
+		if st == "active" || st == "ativo" || st == "true" {
+			active = true
+		} else if st == "inactive" || st == "inativo" || st == "false" {
+			active = false
+		} else {
+			app.errorJSON(w, fmt.Errorf("valor de status inválido. Use 'active' ou 'inactive'"), http.StatusBadRequest)
+			return
+		}
+	} else {
+		app.errorJSON(w, fmt.Errorf("campo 'active' ou 'status' é obrigatório"), http.StatusBadRequest)
+		return
+	}
+
+	err = app.models.AdminUsers.SetActiveByID(r.Context(), id, active)
+	if err != nil {
+		if errors.Is(err, models.ErrUserNotFound) {
+			app.errorJSON(w, fmt.Errorf("usuário não encontrado"), http.StatusNotFound)
+			return
+		}
+		app.errorJSON(w, fmt.Errorf("erro ao atualizar status do usuário: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	user, err := app.models.AdminUsers.GetByID(r.Context(), id)
+	if err == nil && user != nil {
+		app.writeJSON(w, http.StatusOK, jsonResponse{
+			Error:   false,
+			Message: "Status do usuário atualizado com sucesso",
+			Data:    user,
+		})
+		return
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{
+		Error:   false,
+		Message: "Status do usuário atualizado com sucesso",
+		Data:    map[string]interface{}{"id": id, "active": active},
+	})
+}
+
+// AdminResetUserPassword redefine a senha de um usuário pelo ID (exclusivo para role=admin).
+func (app *application) AdminResetUserPassword(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || scope.Role != RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		app.errorJSON(w, fmt.Errorf("ID de usuário inválido"), http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Password    string `json:"password"`
+		NewPassword string `json:"new_password"`
+	}
+
+	if err := app.readJSON(w, r, &req); err != nil {
+		app.errorJSON(w, fmt.Errorf("dados inválidos: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	newPassword := req.Password
+	if newPassword == "" {
+		newPassword = req.NewPassword
+	}
+	newPassword = strings.TrimSpace(newPassword)
+
+	if len(newPassword) < 12 {
+		app.errorJSON(w, fmt.Errorf("nova senha deve ter no mínimo 12 caracteres"), http.StatusBadRequest)
+		return
+	}
+
+	err = app.models.AdminUsers.UpdatePasswordByID(r.Context(), id, newPassword)
+	if err != nil {
+		if errors.Is(err, models.ErrUserNotFound) {
+			app.errorJSON(w, fmt.Errorf("usuário não encontrado"), http.StatusNotFound)
+			return
+		}
+		if strings.Contains(err.Error(), "mínimo 12 caracteres") {
+			app.errorJSON(w, err, http.StatusBadRequest)
+			return
+		}
+		app.errorJSON(w, fmt.Errorf("erro ao redefinir senha: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	app.writeJSON(w, http.StatusOK, jsonResponse{
+		Error:   false,
+		Message: "Senha redefinida com sucesso",
+	})
 }

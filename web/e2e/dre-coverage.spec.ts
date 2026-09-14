@@ -9,36 +9,44 @@
 //   5. Divergência: schools.dre legado != dre_id canônico → autoriza por ID
 //   6. Revogação remota: UI abandona sessão sem F5 após reset/desativação
 //   7. Troca de conta DRE_A → DRE_B sem vazamento de cache/estado
-//
-// Execução serial (workers=1, retries=0): login tem rate limit por IP
-// (5 tentativas / 15 min). Este spec usa IPs TEST-NET (RFC 5737) para
-// isolar seus logins do bucket principal do spec #245.
 import { test, expect } from "@playwright/test";
 import {
   loginViaUI, pageWithToken,
-  apiGet, apiRaw, apiRawPost,
+  apiGet, apiRaw, apiRawPost, apiRawPatch,
   adminCredentials, dreA, dreB, randomPassword, apiURL, webURL,
 } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
-// ── Tokens compartilhados entre cenários ─────────────────────────────────
 let adminToken: string | null = null;
 let dreAToken: string | null = null;
 let dreBToken: string | null = null;
 let dreAUserId: number | null = null;
 let dreACredentials: { username: string; password: string } | null = null;
 
-// IPs TEST-NET-3 (RFC 5737) para isolar logins deste spec do bucket de #245.
-const TEST_NET_IPS = ["203.0.113.20", "203.0.113.21", "203.0.113.22", "203.0.113.23"];
-
-// ── Interfaces ────────────────────────────────────────────────────────────
+// Buckets independentes no rate limiter do ambiente E2E.
+const TEST_NET_IPS = [
+  "203.0.113.20",
+  "203.0.113.21",
+  "203.0.113.22",
+  "203.0.113.23",
+  "203.0.113.24",
+];
 
 interface MeResponse {
   role: string;
   username: string;
   dre: string | null;
   dre_id: number | null;
+}
+
+interface AdminUserResponse {
+  id: number;
+  username: string;
+  role: string;
+  dre: string;
+  dre_id: number | null;
+  active: boolean;
 }
 
 interface FiltrosOpcoes {
@@ -49,8 +57,6 @@ interface FiltrosOpcoes {
   regioes_integracao: string[];
   escolas: Array<{ school_id: number; nome_escola: string; codigo_inep: string; dre: string }>;
 }
-
-// ── Helper: loginViaAPI com IP TEST-NET ───────────────────────────────────
 
 async function loginViaAPIWithIP(
   request: import("@playwright/test").APIRequestContext,
@@ -72,48 +78,45 @@ async function loginViaAPIWithIP(
   return body.data.token;
 }
 
-// ── Teste 1: autenticação e setup ────────────────────────────────────────
-
-test("1 — autenticação: admin + DRE_A + DRE_B com IPs isolados", async ({ request }) => {
-  const cred = adminCredentials();
-  adminToken = await loginViaAPIWithIP(request, cred.username, cred.password, TEST_NET_IPS[0]);
-  expect(adminToken).toBeTruthy();
+test("1 — autenticação resolve usuário e DRE por identidades distintas", async ({ request }) => {
+  const admin = adminCredentials();
+  adminToken = await loginViaAPIWithIP(request, admin.username, admin.password, TEST_NET_IPS[0]);
 
   const dreACred = dreA();
   dreACredentials = { username: dreACred.username, password: dreACred.password };
   dreAToken = await loginViaAPIWithIP(request, dreACred.username, dreACred.password, TEST_NET_IPS[1]);
-  expect(dreAToken).toBeTruthy();
 
   const dreBCred = dreB();
   dreBToken = await loginViaAPIWithIP(request, dreBCred.username, dreBCred.password, TEST_NET_IPS[2]);
-  expect(dreBToken).toBeTruthy();
 
   const meA = await apiGet<MeResponse>(request, dreAToken, "/v1/admin/me");
-  expect(meA.role).toBe("dre");
-  expect(meA.dre_id).toBeGreaterThan(0);
-  dreAUserId = meA.dre_id;
-
   const meB = await apiGet<MeResponse>(request, dreBToken, "/v1/admin/me");
+  expect(meA.role).toBe("dre");
   expect(meB.role).toBe("dre");
+  expect(meA.dre_id).toBeGreaterThan(0);
   expect(meB.dre_id).toBeGreaterThan(0);
-  expect(meB.dre_id).not.toBe(meA.dre_id);
-});
+  expect(meA.dre_id).not.toBe(meB.dre_id);
 
-// ── Teste 2: navegação por todas as 11 abas obrigatórias ─────────────────
+  // admin_users.id e dres.id são identidades diferentes. O teste anterior
+  // atribuía meA.dre_id a dreAUserId e podia resetar o usuário errado caso os
+  // IDs coincidissem por acaso. Resolve o usuário pelo username canônico.
+  const users = await apiGet<AdminUserResponse[]>(request, adminToken, "/v1/admin/users");
+  const dreAUser = users.find((user) => user.username === dreACred.username);
+  expect(dreAUser).toBeTruthy();
+  expect(dreAUser!.dre_id).toBe(meA.dre_id);
+  dreAUserId = dreAUser!.id;
+  expect(dreAUserId).toBeGreaterThan(0);
+});
 
 test("2 — DRE A navega por todas as 11 abas obrigatórias", async ({ browser }) => {
   expect(dreAToken).toBeTruthy();
-
   const page = await pageWithToken(browser, dreAToken!);
   await page.goto("/admin/");
 
-  // Sidebar: badge de restrição visível, seletor DRE disabled
   await expect(page.locator(".ca-sidebar")).toBeVisible();
   await expect(page.getByText(/Acesso restrito à DRE:/)).toBeVisible();
-  const dreFilter = page.getByLabel("DRE");
-  await expect(dreFilter).toBeDisabled();
+  await expect(page.getByLabel("DRE")).toBeDisabled();
 
-  // Cada aba obrigatória: clicar na sidebar → validar heading h2
   const tabs: Array<{ nav: string; heading: string }> = [
     { nav: "Caracterização da Rede", heading: "Dimensão e Perfil da Rede" },
     { nav: "Pessoal e Gestão Escolar", heading: "Estrutura de Gestão Escolar" },
@@ -130,12 +133,6 @@ test("2 — DRE A navega por todas as 11 abas obrigatórias", async ({ browser }
 
   for (const t of tabs) {
     await page.getByText(t.nav, { exact: false }).first().click();
-    // getByText with exact:false handles all cases:
-    // - static headings ("Dimensão e Perfil da Rede")
-    // - dynamic headings ("Resumo IDEB 2023" — includes year)
-    // - non-heading elements ("Escolas Cadastradas" — StatCard label)
-    // .first() disambiguates "Governança Institucional" from
-    // "Classificação de Governança Institucional" on the same page.
     await expect(page.getByText(t.heading, { exact: false }).first())
       .toBeVisible({ timeout: 20_000 });
   }
@@ -143,12 +140,9 @@ test("2 — DRE A navega por todas as 11 abas obrigatórias", async ({ browser }
   await page.close();
 });
 
-// ── Teste 3: "Gestão de DREs/Acessos" NÃO acessível ao DRE ─────────────
-
 test("3 — DRE A não acessa Gestão de DREs/Acessos (sidebar + API)", async ({ browser, request }) => {
   expect(dreAToken).toBeTruthy();
 
-  // UI: sidebar não contém "Administração" nem "Gestão de DREs"
   const page = await pageWithToken(browser, dreAToken!);
   await page.goto("/admin/");
   await expect(page.locator(".ca-sidebar")).toBeVisible();
@@ -156,163 +150,187 @@ test("3 — DRE A não acessa Gestão de DREs/Acessos (sidebar + API)", async ({
   await expect(page.getByText("Administração")).toHaveCount(0);
   await page.close();
 
-  // API: admin-only endpoints retornam 403 para DRE
-  const dres403 = await apiRaw(request, dreAToken!, "/v1/admin/dres");
-  expect(dres403.status()).toBe(403);
-
-  const users403 = await apiRaw(request, dreAToken!, "/v1/admin/users");
-  expect(users403.status()).toBe(403);
+  expect((await apiRaw(request, dreAToken!, "/v1/admin/dres")).status()).toBe(403);
+  expect((await apiRaw(request, dreAToken!, "/v1/admin/users")).status()).toBe(403);
 });
-
-// ── Teste 4: isolamento DRE_A vs DRE_B ───────────────────────────────────
 
 test("4 — isolamento: DRE_B não aparece nos dados/filtros da DRE_A", async ({ request }) => {
   expect(dreAToken).toBeTruthy();
   expect(dreBToken).toBeTruthy();
 
-  // DRE_A: filtros/opcoes contém apenas escolas da DRE A
   const optsA = await apiGet<FiltrosOpcoes>(request, dreAToken!, "/v1/admin/analytics/filtros/opcoes");
-  expect(optsA.dres.length).toBe(1);
-  expect(optsA.dres[0]).not.toBe(dreB().name);
-
-  const escolasA = optsA.escolas.map((e) => e.nome_escola);
-  expect(escolasA.some((n) => n.startsWith("Escola B"))).toBe(false);
-  expect(escolasA.some((n) => n === "Escola A1" || n === "Escola A2" || n === "Escola A3" || n === "Escola Divergente")).toBe(true);
-
-  // DRE_B: mesma validação invertida
   const optsB = await apiGet<FiltrosOpcoes>(request, dreBToken!, "/v1/admin/analytics/filtros/opcoes");
-  expect(optsB.dres.length).toBe(1);
+
+  expect(optsA.dres).toHaveLength(1);
+  expect(optsB.dres).toHaveLength(1);
+  expect(optsA.dres[0]).not.toBe(dreB().name);
   expect(optsB.dres[0]).not.toBe(dreA().name);
 
+  const escolasA = optsA.escolas.map((e) => e.nome_escola);
   const escolasB = optsB.escolas.map((e) => e.nome_escola);
+  expect(escolasA.some((n) => n.startsWith("Escola B"))).toBe(false);
   expect(escolasB.some((n) => n.startsWith("Escola A") || n === "Escola Divergente")).toBe(false);
-  expect(escolasB.some((n) => n === "Escola B1" || n === "Escola B2" || n === "Escola B3")).toBe(true);
+  expect(escolasA.some((n) => n === "Escola Divergente")).toBe(true);
 });
 
-// ── Teste 5: forging de query params ──────────────────────────────────────
-
-test("5 — forging: query param ?dre=<DRE_B> é ignorado para DRE_A", async ({ request }) => {
+test("5 — forging de DRE, school_id e INEP não amplia o escopo", async ({ request }) => {
   expect(dreAToken).toBeTruthy();
+  expect(dreBToken).toBeTruthy();
 
-  // Filtros/opcoes com ?dre=DRE_B forjado — backend ignora e retorna dados da DRE_A
+  const optsB = await apiGet<FiltrosOpcoes>(request, dreBToken!, "/v1/admin/analytics/filtros/opcoes");
+  const foreignSchool = optsB.escolas[0];
+  expect(foreignSchool).toBeTruthy();
+
   const optsForged = await apiGet<FiltrosOpcoes>(
-    request, dreAToken!,
+    request,
+    dreAToken!,
     `/v1/admin/analytics/filtros/opcoes?dre=${encodeURIComponent(dreB().name)}`,
   );
-  const escolasForged = optsForged.escolas.map((e) => e.nome_escola);
-  expect(escolasForged.some((n) => n.startsWith("Escola B"))).toBe(false);
+  expect(optsForged.escolas.some((e) => e.nome_escola.startsWith("Escola B"))).toBe(false);
 
-  // Census com ?dre=DRE_B forjado — backend retorna dados da DRE_A
-  const censusForged = await apiRaw(
-    request, dreAToken!,
+  const censusDre = await apiRaw(
+    request,
+    dreAToken!,
     `/v1/admin/census?dre=${encodeURIComponent(dreB().name)}`,
   );
-  expect(censusForged.ok()).toBeTruthy();
-  const censusBody = (await censusForged.json()) as { data: { rows: Array<{ dre: string }> } };
-  if (censusBody.data?.rows?.length) {
-    const dreNames = censusBody.data.rows.map((r) => r.dre);
-    expect(dreNames.some((n) => n === dreB().name)).toBe(false);
-  }
+  expect(censusDre.ok()).toBeTruthy();
+  const censusDreBody = (await censusDre.json()) as { data: { rows: Array<{ nome_escola: string }> } };
+  expect(censusDreBody.data.rows.some((r) => r.nome_escola.startsWith("Escola B"))).toBe(false);
 
-  // Preenchimento por DRE com ?dre=DRE_B — backend retorna apenas a DRE_A
+  const bySchool = await apiRaw(
+    request,
+    dreAToken!,
+    `/v1/admin/census?school_id=${foreignSchool.school_id}`,
+  );
+  expect(bySchool.ok()).toBeTruthy();
+  const bySchoolBody = (await bySchool.json()) as { data: { rows: unknown[]; total: number } };
+  expect(bySchoolBody.data.rows).toHaveLength(0);
+  expect(bySchoolBody.data.total).toBe(0);
+
+  const byInep = await apiRaw(
+    request,
+    dreAToken!,
+    `/v1/admin/census?codigo_inep=${encodeURIComponent(foreignSchool.codigo_inep)}`,
+  );
+  expect(byInep.ok()).toBeTruthy();
+  const byInepBody = (await byInep.json()) as { data: { rows: unknown[]; total: number } };
+  expect(byInepBody.data.rows).toHaveLength(0);
+  expect(byInepBody.data.total).toBe(0);
+
   const preenchForged = await apiRaw(
-    request, dreAToken!,
+    request,
+    dreAToken!,
     `/v1/admin/analytics/preenchimento/dre?dre=${encodeURIComponent(dreB().name)}`,
   );
   expect(preenchForged.ok()).toBeTruthy();
   const preenchBody = (await preenchForged.json()) as { data: Array<{ dre: string }> };
-  if (Array.isArray(preenchBody.data) && preenchBody.data.length) {
-    const dreNames = preenchBody.data.map((r) => r.dre);
-    expect(dreNames.some((n) => n === dreB().name)).toBe(false);
-  }
+  expect(preenchBody.data.some((r) => r.dre === dreB().name)).toBe(false);
 });
-
-// ── Teste 6: divergência schools.dre vs dre_id canônico ──────────────────
 
 test("6 — divergência legado: schools.dre != dre_id → autoriza por ID", async ({ browser, request }) => {
   expect(dreAToken).toBeTruthy();
   expect(dreBToken).toBeTruthy();
-  expect(adminToken).toBeTruthy();
 
-  // API: escola divergente (dre text = "DRE B", dre_id = DRE A) aparece para DRE_A.
-  // The census API resolves dre from dres.nome via dre_id (canonical), so the
-  // divergent school shows as "DRE A" in the response. We find it by school name.
   const censusA = await apiRaw(request, dreAToken!, "/v1/admin/census");
   expect(censusA.ok()).toBeTruthy();
   const bodyA = (await censusA.json()) as { data: { rows: Array<{ school_id: number; nome_escola: string }> } };
-  const divergentRowA = bodyA.data?.rows?.find((r) => r.nome_escola === "Escola Divergente");
-  expect(divergentRowA).toBeTruthy();
+  const divergent = bodyA.data.rows.find((r) => r.nome_escola === "Escola Divergente");
+  expect(divergent).toBeTruthy();
 
-  // DRE_B não acessa a mesma escola (BOLA: 403)
-  if (divergentRowA) {
-    const bolaB = await apiRaw(request, dreBToken!, `/v1/admin/census/${divergentRowA.school_id}`);
-    expect(bolaB.status()).toBe(403);
-  }
+  const bolaB = await apiRaw(request, dreBToken!, `/v1/admin/census/${divergent!.school_id}`);
+  expect(bolaB.status()).toBe(403);
 
-  // UI: DRE_A vê a escola divergente nos registros do censo
   const page = await pageWithToken(browser, dreAToken!);
   await page.goto("/admin/");
   await page.getByText("Registros do Censo", { exact: false }).first().click();
-  await expect(page.getByText("Exibindo", { exact: false })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("cell", { name: "Escola Divergente" })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("cell", { name: "Escola Divergente" }))
+    .toBeVisible({ timeout: 20_000 });
   await page.close();
 });
 
-// ── Teste 7: revogação remota (heartbeat sem F5) ─────────────────────────
-
-test("7 — revogação remota: reset de senha → UI desloga sem F5", async ({ browser, request }) => {
-  expect(dreAToken).toBeTruthy();
-  expect(dreAUserId).toBeTruthy();
+test("7 — reset remoto encerra a sessão visualmente sem F5", async ({ browser, request }) => {
   expect(adminToken).toBeTruthy();
+  expect(dreAUserId).toBeTruthy();
+  expect(dreACredentials).toBeTruthy();
 
-  // Login DRE_A via UI para ter sessão ativa com cache
-  const dreACred = dreACredentials!;
   const page = await browser.newPage({ baseURL: webURL });
-  const freshToken = await loginViaUI(page, dreACred.username, dreACred.password);
-  expect(freshToken).toBeTruthy();
+  const freshToken = await loginViaUI(page, dreACredentials!.username, dreACredentials!.password);
   await expect(page.locator(".ca-sidebar")).toBeVisible();
 
-  // Admin reseta a senha do DRE_A via API
   const newPassword = await randomPassword();
-  const resetRes = await apiRawPost(
-    request, adminToken!, `/v1/admin/users/${dreAUserId}/reset-password`,
+  const reset = await apiRawPost(
+    request,
+    adminToken!,
+    `/v1/admin/users/${dreAUserId}/reset-password`,
     { password: newPassword },
   );
-  expect(resetRes.ok()).toBeTruthy();
+  expect(reset.ok()).toBeTruthy();
 
-  // Forçar revalidação de sessão via visibilitychange (simula retorno à aba)
-  await page.evaluate(() => {
-    document.dispatchEvent(new Event("visibilitychange"));
-  });
-
-  // UI deve deslogar: tela de login aparece, sidebar some
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
   await expect(page.locator("input[autocomplete='username']")).toBeVisible({ timeout: 15_000 });
   await expect(page.locator(".ca-sidebar")).toHaveCount(0);
+  expect((await apiRaw(request, freshToken, "/v1/admin/me")).status()).toBe(401);
 
-  // Token antigo é inválido
-  const oldTokenCheck = await apiRaw(request, freshToken, "/v1/admin/me");
-  expect(oldTokenCheck.status()).toBe(401);
-
-  // Login com nova senha funciona
-  const newToken = await loginViaAPIWithIP(request, dreACred.username, newPassword, TEST_NET_IPS[3]);
-  expect(newToken).toBeTruthy();
-  const meCheck = await apiGet<MeResponse>(request, newToken, "/v1/admin/me");
-  expect(meCheck.role).toBe("dre");
-
-  // Atualizar credenciais para os próximos testes
+  const newToken = await loginViaAPIWithIP(
+    request,
+    dreACredentials!.username,
+    newPassword,
+    TEST_NET_IPS[3],
+  );
+  const me = await apiGet<MeResponse>(request, newToken, "/v1/admin/me");
+  expect(me.role).toBe("dre");
   dreAToken = newToken;
-  dreACredentials = { username: dreACred.username, password: newPassword };
-
+  dreACredentials = { username: dreACredentials!.username, password: newPassword };
   await page.close();
 });
 
-// ── Teste 8: troca de conta DRE_A → DRE_B sem vazamento ──────────────────
+test("8 — desativação remota encerra UI e token antigo não ressuscita", async ({ browser, request }) => {
+  expect(adminToken).toBeTruthy();
+  expect(dreAUserId).toBeTruthy();
+  expect(dreAToken).toBeTruthy();
+  expect(dreACredentials).toBeTruthy();
 
-test("8 — troca de conta: DRE_A → DRE_B sem vazamento de cache/estado", async ({ browser, request }) => {
+  const page = await pageWithToken(browser, dreAToken!);
+  await page.goto("/admin/");
+  await expect(page.locator(".ca-sidebar")).toBeVisible();
+  const tokenBeforeDeactivate = dreAToken!;
+
+  const deactivate = await apiRawPatch(
+    request,
+    adminToken!,
+    `/v1/admin/users/${dreAUserId}/status`,
+    { active: false },
+  );
+  expect(deactivate.ok()).toBeTruthy();
+
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.locator("input[autocomplete='username']")).toBeVisible({ timeout: 15_000 });
+  expect((await apiRaw(request, tokenBeforeDeactivate, "/v1/admin/me")).status()).toBe(401);
+
+  const reactivate = await apiRawPatch(
+    request,
+    adminToken!,
+    `/v1/admin/users/${dreAUserId}/status`,
+    { active: true },
+  );
+  expect(reactivate.ok()).toBeTruthy();
+  expect((await apiRaw(request, tokenBeforeDeactivate, "/v1/admin/me")).status()).toBe(401);
+
+  const freshToken = await loginViaAPIWithIP(
+    request,
+    dreACredentials!.username,
+    dreACredentials!.password,
+    TEST_NET_IPS[4],
+  );
+  expect((await apiGet<MeResponse>(request, freshToken, "/v1/admin/me")).role).toBe("dre");
+  dreAToken = freshToken;
+  await page.close();
+});
+
+test("9 — troca DRE_A → DRE_B não reaproveita cache/estado", async ({ browser, request }) => {
   expect(dreAToken).toBeTruthy();
   expect(dreBToken).toBeTruthy();
 
-  // Contexto A: DRE_A via token injetado
   const ctxA = await browser.newContext({ baseURL: webURL });
   await ctxA.addInitScript(
     ([key, tk]) => sessionStorage.setItem(key, tk),
@@ -320,14 +338,10 @@ test("8 — troca de conta: DRE_A → DRE_B sem vazamento de cache/estado", asyn
   );
   const pageA = await ctxA.newPage();
   await pageA.goto("/admin/");
-  await expect(pageA.locator(".ca-sidebar")).toBeVisible();
-  await expect(pageA.getByText(/Acesso restrito à DRE:/)).toBeVisible();
   const badgeA = await pageA.getByText(/Acesso restrito à DRE:/).textContent();
   expect(badgeA).toContain(dreA().name);
-  await pageA.close();
   await ctxA.close();
 
-  // Contexto B: DRE_B via token injetado
   const ctxB = await browser.newContext({ baseURL: webURL });
   await ctxB.addInitScript(
     ([key, tk]) => sessionStorage.setItem(key, tk),
@@ -335,23 +349,11 @@ test("8 — troca de conta: DRE_A → DRE_B sem vazamento de cache/estado", asyn
   );
   const pageB = await ctxB.newPage();
   await pageB.goto("/admin/");
-  await expect(pageB.locator(".ca-sidebar")).toBeVisible();
-  await expect(pageB.getByText(/Acesso restrito à DRE:/)).toBeVisible();
   const badgeB = await pageB.getByText(/Acesso restrito à DRE:/).textContent();
   expect(badgeB).toContain(dreB().name);
   expect(badgeB).not.toContain(dreA().name);
 
-  // API: dados da DRE_B não contêm escolas da DRE_A
   const optsB = await apiGet<FiltrosOpcoes>(request, dreBToken!, "/v1/admin/analytics/filtros/opcoes");
-  const escolasB = optsB.escolas.map((e) => e.nome_escola);
-  expect(escolasB.some((n) => n.startsWith("Escola A") || n === "Escola Divergente")).toBe(false);
-
-  await pageB.close();
+  expect(optsB.escolas.some((e) => e.nome_escola.startsWith("Escola A") || e.nome_escola === "Escola Divergente")).toBe(false);
   await ctxB.close();
-});
-
-// ── Cleanup ───────────────────────────────────────────────────────────────
-
-test.afterAll(async () => {
-  // Não há dados dinâmicos criados neste spec para limpar (DRE_A/B vêm do seed).
 });

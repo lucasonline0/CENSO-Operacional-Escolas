@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
+  Eye,
   KeyRound,
   Loader2,
   Mail,
@@ -65,6 +66,7 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
   const [dreToEdit, setDreToEdit] = useState<DREItem | null>(null);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [preselectedDreIdForUser, setPreselectedDreIdForUser] = useState<number | null>(null);
+  const [userToViewAccess, setUserToViewAccess] = useState<AdminUserItem | null>(null);
   const [userToResetPass, setUserToResetPass] = useState<AdminUserItem | null>(null);
   const [credentialsModal, setCredentialsModal] = useState<CredentialsState | null>(null);
   const [toast, setToast] = useState<AdminToastData | null>(null);
@@ -259,6 +261,13 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
     });
   }
 
+  function handleResetFromAccessViewer() {
+    if (!userToViewAccess) return;
+    const selectedUser = userToViewAccess;
+    setUserToViewAccess(null);
+    setUserToResetPass(selectedUser);
+  }
+
   function formatDate(value?: string) {
     if (!value) return "—";
     const parsed = new Date(value);
@@ -441,7 +450,7 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
                                 <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-8 text-center"><UsersRound size={26} className="mx-auto mb-2 text-slate-300" /><p className="text-sm font-medium text-slate-600">Nenhum usuário cadastrado para esta DRE.</p></div>
                               ) : (
                                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                                  <table className="w-full min-w-[720px]">
+                                  <table className="w-full min-w-[760px]">
                                     <thead><tr><th>Usuário</th><th>Perfil</th><th>Cadastro</th><th className="text-center">Acesso</th><th className="text-right">Ações</th></tr></thead>
                                     <tbody>
                                       {linkedUsers.map((user) => (
@@ -452,7 +461,24 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
                                           <td><span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-600"><ShieldCheck size={11} />DRE</span></td>
                                           <td className="text-xs text-slate-500">{formatDate(user.created_at)}</td>
                                           <td className="text-center"><QuickStatusToggle checked={user.active} loading={togglingUserId === user.id} onChange={(next) => handleToggleUserStatus(user, next)} activeLabel="Ativo" inactiveLabel="Inativo" size="sm" /></td>
-                                          <td className="text-right"><button type="button" onClick={(event) => { event.stopPropagation(); setUserToResetPass(user); }} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"><KeyRound size={13} />Redefinir senha</button></td>
+                                          <td className="text-right">
+                                            <div className="inline-flex items-center gap-1.5">
+                                              <button
+                                                type="button"
+                                                onClick={(event) => { event.stopPropagation(); setUserToViewAccess(user); }}
+                                                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                                              >
+                                                <Eye size={13} />Ver acesso
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={(event) => { event.stopPropagation(); setUserToResetPass(user); }}
+                                                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                                              >
+                                                <KeyRound size={13} />Redefinir senha
+                                              </button>
+                                            </div>
+                                          </td>
                                         </tr>
                                       ))}
                                     </tbody>
@@ -474,6 +500,19 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
 
       <DreFormModal isOpen={isDreModalOpen} onClose={() => setIsDreModalOpen(false)} onSuccess={handleDreSuccess} token={token} dreToEdit={dreToEdit} />
       <UserFormModal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} onSuccess={handleUserSuccess} token={token} dres={dres} preselectedDreId={preselectedDreIdForUser} />
+
+      {userToViewAccess && (
+        <CredentialsSuccessModal
+          isOpen
+          onClose={() => setUserToViewAccess(null)}
+          title="Acesso do usuário"
+          subtitle="Consulte o login desta conta regional e redefina a senha quando necessário."
+          username={userToViewAccess.username}
+          dre={userToViewAccess.dre}
+          onResetPassword={handleResetFromAccessViewer}
+        />
+      )}
+
       <ResetPasswordModal isOpen={Boolean(userToResetPass)} onClose={() => setUserToResetPass(null)} onSuccess={handleResetPasswordSuccess} token={token} user={userToResetPass} />
       {credentialsModal && <CredentialsSuccessModal isOpen onClose={() => setCredentialsModal(null)} title={credentialsModal.title} subtitle={credentialsModal.subtitle} username={credentialsModal.username} password={credentialsModal.password} dre={credentialsModal.dre} />}
     </div>

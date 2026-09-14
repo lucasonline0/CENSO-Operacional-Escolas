@@ -10,10 +10,12 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  Loader2,
   LockKeyhole,
   User,
 } from "lucide-react";
 import { AdminModalShell } from "./AdminModalShell";
+import { apiFetch, loadToken } from "./api";
 import { C } from "./constants";
 import { copyToClipboard, formatCredentialsText } from "./credentialsUtils";
 
@@ -28,6 +30,14 @@ interface CredentialsSuccessModalProps {
   onResetPassword?: () => void;
 }
 
+interface StoredCredentialResponse {
+  id: number;
+  username: string;
+  dre: string;
+  available: boolean;
+  password?: string;
+}
+
 export function CredentialsSuccessModal({
   isOpen,
   onClose,
@@ -39,20 +49,70 @@ export function CredentialsSuccessModal({
   onResetPassword,
 }: CredentialsSuccessModalProps) {
   const [showPassword, setShowPassword] = useState(true);
+  const [resolvedPassword, setResolvedPassword] = useState(password ?? "");
+  const [loadingStoredPassword, setLoadingStoredPassword] = useState(false);
+  const [storedPasswordAvailable, setStoredPasswordAvailable] = useState<boolean | null>(password ? true : null);
+  const [revealError, setRevealError] = useState("");
   const [copiedAll, setCopiedAll] = useState(false);
   const [copiedUser, setCopiedUser] = useState(false);
   const [copiedPass, setCopiedPass] = useState(false);
 
-  const hasVisiblePassword = Boolean(password);
+  const hasVisiblePassword = Boolean(resolvedPassword);
+  const isStoredReveal = !password && hasVisiblePassword;
 
   useEffect(() => {
-    if (isOpen) {
-      setShowPassword(true);
-      setCopiedAll(false);
-      setCopiedUser(false);
-      setCopiedPass(false);
+    if (!isOpen) return;
+
+    let cancelled = false;
+    setShowPassword(true);
+    setResolvedPassword(password ?? "");
+    setStoredPasswordAvailable(password ? true : null);
+    setLoadingStoredPassword(false);
+    setRevealError("");
+    setCopiedAll(false);
+    setCopiedUser(false);
+    setCopiedPass(false);
+
+    if (password) return;
+
+    const token = loadToken();
+    if (!token) {
+      setStoredPasswordAvailable(false);
+      setRevealError("Sessão administrativa indisponível. Entre novamente no painel.");
+      return;
     }
-  }, [isOpen]);
+
+    setLoadingStoredPassword(true);
+    apiFetch<StoredCredentialResponse>(
+      `/v1/admin/users/credentials?username=${encodeURIComponent(username)}`,
+      token,
+      { bypassCache: true },
+    )
+      .then((data) => {
+        if (cancelled) return;
+        if (data.available && data.password) {
+          setResolvedPassword(data.password);
+          setStoredPasswordAvailable(true);
+          return;
+        }
+        setResolvedPassword("");
+        setStoredPasswordAvailable(false);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setResolvedPassword("");
+        setStoredPasswordAvailable(false);
+        const message = error instanceof Error ? error.message : "";
+        setRevealError(message === "UNAUTHORIZED" ? "Sessão expirada." : (message || "Não foi possível consultar a senha."));
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingStoredPassword(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, password, username]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -65,9 +125,14 @@ export function CredentialsSuccessModal({
   if (!isOpen) return null;
 
   async function copyAll() {
-    if (!password) return;
+    if (!resolvedPassword) return;
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const text = formatCredentialsText({ dre, username, password, url: origin ? `${origin}/admin` : undefined });
+    const text = formatCredentialsText({
+      dre,
+      username,
+      password: resolvedPassword,
+      url: origin ? `${origin}/admin` : undefined,
+    });
     if (await copyToClipboard(text)) {
       setCopiedAll(true);
       setTimeout(() => setCopiedAll(false), 2500);
@@ -82,8 +147,8 @@ export function CredentialsSuccessModal({
   }
 
   async function copyPassword() {
-    if (!password) return;
-    if (await copyToClipboard(password)) {
+    if (!resolvedPassword) return;
+    if (await copyToClipboard(resolvedPassword)) {
       setCopiedPass(true);
       setTimeout(() => setCopiedPass(false), 1800);
     }
@@ -112,11 +177,16 @@ export function CredentialsSuccessModal({
             </div>
           </div>
 
-          {password ? (
+          {loadingStoredPassword ? (
+            <div className="flex items-center justify-between gap-4 px-4 py-3">
+              <span className="flex items-center gap-2 text-sm text-slate-500"><KeyRound size={15} />Senha de acesso</span>
+              <span className="inline-flex items-center gap-2 text-sm text-slate-500"><Loader2 size={15} className="animate-spin" />Consultando cofre…</span>
+            </div>
+          ) : hasVisiblePassword ? (
             <div className="flex items-center justify-between gap-4 px-4 py-3">
               <span className="flex items-center gap-2 text-sm text-slate-500"><KeyRound size={15} />Senha de acesso</span>
               <div className="flex min-w-0 items-center gap-1">
-                <code className="truncate rounded-md border border-amber-200 bg-amber-50 px-2 py-1 font-mono text-sm font-semibold text-amber-900">{showPassword ? password : "••••••••••••"}</code>
+                <code className="truncate rounded-md border border-amber-200 bg-amber-50 px-2 py-1 font-mono text-sm font-semibold text-amber-900">{showPassword ? resolvedPassword : "••••••••••••"}</code>
                 <button type="button" onClick={() => setShowPassword((value) => !value)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}>{showPassword ? <EyeOff size={15} /> : <Eye size={15} />}</button>
                 <button type="button" onClick={copyPassword} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Copiar senha">{copiedPass ? <Check size={15} className="text-emerald-600" /> : <Copy size={15} />}</button>
               </div>
@@ -132,24 +202,35 @@ export function CredentialsSuccessModal({
           )}
         </div>
 
-        {password ? (
+        {hasVisiblePassword ? (
           <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
             <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
-            <p><strong>Segurança:</strong> a senha não será exibida novamente depois que esta janela for fechada. Copie as credenciais agora e compartilhe-as por canal seguro.</p>
+            <p>
+              <strong>Segurança:</strong>{" "}
+              {isStoredReveal
+                ? "esta visualização foi registrada na auditoria. A senha permanece protegida no banco por AES-256-GCM e só é revelada sob demanda para administradores."
+                : "a senha foi armazenada no cofre criptografado e poderá ser consultada futuramente por administradores autorizados."}
+              {" "}Compartilhe-a somente por canal seguro.
+            </p>
           </div>
-        ) : (
+        ) : revealError ? (
+          <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs leading-5 text-rose-700">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+            <p><strong>Não foi possível consultar a senha:</strong> {revealError}</p>
+          </div>
+        ) : storedPasswordAvailable === false ? (
           <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">
             <LockKeyhole size={16} className="mt-0.5 shrink-0 text-slate-500" />
-            <p><strong>Senha protegida:</strong> a senha atual é armazenada somente como hash e não pode ser recuperada ou exibida. Para obter uma senha visível novamente, redefina o acesso; a nova senha será mostrada imediatamente após a alteração.</p>
+            <p><strong>Conta anterior ao cofre:</strong> esta senha foi criada antes do armazenamento criptografado reversível e não pode ser recuperada. Redefina a senha uma única vez; a nova senha ficará disponível em “Ver acesso” nas próximas consultas.</p>
           </div>
-        )}
+        ) : null}
 
         <div className="flex flex-col-reverse gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end">
-          <button type="button" onClick={onClose} className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50">{password ? "Concluir" : "Fechar"}</button>
+          <button type="button" onClick={onClose} className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50">{hasVisiblePassword ? "Concluir" : "Fechar"}</button>
 
-          {password ? (
+          {hasVisiblePassword ? (
             <button type="button" onClick={copyAll} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white" style={{ background: copiedAll ? C.success : C.primary }}>{copiedAll ? <><Check size={16} />Credenciais copiadas</> : <><Copy size={16} />Copiar credenciais</>}</button>
-          ) : onResetPassword ? (
+          ) : onResetPassword && !loadingStoredPassword ? (
             <button type="button" onClick={onResetPassword} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white" style={{ background: C.primary }}><KeyRound size={16} />Redefinir senha</button>
           ) : null}
         </div>

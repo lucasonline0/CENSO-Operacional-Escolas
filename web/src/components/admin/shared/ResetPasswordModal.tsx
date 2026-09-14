@@ -43,6 +43,7 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess, token, user }: 
   }, [isOpen, loading, onClose]);
 
   if (!isOpen || !user) return null;
+  const targetUser = user;
 
   function generatePassword() {
     setPassword(generateSecurePassword(12));
@@ -66,8 +67,8 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess, token, user }: 
     setLoading(true);
     setError("");
     try {
-      await resetAdminUserPassword(token, user.id, cleanPassword);
-      onSuccess(user, cleanPassword);
+      await resetAdminUserPassword(token, targetUser.id, cleanPassword);
+      onSuccess(targetUser, cleanPassword);
     } catch (requestError: unknown) {
       setError((requestError as Error).message || "Erro ao redefinir a senha do usuário.");
     } finally {
@@ -86,8 +87,8 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess, token, user }: 
     >
       <form onSubmit={handleSubmit} className="space-y-5 p-6">
         <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-          <div className="flex items-center justify-between gap-4"><span className="flex items-center gap-2 text-slate-500"><User size={14} />Usuário</span><span className="font-mono font-semibold text-slate-800">{user.username}</span></div>
-          <div className="flex items-center justify-between gap-4"><span className="flex items-center gap-2 text-slate-500"><Building2 size={14} />DRE vinculada</span><span className="max-w-[220px] truncate font-semibold text-slate-800">{user.dre}</span></div>
+          <div className="flex items-center justify-between gap-4"><span className="flex items-center gap-2 text-slate-500"><User size={14} />Usuário</span><span className="font-mono font-semibold text-slate-800">{targetUser.username}</span></div>
+          <div className="flex items-center justify-between gap-4"><span className="flex items-center gap-2 text-slate-500"><Building2 size={14} />DRE vinculada</span><span className="max-w-[220px] truncate font-semibold text-slate-800">{targetUser.dre}</span></div>
         </div>
 
         <div>

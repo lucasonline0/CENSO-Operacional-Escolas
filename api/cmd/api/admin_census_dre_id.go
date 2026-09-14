@@ -75,7 +75,7 @@ func canonicalCensusSummarySQL() string {
 		         WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($5))
 		       ))
 		   AND ($6 = 0 OR s.id = $6)
-		   AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7))),
+		   AND ($7 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($7)))),
 		COUNT(*) FILTER (WHERE cr.status = 'completed'),
 		COUNT(*) FILTER (WHERE cr.status = 'draft'),
 		COUNT(*) FILTER (WHERE cr.status = 'completed' AND cr.sheet_synced_at IS NULL)

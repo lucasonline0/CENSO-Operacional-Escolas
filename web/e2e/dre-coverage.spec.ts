@@ -1,14 +1,5 @@
-// E2E de cobertura do Perfil DRE — abas, isolamento, divergência legado e
-// revogação remota contra a stack REAL (PostgreSQL 16 + API Go + Next.js).
-//
-// Issue #246 — PEDRO-08:
-//   1. Navegação por todas as 11 abas obrigatórias (DRE A)
-//   2. "Gestão de DREs e Acessos" inacessível ao perfil DRE
-//   3. Isolamento: dados de DRE_B não aparecem para DRE_A
-//   4. Forgery: query params de outra DRE são ignorados pelo backend
-//   5. Divergência: schools.dre legado != dre_id canônico → autoriza por ID
-//   6. Revogação remota: UI abandona sessão sem F5 após reset/desativação
-//   7. Troca de conta DRE_A → DRE_B sem vazamento de cache/estado
+// E2E de cobertura final do Perfil DRE contra a stack real.
+// Issue #246 — abas, isolamento, divergência legado, revogação e cache.
 import { test, expect } from "@playwright/test";
 import {
   loginViaUI, pageWithToken,
@@ -24,7 +15,6 @@ let dreBToken: string | null = null;
 let dreAUserId: number | null = null;
 let dreACredentials: { username: string; password: string } | null = null;
 
-// Buckets independentes no rate limiter do ambiente E2E.
 const TEST_NET_IPS = [
   "203.0.113.20",
   "203.0.113.21",
@@ -56,6 +46,15 @@ interface FiltrosOpcoes {
   zonas: string[];
   regioes_integracao: string[];
   escolas: Array<{ school_id: number; nome_escola: string; codigo_inep: string; dre: string }>;
+}
+
+interface PreenchimentoPayload {
+  ano_referencia: number;
+  total_escolas: number;
+  total_completed: number;
+  total_draft: number;
+  total_pending: number;
+  dres: Array<{ dre: string; total: number; completed: number; draft: number; pending: number }>;
 }
 
 async function loginViaAPIWithIP(
@@ -97,9 +96,8 @@ test("1 — autenticação resolve usuário e DRE por identidades distintas", as
   expect(meB.dre_id).toBeGreaterThan(0);
   expect(meA.dre_id).not.toBe(meB.dre_id);
 
-  // admin_users.id e dres.id são identidades diferentes. O teste anterior
-  // atribuía meA.dre_id a dreAUserId e podia resetar o usuário errado caso os
-  // IDs coincidissem por acaso. Resolve o usuário pelo username canônico.
+  // admin_users.id e dres.id são identidades diferentes. Resolve o usuário
+  // pelo username e só depois usa seu ID nas mutações de lifecycle.
   const users = await apiGet<AdminUserResponse[]>(request, adminToken, "/v1/admin/users");
   const dreAUser = users.find((user) => user.username === dreACred.username);
   expect(dreAUser).toBeTruthy();
@@ -223,8 +221,10 @@ test("5 — forging de DRE, school_id e INEP não amplia o escopo", async ({ req
     `/v1/admin/analytics/preenchimento/dre?dre=${encodeURIComponent(dreB().name)}`,
   );
   expect(preenchForged.ok()).toBeTruthy();
-  const preenchBody = (await preenchForged.json()) as { data: Array<{ dre: string }> };
-  expect(preenchBody.data.some((r) => r.dre === dreB().name)).toBe(false);
+  const preenchBody = (await preenchForged.json()) as { data: PreenchimentoPayload };
+  expect(preenchBody.data.dres).toHaveLength(1);
+  expect(preenchBody.data.dres[0].dre).toBe(dreA().name);
+  expect(preenchBody.data.dres.some((r) => r.dre === dreB().name)).toBe(false);
 });
 
 test("6 — divergência legado: schools.dre != dre_id → autoriza por ID", async ({ browser, request }) => {

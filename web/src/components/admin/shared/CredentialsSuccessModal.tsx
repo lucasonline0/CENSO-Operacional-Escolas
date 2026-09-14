@@ -50,7 +50,7 @@ export function CredentialsSuccessModal({
 }: CredentialsSuccessModalProps) {
   const [showPassword, setShowPassword] = useState(true);
   const [resolvedPassword, setResolvedPassword] = useState(password ?? "");
-  const [loadingStoredPassword, setLoadingStoredPassword] = useState(false);
+  const [loadingStoredPassword, setLoadingStoredPassword] = useState(!password && isOpen);
   const [storedPasswordAvailable, setStoredPasswordAvailable] = useState<boolean | null>(password ? true : null);
   const [revealError, setRevealError] = useState("");
   const [copiedAll, setCopiedAll] = useState(false);
@@ -61,28 +61,22 @@ export function CredentialsSuccessModal({
   const isStoredReveal = !password && hasVisiblePassword;
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || password) return;
 
     let cancelled = false;
-    setShowPassword(true);
-    setResolvedPassword(password ?? "");
-    setStoredPasswordAvailable(password ? true : null);
-    setLoadingStoredPassword(false);
-    setRevealError("");
-    setCopiedAll(false);
-    setCopiedUser(false);
-    setCopiedPass(false);
-
-    if (password) return;
-
     const token = loadToken();
     if (!token) {
-      setStoredPasswordAvailable(false);
-      setRevealError("Sessão administrativa indisponível. Entre novamente no painel.");
-      return;
+      Promise.resolve().then(() => {
+        if (cancelled) return;
+        setStoredPasswordAvailable(false);
+        setLoadingStoredPassword(false);
+        setRevealError("Sessão administrativa indisponível. Entre novamente no painel.");
+      });
+      return () => {
+        cancelled = true;
+      };
     }
 
-    setLoadingStoredPassword(true);
     apiFetch<StoredCredentialResponse>(
       `/v1/admin/users/credentials?username=${encodeURIComponent(username)}`,
       token,

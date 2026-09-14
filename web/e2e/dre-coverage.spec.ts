@@ -2,9 +2,9 @@
 // Issue #246 — abas, isolamento, divergência legado, revogação e cache.
 import { test, expect } from "@playwright/test";
 import {
-  loginViaUI, pageWithToken,
+  pageWithToken,
   apiGet, apiRaw, apiRawPost, apiRawPatch,
-  adminCredentials, dreA, dreB, randomPassword, apiURL, webURL,
+  adminCredentials, dreA, dreB, randomPassword, apiURL,
 } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
@@ -135,7 +135,7 @@ test("2 — DRE A navega por todas as 11 abas obrigatórias", async ({ browser }
       .toBeVisible({ timeout: 20_000 });
   }
 
-  await page.close();
+  await page.context().close();
 });
 
 test("3 — DRE A não acessa Gestão de DREs/Acessos (sidebar + API)", async ({ browser, request }) => {
@@ -146,7 +146,7 @@ test("3 — DRE A não acessa Gestão de DREs/Acessos (sidebar + API)", async ({
   await expect(page.locator(".ca-sidebar")).toBeVisible();
   await expect(page.getByText("Gestão de DREs e Acessos")).toHaveCount(0);
   await expect(page.getByText("Administração")).toHaveCount(0);
-  await page.close();
+  await page.context().close();
 
   expect((await apiRaw(request, dreAToken!, "/v1/admin/dres")).status()).toBe(403);
   expect((await apiRaw(request, dreAToken!, "/v1/admin/users")).status()).toBe(403);
@@ -245,16 +245,21 @@ test("6 — divergência legado: schools.dre != dre_id → autoriza por ID", asy
   await page.getByText("Registros do Censo", { exact: false }).first().click();
   await expect(page.getByRole("cell", { name: "Escola Divergente" }))
     .toBeVisible({ timeout: 20_000 });
-  await page.close();
+  await page.context().close();
 });
 
 test("7 — reset remoto encerra a sessão visualmente sem F5", async ({ browser, request }) => {
   expect(adminToken).toBeTruthy();
   expect(dreAUserId).toBeTruthy();
+  expect(dreAToken).toBeTruthy();
   expect(dreACredentials).toBeTruthy();
 
-  const page = await browser.newPage({ baseURL: webURL });
-  const freshToken = await loginViaUI(page, dreACredentials!.username, dreACredentials!.password);
+  // Reutiliza o token real já autenticado em TEST-NET. Fazer novo login via UI
+  // aqui concorria com o bucket normal consumido pelo spec #245 e tornava a
+  // suíte dependente da ordem dos arquivos.
+  const freshToken = dreAToken!;
+  const page = await pageWithToken(browser, freshToken);
+  await page.goto("/admin/");
   await expect(page.locator(".ca-sidebar")).toBeVisible();
 
   const newPassword = await randomPassword();
@@ -281,7 +286,7 @@ test("7 — reset remoto encerra a sessão visualmente sem F5", async ({ browser
   expect(me.role).toBe("dre");
   dreAToken = newToken;
   dreACredentials = { username: dreACredentials!.username, password: newPassword };
-  await page.close();
+  await page.context().close();
 });
 
 test("8 — desativação remota encerra UI e token antigo não ressuscita", async ({ browser, request }) => {
@@ -324,14 +329,14 @@ test("8 — desativação remota encerra UI e token antigo não ressuscita", asy
   );
   expect((await apiGet<MeResponse>(request, freshToken, "/v1/admin/me")).role).toBe("dre");
   dreAToken = freshToken;
-  await page.close();
+  await page.context().close();
 });
 
 test("9 — troca DRE_A → DRE_B não reaproveita cache/estado", async ({ browser, request }) => {
   expect(dreAToken).toBeTruthy();
   expect(dreBToken).toBeTruthy();
 
-  const ctxA = await browser.newContext({ baseURL: webURL });
+  const ctxA = await browser.newContext({ baseURL: process.env.E2E_WEB_URL ?? "http://localhost:3000" });
   await ctxA.addInitScript(
     ([key, tk]) => sessionStorage.setItem(key, tk),
     ["censo_admin_token", dreAToken!],
@@ -342,7 +347,7 @@ test("9 — troca DRE_A → DRE_B não reaproveita cache/estado", async ({ brows
   expect(badgeA).toContain(dreA().name);
   await ctxA.close();
 
-  const ctxB = await browser.newContext({ baseURL: webURL });
+  const ctxB = await browser.newContext({ baseURL: process.env.E2E_WEB_URL ?? "http://localhost:3000" });
   await ctxB.addInitScript(
     ([key, tk]) => sessionStorage.setItem(key, tk),
     ["censo_admin_token", dreBToken!],

@@ -21,16 +21,6 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// migrationsFS embute, no próprio binário, todos os .sql em
-// api/cmd/api/migrations/. Isso elimina a dependência de um caminho
-// relativo em runtime (problema observado no deploy Railway, onde
-// o working directory do processo não contém o diretório
-// infra/migrations/ que existe no monorepo).
-//
-// A cópia em infra/migrations/ é mantida como referência operacional
-// e fonte de verdade documental — qualquer mudança numa view deve ser
-// refletida nas DUAS pastas.
-//
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
 
@@ -63,18 +53,14 @@ type application struct {
 func main() {
 	logger := log.New(os.Stdout, "[CENSO-API] ", log.Ldate|log.Ltime|log.Lshortfile)
 
-	// --- CORREÇÃO DE PATH ---
 	cwd, _ := os.Getwd()
 	logger.Printf("Executando a partir de: %s", cwd)
-
-	// PROCURA O .ENV DE FORMA INTELIGENTE EM VÁRIOS LUGARES
 	envPaths := []string{
 		".env",
 		filepath.Join(cwd, ".env"),
 		filepath.Join(cwd, "..", ".env"),
 		filepath.Join(cwd, "..", "infra", ".env"),
 	}
-
 	envLoaded := false
 	for _, p := range envPaths {
 		if err := godotenv.Load(p); err == nil {
@@ -83,7 +69,6 @@ func main() {
 			break
 		}
 	}
-
 	if !envLoaded {
 		logger.Println("AVISO: Nenhum arquivo .env encontrado. Dependendo das variáveis do sistema.")
 	} else if os.Getenv("ADMIN_USERNAME") != "" {
@@ -94,7 +79,6 @@ func main() {
 	if err := validateSecurityConfig(); err != nil {
 		logger.Fatal("ERRO FATAL SEGURANÇA: ", err)
 	}
-
 	cfg.port = os.Getenv("PORT")
 	if cfg.port == "" {
 		cfg.port = "8000"
@@ -138,7 +122,6 @@ func main() {
 	} else {
 		logger.Println("Migração sheet_synced_at OK")
 	}
-
 	if err = applyMigrations(db, logger); err != nil {
 		logger.Fatal("ERRO FATAL MIGRATIONS: ", err)
 	}
@@ -149,7 +132,6 @@ func main() {
 	} else {
 		logger.Println("SheetsService iniciado.")
 	}
-
 	driveService, err := services.NewDriveService()
 	if err != nil {
 		logger.Println("AVISO: DriveService erro:", err)
@@ -164,7 +146,6 @@ func main() {
 		sheets: sheetsService,
 		drive:  driveService,
 	}
-
 	go app.sheetSyncRetryJob()
 
 	srv := &http.Server{
@@ -174,7 +155,6 @@ func main() {
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	}
-
 	logger.Printf("Servidor rodando porta %s", cfg.port)
 	err = srv.ListenAndServe()
 	logger.Fatal(err)
@@ -293,7 +273,7 @@ func (app *application) routes() http.Handler {
 
 	mux.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Censo API Online"))
+		_, _ = w.Write([]byte("Censo API Online"))
 	})
 
 	mux.Route("/v1", func(r chi.Router) {
@@ -328,10 +308,11 @@ func (app *application) routes() http.Handler {
 			protected.Post("/admin/dres/{id}/schools", app.AdminAssignSchoolsToDRE)
 			protected.Patch("/admin/schools/{id}/dre", app.AdminMoveSchoolToDRE)
 
-			protected.Post("/admin/users", app.AdminCreateUser)
+			protected.With(app.persistManagedPassword).Post("/admin/users", app.AdminCreateUser)
 			protected.Get("/admin/users", app.AdminListUsers)
+			protected.Get("/admin/users/credentials", app.AdminRevealUserCredentials)
 			protected.Patch("/admin/users/{id}/status", app.AdminUpdateUserStatus)
-			protected.Post("/admin/users/{id}/reset-password", app.AdminResetUserPassword)
+			protected.With(app.persistManagedPassword).Post("/admin/users/{id}/reset-password", app.AdminResetUserPassword)
 
 			protected.Get("/admin/analytics/overview", app.AdminAnalyticsOverview)
 			protected.Get("/admin/analytics/caracterizacao/perfil", app.AdminAnalyticsCaracterizacaoPerfil)

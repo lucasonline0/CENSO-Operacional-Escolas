@@ -5,13 +5,14 @@ function normalizeLegacyDreName(value: string): string {
     .trim()
     .toLowerCase()
     .replace(/[–—]/g, "-")
+    .replace(/á/g, "a")
     .replace(/\s+/g, " ");
 }
 
 export function isInvalidLegacyDreName(value: unknown): boolean {
   if (typeof value !== "string") return false;
   const normalized = normalizeLegacyDreName(value);
-  return normalized === "02 ure - cametá" || normalized === "02 ure - cameta";
+  return /^0?2(?:a|ª)?\s+ure\s*-\s*cameta$/.test(normalized);
 }
 
 export function sanitizeLegacyDrePayload<T>(path: string, data: T): T {

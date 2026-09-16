@@ -1,30 +1,29 @@
 package main
 
 import (
+	"regexp"
 	"strings"
 )
 
-// isInvalidLegacyDRE checks if a DRE name matches the exact legacy invalid
-// non-DRE entry '02 URE - Cametá', tolerating case-insensitivity, extra
-// whitespace, CAMETA spelling variant, and en/em dashes (– / —).
+var invalidLegacyURECametaPattern = regexp.MustCompile(`^0?2(?:a|ª)?\s+ure\s*-\s*cameta$`)
+
+// isInvalidLegacyDRE identifica o registro legado de URE que foi promovido
+// incorretamente para a entidade mestre de DREs. O dado existe em formatos
+// históricos diferentes (02, 02A/02ª, Cameta/Cametá, tipos de hífen e caixa).
 func isInvalidLegacyDRE(name string) bool {
-	if name == "" {
+	if strings.TrimSpace(name) == "" {
 		return false
 	}
 
-	// Normalize: lowercase, collapse whitespace, replace dashes
 	normalized := strings.ToLower(strings.TrimSpace(name))
+	normalized = strings.NewReplacer(
+		"–", "-",
+		"—", "-",
+		"á", "a",
+	).Replace(normalized)
+	normalized = strings.Join(strings.Fields(normalized), " ")
 
-	// Replace en-dash (–) and em-dash (—) with hyphen-minus (-)
-	replacer := strings.NewReplacer("–", "-", "—", "-")
-	normalized = replacer.Replace(normalized)
-
-	// Collapse multiple spaces/whitespace into single space
-	parts := strings.Fields(normalized)
-	normalized = strings.Join(parts, " ")
-
-	// Accept both "cametá" and "cameta" spellings
-	return normalized == "02 ure - cametá" || normalized == "02 ure - cameta"
+	return invalidLegacyURECametaPattern.MatchString(normalized)
 }
 
 // filterOutInvalidDREs removes DRE entries that match the legacy invalid
@@ -41,4 +40,3 @@ func filterOutInvalidDREs(dres []string) []string {
 	}
 	return result
 }
-

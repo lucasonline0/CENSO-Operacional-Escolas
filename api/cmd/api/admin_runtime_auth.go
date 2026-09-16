@@ -39,10 +39,9 @@ var runtimeDummyPasswordHash = func() []byte {
 }()
 
 func rejectRuntimeLogin(app *application, w http.ResponseWriter, password string) {
-	// Mantém custo bcrypt também quando o username não existe e preserva o
-	// atraso já usado pelo login legado para reduzir enumeração por timing.
+	// Mantém o mesmo custo bcrypt também quando o username não existe, evitando
+	// enumeração por timing sem adicionar um sleep artificial ao caminho de erro.
 	_ = bcrypt.CompareHashAndPassword(runtimeDummyPasswordHash, []byte(password))
-	time.Sleep(600 * time.Millisecond)
 	app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
 }
 
@@ -90,7 +89,6 @@ func (app *application) AdminLoginRuntime(w http.ResponseWriter, r *http.Request
 	var claims runtimeAdminClaims
 	if isEnvAdmin {
 		if err := bcrypt.CompareHashAndPassword([]byte(adminHash), []byte(req.Password)); err != nil {
-			time.Sleep(600 * time.Millisecond)
 			app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
 			return
 		}
@@ -112,7 +110,6 @@ func (app *application) AdminLoginRuntime(w http.ResponseWriter, r *http.Request
 			return
 		}
 		if err := bcrypt.CompareHashAndPassword([]byte(access.PasswordHash), []byte(req.Password)); err != nil {
-			time.Sleep(600 * time.Millisecond)
 			app.errorJSON(w, fmt.Errorf("credenciais inválidas"), http.StatusUnauthorized)
 			return
 		}

@@ -70,7 +70,9 @@ DO $$ BEGIN
     ALTER TABLE ideb_resultados
         ADD CONSTRAINT ideb_resultados_ano_inep_etapa_uniq
         UNIQUE (ano, codigo_inep, etapa);
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- Em bancos antigos pode existir apenas o índice homônimo da UNIQUE. Nesse caso
+-- o PostgreSQL retorna 42P07 (duplicate_table), não 42710 (duplicate_object).
+EXCEPTION WHEN duplicate_object OR duplicate_table THEN NULL; END $$;
 
 -- FK nullable para schools(id). ON DELETE SET NULL preserva o registro IDEB
 -- mesmo que a escola seja removida/corrigida no cadastro operacional.

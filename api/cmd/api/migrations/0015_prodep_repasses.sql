@@ -65,7 +65,9 @@ DO $$ BEGIN
     ALTER TABLE prodep_repasses
         ADD CONSTRAINT prodep_repasses_inep_ano_cat_uniq
         UNIQUE (codigo_inep_prodep, ano, categoria);
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- Em bancos antigos pode existir apenas o índice homônimo da UNIQUE. Nesse caso
+-- o PostgreSQL retorna 42P07 (duplicate_table), não 42710 (duplicate_object).
+EXCEPTION WHEN duplicate_object OR duplicate_table THEN NULL; END $$;
 
 DO $$ BEGIN
     ALTER TABLE prodep_repasses

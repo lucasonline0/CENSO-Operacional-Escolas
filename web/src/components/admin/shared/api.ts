@@ -3,6 +3,7 @@
 // nenhum comportamento alterado.
 
 import { API, TOKEN_KEY } from "./constants";
+import { sanitizeLegacyDrePayload } from "./legacyDreFilter";
 
 export const saveToken  = (t: string) => { try { sessionStorage.setItem(TOKEN_KEY, t); } catch {} };
 export const loadToken  = (): string | null => { try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; } };
@@ -84,7 +85,8 @@ export async function apiFetch<T>(path: string, token: string, opts?: ApiFetchOp
     const b = await res.json().catch(() => ({}));
     throw new Error((b as { message?: string }).message ?? `HTTP ${res.status}`);
   }
-  const data = (await res.json()).data as T;
+  const rawData = (await res.json()).data as T;
+  const data = sanitizeLegacyDrePayload(path, rawData);
   if (useCache) namespaceFor(token).set(path, { data, expiresAt: Date.now() + CACHE_TTL });
   return data;
 }

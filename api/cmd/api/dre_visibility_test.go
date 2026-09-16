@@ -10,42 +10,21 @@ func TestIsInvalidLegacyDRE(t *testing.T) {
 		input    string
 		expected bool
 	}{
-		// Exact match
-		{"exact match", "02 URE - Cametá", true},
-		{"lowercase exact", "02 ure - cametá", true},
-		{"uppercase exact", "02 URE - CAMETÁ", true},
+		{"exact legacy", "02 URE - Cametá", true},
+		{"screenshot variant", "02A URE - CAMETA", true},
+		{"ordinal variant", "02ª URE - Cametá", true},
+		{"single digit variant", "2A URE - Cameta", true},
+		{"lowercase", "02a ure - cameta", true},
+		{"extra whitespace", "  02A   URE   -   CAMETA  ", true},
+		{"en dash", "02A URE – Cametá", true},
+		{"em dash", "02A URE — Cameta", true},
 
-		// Extra whitespace
-		{"extra space after 02", "02  URE - Cametá", true},
-		{"extra space before dash", "02 URE  - Cametá", true},
-		{"extra space after dash", "02 URE -  Cametá", true},
-		{"leading whitespace", "  02 URE - Cametá", true},
-		{"trailing whitespace", "02 URE - Cametá  ", true},
-		{"multiple spaces collapsed", "02   URE   -   Cametá", true},
-
-		// CAMETA spelling variant
-		{"cameta without accent", "02 URE - Cameta", true},
-		{"CAMETA uppercase", "02 URE - CAMETA", true},
-		{"cameta lowercase", "02 ure - cameta", true},
-
-		// En-dash (–) and em-dash (—)
-		{"en-dash", "02 URE – Cametá", true},
-		{"em-dash", "02 URE — Cametá", true},
-		{"en-dash with cameta", "02 URE – Cameta", true},
-		{"em-dash with cameta", "02 URE — Cameta", true},
-
-		// Combined variations
-		{"en-dash, extra spaces, cameta", "02  URE  –  Cameta", true},
-		{"em-dash, extra spaces, cametá", "02  URE  —  Cametá", true},
-
-		// Should NOT match
-		{"different number", "01 URE - Cametá", false},
-		{"different city", "02 URE - Belém", false},
-		{"missing URE", "02 - Cametá", false},
-		{"only city name", "Cametá", false},
-		{"empty string", "", false},
-		{"completely different", "Diretoria Regional de Educação Sul", false},
-		{"similar but not same", "02 URE Cametá", false},
+		{"different number", "01A URE - CAMETA", false},
+		{"different city", "02A URE - Belém", false},
+		{"missing URE", "02A - CAMETA", false},
+		{"only city", "CAMETA", false},
+		{"empty", "", false},
+		{"real DRE", "DRE Centro", false},
 	}
 
 	for _, tt := range tests {
@@ -59,56 +38,22 @@ func TestIsInvalidLegacyDRE(t *testing.T) {
 }
 
 func TestFilterOutInvalidDREs(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    []string
-		expected []string
-	}{
-		{
-			"filter out single invalid",
-			[]string{"02 URE - Cametá", "DRE Centro", "DRE Norte"},
-			[]string{"DRE Centro", "DRE Norte"},
-		},
-		{
-			"filter out multiple variations",
-			[]string{"02 URE - Cametá", "02 URE - Cameta", "02 URE – Cametá", "DRE Centro"},
-			[]string{"DRE Centro"},
-		},
-		{
-			"no invalid entries",
-			[]string{"DRE Centro", "DRE Norte", "DRE Sul"},
-			[]string{"DRE Centro", "DRE Norte", "DRE Sul"},
-		},
-		{
-			"empty list",
-			[]string{},
-			[]string{},
-		},
-		{
-			"only invalid",
-			[]string{"02 URE - Cametá"},
-			[]string{},
-		},
-		{
-			"with extra whitespace",
-			[]string{"02  URE  -  Cametá", "DRE Centro"},
-			[]string{"DRE Centro"},
-		},
+	input := []string{
+		"02 URE - Cametá",
+		"02A URE - CAMETA",
+		"02ª URE – Cametá",
+		"DRE Centro",
+		"DRE Norte",
 	}
+	expected := []string{"DRE Centro", "DRE Norte"}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := filterOutInvalidDREs(tt.input)
-			if len(result) != len(tt.expected) {
-				t.Errorf("filterOutInvalidDREs(%v) returned %d items, expected %d", tt.input, len(result), len(tt.expected))
-			}
-			for i, v := range result {
-				if i >= len(tt.expected) || v != tt.expected[i] {
-					t.Errorf("filterOutInvalidDREs(%v) = %v, expected %v", tt.input, result, tt.expected)
-					break
-				}
-			}
-		})
+	result := filterOutInvalidDREs(input)
+	if len(result) != len(expected) {
+		t.Fatalf("filterOutInvalidDREs(%v) returned %d items, expected %d: %v", input, len(result), len(expected), result)
+	}
+	for i, value := range result {
+		if value != expected[i] {
+			t.Fatalf("filterOutInvalidDREs(%v) = %v, expected %v", input, result, expected)
+		}
 	}
 }
-

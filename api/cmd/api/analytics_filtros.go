@@ -300,6 +300,8 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 		app.errorJSON(w, fmt.Errorf("dres: %w", err), http.StatusInternalServerError)
 		return
 	}
+	// Filter out invalid legacy DREs
+	dres = filterOutInvalidDREs(dres)
 
 	// Municípios: filtrados por dre, zona, regiao (não pelo próprio municipio)
 	municipiosWhere, municipiosArgs := filtrosOpcoesSchoolsWhereWithAuthorization(f, "s", "municipio", authorizedDRE)

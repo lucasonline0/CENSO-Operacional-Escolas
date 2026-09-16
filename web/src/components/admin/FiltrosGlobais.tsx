@@ -208,9 +208,22 @@ export function FiltrosGlobais({
 }) {
   const isDreUser = profile?.role === "dre";
 
+  // DRE user's enforced dre filter does not count in activeCount
   const activeCount = useMemo(
-    () => Object.values(filters).filter((v) => v !== undefined && v !== "").length,
-    [filters],
+    () => {
+      let count = 0;
+      for (const [key, value] of Object.entries(filters)) {
+        if (value !== undefined && value !== "") {
+          // Skip the DRE filter for any DRE user
+          if (isDreUser && key === "dre") {
+            continue;
+          }
+          count++;
+        }
+      }
+      return count;
+    },
+    [filters, isDreUser],
   );
 
   function set(key: keyof DashboardFilters, raw: string | number | undefined) {
@@ -322,8 +335,8 @@ export function FiltrosGlobais({
           {filters.regiao_integracao && (
             <ActiveTag label={`Região: ${filters.regiao_integracao}`} onRemove={() => set("regiao_integracao", "")} />
           )}
-          {filters.dre && (
-            <ActiveTag label={`DRE: ${filters.dre}`} onRemove={isDreUser ? undefined : () => set("dre", "")} />
+          {filters.dre && !isDreUser && (
+            <ActiveTag label={`DRE: ${filters.dre}`} onRemove={() => set("dre", "")} />
           )}
           {filters.municipio && (
             <ActiveTag label={`Município: ${filters.municipio}`} onRemove={() => set("municipio", "")} />

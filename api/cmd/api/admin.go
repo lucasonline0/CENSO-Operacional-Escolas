@@ -785,7 +785,8 @@ func (app *application) AdminCreateDRE(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// AdminListDREs lista todas as DREs cadastradas (exclusivo para role=admin).
+// AdminListDREs lista todas as DREs cadastradas, excluindo DREs legadas inválidas
+// (exclusivo para role=admin).
 func (app *application) AdminListDREs(w http.ResponseWriter, r *http.Request) {
 	scope, ok := GetAdminAccessScope(r.Context())
 	if !ok || scope.Role != RoleAdmin {
@@ -802,11 +803,20 @@ func (app *application) AdminListDREs(w http.ResponseWriter, r *http.Request) {
 		dres = []*models.DRE{}
 	}
 
+	// Filter out invalid legacy DREs
+	filtered := make([]*models.DRE, 0, len(dres))
+	for _, dre := range dres {
+		if !isInvalidLegacyDRE(dre.Nome) {
+			filtered = append(filtered, dre)
+		}
+	}
+
 	app.writeJSON(w, http.StatusOK, jsonResponse{
 		Error: false,
-		Data:  dres,
+		Data:  filtered,
 	})
 }
+
 
 // AdminUpdateDRE atualiza os dados de uma DRE existente (exclusivo para role=admin).
 func (app *application) AdminUpdateDRE(w http.ResponseWriter, r *http.Request) {

@@ -5,7 +5,7 @@ import {
   LogOut, RefreshCw, AlertCircle, Loader2, PanelLeftClose, BarChart2,
   UsersRound, MonitorSmartphone, ShieldCheck, Utensils,
   ClipboardCheck, Activity, Landmark, Database, MapPinned,
-  Menu, X, ChevronDown, HeartPulse,
+  Menu, X, ChevronDown, HeartPulse, KeyRound,
   MonitorPlay,
   Sun,
   Moon,
@@ -32,6 +32,7 @@ import { AbaServicosTerceirizados } from "@/components/admin/AbaServicosTerceiri
 import { AbaGestaoFinanceiraGovernanca } from "@/components/admin/AbaGestaoFinanceiraGovernanca";
 import { AbaSaudeOperacionalEscolas } from "@/components/admin/AbaSaudeOperacionalEscolas";
 import { AbaGestaoDres } from "@/components/admin/AbaGestaoDres";
+import { ChangeOwnPasswordModal } from "@/components/admin/shared/ChangeOwnPasswordModal";
 import { FiltrosGlobais } from "@/components/admin/FiltrosGlobais";
 import PresentationMode from "@/components/admin/PresentationMode";
 import type {
@@ -510,7 +511,7 @@ function preferredTabForProfile(profile: AdminProfile): Tab {
   return "census";
 }
 
-function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
+function Dashboard({ token, onLogout, onTokenRefresh }: { token: string; onLogout: () => void; onTokenRefresh: (token: string) => void }) {
   const [profile, setProfile] = useState<AdminProfile | null>(null);
   const hasCapability = useCallback(
     (permission: AdminPermission) => profileHasCapability(profile, permission),
@@ -537,6 +538,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const [filtrosOpcoes, setFiltrosOpcoes] = useState<FiltrosOpcoes | null>(null);
   const [presentationMode, setPresentationMode] = useState(false);
   const [showMobilePresAlert, setShowMobilePresAlert] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const [dataVersion, setDataVersion] = useState(0);
   const handleDataChanged = useCallback(() => setDataVersion((v) => v + 1), []);
 
@@ -884,6 +886,11 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 <MonitorPlay size={16} />
                 <span>Modo Apresentação</span>
               </button>}
+              {profile?.role !== "admin" && (
+                <button className="ca-icon-btn" title="Alterar minha senha" onClick={() => setShowChangePassword(true)}>
+                  <KeyRound size={16} />
+                </button>
+              )}
               <button className="ca-icon-btn" title="Mudar tema" onClick={() => setDark(!dark)}>
                 {
                   dark
@@ -1024,6 +1031,18 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         />
       )}
 
+      <ChangeOwnPasswordModal
+        isOpen={showChangePassword}
+        token={token}
+        onClose={() => setShowChangePassword(false)}
+        onSuccess={(freshToken) => {
+          saveToken(freshToken);
+          clearApiCache();
+          setShowChangePassword(false);
+          onTokenRefresh(freshToken);
+        }}
+      />
+
       {showMobilePresAlert && (
         <div className="ca-mobile-pres-overlay" onClick={() => setShowMobilePresAlert(false)}>
           <div className="ca-mobile-pres-popup" onClick={(e) => e.stopPropagation()}>
@@ -1062,5 +1081,11 @@ export default function AdminPage() {
   }, []);
   if (!auth.ready) return null;
   if (!auth.token) return <LoginForm onLogin={(t) => setAuth({ token: t, ready: true })} />;
-  return <Dashboard token={auth.token} onLogout={() => setAuth({ token: null, ready: true })} />;
+  return (
+    <Dashboard
+      token={auth.token}
+      onLogout={() => setAuth({ token: null, ready: true })}
+      onTokenRefresh={(token) => setAuth({ token, ready: true })}
+    />
+  );
 }

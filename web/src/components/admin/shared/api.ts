@@ -176,6 +176,22 @@ export async function resetAdminUserPassword(
   });
 }
 
+export async function changeOwnPassword(
+  token: string,
+  currentPassword: string,
+  newPassword: string,
+  confirmPassword: string
+): Promise<{ token: string; expires_in: number }> {
+  return apiMutation<{ token: string; expires_in: number }>("/v1/admin/me/change-password", token, {
+    method: "POST",
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+      confirm_password: confirmPassword,
+    }),
+  });
+}
+
 
 // Dispara todos os endpoints do dashboard em paralelo e armazena no cache.
 // Chamado durante o login para que as abas abram instantaneamente.

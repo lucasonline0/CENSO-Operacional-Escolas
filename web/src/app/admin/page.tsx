@@ -154,7 +154,7 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
     try {
       const res = await fetch(`${API}/v1/admin/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: u, password: p }) });
       const json = await res.json() as { code?: string; message?: string; data?: { token?: string; challenge_token?: string } };
-      if (json.code === "PASSWORD_SETUP_REQUIRED" && json.data?.challenge_token) {
+      if ((json.code === "PASSWORD_SETUP_REQUIRED" || res.status === 403) && json.data?.challenge_token) {
         setPasswordSetupChallenge(json.data.challenge_token);
         setPassword("");
         setStatus("idle");

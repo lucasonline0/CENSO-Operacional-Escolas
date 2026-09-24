@@ -94,7 +94,7 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
 
     try {
       const [dreData, userData] = await Promise.all([
-        (canManageDres || canCreateUsers) ? fetchDREs(token) : Promise.resolve([] as DREItem[]),
+        (canManageDres || canCreateUsers || canReadUsers) ? fetchDREs(token) : Promise.resolve([] as DREItem[]),
         canReadUsers ? fetchAdminUsers(token) : Promise.resolve([] as AdminUserItem[]),
       ]);
       setDres(dreData);
@@ -186,6 +186,7 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
   }
 
   async function handleToggleDreStatus(dre: DREItem, nextActive: boolean) {
+    if (!canManageDres) return;
     setTogglingDreId(dre.id);
     setDres((current) => current.map((item) => item.id === dre.id ? { ...item, ativa: nextActive } : item));
     try {
@@ -204,6 +205,7 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
   }
 
   async function handleToggleUserStatus(user: AdminUserItem, nextActive: boolean) {
+    if (!canManageUsers) return;
     setTogglingUserId(user.id);
     setUsers((current) => current.map((item) => item.id === user.id ? { ...item, active: nextActive } : item));
     try {
@@ -288,7 +290,7 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
   }
 
   function handleResetFromAccessViewer() {
-    if (!userToViewAccess) return;
+    if (!userToViewAccess || !canResetPasswords) return;
     const selectedUser = userToViewAccess;
     setUserToViewAccess(null);
     setUserToResetPass(selectedUser);
@@ -347,10 +349,10 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
         </div>
       </section>
 
-      {!hasActiveDres && !loading && (
+      {!hasActiveDres && !loading && canCreateUsers && (
         <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span>Nenhuma DRE está ativa. Ative uma regional antes de criar novos usuários.</span>
+          <span>Nenhuma DRE está disponível no seu escopo. Contas globais ainda podem ser criadas se sua conta puder delegar escopo global.</span>
         </div>
       )}
 
@@ -487,11 +489,11 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
                         <td className="text-center">
                           {linkedUsers.length > 0 ? <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700"><UsersRound size={12} />{linkedUsers.length} {linkedUsers.length === 1 ? "usuário" : "usuários"}{activeLinkedUsers !== linkedUsers.length && <span className="text-slate-400">· {activeLinkedUsers} ativos</span>}</span> : <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">Sem usuário</span>}
                         </td>
-                        <td className="text-center"><QuickStatusToggle checked={dre.ativa} loading={togglingDreId === dre.id} onChange={(next) => handleToggleDreStatus(dre, next)} activeLabel="Ativa" inactiveLabel="Inativa" size="sm" /></td>
+                        <td className="text-center">{canManageDres ? <QuickStatusToggle checked={dre.ativa} loading={togglingDreId === dre.id} onChange={(next) => handleToggleDreStatus(dre, next)} activeLabel="Ativa" inactiveLabel="Inativa" size="sm" /> : <span className="text-xs font-medium text-slate-500">{dre.ativa ? "Ativa" : "Inativa"}</span>}</td>
                         <td className="text-right">
                           <div className="inline-flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
-                            <button type="button" onClick={(event) => openNewUser(dre.id, event)} disabled={!dre.ativa} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35" title={dre.ativa ? "Adicionar usuário" : "Ative a DRE para adicionar usuário"}><UserPlus size={14} /></button>
-                            <button type="button" onClick={(event) => openEditDre(dre, event)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50" title="Editar DRE"><Pencil size={14} /></button>
+                            {canCreateUsers && <button type="button" onClick={(event) => openNewUser(dre.id, event)} disabled={!dre.ativa} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35" title={dre.ativa ? "Adicionar conta" : "DRE inativa"}><UserPlus size={14} /></button>}
+                            {canManageDres && <button type="button" onClick={(event) => openEditDre(dre, event)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50" title="Editar DRE"><Pencil size={14} /></button>}
                           </div>
                         </td>
                       </tr>
@@ -525,7 +527,7 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
                                           <td className="text-xs text-slate-500">{formatDate(user.created_at)}</td>
                                           <td className="text-center">
                                             <div className="flex flex-col items-center gap-1.5">
-                                              <QuickStatusToggle checked={user.active} loading={togglingUserId === user.id} onChange={(next) => handleToggleUserStatus(user, next)} activeLabel="Ativo" inactiveLabel="Inativo" size="sm" />
+                                              {canManageUsers ? <QuickStatusToggle checked={user.active} loading={togglingUserId === user.id} onChange={(next) => handleToggleUserStatus(user, next)} activeLabel="Ativo" inactiveLabel="Inativo" size="sm" /> : <span className="text-xs text-slate-500">{user.active ? "Ativo" : "Inativo"}</span>}
                                               <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${!user.active ? "border-slate-200 bg-slate-100 text-slate-500" : user.must_change_password ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
                                                 {!user.active ? "Usuário inativo" : user.must_change_password ? "Primeiro acesso pendente" : "Acesso ativo"}
                                               </span>
@@ -540,13 +542,13 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
                                               >
                                                 <Eye size={13} />Ver acesso
                                               </button>
-                                              <button
+                                              {canResetPasswords && (<button
                                                 type="button"
                                                 onClick={(event) => { event.stopPropagation(); setUserToResetPass(user); }}
                                                 className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
                                               >
                                                 <KeyRound size={13} />Redefinir senha
-                                              </button>
+                                              </button>)}
                                             </div>
                                           </td>
                                         </tr>
@@ -568,7 +570,7 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
         )}
       </section>
 
-      <DreFormModal isOpen={isDreModalOpen} onClose={() => setIsDreModalOpen(false)} onSuccess={handleDreSuccess} token={token} dreToEdit={dreToEdit} />
+      {canManageDres && <DreFormModal isOpen={isDreModalOpen} onClose={() => setIsDreModalOpen(false)} onSuccess={handleDreSuccess} token={token} dreToEdit={dreToEdit} />}
       <UserFormModal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} onSuccess={handleUserSuccess} token={token} dres={dres} preselectedDreId={preselectedDreIdForUser} creator={profile} />
 
       {userToViewAccess && (
@@ -580,7 +582,7 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
           username={userToViewAccess.username}
           email={userToViewAccess.email}
           dre={userToViewAccess.dre}
-          onResetPassword={handleResetFromAccessViewer}
+          onResetPassword={canResetPasswords ? handleResetFromAccessViewer : undefined}
         />
       )}
 

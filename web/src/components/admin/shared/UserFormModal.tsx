@@ -77,6 +77,9 @@ export function UserFormModal({
     [creator, creatorIsAdmin],
   );
   const canGrantAllScope = creatorIsAdmin || creator?.data_scope?.type === "all";
+  const canGrantReadPreset = READ_PERMISSIONS.every((permission) => creatorPermissions.has(permission));
+  const canGrantDrePreset = canGrantReadPreset && activeDres.length > 0;
+  const canGrantGlobalPreset = canGrantReadPreset && canGrantAllScope;
   const grantableOptions = useMemo(
     () => PERMISSION_OPTIONS.filter((option) => creatorPermissions.has(option.id)),
     [creatorPermissions],
@@ -89,18 +92,19 @@ export function UserFormModal({
     const firstDre = firstId == null ? undefined : activeDres.find((d) => d.id === firstId);
     const defaultReads = READ_PERMISSIONS.filter((permission) => creatorPermissions.has(permission));
 
-    setPreset("dre");
+    const initialPreset: Preset = canGrantDrePreset ? "dre" : "custom";
+    setPreset(initialPreset);
     setDataScope("selected");
     setSelectedDreIds(firstId == null ? [] : [firstId]);
     setPermissions(defaultReads);
-    setUsername(suggestedUsername(firstDre));
+    setUsername(initialPreset === "dre" ? suggestedUsername(firstDre) : "");
     setEmail("");
     setPassword(generateSecurePassword(12));
     setShowPassword(true);
     setLoading(false);
     setCopied(false);
     setError(preselectedDreId != null && !preselectedValid ? "A DRE selecionada não está disponível no seu escopo." : "");
-  }, [isOpen, preselectedDreId, activeDres, creatorPermissions]);
+  }, [isOpen, preselectedDreId, activeDres, creatorPermissions, canGrantDrePreset]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -118,6 +122,11 @@ export function UserFormModal({
     const readSubset = READ_PERMISSIONS.filter((permission) => creatorPermissions.has(permission));
 
     if (next === "dre") {
+      if (!canGrantDrePreset) {
+        setError("Seu perfil não pode delegar o pacote completo de leitura de uma conta DRE.");
+        setPreset("custom");
+        return;
+      }
       const id = selectedDreIds[0] ?? activeDres[0]?.id;
       setDataScope("selected");
       setSelectedDreIds(id ? [id] : []);
@@ -127,8 +136,8 @@ export function UserFormModal({
     }
 
     if (next === "global") {
-      if (!canGrantAllScope) {
-        setError("Seu perfil não pode delegar acesso global.");
+      if (!canGrantGlobalPreset) {
+        setError("Seu perfil não pode delegar o pacote completo de consulta global.");
         setPreset("custom");
         return;
       }
@@ -235,7 +244,7 @@ export function UserFormModal({
               <button
                 key={id}
                 type="button"
-                disabled={id === "global" && !canGrantAllScope}
+                disabled={(id === "dre" && !canGrantDrePreset) || (id === "global" && !canGrantGlobalPreset)}
                 onClick={() => applyPreset(id)}
                 className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${preset === id ? "border-blue-400 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600"} disabled:cursor-not-allowed disabled:opacity-40`}
               >

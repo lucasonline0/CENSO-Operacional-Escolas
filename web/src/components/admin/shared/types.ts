@@ -55,11 +55,31 @@ export interface CaracterizacaoPerfilPg {
   por_zona:              CaracterizacaoZonaPg[];
   matriculas_por_porte:  CaracterizacaoMatPortePg[];
 }
+export type AdminPermission =
+  | "census.read"
+  | "analytics.read"
+  | "reports.read"
+  | "users.read"
+  | "users.create"
+  | "users.manage"
+  | "users.reset_password"
+  | "dres.manage"
+  | "schools.manage_dre"
+  | "sync.execute";
+
+export interface AdminDataScope {
+  type: "all" | "selected";
+  dre_ids: number[];
+}
+
 export interface AdminProfile {
   username: string;
-  role: "admin" | "dre";
+  role: "admin" | "dre" | "custom";
   dre: string | null;
   dre_id: number | null;
+  permissions: AdminPermission[];
+  data_scope: AdminDataScope;
+  must_change_password: boolean;
 }
 
 export interface DREItem {
@@ -80,11 +100,14 @@ export interface AdminUserItem {
   id: number;
   username: string;
   email: string;
-  role: "admin" | "dre";
+  role: "admin" | "dre" | "custom";
   dre: string;
   dre_id: number | null;
   active: boolean;
   must_change_password: boolean;
+  permissions?: AdminPermission[];
+  data_scope?: "all" | "selected";
+  dre_ids?: number[];
   created_at: string;
   updated_at: string;
 }

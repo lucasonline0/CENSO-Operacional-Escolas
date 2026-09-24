@@ -69,7 +69,7 @@ function FirstAccessForm({ challenge, onComplete, onBack }: { challenge: string;
       saveToken(token);
       try {
         const profile = await fetchAdminMeFresh(token);
-        await prefetchDashboard(token, profile.role);
+        await prefetchDashboard(token, profile);
       } catch (validationError) {
         clearToken();
         clearApiCache();
@@ -167,7 +167,7 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
       setStatus("prefetch");
       try {
         const prof = await fetchAdminMeFresh(token);
-        await prefetchDashboard(token, prof.role);
+        await prefetchDashboard(token, prof);
       } catch (validationError) {
         clearToken();
         clearApiCache();
@@ -490,6 +490,17 @@ function NavGroup({
 
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [profile, setProfile] = useState<AdminProfile | null>(null);
+  const hasCapability = useCallback((permission: string) => (
+    profile?.role === "admin" || profile?.permissions?.includes(permission as never) === true
+  ), [profile]);
+  const canAccessManagement =
+    hasCapability("users.read") ||
+    hasCapability("users.create") ||
+    hasCapability("users.manage") ||
+    hasCapability("users.reset_password") ||
+    hasCapability("dres.manage") ||
+    hasCapability("schools.manage_dre");
+  const canSync = hasCapability("sync.execute");
   const [censusPage, setCensusPage] = useState<CensusPage | null>(null);
   const [tab, setTab] = useState<Tab>("perfil");
   const [filterStatus, setFilterStatus] = useState("");
@@ -537,7 +548,14 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
       const prev = profileRef.current;
       const identityChanged =
         prev !== null &&
-        (prev.username !== fresh.username || prev.role !== fresh.role || prev.dre !== fresh.dre || prev.dre_id !== fresh.dre_id);
+        (
+          prev.username !== fresh.username ||
+          prev.role !== fresh.role ||
+          prev.dre !== fresh.dre ||
+          prev.dre_id !== fresh.dre_id ||
+          JSON.stringify(prev.permissions) !== JSON.stringify(fresh.permissions) ||
+          JSON.stringify(prev.data_scope) !== JSON.stringify(fresh.data_scope)
+        );
       if (identityChanged) {
         setFilters({});
         setFiltrosOpcoes(null);
@@ -684,7 +702,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   };
 
   const handleNav = (id: Tab) => {
-    if (id === "gestao" && profile?.role !== "admin") return;
+    if (id === "gestao" && !canAccessManagement) return;
     setTab(id);
     updateSearch("");
     setVisited((prev) => new Set([...prev, id]));
@@ -753,14 +771,14 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             <NavGroup items={NAV_OPERACIONAL} active={tab} onNav={handleNav} mobileOpen={mobileNavOpen} />
           </div>
 
-          {profile?.role === "admin" && (
+          {canAccessManagement && (
             <div className="ca-nav-group">
               <div className="ca-nav-group-label">Administração</div>
               <NavGroup items={NAV_ADMIN} active={tab} onNav={handleNav} mobileOpen={mobileNavOpen} />
             </div>
           )}
 
-          {profile?.role !== "dre" && (
+          {canSync && (
             <div className="ca-side-footer" onClick={handleSync} style={{ cursor: "pointer" }}>
               <div className="ca-sf-icon">
                 <RefreshCw size={16} className={syncing ? "animate-spin" : ""} />
@@ -923,7 +941,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               </div>
             )}
 
-            {profile?.role === "admin" && visited.has("gestao") && (
+            {canAccessManagement && visited.has("gestao") && (
               <div style={{ display: tab === "gestao" ? undefined : "none" }}>
                 <AbaGestaoDres token={token} onUnauth={logout} onDataChanged={handleDataChanged} />
               </div>

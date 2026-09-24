@@ -200,3 +200,29 @@ func TestAdminUserListIncludesCustomAuthorization(t *testing.T) {
 		t.Fatalf("permissions missing from list: %+v", got.Permissions)
 	}
 }
+
+
+func TestRegionalPresetDelegationRequiresReadCapabilitiesAndTerritory(t *testing.T) {
+	perms := permissionsMap([]string{
+		PermissionUsersCreate,
+		PermissionCensusRead,
+		PermissionAnalyticsRead,
+		PermissionReportsRead,
+	})
+	actor := AdminAccessScope{
+		Role: "custom", DataScope: "selected",
+		permissions: &perms, dreIDs: newDREIDs([]int{3}),
+	}
+	if !canDelegateRegionalAccount(actor, 3) {
+		t.Fatal("regional preset inside the actor scope should be delegable")
+	}
+	if canDelegateRegionalAccount(actor, 7) {
+		t.Fatal("regional preset outside the actor scope was allowed")
+	}
+
+	limited := permissionsMap([]string{PermissionUsersCreate, PermissionCensusRead})
+	actor.permissions = &limited
+	if canDelegateRegionalAccount(actor, 3) {
+		t.Fatal("regional preset granted analytics/reports that actor does not own")
+	}
+}

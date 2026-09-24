@@ -1002,6 +1002,10 @@ func (app *application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 		}
+		if !canDelegateRegionalAccount(scope, *req.DREID) {
+			app.errorJSON(w, fmt.Errorf("não é permitido criar uma conta DRE com permissões ou escopo superiores ao próprio"), http.StatusForbidden)
+			return
+		}
 		user, err = app.models.AdminUsers.ProvisionForDREID(r.Context(), req.Username, req.Email, req.Password, req.Role, *req.DREID)
 	} else {
 		// Compatibilidade temporária: clientes antigos ainda podem enviar apenas
@@ -1009,6 +1013,9 @@ func (app *application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		canonical, lookupErr := app.models.DREs.GetByNome(r.Context(), req.DRE)
 		if lookupErr != nil {
 			err = lookupErr
+		} else if !canDelegateRegionalAccount(scope, canonical.ID) {
+			app.errorJSON(w, fmt.Errorf("não é permitido criar uma conta DRE com permissões ou escopo superiores ao próprio"), http.StatusForbidden)
+			return
 		} else {
 			user, err = app.models.AdminUsers.ProvisionForDREID(r.Context(), req.Username, req.Email, req.Password, req.Role, canonical.ID)
 		}

@@ -74,3 +74,13 @@ func canAdministerTarget(actor AdminAccessScope, target *models.RuntimeAdminAcce
 		return false
 	}
 }
+
+
+func canDelegateRegionalAccount(actor AdminAccessScope, dreID int) bool {
+	return canDelegate(
+		actor,
+		[]string{PermissionCensusRead, PermissionAnalyticsRead, PermissionReportsRead},
+		"selected",
+		[]int{dreID},
+	)
+}

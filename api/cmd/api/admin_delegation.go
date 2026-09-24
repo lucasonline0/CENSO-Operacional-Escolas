@@ -1,6 +1,10 @@
 package main
 
-import "strings"
+import (
+	"strings"
+
+	"censo-api/internal/models"
+)
 
 // canDelegate is the server-side anti-escalation rule for every provision
 // request. Empty/unknown capabilities never become implicit grants.
@@ -28,4 +32,45 @@ func canDelegate(actor AdminAccessScope, permissions []string, dataScope string,
 		}
 	}
 	return true
+}
+
+
+func canAdministerTarget(actor AdminAccessScope, target *models.RuntimeAdminAccess) bool {
+	if target == nil {
+		return false
+	}
+	if actor.Role == RoleAdmin && actor.DataScope == "all" {
+		return true
+	}
+	if strings.EqualFold(strings.TrimSpace(actor.Username), strings.TrimSpace(target.Username)) {
+		return false
+	}
+	if target.Role == RoleAdmin {
+		return false
+	}
+	for _, permission := range target.Permissions {
+		if !actor.HasPermission(permission) {
+			return false
+		}
+	}
+	switch target.DataScope {
+	case "all":
+		return actor.DataScope == "all"
+	case "selected":
+		ids := append([]int(nil), target.DREIDs...)
+		if len(ids) == 0 && target.DREID > 0 {
+			ids = []int{target.DREID}
+		}
+		if len(ids) == 0 {
+			return false
+		}
+		for _, id := range ids {
+			if !actor.IsAuthorizedForDREID(id) {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
 }

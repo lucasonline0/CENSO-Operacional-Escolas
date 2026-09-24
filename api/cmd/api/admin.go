@@ -1104,6 +1104,20 @@ func (app *application) AdminUpdateUserStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	target, err := app.models.AdminUsers.GetRuntimeAccessByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, models.ErrUserNotFound) {
+			app.errorJSON(w, fmt.Errorf("usuário não encontrado"), http.StatusNotFound)
+			return
+		}
+		app.errorJSON(w, fmt.Errorf("erro ao validar usuário alvo: %w", err), http.StatusInternalServerError)
+		return
+	}
+	if !canAdministerTarget(scope, target) {
+		app.errorJSON(w, fmt.Errorf("não é permitido gerenciar uma conta com privilégios ou escopo superiores"), http.StatusForbidden)
+		return
+	}
+
 	err = app.models.AdminUsers.SetActiveByID(r.Context(), id, active)
 	if err != nil {
 		if errors.Is(err, models.ErrUserNotFound) {
@@ -1164,6 +1178,20 @@ func (app *application) AdminResetUserPassword(w http.ResponseWriter, r *http.Re
 
 	if len(newPassword) < 12 {
 		app.errorJSON(w, fmt.Errorf("nova senha deve ter no mínimo 12 caracteres"), http.StatusBadRequest)
+		return
+	}
+
+	target, err := app.models.AdminUsers.GetRuntimeAccessByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, models.ErrUserNotFound) {
+			app.errorJSON(w, fmt.Errorf("usuário não encontrado"), http.StatusNotFound)
+			return
+		}
+		app.errorJSON(w, fmt.Errorf("erro ao validar usuário alvo: %w", err), http.StatusInternalServerError)
+		return
+	}
+	if !canAdministerTarget(scope, target) {
+		app.errorJSON(w, fmt.Errorf("não é permitido redefinir a credencial de uma conta com privilégios ou escopo superiores"), http.StatusForbidden)
 		return
 	}
 

@@ -37,11 +37,13 @@ var migrationsFS embed.FS
 const version = "1.1.0"
 
 var criticalAdministrativeMigrations = map[string]struct{}{
-	"0018_create_admin_users.sql":        {},
-	"0019_create_dres_master.sql":        {},
-	"0020_dre_canonical_relations.sql":   {},
-	"0021_dre_normalized_uniqueness.sql": {},
-	"0024_admin_users_auth_version.sql":  {},
+	"0018_create_admin_users.sql":            {},
+	"0019_create_dres_master.sql":            {},
+	"0020_dre_canonical_relations.sql":       {},
+	"0021_dre_normalized_uniqueness.sql":     {},
+	"0024_admin_users_auth_version.sql":      {},
+	"0026_admin_user_email_first_access.sql": {},
+	"0027_admin_user_authorization.sql":      {},
 }
 
 type config struct {
@@ -311,9 +313,12 @@ func (app *application) routes() http.Handler {
 		})
 
 		r.Post("/admin/login", app.AdminLoginRuntime)
+		r.Post("/admin/first-access/password", app.AdminCompleteFirstAccess)
 		r.Group(func(protected chi.Router) {
 			protected.Use(app.requireRuntimeAdminAuth)
+			protected.Use(app.requireRequestCapability)
 			protected.Get("/admin/me", app.AdminMeCanonical)
+			protected.Post("/admin/me/change-password", app.AdminChangeOwnPassword)
 			protected.Get("/admin/dashboard", app.AdminDashboardCanonical)
 			protected.Get("/admin/sheet-metrics", app.AdminSheetMetrics)
 			protected.Get("/admin/indicadores-metrics", app.AdminIndicadoresMetrics)

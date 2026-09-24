@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -103,6 +104,20 @@ func TestProdepWhereSQLNormalizesGeoFilters(t *testing.T) {
 	}
 	if !strings.Contains(prodepWhereSQL, "usar_na_carga = true") {
 		t.Fatalf("prodepWhereSQL deve manter o filtro usar_na_carga = true")
+	}
+	if !strings.Contains(prodepWhereSQL, "zone_s.zona") || !strings.Contains(prodepWhereSQL, "$12") {
+		t.Fatalf("prodepWhereSQL deve aplicar o filtro global de zona pela escola vinculada")
+	}
+}
+
+func TestApplyProdepAccessScopeMapsGlobalYearAndZone(t *testing.T) {
+	req, err := http.NewRequest(http.MethodGet, "/?year=2024&zona=Rural", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := applyProdepAccessScope(req, prodepFilters{})
+	if got.Ano != 2024 || got.Zona != "Rural" {
+		t.Fatalf("filtros globais não propagados: %+v", got)
 	}
 }
 

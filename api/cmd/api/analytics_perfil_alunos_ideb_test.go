@@ -109,7 +109,7 @@ func TestIdebArgsOrder(t *testing.T) {
 	if len(args) != 14 {
 		t.Fatalf("esperava 14 args, obtive %d", len(args))
 	}
-	if args[0] != 2023 || args[1] != "anos_finais" || args[9] != true || args[10] != 42 || args[11] != "15000123" || args[12] != true || args[13] != 77 {
+	if args[0] != 2023 || args[1] != "anos_finais" || args[9] != true || args[10] != 42 || args[11] != "15000123" || args[12] != true || args[13] != "77" {
 		t.Fatalf("ordem dos args inesperada: %+v", args)
 	}
 }

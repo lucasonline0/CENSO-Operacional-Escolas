@@ -1,11 +1,11 @@
 // E2E do lifecycle completo Admin → Perfil DRE contra a stack REAL
 // (PostgreSQL 16 + API Go + Next.js).
 //
-// Cobertura obrigatória da issue #245 (14 cenários serial):
+// Cobertura do lifecycle DRE e do primeiro acesso (14 cenários serial):
 //   1.  Admin autentica e vê rede completa
 //   2.  Admin cria DRE ativa pelo fluxo real
 //   3.  Admin cria usuário regional vinculado à DRE pelo contrato canônico dre_id
-//   4.  Usuário DRE autentica e /admin/me confirma role=dre + dre_id correto
+//   4.  Credencial temporária exige criação/confirmacao de senha antes do dashboard
 //   5.  Admin renomeia DRE e usuário mantém vínculo pelo mesmo ID
 //   6.  Admin renomeia DRE com nome >100 caracteres e funciona pelo ID
 //   7.  Admin desativa usuário → token antigo revogado definitivamente (401)
@@ -15,7 +15,7 @@
 //   11. DRE criada inicialmente inativa não permite provisioning de usuário
 //   12. Reset de senha invalida token anterior imediatamente
 //   13. Senha antiga comprovadamente falha após reset
-//   14. Login com nova senha/identidade não reaproveita estado/cache anterior
+//   14. Reset exige nova troca e não reaproveita estado/cache anterior
 //
 // Execução serial (workers=1, retries=0): login tem rate limit por IP
 // (5 tentativas / 15 min). O fluxo usa exatamente 5 logins no bucket principal.
@@ -40,7 +40,7 @@ let dynamicDreID: number | null = null;
 let dynamicDreToken: string | null = null;
 let dynamicDreTokenRevoked: string | null = null;
 let dynamicUserId: number | null = null;
-let dynamicUserCred: { username: string; password: string } | null = null;
+let dynamicUserCred: { username: string; email: string; password: string } | null = null;
 let previousUserPassword: string | null = null;
 const DRE_LIFECYCLE_NAME = "DRE E2E Lifecycle";
 
@@ -62,19 +62,23 @@ interface DREListItem {
 interface AdminUserRow {
   id: number;
   username: string;
+  email: string;
   role: string;
   dre_id: number;
   dre: string;
   active: boolean;
+  must_change_password: boolean;
 }
 
 interface AdminUserListResponse {
   id: number;
   username: string;
+  email: string;
   role: string;
   dre: string;
   dre_id: number;
   active: boolean;
+  must_change_password: boolean;
 }
 
 interface DrenameEntry {
@@ -132,10 +136,12 @@ test("3 — admin cria usuário regional vinculado à DRE pelo contrato canônic
   expect(dynamicDreID).toBeTruthy();
 
   const username = `e2e.lifecycle.${Date.now()}`;
+  const email = `${username}@example.test`;
   const password = await randomPassword();
 
   const res = await apiRawPost(request, adminToken!, "/v1/admin/users", {
     username,
+    email,
     password,
     role: "dre",
     dre_id: dynamicDreID,
@@ -146,23 +152,57 @@ test("3 — admin cria usuário regional vinculado à DRE pelo contrato canônic
   expect(body.data.dre_id).toBe(dynamicDreID);
   expect(body.data.dre).toBe(DRE_LIFECYCLE_NAME);
   expect(body.data.active).toBe(true);
+  expect(body.data.email).toBe(email);
+  expect(body.data.must_change_password).toBe(true);
 
   dynamicUserId = body.data.id;
-  dynamicUserCred = { username, password };
+  dynamicUserCred = { username, email, password };
 
   const users = await apiGet<Array<AdminUserListResponse>>(request, adminToken!, "/v1/admin/users");
   const found = users.find((u) => u.id === dynamicUserId);
   expect(found).toBeTruthy();
   expect(found!.dre_id).toBe(dynamicDreID);
+  expect(found!.must_change_password).toBe(true);
 });
 
 // ── Teste 4 ───────────────────────────────────────────────────────────────
 
-test("4 — usuário DRE autentica e /admin/me confirma role=dre + dre_id correto", async ({ page, request }) => {
+test("4 — primeiro acesso cria senha antes de liberar dashboard e confirma dre_id", async ({ page, request }) => {
   expect(dynamicUserCred).toBeTruthy();
   expect(dynamicDreID).toBeTruthy();
 
-  dynamicDreToken = await loginViaUI(page, dynamicUserCred!.username, dynamicUserCred!.password);
+  const temporaryPassword = dynamicUserCred!.password;
+  const definitivePassword = await randomPassword();
+
+  await page.goto("/admin/");
+  await page.locator("input[autocomplete='username']").fill(dynamicUserCred!.email);
+  await page.locator("input[autocomplete='current-password']").fill(temporaryPassword);
+  await page.getByRole("button", { name: /Entrar no painel/i }).click();
+
+  await expect(page.getByRole("heading", { name: "Crie sua senha" })).toBeVisible();
+  await expect(page.locator(".ca-sidebar")).toHaveCount(0);
+
+  const newPassword = page.getByLabel("Nova senha", { exact: true });
+  const confirmation = page.getByLabel("Confirmar nova senha", { exact: true });
+  const completeButton = page.getByRole("button", { name: /Criar senha e entrar/i });
+
+  await newPassword.fill("short");
+  await confirmation.fill("different");
+  await expect(page.getByText("As senhas não coincidem.")).toBeVisible();
+  await expect(completeButton).toBeDisabled();
+
+  await confirmation.fill("short");
+  await expect(completeButton).toBeDisabled();
+
+  await newPassword.fill(definitivePassword);
+  await confirmation.fill(definitivePassword);
+  await expect(completeButton).toBeEnabled();
+  await completeButton.click();
+  await expect(page.locator(".ca-sidebar")).toBeVisible();
+
+  dynamicDreToken = await page.evaluate(() => sessionStorage.getItem("censo_admin_token"));
+  expect(dynamicDreToken).toBeTruthy();
+  dynamicUserCred = { ...dynamicUserCred!, password: definitivePassword };
 
   await expect(page.getByText(/Acesso restrito à DRE:/)).toBeVisible();
   const dreFilter = page.getByLabel("DRE");
@@ -172,6 +212,12 @@ test("4 — usuário DRE autentica e /admin/me confirma role=dre + dre_id corret
   expect(me.role).toBe("dre");
   expect(me.dre_id).toBe(dynamicDreID);
   expect(me.dre).toBe(DRE_LIFECYCLE_NAME);
+
+  const temporaryLogin = await request.post(`${apiURL}/v1/admin/login`, {
+    data: { username: dynamicUserCred!.email, password: temporaryPassword },
+    headers: { "X-Forwarded-For": "203.0.113.14" },
+  });
+  expect(temporaryLogin.status()).toBe(401);
 });
 
 // ── Teste 5 ───────────────────────────────────────────────────────────────
@@ -353,6 +399,7 @@ test("11 — DRE criada inicialmente inativa não permite provisioning de usuár
 
   const res = await apiRawPost(request, adminToken!, "/v1/admin/users", {
     username: `e2e.inactive.test.${Date.now()}`,
+    email: `e2e.inactive.${Date.now()}@example.test`,
     password: await randomPassword(),
     role: "dre",
     dre_id: body.data.id,
@@ -408,7 +455,7 @@ test("13 — senha antiga comprovadamente falha após reset", async ({ request }
 
 // ── Teste 14 ──────────────────────────────────────────────────────────────
 
-test("14 — logout/login entre identidades distintas não reaproveita estado/cache", async ({ browser }) => {
+test("14 — reset força nova senha e identidades distintas não reaproveitam cache", async ({ browser }) => {
   expect(adminToken).toBeTruthy();
   expect(dynamicDreTokenRevoked).toBeTruthy();
   expect(dynamicUserCred).toBeTruthy();
@@ -436,13 +483,22 @@ test("14 — logout/login entre identidades distintas não reaproveita estado/ca
   await expect(drePage.locator("input[autocomplete='username']")).toBeVisible();
   await expect(drePage.locator(".ca-sidebar")).toHaveCount(0);
 
-  // Contexto C: login real com a NOVA senha após reset. Além de provar o
-  // cenário 13, garante que o estado dos contextos anteriores não é reutilizado.
+  // Contexto C: a senha do reset é temporária e deve abrir o setup, nunca o painel.
   const freshCtx = await browser.newContext({ baseURL: webURL });
   const freshPage = await freshCtx.newPage();
-  const freshToken = await loginViaUI(
-    freshPage, dynamicUserCred!.username, dynamicUserCred!.password,
-  );
+  await freshPage.goto("/admin/");
+  await freshPage.locator("input[autocomplete='username']").fill(dynamicUserCred!.email);
+  await freshPage.locator("input[autocomplete='current-password']").fill(dynamicUserCred!.password);
+  await freshPage.getByRole("button", { name: /Entrar no painel/i }).click();
+  await expect(freshPage.getByRole("heading", { name: "Crie sua senha" })).toBeVisible();
+  await expect(freshPage.locator(".ca-sidebar")).toHaveCount(0);
+
+  const definitiveAfterReset = await randomPassword();
+  await freshPage.getByLabel("Nova senha", { exact: true }).fill(definitiveAfterReset);
+  await freshPage.getByLabel("Confirmar nova senha", { exact: true }).fill(definitiveAfterReset);
+  await freshPage.getByRole("button", { name: /Criar senha e entrar/i }).click();
+  await expect(freshPage.locator(".ca-sidebar")).toBeVisible();
+  const freshToken = await freshPage.evaluate(() => sessionStorage.getItem("censo_admin_token"));
   expect(freshToken).toBeTruthy();
   await expect(freshPage.locator(".ca-sidebar")).toBeVisible();
   await expect(freshPage.getByText(/Acesso restrito à DRE:/)).toBeVisible();

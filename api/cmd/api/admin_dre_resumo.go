@@ -79,13 +79,19 @@ func buildDRESummaryPayload(dreID int, dre string, year, totalSchools int, total
 // Mantém o endpoint restrito a administradores, como o restante da gestão de
 // DREs. DRE inativa continua consultável; somente ID inexistente retorna 404.
 func (app *application) AdminDRESummary(w http.ResponseWriter, r *http.Request) {
-	if !app.requireAdminDREManagement(w, r) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || !scope.HasPermission(PermissionAnalyticsRead) {
+		app.errorJSON(w, fmt.Errorf("acesso restrito ao resumo analítico"), http.StatusForbidden)
 		return
 	}
 
 	dreID, err := parsePositiveRouteID(r, "id", "ID de DRE")
 	if err != nil {
 		app.errorJSON(w, err, http.StatusBadRequest)
+		return
+	}
+	if scope.DataScope == "selected" && !scope.IsAuthorizedForDREID(dreID) {
+		app.errorJSON(w, fmt.Errorf("DRE fora do escopo autorizado"), http.StatusForbidden)
 		return
 	}
 

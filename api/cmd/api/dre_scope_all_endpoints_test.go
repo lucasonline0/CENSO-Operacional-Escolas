@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -40,7 +41,7 @@ func TestDRECanonicalScopedPredicateIgnoresForgedLegacyTextAndLongName(t *testin
 
 	predicate := schoolDREScopedFilterPredicate("s", "$1", "$2")
 	var count int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM schools s WHERE `+predicate, targetID, "NOME COMPLETAMENTE STALE").Scan(&count); err != nil {
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM schools s WHERE `+predicate, fmt.Sprintf("%d", targetID), "NOME COMPLETAMENTE STALE").Scan(&count); err != nil {
 		t.Fatalf("canonical school predicate: %v", err)
 	}
 	if count != 1 {
@@ -59,11 +60,25 @@ func TestDRECanonicalScopedPredicateIgnoresForgedLegacyTextAndLongName(t *testin
 	// sufficient to identify exactly one row; the text is deliberately wrong.
 	analyticsPredicate := analyticsDREScopedFilterPredicate("school_id", "dre", "$1", "$2")
 	viewQuery := `SELECT COUNT(*) FROM (SELECT id AS school_id, dre FROM schools) v WHERE ` + analyticsPredicate
-	if err := tx.QueryRow(viewQuery, targetID, "STALE VIEW NAME").Scan(&count); err != nil {
+	if err := tx.QueryRow(viewQuery, fmt.Sprintf("%d", targetID), "STALE VIEW NAME").Scan(&count); err != nil {
 		t.Fatalf("canonical analytics predicate: %v", err)
 	}
 	if count != 1 {
 		t.Fatalf("canonical analytics scope count=%d; want 1", count)
+	}
+
+	multiScope := fmt.Sprintf("%d,%d", targetID, otherID)
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM schools s WHERE `+predicate, multiScope, "").Scan(&count); err != nil {
+		t.Fatalf("canonical multi-DRE school predicate: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("canonical multi-DRE school count=%d; want 2", count)
+	}
+	if err := tx.QueryRow(viewQuery, multiScope, "").Scan(&count); err != nil {
+		t.Fatalf("canonical multi-DRE analytics predicate: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("canonical multi-DRE analytics count=%d; want 2", count)
 	}
 }
 

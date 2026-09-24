@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 # Gate E2E de PERFIL DRE contra a STACK REAL (sem mocks):
-# PostgreSQL 16 efêmero + infra/init.sql + API Go (migrations reais 0001-0024
+# PostgreSQL 16 efêmero + infra/init.sql + API Go (migrations reais 0001-0026
 # no startup via applyMigrations) + Next.js production + Playwright.
 # Falha de migration, de startup (API/frontend) ou de qualquer assert da
 # suíte reprova o PR. Artefatos (playwright-report/test-results) são anexados

@@ -5,7 +5,7 @@ import {
   LogOut, RefreshCw, AlertCircle, Loader2, PanelLeftClose, BarChart2,
   UsersRound, MonitorSmartphone, ShieldCheck, Utensils,
   ClipboardCheck, Activity, Landmark, Database, MapPinned,
-  Menu, X, ChevronDown, HeartPulse,
+  Menu, X, ChevronDown, HeartPulse, KeyRound,
   MonitorPlay,
   Sun,
   Moon,
@@ -32,13 +32,107 @@ import { AbaServicosTerceirizados } from "@/components/admin/AbaServicosTerceiri
 import { AbaGestaoFinanceiraGovernanca } from "@/components/admin/AbaGestaoFinanceiraGovernanca";
 import { AbaSaudeOperacionalEscolas } from "@/components/admin/AbaSaudeOperacionalEscolas";
 import { AbaGestaoDres } from "@/components/admin/AbaGestaoDres";
+import { ChangeOwnPasswordModal } from "@/components/admin/shared/ChangeOwnPasswordModal";
 import { FiltrosGlobais } from "@/components/admin/FiltrosGlobais";
 import PresentationMode from "@/components/admin/PresentationMode";
 import type {
-  CensusPage, DashboardData, DashboardFilters, FiltrosOpcoes, AdminProfile,
+  CensusPage, DashboardData, DashboardFilters, FiltrosOpcoes, AdminProfile, AdminPermission,
 } from "@/components/admin/shared/types";
 
 // ─── Login ────────────────────────────────────────────────────────────────────
+
+function FirstAccessForm({ challenge, onComplete, onBack }: { challenge: string; onComplete: (token: string) => void; onBack: () => void }) {
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const valid = newPassword.length >= 12 && newPassword === confirmPassword;
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!valid || loading) return;
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${API}/v1/admin/first-access/password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${challenge}` },
+        body: JSON.stringify({ new_password: newPassword, confirm_password: confirmPassword }),
+      });
+      const payload = await response.json() as { message?: string; data?: { token?: string } };
+      const token = payload.data?.token;
+      if (!response.ok || !token) {
+        setError(payload.message ?? "Não foi possível criar a nova senha.");
+        return;
+      }
+      saveToken(token);
+      try {
+        const profile = await fetchAdminMeFresh(token);
+        await prefetchDashboard(token, profile);
+      } catch (validationError) {
+        clearToken();
+        clearApiCache();
+        setError((validationError as Error).message === "UNAUTHORIZED"
+          ? "A sessão foi revogada antes da conclusão do acesso. Entre novamente."
+          : "Não foi possível validar a nova sessão.");
+        return;
+      }
+      onComplete(token);
+    } catch {
+      setError("Não foi possível conectar ao servidor.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="censo-admin">
+      <main className="login">
+        <div className="login__left">
+          <div className="login__left-circle login__left-circle--lg" aria-hidden="true" />
+          <div className="login__left-circle login__left-circle--sm" aria-hidden="true" />
+          <div className="login__left-inner">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="login__left-logo" src="/logo-horizontal-letter-white.png" alt="FADEP · Secretaria de Educação · Governo do Pará" />
+            <div className="login__left-brand"><h1 className="login__left-title">Censo SEDUC</h1><p className="login__left-subtitle">Operacional e Estrutural</p></div>
+          </div>
+        </div>
+        <div className="login__right">
+          <div className="login__form-wrapper">
+            <div className="login__form-header">
+              <span className="login__mobile-app">Censo SEDUC</span>
+              <h2 className="login__heading">Crie sua senha</h2>
+              <p className="login__subheading">A credencial inicial é temporária. Defina uma senha definitiva para acessar o painel.</p>
+            </div>
+            <form className="login__form" onSubmit={submit} noValidate>
+              <label className="login__field">
+                <span className="login__label" id="new-password-label">Nova senha</span>
+                <div className="login__input-wrap">
+                  <input id="new-password" aria-labelledby="new-password-label" type={showNew ? "text" : "password"} autoComplete="new-password" maxLength={128} className="login__input" disabled={loading} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+                  <button type="button" className="login__input-toggle" aria-label={showNew ? "Ocultar nova senha" : "Mostrar nova senha"} onClick={() => setShowNew((value) => !value)}>{showNew ? "Ocultar" : "Mostrar"}</button>
+                </div>
+                <span className="text-xs text-slate-500">Use no mínimo 12 caracteres.</span>
+              </label>
+              <label className="login__field">
+                <span className="login__label" id="confirm-new-password-label">Confirmar nova senha</span>
+                <div className="login__input-wrap">
+                  <input id="confirm-new-password" aria-labelledby="confirm-new-password-label" type={showConfirm ? "text" : "password"} autoComplete="new-password" maxLength={128} className="login__input" disabled={loading} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
+                  <button type="button" className="login__input-toggle" aria-label={showConfirm ? "Ocultar confirmação" : "Mostrar confirmação"} onClick={() => setShowConfirm((value) => !value)}>{showConfirm ? "Ocultar" : "Mostrar"}</button>
+                </div>
+              </label>
+              {confirmPassword && newPassword !== confirmPassword && <p className="login__error">As senhas não coincidem.</p>}
+              {error && <p className="login__error">{error}</p>}
+              <button type="submit" className="login__button" disabled={!valid || loading}>{loading ? <><Loader2 size={16} className="animate-spin" />Criando senha…</> : "Criar senha e entrar"}</button>
+              {error && <button type="button" className="text-sm font-semibold text-slate-600" onClick={onBack}>Voltar ao login</button>}
+            </form>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
 
 function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
   const [username, setUsername] = useState("");
@@ -47,6 +141,7 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
   const [error, setError] = useState("");
   const [status, setStatus] = useState<"idle" | "auth" | "prefetch">("idle");
   const [attempts, setAttempts] = useState(0);
+  const [passwordSetupChallenge, setPasswordSetupChallenge] = useState("");
   const blocked = attempts >= 5;
   const loading = status !== "idle";
 
@@ -54,27 +149,41 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
     e.preventDefault();
     if (blocked) return;
     setError(""); setStatus("auth");
-    const u = sanitize(username).slice(0, 64);
+    const u = sanitize(username).slice(0, 254);
     const p = sanitize(password).slice(0, 128);
     if (!u || !p) { setError("Preencha usuário e senha."); setStatus("idle"); return; }
     try {
       const res = await fetch(`${API}/v1/admin/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: u, password: p }) });
-      const json = await res.json();
+      const json = await res.json() as { code?: string; message?: string; data?: { token?: string; challenge_token?: string } };
+      if ((json.code === "PASSWORD_SETUP_REQUIRED" || res.status === 403) && json.data?.challenge_token) {
+        setPasswordSetupChallenge(json.data.challenge_token);
+        setPassword("");
+        setStatus("idle");
+        return;
+      }
       if (!res.ok) { setAttempts((a) => a + 1); setError(json.message ?? "Credenciais inválidas."); setStatus("idle"); return; }
-      const token = (json.data as { token: string }).token;
+      const token = json.data?.token;
+      if (!token) throw new Error("token ausente");
       saveToken(token);
       setStatus("prefetch");
       try {
         const prof = await fetchAdminMeFresh(token);
-        await prefetchDashboard(token, prof.role);
-      } catch {
-        // Um 401 aqui (raro: falha entre login e /admin/me) limpa token/cache
-        // em apiFetch; re-grava o token para o mont do dashboard revalidar.
-        saveToken(token);
-        await prefetchDashboard(token);
+        await prefetchDashboard(token, prof);
+      } catch (validationError) {
+        clearToken();
+        clearApiCache();
+        setError((validationError as Error).message === "UNAUTHORIZED"
+          ? "A sessão foi revogada. Entre novamente."
+          : "Não foi possível validar a sessão.");
+        setStatus("idle");
+        return;
       }
       onLogin(token);
     } catch { setError("Não foi possível conectar ao servidor."); setStatus("idle"); }
+  }
+
+  if (passwordSetupChallenge) {
+    return <FirstAccessForm challenge={passwordSetupChallenge} onComplete={onLogin} onBack={() => { setPasswordSetupChallenge(""); setError(""); }} />;
   }
 
   return (
@@ -111,7 +220,7 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
             <form className="login__form" onSubmit={submit} noValidate>
               {/* Usuário */}
               <label className="login__field">
-                <span className="login__label">Usuário</span>
+                <span className="login__label">E-mail ou usuário</span>
                 <div className="login__input-wrap">
                   <span className="login__input-icon" aria-hidden="true">
                     <svg viewBox="0 0 20 20" fill="none">
@@ -120,7 +229,7 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
                     </svg>
                   </span>
                   <input
-                    type="text" autoComplete="username" maxLength={64}
+                    type="text" autoComplete="username" maxLength={254}
                     className="login__input login__input--icon"
                     disabled={loading || blocked} value={username}
                     onChange={(e) => setUsername(e.target.value)}
@@ -380,8 +489,38 @@ function NavGroup({
   );
 }
 
-function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
+function profileHasCapability(profile: AdminProfile | null | undefined, permission: AdminPermission): boolean {
+  return profile?.role === "admin" || profile?.permissions?.includes(permission) === true;
+}
+
+function profileCanManageAccess(profile: AdminProfile | null | undefined): boolean {
+  return (
+    profileHasCapability(profile, "users.read") ||
+    profileHasCapability(profile, "users.create") ||
+    profileHasCapability(profile, "users.manage") ||
+    profileHasCapability(profile, "users.reset_password") ||
+    profileHasCapability(profile, "dres.manage") ||
+    profileHasCapability(profile, "schools.manage_dre")
+  );
+}
+
+function preferredTabForProfile(profile: AdminProfile): Tab {
+  if (profileHasCapability(profile, "analytics.read")) return "perfil";
+  if (profileHasCapability(profile, "census.read")) return "census";
+  if (profileCanManageAccess(profile)) return "gestao";
+  return "census";
+}
+
+function Dashboard({ token, onLogout, onTokenRefresh }: { token: string; onLogout: () => void; onTokenRefresh: (token: string) => void }) {
   const [profile, setProfile] = useState<AdminProfile | null>(null);
+  const hasCapability = useCallback(
+    (permission: AdminPermission) => profileHasCapability(profile, permission),
+    [profile],
+  );
+  const canReadAnalytics = hasCapability("analytics.read");
+  const canReadCensus = hasCapability("census.read");
+  const canAccessManagement = profileCanManageAccess(profile);
+  const canSync = hasCapability("sync.execute");
   const [censusPage, setCensusPage] = useState<CensusPage | null>(null);
   const [tab, setTab] = useState<Tab>("perfil");
   const [filterStatus, setFilterStatus] = useState("");
@@ -399,6 +538,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const [filtrosOpcoes, setFiltrosOpcoes] = useState<FiltrosOpcoes | null>(null);
   const [presentationMode, setPresentationMode] = useState(false);
   const [showMobilePresAlert, setShowMobilePresAlert] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const [dataVersion, setDataVersion] = useState(0);
   const handleDataChanged = useCallback(() => setDataVersion((v) => v + 1), []);
 
@@ -429,7 +569,14 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
       const prev = profileRef.current;
       const identityChanged =
         prev !== null &&
-        (prev.username !== fresh.username || prev.role !== fresh.role || prev.dre !== fresh.dre || prev.dre_id !== fresh.dre_id);
+        (
+          prev.username !== fresh.username ||
+          prev.role !== fresh.role ||
+          prev.dre !== fresh.dre ||
+          prev.dre_id !== fresh.dre_id ||
+          JSON.stringify(prev.permissions) !== JSON.stringify(fresh.permissions) ||
+          JSON.stringify(prev.data_scope) !== JSON.stringify(fresh.data_scope)
+        );
       if (identityChanged) {
         setFilters({});
         setFiltrosOpcoes(null);
@@ -439,12 +586,23 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         }
       }
       setProfile(fresh);
+      const currentTab = tab;
+      const analyticsTabs: Tab[] = ["perfil", "pessoal", "tecnologia", "infraestrutura", "merenda", "servicos", "alunos", "governanca", "saude", "dre"];
+      const tabAllowed =
+        (analyticsTabs.includes(currentTab) && profileHasCapability(fresh, "analytics.read")) ||
+        (currentTab === "census" && profileHasCapability(fresh, "census.read")) ||
+        (currentTab === "gestao" && profileCanManageAccess(fresh));
+      if (!tabAllowed) {
+        const nextTab = preferredTabForProfile(fresh);
+        setTab(nextTab);
+        setVisited(new Set<Tab>([nextTab]));
+      }
     } catch (e) {
       if ((e as Error).message === "UNAUTHORIZED") { logout(); return; }
     } finally {
       revalidatingRef.current = false;
     }
-  }, [token, logout]);
+  }, [token, logout, tab]);
 
   // Heartbeat de sessão: valida a sessão na rede a cada intervalo e ao retornar
   // à aba/janela (visibilitychange/focus). Qualquer revogação remota encerra a
@@ -510,18 +668,26 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
          const userProfile = await fetchAdminMeFresh(token);
          if (!active) return;
          setProfile(userProfile);
-        profileRef.current = userProfile;
-        
+         profileRef.current = userProfile;
+         const initialTab = preferredTabForProfile(userProfile);
+         setTab(initialTab);
+         setVisited(new Set<Tab>([initialTab]));
+
          if (userProfile.role === "dre" && userProfile.dre) {
-            setFilters((prev) => ({ ...prev, dre: userProfile.dre ?? undefined }));
+           setFilters((prev) => ({ ...prev, dre: userProfile.dre ?? undefined }));
+         }
+         if (profileHasCapability(userProfile, "analytics.read")) {
+           await loadDb();
+         } else {
+           setLoading(false);
          }
        } catch (e) {
-        if ((e as Error).message === "UNAUTHORIZED") {
-            logout();
-            return;
-          }
+         if ((e as Error).message === "UNAUTHORIZED") {
+           logout();
+           return;
+         }
+         setLoading(false);
        }
-       loadDb();
      }
      init();
      return () => { active = false; };
@@ -531,11 +697,15 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   // Pequeno debounce: a busca textual agora dispara requisição ao backend e o
   // timeout evita uma chamada por tecla digitada.
   useEffect(() => {
-    if (tab !== "census") return;
+    if (tab !== "census" || !canReadCensus) return;
     const t = setTimeout(() => { loadCensus(); }, 300);
     return () => clearTimeout(t);
-  }, [tab, loadCensus]);
+  }, [tab, loadCensus, canReadCensus]);
   useEffect(() => {
+    if (!profile || !canReadAnalytics) {
+      setFiltrosOpcoes(null);
+      return;
+    }
     const qs = new URLSearchParams();
     if (filters.dre) qs.set("dre", filters.dre);
     if (filters.municipio) qs.set("municipio", filters.municipio);
@@ -547,10 +717,11 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     apiFetch<FiltrosOpcoes>(url, token)
       .then(setFiltrosOpcoes)
       .catch((e) => { if ((e as Error).message === "UNAUTHORIZED") logout(); });
-  }, [filters, token, logout, dataVersion]);
+  }, [filters, token, logout, dataVersion, profile, canReadAnalytics]);
 
 
   async function handleSync() {
+    if (!canSync) return;
     setSyncing(true);
     try {
       const res = await fetch(`${API}/v1/admin/sync-sheets`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
@@ -576,12 +747,19 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   };
 
   const handleNav = (id: Tab) => {
-    if (id === "gestao" && profile?.role !== "admin") return;
+    const analyticsTabs: Tab[] = ["perfil", "pessoal", "tecnologia", "infraestrutura", "merenda", "servicos", "alunos", "governanca", "saude", "dre"];
+    if (analyticsTabs.includes(id) && !canReadAnalytics) return;
+    if (id === "census" && !canReadCensus) return;
+    if (id === "gestao" && !canAccessManagement) return;
     setTab(id);
     updateSearch("");
     setVisited((prev) => new Set([...prev, id]));
     setMobileNavOpen(false);
   };
+
+  const visibleOperationalNav = NAV_OPERACIONAL.filter((item) =>
+    item.id === "census" ? canReadCensus : canReadAnalytics,
+  );
 
   const [dark, setDark] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -635,24 +813,28 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             </button>
           </div>
 
-          <div className="ca-nav-group">
-            <div className="ca-nav-group-label">Indicadores</div>
-            <NavGroup items={NAV_INDICATORS} active={tab} onNav={handleNav} mobileOpen={mobileNavOpen} />
-          </div>
+          {canReadAnalytics && (
+            <div className="ca-nav-group">
+              <div className="ca-nav-group-label">Indicadores</div>
+              <NavGroup items={NAV_INDICATORS} active={tab} onNav={handleNav} mobileOpen={mobileNavOpen} />
+            </div>
+          )}
 
-          <div className="ca-nav-group">
-            <div className="ca-nav-group-label">Operacional</div>
-            <NavGroup items={NAV_OPERACIONAL} active={tab} onNav={handleNav} mobileOpen={mobileNavOpen} />
-          </div>
+          {visibleOperationalNav.length > 0 && (
+            <div className="ca-nav-group">
+              <div className="ca-nav-group-label">Operacional</div>
+              <NavGroup items={visibleOperationalNav} active={tab} onNav={handleNav} mobileOpen={mobileNavOpen} />
+            </div>
+          )}
 
-          {profile?.role === "admin" && (
+          {canAccessManagement && (
             <div className="ca-nav-group">
               <div className="ca-nav-group-label">Administração</div>
               <NavGroup items={NAV_ADMIN} active={tab} onNav={handleNav} mobileOpen={mobileNavOpen} />
             </div>
           )}
 
-          {profile?.role !== "dre" && (
+          {canSync && (
             <div className="ca-side-footer" onClick={handleSync} style={{ cursor: "pointer" }}>
               <div className="ca-sf-icon">
                 <RefreshCw size={16} className={syncing ? "animate-spin" : ""} />
@@ -689,7 +871,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 alt="FADEP · Secretaria de Educação · Governo do Pará"
                 className="ca-topbar-logo"
               />
-              <button
+              {canReadAnalytics && <button
                 type="button"
                 className="ca-pres-launch-btn ca-pres-mobile-disabled z-10"
                 title="Modo Apresentação"
@@ -703,7 +885,12 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               >
                 <MonitorPlay size={16} />
                 <span>Modo Apresentação</span>
-              </button>
+              </button>}
+              {profile?.role !== "admin" && (
+                <button className="ca-icon-btn" title="Alterar minha senha" onClick={() => setShowChangePassword(true)}>
+                  <KeyRound size={16} />
+                </button>
+              )}
               <button className="ca-icon-btn" title="Mudar tema" onClick={() => setDark(!dark)}>
                 {
                   dark
@@ -726,7 +913,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               </div>
             )}
 
-            {tab !== "saude" && tab !== "gestao" && (
+            {canReadAnalytics && tab !== "saude" && tab !== "gestao" && (
               <div className="ca-filters-wrap">
                 <FiltrosGlobais
                   opcoes={filtrosOpcoes}
@@ -736,7 +923,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 />
               </div>
             )}
-            {visited.has("perfil") && (
+            {canReadAnalytics && visited.has("perfil") && (
               <div style={{ display: tab === "perfil" ? undefined : "none" }}>
                 <AbaCaracterizacao 
                   token={token} 
@@ -746,42 +933,42 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 />
               </div>
             )}
-            {visited.has("pessoal") && (
+            {canReadAnalytics && visited.has("pessoal") && (
               <div style={{ display: tab === "pessoal" ? undefined : "none" }}>
                 <AbaPessoalGestao token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
-            {visited.has("tecnologia") && (
+            {canReadAnalytics && visited.has("tecnologia") && (
               <div style={{ display: tab === "tecnologia" ? undefined : "none" }}>
                 <AbaTecnologia token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
-            {visited.has("infraestrutura") && (
+            {canReadAnalytics && visited.has("infraestrutura") && (
               <div style={{ display: tab === "infraestrutura" ? undefined : "none" }}>
                 <AbaInfraestruturaSeguranca token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
-            {visited.has("merenda") && (
+            {canReadAnalytics && visited.has("merenda") && (
               <div style={{ display: tab === "merenda" ? undefined : "none" }}>
                 <AbaMerenda token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
-            {visited.has("servicos") && (
+            {canReadAnalytics && visited.has("servicos") && (
               <div style={{ display: tab === "servicos" ? undefined : "none" }}>
                 <AbaServicosTerceirizados token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
-            {visited.has("alunos") && (
+            {canReadAnalytics && visited.has("alunos") && (
               <div style={{ display: tab === "alunos" ? undefined : "none" }}>
                 <AbaPerfilAlunos token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
-            {visited.has("governanca") && (
+            {canReadAnalytics && visited.has("governanca") && (
               <div style={{ display: tab === "governanca" ? undefined : "none" }}>
                 <AbaGestaoFinanceiraGovernanca token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
-            {visited.has("saude") && (
+            {canReadAnalytics && visited.has("saude") && (
               <div style={{ display: tab === "saude" ? undefined : "none" }}>
                 <AbaSaudeOperacionalEscolas
                   token={token}
@@ -793,7 +980,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               </div>
             )}
 
-            {tab === "census" && (
+            {canReadCensus && tab === "census" && (
               <AbaTodosCensos
                 censusPage={censusPage}
                 filterStatus={filterStatus}
@@ -809,15 +996,15 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               />
             )}
 
-            {visited.has("dre") && (
+            {canReadAnalytics && visited.has("dre") && (
               <div style={{ display: tab === "dre" ? undefined : "none" }}>
                 <AbaPorDre token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
 
-            {profile?.role === "admin" && visited.has("gestao") && (
+            {canAccessManagement && visited.has("gestao") && (
               <div style={{ display: tab === "gestao" ? undefined : "none" }}>
-                <AbaGestaoDres token={token} onUnauth={logout} onDataChanged={handleDataChanged} />
+                <AbaGestaoDres token={token} profile={profile!} onUnauth={logout} onDataChanged={handleDataChanged} />
               </div>
             )}
           </div>
@@ -833,16 +1020,28 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
       </div>
 
-      {viewId !== null && (
+      {canReadCensus && viewId !== null && (
         <JsonModal censusId={viewId} token={token} onClose={() => setViewId(null)} />
       )}
 
-      {presentationMode && (
+      {canReadAnalytics && presentationMode && (
         <PresentationMode
           onClose={() => setPresentationMode(false)}
           onNavigateTab={(tabId) => handleNav(tabId as Tab)}
         />
       )}
+
+      <ChangeOwnPasswordModal
+        isOpen={showChangePassword}
+        token={token}
+        onClose={() => setShowChangePassword(false)}
+        onSuccess={(freshToken) => {
+          saveToken(freshToken);
+          clearApiCache();
+          setShowChangePassword(false);
+          onTokenRefresh(freshToken);
+        }}
+      />
 
       {showMobilePresAlert && (
         <div className="ca-mobile-pres-overlay" onClick={() => setShowMobilePresAlert(false)}>
@@ -882,5 +1081,11 @@ export default function AdminPage() {
   }, []);
   if (!auth.ready) return null;
   if (!auth.token) return <LoginForm onLogin={(t) => setAuth({ token: t, ready: true })} />;
-  return <Dashboard token={auth.token} onLogout={() => setAuth({ token: null, ready: true })} />;
+  return (
+    <Dashboard
+      token={auth.token}
+      onLogout={() => setAuth({ token: null, ready: true })}
+      onTokenRefresh={(token) => setAuth({ token, ready: true })}
+    />
+  );
 }

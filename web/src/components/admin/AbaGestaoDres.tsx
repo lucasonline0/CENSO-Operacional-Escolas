@@ -33,10 +33,11 @@ import { StatCard } from "./shared/StatCard";
 import { UserFormModal } from "./shared/UserFormModal";
 import { C } from "./shared/constants";
 import { copyToClipboard } from "./shared/credentialsUtils";
-import type { AdminUserItem, DREItem } from "./shared/types";
+import type { AdminProfile, AdminUserItem, DREItem } from "./shared/types";
 
 interface AbaGestaoDresProps {
   token: string;
+  profile: AdminProfile;
   onUnauth: () => void;
   onDataChanged?: () => void;
 }
@@ -47,11 +48,19 @@ type CredentialsState = {
   title: string;
   subtitle: string;
   username: string;
+  email?: string;
   password?: string;
   dre: string;
 };
 
-export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresProps) {
+export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGestaoDresProps) {
+  const hasCapability = (permission: string) =>
+    profile.role === "admin" || profile.permissions?.includes(permission as never) === true;
+  const canReadUsers = hasCapability("users.read");
+  const canCreateUsers = hasCapability("users.create");
+  const canManageUsers = hasCapability("users.manage");
+  const canResetPasswords = hasCapability("users.reset_password");
+  const canManageDres = hasCapability("dres.manage");
   const [dres, setDres] = useState<DREItem[]>([]);
   const [users, setUsers] = useState<AdminUserItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,7 +93,10 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
     setError("");
 
     try {
-      const [dreData, userData] = await Promise.all([fetchDREs(token), fetchAdminUsers(token)]);
+      const [dreData, userData] = await Promise.all([
+        (canManageDres || canCreateUsers || canReadUsers) ? fetchDREs(token) : Promise.resolve([] as DREItem[]),
+        canReadUsers ? fetchAdminUsers(token) : Promise.resolve([] as AdminUserItem[]),
+      ]);
       setDres(dreData);
       setUsers(userData);
     } catch (requestError: unknown) {
@@ -98,7 +110,7 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
       setLoading(false);
       setRefreshing(false);
     }
-  }, [token, onUnauth]);
+  }, [token, onUnauth, canManageDres, canCreateUsers, canReadUsers]);
 
   useEffect(() => {
     loadData();
@@ -106,6 +118,11 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
 
   const regionalUsers = useMemo(
     () => users.filter((user) => user.role === "dre" && user.dre_id != null),
+    [users],
+  );
+
+  const customUsers = useMemo(
+    () => users.filter((user) => user.role === "custom"),
     [users],
   );
 
@@ -149,7 +166,7 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
         .filter(Boolean)
         .some((value) => value.toLowerCase().includes(query));
       if (ownFields) return true;
-      return (usersByDreMap.get(dre.id) ?? []).some((user) => user.username.toLowerCase().includes(query));
+      return (usersByDreMap.get(dre.id) ?? []).some((user) => user.username.toLowerCase().includes(query) || user.email.toLowerCase().includes(query));
     });
   }, [dres, search, statusFilter, usersByDreMap]);
 
@@ -169,6 +186,7 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
   }
 
   async function handleToggleDreStatus(dre: DREItem, nextActive: boolean) {
+    if (!canManageDres) return;
     setTogglingDreId(dre.id);
     setDres((current) => current.map((item) => item.id === dre.id ? { ...item, ativa: nextActive } : item));
     try {
@@ -187,6 +205,7 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
   }
 
   async function handleToggleUserStatus(user: AdminUserItem, nextActive: boolean) {
+    if (!canManageUsers) return;
     setTogglingUserId(user.id);
     setUsers((current) => current.map((item) => item.id === user.id ? { ...item, active: nextActive } : item));
     try {
@@ -205,18 +224,21 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
   }
 
   function openNewDre() {
+    if (!canManageDres) return;
     setDreToEdit(null);
     setIsDreModalOpen(true);
   }
 
   function openEditDre(dre: DREItem, event: React.MouseEvent) {
     event.stopPropagation();
+    if (!canManageDres) return;
     setDreToEdit(dre);
     setIsDreModalOpen(true);
   }
 
   function openNewUser(dreId?: number, event?: React.MouseEvent) {
     event?.stopPropagation();
+    if (!canCreateUsers) return;
     setPreselectedDreIdForUser(dreId ?? null);
     setIsUserModalOpen(true);
   }
@@ -243,8 +265,11 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
     onDataChanged?.();
     setCredentialsModal({
       title: "Novo usuário cadastrado",
-      subtitle: `A conta regional de ${createdUser.dre} foi criada com sucesso.`,
+      subtitle: createdUser.role === "custom"
+        ? "A conta personalizada foi criada com as permissões e o escopo selecionados."
+        : `A conta regional de ${createdUser.dre} foi criada com sucesso.`,
       username: createdUser.username,
+      email: createdUser.email,
       password,
       dre: createdUser.dre,
     });
@@ -252,17 +277,20 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
 
   function handleResetPasswordSuccess(user: AdminUserItem, newPassword: string) {
     setUserToResetPass(null);
+    setUsers((current) => current.map((item) => item.id === user.id ? { ...item, must_change_password: true } : item));
+    onDataChanged?.();
     setCredentialsModal({
-      title: "Senha redefinida com sucesso",
-      subtitle: `A nova senha de ${user.username} já está ativa no sistema.`,
+      title: "Credencial temporária gerada",
+      subtitle: `${user.email || user.username} deverá criar uma nova senha no próximo acesso.`,
       username: user.username,
+      email: user.email,
       password: newPassword,
       dre: user.dre,
     });
   }
 
   function handleResetFromAccessViewer() {
-    if (!userToViewAccess) return;
+    if (!userToViewAccess || !canResetPasswords) return;
     const selectedUser = userToViewAccess;
     setUserToViewAccess(null);
     setUserToResetPass(selectedUser);
@@ -299,30 +327,32 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
           >
             <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />Atualizar
           </button>
-          <button
-            type="button"
-            onClick={() => openNewUser()}
-            disabled={!hasActiveDres}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            title={!hasActiveDres ? "Cadastre ou ative uma DRE antes de criar usuários" : undefined}
-          >
-            <UserPlus size={14} />Novo usuário
-          </button>
-          <button
-            type="button"
-            onClick={openNewDre}
-            className="inline-flex h-9 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold text-white"
-            style={{ background: C.primary }}
-          >
-            <Plus size={15} />Nova DRE
-          </button>
+          {canCreateUsers && (
+            <button
+              type="button"
+              onClick={() => openNewUser()}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              <UserPlus size={14} />Nova conta
+            </button>
+          )}
+          {canManageDres && (
+            <button
+              type="button"
+              onClick={openNewDre}
+              className="inline-flex h-9 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold text-white"
+              style={{ background: C.primary }}
+            >
+              <Plus size={15} />Nova DRE
+            </button>
+          )}
         </div>
       </section>
 
-      {!hasActiveDres && !loading && (
+      {!hasActiveDres && !loading && canCreateUsers && (
         <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span>Nenhuma DRE está ativa. Ative uma regional antes de criar novos usuários.</span>
+          <span>Nenhuma DRE está disponível no seu escopo. Contas globais ainda podem ser criadas se sua conta puder delegar escopo global.</span>
         </div>
       )}
 
@@ -368,6 +398,40 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
           <span className="flex items-start gap-2"><AlertCircle size={16} className="mt-0.5 shrink-0" />{error}</span>
           <button type="button" onClick={() => loadData()} className="shrink-0 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-rose-100">Tentar novamente</button>
         </div>
+      )}
+
+
+      {canReadUsers && customUsers.length > 0 && (
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 px-5 py-3" style={{ background: C.primaryLight }}>
+            <h2 className="text-sm font-semibold text-slate-800">Acessos personalizados</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Contas globais ou com múltiplas DREs e permissões configuráveis.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px]">
+              <thead><tr><th>Conta</th><th>Escopo</th><th>Cadastro</th><th className="text-center">Situação</th><th className="text-right">Ações</th></tr></thead>
+              <tbody>
+                {customUsers.map((user) => (
+                  <tr key={user.id}>
+                    <td><p className="font-semibold text-slate-800">{user.email || user.username}</p><p className="font-mono text-xs text-slate-500">{user.username}</p></td>
+                    <td><span className="text-xs font-semibold text-slate-600">{user.data_scope === "all" ? "Todas as DREs" : "DREs selecionadas"}</span></td>
+                    <td className="text-xs text-slate-500">{formatDate(user.created_at)}</td>
+                    <td className="text-center">
+                      {canManageUsers ? (
+                        <QuickStatusToggle checked={user.active} loading={togglingUserId === user.id} onChange={(next) => handleToggleUserStatus(user, next)} activeLabel="Ativo" inactiveLabel="Inativo" size="sm" />
+                      ) : (
+                        <span className="text-xs text-slate-500">{user.active ? "Ativo" : "Inativo"}</span>
+                      )}
+                    </td>
+                    <td className="text-right">
+                      {canResetPasswords && <button type="button" onClick={() => setUserToResetPass(user)} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"><KeyRound size={13} />Redefinir senha</button>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -425,11 +489,11 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
                         <td className="text-center">
                           {linkedUsers.length > 0 ? <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700"><UsersRound size={12} />{linkedUsers.length} {linkedUsers.length === 1 ? "usuário" : "usuários"}{activeLinkedUsers !== linkedUsers.length && <span className="text-slate-400">· {activeLinkedUsers} ativos</span>}</span> : <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">Sem usuário</span>}
                         </td>
-                        <td className="text-center"><QuickStatusToggle checked={dre.ativa} loading={togglingDreId === dre.id} onChange={(next) => handleToggleDreStatus(dre, next)} activeLabel="Ativa" inactiveLabel="Inativa" size="sm" /></td>
+                        <td className="text-center">{canManageDres ? <QuickStatusToggle checked={dre.ativa} loading={togglingDreId === dre.id} onChange={(next) => handleToggleDreStatus(dre, next)} activeLabel="Ativa" inactiveLabel="Inativa" size="sm" /> : <span className="text-xs font-medium text-slate-500">{dre.ativa ? "Ativa" : "Inativa"}</span>}</td>
                         <td className="text-right">
                           <div className="inline-flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
-                            <button type="button" onClick={(event) => openNewUser(dre.id, event)} disabled={!dre.ativa} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35" title={dre.ativa ? "Adicionar usuário" : "Ative a DRE para adicionar usuário"}><UserPlus size={14} /></button>
-                            <button type="button" onClick={(event) => openEditDre(dre, event)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50" title="Editar DRE"><Pencil size={14} /></button>
+                            {canCreateUsers && <button type="button" onClick={(event) => openNewUser(dre.id, event)} disabled={!dre.ativa} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35" title={dre.ativa ? "Adicionar conta" : "DRE inativa"}><UserPlus size={14} /></button>}
+                            {canManageDres && <button type="button" onClick={(event) => openEditDre(dre, event)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50" title="Editar DRE"><Pencil size={14} /></button>}
                           </div>
                         </td>
                       </tr>
@@ -451,16 +515,24 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
                               ) : (
                                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                                   <table className="w-full min-w-[760px]">
-                                    <thead><tr><th>Usuário</th><th>Perfil</th><th>Cadastro</th><th className="text-center">Acesso</th><th className="text-right">Ações</th></tr></thead>
+                                    <thead><tr><th>Conta</th><th>Perfil</th><th>Cadastro</th><th className="text-center">Situação</th><th className="text-right">Ações</th></tr></thead>
                                     <tbody>
                                       {linkedUsers.map((user) => (
                                         <tr key={user.id} className={!user.active ? "opacity-60" : ""}>
                                           <td>
-                                            <div className="flex items-center gap-2"><span className="font-mono font-semibold text-slate-800">{user.username}</span><button type="button" onClick={async () => { if (await copyToClipboard(user.username)) showToast(`Usuário “${user.username}” copiado.`); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Copiar usuário"><Copy size={13} /></button></div>
+                                            <div className="flex items-center gap-2"><span className="font-semibold text-slate-800">{user.email || "Sem e-mail (legado)"}</span>{user.email && <button type="button" onClick={async () => { if (await copyToClipboard(user.email)) showToast(`E-mail “${user.email}” copiado.`); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Copiar e-mail"><Copy size={13} /></button>}</div>
+                                            <p className="mt-0.5 font-mono text-xs text-slate-500">Usuário legado: {user.username}</p>
                                           </td>
                                           <td><span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-600"><ShieldCheck size={11} />DRE</span></td>
                                           <td className="text-xs text-slate-500">{formatDate(user.created_at)}</td>
-                                          <td className="text-center"><QuickStatusToggle checked={user.active} loading={togglingUserId === user.id} onChange={(next) => handleToggleUserStatus(user, next)} activeLabel="Ativo" inactiveLabel="Inativo" size="sm" /></td>
+                                          <td className="text-center">
+                                            <div className="flex flex-col items-center gap-1.5">
+                                              {canManageUsers ? <QuickStatusToggle checked={user.active} loading={togglingUserId === user.id} onChange={(next) => handleToggleUserStatus(user, next)} activeLabel="Ativo" inactiveLabel="Inativo" size="sm" /> : <span className="text-xs text-slate-500">{user.active ? "Ativo" : "Inativo"}</span>}
+                                              <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${!user.active ? "border-slate-200 bg-slate-100 text-slate-500" : user.must_change_password ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+                                                {!user.active ? "Usuário inativo" : user.must_change_password ? "Primeiro acesso pendente" : "Acesso ativo"}
+                                              </span>
+                                            </div>
+                                          </td>
                                           <td className="text-right">
                                             <div className="inline-flex items-center gap-1.5">
                                               <button
@@ -470,13 +542,13 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
                                               >
                                                 <Eye size={13} />Ver acesso
                                               </button>
-                                              <button
+                                              {canResetPasswords && (<button
                                                 type="button"
                                                 onClick={(event) => { event.stopPropagation(); setUserToResetPass(user); }}
                                                 className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
                                               >
                                                 <KeyRound size={13} />Redefinir senha
-                                              </button>
+                                              </button>)}
                                             </div>
                                           </td>
                                         </tr>
@@ -498,8 +570,8 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
         )}
       </section>
 
-      <DreFormModal isOpen={isDreModalOpen} onClose={() => setIsDreModalOpen(false)} onSuccess={handleDreSuccess} token={token} dreToEdit={dreToEdit} />
-      <UserFormModal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} onSuccess={handleUserSuccess} token={token} dres={dres} preselectedDreId={preselectedDreIdForUser} />
+      {canManageDres && <DreFormModal isOpen={isDreModalOpen} onClose={() => setIsDreModalOpen(false)} onSuccess={handleDreSuccess} token={token} dreToEdit={dreToEdit} />}
+      <UserFormModal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} onSuccess={handleUserSuccess} token={token} dres={dres} preselectedDreId={preselectedDreIdForUser} creator={profile} />
 
       {userToViewAccess && (
         <CredentialsSuccessModal
@@ -508,13 +580,14 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
           title="Acesso do usuário"
           subtitle="Consulte o login desta conta regional e redefina a senha quando necessário."
           username={userToViewAccess.username}
+          email={userToViewAccess.email}
           dre={userToViewAccess.dre}
-          onResetPassword={handleResetFromAccessViewer}
+          onResetPassword={canResetPasswords ? handleResetFromAccessViewer : undefined}
         />
       )}
 
       <ResetPasswordModal isOpen={Boolean(userToResetPass)} onClose={() => setUserToResetPass(null)} onSuccess={handleResetPasswordSuccess} token={token} user={userToResetPass} />
-      {credentialsModal && <CredentialsSuccessModal isOpen onClose={() => setCredentialsModal(null)} title={credentialsModal.title} subtitle={credentialsModal.subtitle} username={credentialsModal.username} password={credentialsModal.password} dre={credentialsModal.dre} />}
+      {credentialsModal && <CredentialsSuccessModal isOpen onClose={() => setCredentialsModal(null)} title={credentialsModal.title} subtitle={credentialsModal.subtitle} username={credentialsModal.username} email={credentialsModal.email} password={credentialsModal.password} dre={credentialsModal.dre} />}
     </div>
   );
 }

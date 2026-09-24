@@ -38,6 +38,7 @@ type PreenchimentoDrePayload struct {
 type preenchimentoDreFilters struct {
 	Year             int
 	DREID            int
+	DREIDs           []int
 	DRE              string
 	Municipio        string
 	Zona             string
@@ -249,6 +250,7 @@ func preenchimentoDreFiltersFromRequest(r *http.Request, now time.Time) preenchi
 	f := parsePreenchimentoDreFilters(r.URL.Query(), now)
 	shared := parseAnalyticsFilters(r)
 	f.DREID = shared.DREID
+	f.DREIDs = append([]int(nil), shared.DREIDs...)
 	f.DRE = shared.DRE
 	f.Municipio = shared.Municipio
 	f.Zona = shared.Zona
@@ -267,7 +269,7 @@ func buildPreenchimentoDreScopedQuery(f preenchimentoDreFilters) (string, []any)
 		f.RegiaoIntegracao,
 		f.SchoolID,
 		f.CodigoINEP,
-		f.DREID,
+		dreScopeSQLArg(f.DREID, f.DREIDs),
 	}
 }
 

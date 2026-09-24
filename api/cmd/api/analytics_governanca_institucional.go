@@ -16,9 +16,8 @@ import (
 //   GET /v1/admin/analytics/financeiro-governanca/institucional
 //
 // Fonte: respostas CONCLUÍDAS do Censo (a view já filtra status = 'completed').
-// Por isso o filtro `ano` NÃO se aplica aqui — diferentemente do bloco PRODEP,
-// que tem seus próprios filtros. Os filtros globais aplicáveis são: dre,
-// municipio, zona. A nota/metadados deixa explícito que se trata do Censo atual.
+// O handler aplica todos os filtros globais, incluindo ano, ao census_id da
+// view para manter cards e tabelas coerentes com o recorte selecionado.
 //
 // Regra metodológica (docs/dashboard/governanca-institucional-financeira.md):
 //   * "Não informado"/vazio NUNCA vira "Não" — fica fora do numerador (a view
@@ -76,6 +75,10 @@ var governancaInstitucionalScopedWhereSQL = `
 	        WHERE UPPER(TRIM(regiao_de_integracao)) = UPPER(TRIM($4))))
 	  AND ($5 = 0 OR school_id = $5)
 	  AND ($6 = '' OR UPPER(TRIM(COALESCE(codigo_inep, ''))) = UPPER(TRIM($6)))
+	  AND EXISTS (
+	        SELECT 1 FROM census_responses filtered_cr
+	        WHERE filtered_cr.id = census_id AND filtered_cr.year = $8
+	      )
 `
 
 // GovernancaIndicador é a tripla total/denominador/percentual de cada card.
@@ -131,7 +134,7 @@ const governancaInstitucionalObservacao = "Indicadores calculados a partir de re
 // AdminAnalyticsFinanceiroGovernancaInstitucional responde GET
 // /v1/admin/analytics/financeiro-governanca/institucional.
 //
-// Filtros opcionais: dre, municipio, zona. Sem respostas no recorte devolve
+// Filtros opcionais: ano, região, dre, município, zona, escola e INEP. Sem respostas no recorte devolve
 // estrutura válida com zeros (percentuais = 0), nunca erro.
 func (app *application) AdminAnalyticsFinanceiroGovernancaInstitucional(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -145,7 +148,8 @@ func (app *application) AdminAnalyticsFinanceiroGovernancaInstitucional(w http.R
 		shared.RegiaoIntegracao,
 		shared.SchoolID,
 		shared.CodigoINEP,
-		shared.DREID,
+		shared.SQLDREScopeParam(),
+		shared.Year,
 	}
 
 	var (

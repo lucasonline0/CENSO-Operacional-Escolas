@@ -20,7 +20,7 @@ func (app *application) requireRequestCapability(next http.Handler) http.Handler
 			return
 		}
 		if r.URL.Path == "/v1/admin/dres" && r.Method == http.MethodGet {
-			if scope.HasPermission(PermissionDREsManage) || scope.HasPermission(PermissionUsersCreate) {
+			if scope.HasPermission(PermissionDREsManage) || scope.HasPermission(PermissionUsersCreate) || scope.HasPermission(PermissionUsersRead) {
 				next.ServeHTTP(w, r)
 				return
 			}

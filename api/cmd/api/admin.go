@@ -789,7 +789,7 @@ func (app *application) AdminCreateDRE(w http.ResponseWriter, r *http.Request) {
 // (exclusivo para role=admin).
 func (app *application) AdminListDREs(w http.ResponseWriter, r *http.Request) {
 	scope, ok := GetAdminAccessScope(r.Context())
-	if !ok || (!scope.HasPermission(PermissionDREsManage) && !scope.HasPermission(PermissionUsersCreate)) {
+	if !ok || (!scope.HasPermission(PermissionDREsManage) && !scope.HasPermission(PermissionUsersCreate) && !scope.HasPermission(PermissionUsersRead)) {
 		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores de DRE ou criadores de contas"), http.StatusForbidden)
 		return
 	}
@@ -1065,10 +1065,16 @@ func (app *application) AdminListUsers(w http.ResponseWriter, r *http.Request) {
 	if users == nil {
 		users = []*models.AdminUser{}
 	}
+	filtered := make([]*models.AdminUser, 0, len(users))
+	for _, user := range users {
+		if canViewAccountTarget(scope, user) {
+			filtered = append(filtered, user)
+		}
+	}
 
 	app.writeJSON(w, http.StatusOK, jsonResponse{
 		Error: false,
-		Data:  users,
+		Data:  filtered,
 	})
 }
 

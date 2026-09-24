@@ -10,7 +10,7 @@ import (
 // an authorization boundary. Unknown routes and permissions deny by default.
 func (app *application) requireRequestCapability(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/admin/me" {
+		if r.URL.Path == "/v1/admin/me" || r.URL.Path == "/v1/admin/me/change-password" {
 			next.ServeHTTP(w, r)
 			return
 		}

@@ -22,7 +22,8 @@ var (
 	ErrInvalidEmail         = errors.New("e-mail inválido")
 	ErrInvalidRole          = errors.New("role inválida")
 	ErrDRERequiredForDRE    = errors.New("DRE é obrigatória para a role dre")
-	ErrPasswordSetupInvalid = errors.New("desafio de primeiro acesso inválido ou já utilizado")
+	ErrPasswordSetupInvalid  = errors.New("desafio de primeiro acesso inválido ou já utilizado")
+	ErrCurrentPasswordInvalid = errors.New("senha atual inválida")
 )
 
 type AdminUser struct {
@@ -774,6 +775,67 @@ func (m *AdminUserModel) CompleteFirstAccess(ctx context.Context, userID, expect
 		RETURNING u.auth_version`, string(hash), userID, expectedAuthVersion).Scan(&newAuthVersion)
 	if err == sql.ErrNoRows {
 		return 0, ErrPasswordSetupInvalid
+	}
+	if err != nil {
+		return 0, err
+	}
+	return newAuthVersion, nil
+}
+
+// ChangeOwnPassword verifies the current credential and rotates auth_version atomically.
+func (m *AdminUserModel) ChangeOwnPassword(ctx context.Context, userID int, currentPassword, newPassword string) (int, error) {
+	if userID <= 0 {
+		return 0, ErrUserNotFound
+	}
+	if len(currentPassword) == 0 || len(currentPassword) > 128 {
+		return 0, ErrCurrentPasswordInvalid
+	}
+	if len(newPassword) < 12 {
+		return 0, errors.New("nova senha deve ter no mínimo 12 caracteres")
+	}
+	if len(newPassword) > 128 {
+		return 0, errors.New("nova senha deve ter no máximo 128 caracteres")
+	}
+
+	var currentHash string
+	var active bool
+	var authVersion int
+	err := m.DB.QueryRowContext(ctx, `
+		SELECT password_hash, active, COALESCE(auth_version, 1)
+		FROM admin_users
+		WHERE id = $1`, userID).Scan(&currentHash, &active, &authVersion)
+	if err == sql.ErrNoRows {
+		return 0, ErrUserNotFound
+	}
+	if err != nil {
+		return 0, err
+	}
+	if !active {
+		return 0, ErrUserInactive
+	}
+	if bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(currentPassword)) != nil {
+		return 0, ErrCurrentPasswordInvalid
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return 0, fmt.Errorf("erro ao gerar hash da senha: %w", err)
+	}
+	var newAuthVersion int
+	err = m.DB.QueryRowContext(ctx, `
+		UPDATE admin_users
+		SET password_hash = $1,
+		    auth_version = COALESCE(auth_version, 1) + 1,
+		    must_change_password = false,
+		    updated_at = NOW()
+		WHERE id = $2
+		  AND active = true
+		  AND COALESCE(auth_version, 1) = $3
+		RETURNING auth_version`,
+		string(newHash), userID, authVersion,
+	).Scan(&newAuthVersion)
+	if err == sql.ErrNoRows {
+		return 0, ErrCurrentPasswordInvalid
 	}
 	if err != nil {
 		return 0, err

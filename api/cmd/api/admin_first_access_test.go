@@ -285,3 +285,63 @@ func TestCustomFirstAccessCompletesForGlobalAndSelectedScopes(t *testing.T) {
 		})
 	}
 }
+
+
+func selfPasswordChangeRequest(handler http.Handler, token, currentPassword, newPassword string) *httptest.ResponseRecorder {
+	body := fmt.Sprintf(`{"current_password":%q,"new_password":%q,"confirm_password":%q}`, currentPassword, newPassword, newPassword)
+	req := httptest.NewRequest(http.MethodPost, "/v1/admin/me/change-password", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, req)
+	return recorder
+}
+
+func TestAuthenticatedUserCanRotateOwnPassword(t *testing.T) {
+	_, handler, m := setupRuntimeAuthTest(t)
+	ctx := context.Background()
+	dre, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE SELF PASSWORD", Ativa: true})
+	if err != nil {
+		t.Fatalf("create DRE: %v", err)
+	}
+	user, err := m.AdminUsers.ProvisionForDREID(ctx, "self.password", "self.password@example.test", "Temporary!Password123", RoleDRE, dre.ID)
+	if err != nil {
+		t.Fatalf("provision: %v", err)
+	}
+	firstLogin, _ := runtimeLoginRequest(t, handler, user.Email, "Temporary!Password123", "203.0.113.50:5050")
+	challenge := decodePasswordSetupResponse(t, firstLogin).Data.ChallengeToken
+	completed := passwordSetupRequest(handler, challenge, "Definitive!Password456", "Definitive!Password456")
+	oldToken := decodePasswordSetupResponse(t, completed).Data.Token
+	if oldToken == "" {
+		t.Fatalf("complete first access: %s", completed.Body.String())
+	}
+
+	wrong := selfPasswordChangeRequest(handler, oldToken, "Wrong!Password123", "Rotated!Password789")
+	if wrong.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong current password status=%d body=%s", wrong.Code, wrong.Body.String())
+	}
+	if rr := runtimeMeRequest(handler, oldToken); rr.Code != http.StatusOK {
+		t.Fatalf("wrong current password revoked valid session: %d %s", rr.Code, rr.Body.String())
+	}
+
+	changed := selfPasswordChangeRequest(handler, oldToken, "Definitive!Password456", "Rotated!Password789")
+	if changed.Code != http.StatusOK {
+		t.Fatalf("change own password status=%d body=%s", changed.Code, changed.Body.String())
+	}
+	newToken := decodePasswordSetupResponse(t, changed).Data.Token
+	if newToken == "" {
+		t.Fatalf("change response missing renewed token: %s", changed.Body.String())
+	}
+	if rr := runtimeMeRequest(handler, oldToken); rr.Code != http.StatusUnauthorized {
+		t.Fatalf("old token survived password rotation: %d %s", rr.Code, rr.Body.String())
+	}
+	if rr := runtimeMeRequest(handler, newToken); rr.Code != http.StatusOK {
+		t.Fatalf("renewed token invalid: %d %s", rr.Code, rr.Body.String())
+	}
+	if oldLogin, token := runtimeLoginRequest(t, handler, user.Email, "Definitive!Password456", "203.0.113.51:5051"); oldLogin.Code != http.StatusUnauthorized || token != "" {
+		t.Fatalf("old password remained valid: status=%d body=%s", oldLogin.Code, oldLogin.Body.String())
+	}
+	if login, token := runtimeLoginRequest(t, handler, user.Email, "Rotated!Password789", "203.0.113.52:5052"); login.Code != http.StatusOK || token == "" {
+		t.Fatalf("new password login failed: status=%d body=%s", login.Code, login.Body.String())
+	}
+}

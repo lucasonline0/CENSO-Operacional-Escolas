@@ -318,6 +318,7 @@ func (app *application) routes() http.Handler {
 			protected.Use(app.requireRuntimeAdminAuth)
 			protected.Use(app.requireRequestCapability)
 			protected.Get("/admin/me", app.AdminMeCanonical)
+			protected.Post("/admin/me/change-password", app.AdminChangeOwnPassword)
 			protected.Get("/admin/dashboard", app.AdminDashboardCanonical)
 			protected.Get("/admin/sheet-metrics", app.AdminSheetMetrics)
 			protected.Get("/admin/indicadores-metrics", app.AdminIndicadoresMetrics)

@@ -11,6 +11,7 @@ import (
 // canônica usada para autorização; DRE permanece no contrato para exibição e
 // compatibilidade com clientes existentes.
 type AdminAccessScope struct {
+	UserID             int    `json:"-"`
 	Username           string `json:"username"`
 	Role               string `json:"role"`
 	DREID              int    `json:"dre_id,omitempty"`

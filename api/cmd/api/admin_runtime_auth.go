@@ -299,6 +299,65 @@ func (app *application) AdminCompleteFirstAccess(w http.ResponseWriter, r *http.
 	})
 }
 
+func (app *application) AdminChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 2048)
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || scope.UserID <= 0 || scope.Role == RoleAdmin {
+		app.errorJSON(w, fmt.Errorf("troca de senha não disponível para esta conta"), http.StatusForbidden)
+		return
+	}
+	if !loginRL.check("password-change:" + clientIP(r)) {
+		w.Header().Set("Retry-After", "900")
+		app.errorJSON(w, fmt.Errorf("muitas tentativas. Aguarde 15 minutos"), http.StatusTooManyRequests)
+		return
+	}
+
+	var req struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+		ConfirmPassword string `json:"confirm_password"`
+	}
+	if err := app.readJSON(w, r, &req); err != nil {
+		app.errorJSON(w, fmt.Errorf("dados inválidos"), http.StatusBadRequest)
+		return
+	}
+	if req.NewPassword != req.ConfirmPassword {
+		app.writeJSON(w, http.StatusBadRequest, jsonResponse{Error: true, Code: "PASSWORD_CONFIRMATION_MISMATCH", Message: "A confirmação da senha não confere"})
+		return
+	}
+
+	newVersion, err := app.models.AdminUsers.ChangeOwnPassword(r.Context(), scope.UserID, req.CurrentPassword, req.NewPassword)
+	if err != nil {
+		switch {
+		case errors.Is(err, models.ErrCurrentPasswordInvalid):
+			app.errorJSON(w, fmt.Errorf("senha atual inválida"), http.StatusUnauthorized)
+		case errors.Is(err, models.ErrUserInactive), errors.Is(err, models.ErrUserNotFound):
+			app.errorJSON(w, fmt.Errorf("sessão revogada"), http.StatusUnauthorized)
+		case strings.Contains(err.Error(), "mínimo 12 caracteres"), strings.Contains(err.Error(), "máximo 128 caracteres"):
+			app.errorJSON(w, err, http.StatusBadRequest)
+		default:
+			app.errorJSON(w, fmt.Errorf("erro ao alterar senha"), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	access, err := app.models.AdminUsers.GetRuntimeAccessByID(r.Context(), scope.UserID)
+	if err != nil || !validRuntimeAccess(access) || access.AuthVersion != newVersion || access.MustChangePassword {
+		app.errorJSON(w, fmt.Errorf("não foi possível renovar a sessão"), http.StatusUnauthorized)
+		return
+	}
+	token, err := signRuntimeAdminToken(runtimeDREClaims(access, time.Now()))
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro interno ao gerar token"), http.StatusInternalServerError)
+		return
+	}
+	app.writeJSON(w, http.StatusOK, jsonResponse{
+		Error: false,
+		Message: "Senha alterada com sucesso",
+		Data: map[string]interface{}{"token": token, "expires_in": int(jwtExpiry.Seconds())},
+	})
+}
+
 func parseRuntimeAdminToken(tokenStr string) (*runtimeAdminClaims, error) {
 	claims := &runtimeAdminClaims{}
 	tok, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
@@ -370,6 +429,7 @@ func (app *application) resolveRuntimeDREScope(ctx context.Context, claims *runt
 		primaryDREID = access.DREIDs[0]
 	}
 	return AdminAccessScope{
+		UserID:      access.ID,
 		Username:    access.Username,
 		Role:        access.Role,
 		DREID:       primaryDREID,

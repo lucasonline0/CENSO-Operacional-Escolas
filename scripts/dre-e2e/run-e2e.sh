@@ -2,7 +2,7 @@
 # gate E2E de PERFIL DRE contra a stack REAL (sem mocks).
 #
 #   PostgreSQL 16 efêmero (docker) + infra/init.sql
-#     -> API Go (aplica migrations reais 0001-0024 no startup)
+#     -> API Go (aplica migrations reais 0001-0026 no startup)
 #     -> seed canônico (dres / schools com dre_id / census_responses / usuários DRE)
 #     -> Next.js production (porta isolada)
 #     -> Playwright (web/e2e/dre-lifecycle.spec.ts)
@@ -31,6 +31,8 @@ E2E_DRE_B_NAME="${E2E_DRE_B_NAME:-DRE B}"
 ADMIN_USERNAME="${E2E_ADMIN_USERNAME:-e2e.admin}"
 DRE_A_USERNAME="${E2E_DRE_A_USERNAME:-e2e.dre_a}"
 DRE_B_USERNAME="${E2E_DRE_B_USERNAME:-e2e.dre_b}"
+DRE_A_EMAIL="${E2E_DRE_A_EMAIL:-e2e.dre_a@example.test}"
+DRE_B_EMAIL="${E2E_DRE_B_EMAIL:-e2e.dre_b@example.test}"
 
 WORK="$(mktemp -d /tmp/censo-e2e.XXXXXX)"
 LOGS="$WORK/logs"
@@ -90,6 +92,8 @@ DRE_A_PASSWORD="$(openssl rand -hex 16)"
 DRE_B_PASSWORD="$(openssl rand -hex 16)"
 ADMIN_JWT_SECRET="$(openssl rand -hex 32)"
 ADMIN_PASSWORD_HASH="$("$GENPASSWD_BIN" "$ADMIN_PASSWORD" | sed -n 's/^ADMIN_PASSWORD_HASH=//p')"
+DRE_A_PASSWORD_HASH="$("$GENPASSWD_BIN" "$DRE_A_PASSWORD" | sed -n 's/^ADMIN_PASSWORD_HASH=//p')"
+DRE_B_PASSWORD_HASH="$("$GENPASSWD_BIN" "$DRE_B_PASSWORD" | sed -n 's/^ADMIN_PASSWORD_HASH=//p')"
 [ -n "$ADMIN_PASSWORD_HASH" ] || fail "falha ao gerar hash bcrypt do admin"
 
 cat >"$WORK/secrets.env" <<EOF
@@ -101,7 +105,7 @@ DRE_B_USERNAME=$DRE_B_USERNAME
 DRE_B_PASSWORD=$DRE_B_PASSWORD
 EOF
 
-# ─── 5. API Go (aplica migrations 0001-0024 no startup) ────────────────
+# ─── 5. API Go (aplica migrations 0001-0026 no startup) ────────────────
 log "iniciando API Go na porta ${API_PORT} (migrations reais no startup)"
 env \
     PORT="$API_PORT" \
@@ -120,7 +124,7 @@ done
 curl -fsS "$API_URL/v1/health" >/dev/null 2>&1 \
     || { tail -n 80 "$LOGS/api.log"; fail "API não respondeu — migration/startup falhou"; }
 
-# ─── 6. Verificação do schema canônico (0019/0020/0021/0024) ────────────
+# ─── 6. Verificação do schema canônico e credenciais (0019-0026) ────────
 log "verificando schema canônico do perfil DRE"
 pg_sql <<'SQL'
 DO $$
@@ -139,6 +143,11 @@ BEGIN
           AND column_name = 'auth_version') <> 1 THEN
         RAISE EXCEPTION 'bloco: admin_users.auth_version ausente (migration 0024)';
     END IF;
+    IF (SELECT count(*) FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'admin_users'
+          AND column_name IN ('email', 'must_change_password')) <> 2 THEN
+        RAISE EXCEPTION 'bloco: e-mail/primeiro acesso ausentes (migration 0026)';
+    END IF;
 END $$;
 SQL
 
@@ -147,6 +156,14 @@ log "semeadura: dres -> schools (dre_id) -> census_responses -> divergência leg
 pg_sql >"$LOGS/seed.log" 2>&1 <<SQL
 INSERT INTO dres (nome) VALUES ('$E2E_DRE_A_NAME') ON CONFLICT (nome) DO NOTHING;
 INSERT INTO dres (nome) VALUES ('$E2E_DRE_B_NAME') ON CONFLICT (nome) DO NOTHING;
+
+INSERT INTO reg_integracao (municipio, regiao_de_integracao) VALUES
+  ('Municipio A1', 'REGIAO E2E A'),
+  ('Municipio A2', 'REGIAO E2E A'),
+  ('Municipio B1', 'REGIAO E2E B'),
+  ('Municipio B2', 'REGIAO E2E B')
+ON CONFLICT (municipio) DO UPDATE
+SET regiao_de_integracao = EXCLUDED.regiao_de_integracao;
 
 INSERT INTO schools (nome_escola, codigo_inep, municipio, zona, dre_id)
 SELECT v.nome, v.inep, v.municipio, v.zona, d.id
@@ -214,13 +231,18 @@ SELECT 2023, s.codigo_inep, s.id, s.nome_escola,
 FROM schools s WHERE s.codigo_inep = '260101E1';
 SQL
 
-log "criando usuários DRE no banco canônico (CLI real)"
-DATABASE_URL="$DATABASE_URL" "$ADMIN_USER_BIN" create \
-    -username "$DRE_A_USERNAME" -dre "$E2E_DRE_A_NAME" -password "$DRE_A_PASSWORD" \
-    >"$LOGS/admin-user.log" 2>&1
-DATABASE_URL="$DATABASE_URL" "$ADMIN_USER_BIN" create \
-    -username "$DRE_B_USERNAME" -dre "$E2E_DRE_B_NAME" -password "$DRE_B_PASSWORD" \
-    >>"$LOGS/admin-user.log" 2>&1
+log "semeando contas DRE estabelecidas para a matriz de cobertura"
+# Estas contas representam usuários existentes que já concluíram o primeiro
+# acesso. O lifecycle dinâmico cria a conta nova pela API e testa o fluxo real.
+pg_sql >"$LOGS/admin-user.log" 2>&1 <<SQL
+INSERT INTO admin_users (username, email, password_hash, role, dre_id, active, auth_version, must_change_password, created_at, updated_at)
+SELECT '$DRE_A_USERNAME', '$DRE_A_EMAIL', '$DRE_A_PASSWORD_HASH', 'dre', d.id, true, 1, false, NOW(), NOW()
+FROM dres d WHERE d.nome = '$E2E_DRE_A_NAME';
+
+INSERT INTO admin_users (username, email, password_hash, role, dre_id, active, auth_version, must_change_password, created_at, updated_at)
+SELECT '$DRE_B_USERNAME', '$DRE_B_EMAIL', '$DRE_B_PASSWORD_HASH', 'dre', d.id, true, 1, false, NOW(), NOW()
+FROM dres d WHERE d.nome = '$E2E_DRE_B_NAME';
+SQL
 
 # ─── 8. Frontend Next.js (production) ───────────────────────────────────
 log "buildando frontend Next.js com NEXT_PUBLIC_API_URL=$API_URL"
@@ -243,7 +265,11 @@ curl -fsS "$WEB_URL/admin/" >/dev/null 2>&1 \
 # "Executable doesn't exist at .../chromium_headless_shell-XXXX/...".
 log "instalando/verificando chromium e chromium-headless-shell (Playwright)"
 cd "$ROOT/web"
-if [ "$CI" = "true" ]; then
+if [ -n "${E2E_CHROMIUM_EXECUTABLE:-}" ]; then
+    [ -x "$E2E_CHROMIUM_EXECUTABLE" ] \
+        || fail "E2E_CHROMIUM_EXECUTABLE não aponta para um executável: $E2E_CHROMIUM_EXECUTABLE"
+    log "usando Chromium informado em E2E_CHROMIUM_EXECUTABLE"
+elif [ "$CI" = "true" ]; then
     sudo npx playwright install --with-deps chromium chromium-headless-shell
 else
     npx playwright install chromium chromium-headless-shell

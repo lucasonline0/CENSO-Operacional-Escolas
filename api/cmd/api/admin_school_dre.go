@@ -14,7 +14,7 @@ import (
 
 func (app *application) requireAdminDREManagement(w http.ResponseWriter, r *http.Request) bool {
 	scope, ok := GetAdminAccessScope(r.Context())
-	if !ok || scope.Role != RoleAdmin {
+	if !ok || !scope.HasPermission(PermissionSchoolsManageDRE) {
 		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
 		return false
 	}

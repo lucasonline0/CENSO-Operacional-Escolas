@@ -78,8 +78,8 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess, token, user }: 
 
   return (
     <AdminModalShell
-      title="Redefinir senha"
-      subtitle="Defina uma nova senha de acesso para esta conta regional."
+      title="Gerar nova credencial temporária"
+      subtitle="As sessões atuais serão revogadas e a troca de senha será obrigatória."
       Icon={KeyRound}
       onClose={onClose}
       closeDisabled={loading}
@@ -93,7 +93,7 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess, token, user }: 
 
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-3">
-            <label className="text-xs font-semibold text-slate-700">Nova senha de acesso <span className="text-rose-500">*</span></label>
+            <label className="text-xs font-semibold text-slate-700">Senha temporária <span className="text-rose-500">*</span></label>
             <button type="button" onClick={generatePassword} className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: C.primary }}><Sparkles size={13} />Gerar senha segura</button>
           </div>
           <div className="relative">
@@ -103,14 +103,14 @@ export function ResetPasswordModal({ isOpen, onClose, onSuccess, token, user }: 
               <button type="button" onClick={copyPassword} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Copiar senha">{copied ? <Check size={15} className="text-emerald-600" /> : <Copy size={15} />}</button>
             </div>
           </div>
-          <p className="mt-1.5 text-xs leading-5 text-slate-500">A troca revoga as sessões anteriores e passa a valer imediatamente.</p>
+          <p className="mt-1.5 text-xs leading-5 text-slate-500">A credencial revoga sessões anteriores, funciona apenas para iniciar o fluxo de criação da senha definitiva e será exibida uma única vez.</p>
         </div>
 
         {error && <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"><AlertCircle size={15} className="mt-0.5 shrink-0" /><span>{error}</span></div>}
 
         <div className="flex items-center justify-end gap-2 border-t border-slate-200 pt-4">
           <button type="button" onClick={onClose} disabled={loading} className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancelar</button>
-          <button type="submit" disabled={loading || !password.trim()} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white disabled:opacity-50" style={{ background: C.primary }}>{loading ? <><Loader2 size={15} className="animate-spin" />Salvando…</> : "Redefinir senha"}</button>
+          <button type="submit" disabled={loading || !password.trim()} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white disabled:opacity-50" style={{ background: C.primary }}>{loading ? <><Loader2 size={15} className="animate-spin" />Salvando…</> : "Gerar credencial"}</button>
         </div>
       </form>
     </AdminModalShell>

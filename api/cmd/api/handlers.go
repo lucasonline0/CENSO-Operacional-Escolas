@@ -408,7 +408,7 @@ func (app *application) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 // Protegido por SYNC_SECRET para evitar uso não autorizado.
 func (app *application) AdminSyncSheets(w http.ResponseWriter, r *http.Request) {
 	scope, _ := GetAdminAccessScope(r.Context())
-	if scope.Role != RoleAdmin {
+	if !scope.HasPermission(PermissionSyncExecute) {
 		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
 		return
 	}

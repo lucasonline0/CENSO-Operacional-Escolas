@@ -60,6 +60,7 @@ type prodepFilters struct {
 	DRE                   string // '' = todas (case-insensitive sobre dre_prodep)
 	Municipio             string // '' = todos (case-insensitive sobre municipio_resolvido)
 	RI                    string // '' = todas (case-insensitive sobre ri_prodep)
+	Zona                  string // '' = todas (resolvida pela escola vinculada)
 	MatchStatus           string // '' = todos
 	StatusPrestacaoContas string // '' = todos
 	SchoolID              int
@@ -82,6 +83,7 @@ func (f prodepFilters) args() []any {
 		f.SchoolID,
 		f.CodigoINEP,
 		f.DREID,
+		f.Zona,
 	}
 }
 
@@ -141,6 +143,12 @@ var prodepWhereSQL = `
 	      )))
 	  AND ($9 = 0 OR prodep_repasses.school_id = $9 OR prodep_repasses.school_id_sede = $9)
 	  AND ($10 = '' OR UPPER(TRIM(COALESCE(codigo_inep_prodep, ''))) = UPPER(TRIM($10)))
+	  AND ($12 = '' OR EXISTS (
+	        SELECT 1
+	        FROM schools zone_s
+	        WHERE (zone_s.id = prodep_repasses.school_id OR zone_s.id = prodep_repasses.school_id_sede)
+	          AND UPPER(TRIM(COALESCE(zone_s.zona, ''))) = UPPER(TRIM($12))
+	      ))
 `
 
 type ProdepResumo struct {
@@ -293,8 +301,12 @@ func parseProdepFilters(q map[string][]string) (prodepFilters, error) {
 // deliberadamente ocultadas do perfil DRE quando não há vínculo confiável.
 func applyProdepAccessScope(r *http.Request, f prodepFilters) prodepFilters {
 	shared := parseAnalyticsFilters(r)
+	if r.URL.Query().Has("year") {
+		f.Ano = shared.Year
+	}
 	f.DRE = shared.DRE
 	f.Municipio = shared.Municipio
+	f.Zona = shared.Zona
 	f.SchoolID = shared.SchoolID
 	f.CodigoINEP = shared.CodigoINEP
 	if strings.TrimSpace(shared.RegiaoIntegracao) != "" {

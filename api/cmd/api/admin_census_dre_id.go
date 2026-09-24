@@ -40,7 +40,7 @@ func canonicalCensusListWhereSQL() string {
 
 func canonicalCensusWhereArgs(p censusListParams, scope AdminAccessScope, schoolID int, codigoINEP string) []any {
 	dreID := 0
-	if scope.Role == RoleDRE {
+	if scope.DataScope == "selected" || scope.Role == RoleDRE {
 		dreID = scope.DREID
 	}
 	return []any{
@@ -112,7 +112,7 @@ func (app *application) AdminGetCensusCanonical(w http.ResponseWriter, r *http.R
 	scope, _ := GetAdminAccessScope(ctx)
 
 	p := parseCensusListParams(r.URL.Query())
-	if scope.Role == RoleDRE {
+	if scope.DataScope == "selected" || scope.Role == RoleDRE {
 		p.DRE = strings.TrimSpace(scope.DRE)
 	}
 	schoolID, codigoINEP := canonicalCensusSchoolFilters(r)
@@ -159,7 +159,7 @@ func (app *application) AdminGetCensusCanonical(w http.ResponseWriter, r *http.R
 	}
 
 	dreID := 0
-	if scope.Role == RoleDRE {
+	if scope.DataScope == "selected" || scope.Role == RoleDRE {
 		dreID = scope.DREID
 	}
 	var summary CensusSummary
@@ -213,7 +213,7 @@ func (app *application) AdminGetCensusByIDCanonical(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if scope.Role == RoleDRE && canonicalMode {
+	if (scope.DataScope == "selected" || scope.Role == RoleDRE) && canonicalMode {
 		if scope.DREID <= 0 || targetDREID <= 0 || !scope.IsAuthorizedForDREID(targetDREID) {
 			app.errorJSON(w, fmt.Errorf("acesso não permitido para esta DRE"), http.StatusForbidden)
 			return

@@ -40,6 +40,99 @@ import type {
 
 // ─── Login ────────────────────────────────────────────────────────────────────
 
+function FirstAccessForm({ challenge, onComplete, onBack }: { challenge: string; onComplete: (token: string) => void; onBack: () => void }) {
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const valid = newPassword.length >= 12 && newPassword === confirmPassword;
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!valid || loading) return;
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${API}/v1/admin/first-access/password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${challenge}` },
+        body: JSON.stringify({ new_password: newPassword, confirm_password: confirmPassword }),
+      });
+      const payload = await response.json() as { message?: string; data?: { token?: string } };
+      const token = payload.data?.token;
+      if (!response.ok || !token) {
+        setError(payload.message ?? "Não foi possível criar a nova senha.");
+        return;
+      }
+      saveToken(token);
+      try {
+        const profile = await fetchAdminMeFresh(token);
+        await prefetchDashboard(token, profile.role);
+      } catch (validationError) {
+        clearToken();
+        clearApiCache();
+        setError((validationError as Error).message === "UNAUTHORIZED"
+          ? "A sessão foi revogada antes da conclusão do acesso. Entre novamente."
+          : "Não foi possível validar a nova sessão.");
+        return;
+      }
+      onComplete(token);
+    } catch {
+      setError("Não foi possível conectar ao servidor.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="censo-admin">
+      <main className="login">
+        <div className="login__left">
+          <div className="login__left-circle login__left-circle--lg" aria-hidden="true" />
+          <div className="login__left-circle login__left-circle--sm" aria-hidden="true" />
+          <div className="login__left-inner">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="login__left-logo" src="/logo-horizontal-letter-white.png" alt="FADEP · Secretaria de Educação · Governo do Pará" />
+            <div className="login__left-brand"><h1 className="login__left-title">Censo SEDUC</h1><p className="login__left-subtitle">Operacional e Estrutural</p></div>
+          </div>
+        </div>
+        <div className="login__right">
+          <div className="login__form-wrapper">
+            <div className="login__form-header">
+              <span className="login__mobile-app">Censo SEDUC</span>
+              <h2 className="login__heading">Crie sua senha</h2>
+              <p className="login__subheading">A credencial inicial é temporária. Defina uma senha definitiva para acessar o painel.</p>
+            </div>
+            <form className="login__form" onSubmit={submit} noValidate>
+              <label className="login__field">
+                <span className="login__label">Nova senha</span>
+                <div className="login__input-wrap">
+                  <input type={showNew ? "text" : "password"} autoComplete="new-password" maxLength={128} className="login__input" disabled={loading} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+                  <button type="button" className="login__input-toggle" aria-label={showNew ? "Ocultar nova senha" : "Mostrar nova senha"} onClick={() => setShowNew((value) => !value)}>{showNew ? "Ocultar" : "Mostrar"}</button>
+                </div>
+                <span className="text-xs text-slate-500">Use no mínimo 12 caracteres.</span>
+              </label>
+              <label className="login__field">
+                <span className="login__label">Confirmar nova senha</span>
+                <div className="login__input-wrap">
+                  <input type={showConfirm ? "text" : "password"} autoComplete="new-password" maxLength={128} className="login__input" disabled={loading} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
+                  <button type="button" className="login__input-toggle" aria-label={showConfirm ? "Ocultar confirmação" : "Mostrar confirmação"} onClick={() => setShowConfirm((value) => !value)}>{showConfirm ? "Ocultar" : "Mostrar"}</button>
+                </div>
+              </label>
+              {confirmPassword && newPassword !== confirmPassword && <p className="login__error">As senhas não coincidem.</p>}
+              {error && <p className="login__error">{error}</p>}
+              <button type="submit" className="login__button" disabled={!valid || loading}>{loading ? <><Loader2 size={16} className="animate-spin" />Criando senha…</> : "Criar senha e entrar"}</button>
+              {error && <button type="button" className="text-sm font-semibold text-slate-600" onClick={onBack}>Voltar ao login</button>}
+            </form>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
 function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -47,6 +140,7 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
   const [error, setError] = useState("");
   const [status, setStatus] = useState<"idle" | "auth" | "prefetch">("idle");
   const [attempts, setAttempts] = useState(0);
+  const [passwordSetupChallenge, setPasswordSetupChallenge] = useState("");
   const blocked = attempts >= 5;
   const loading = status !== "idle";
 
@@ -54,27 +148,41 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
     e.preventDefault();
     if (blocked) return;
     setError(""); setStatus("auth");
-    const u = sanitize(username).slice(0, 64);
+    const u = sanitize(username).slice(0, 254);
     const p = sanitize(password).slice(0, 128);
     if (!u || !p) { setError("Preencha usuário e senha."); setStatus("idle"); return; }
     try {
       const res = await fetch(`${API}/v1/admin/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: u, password: p }) });
-      const json = await res.json();
+      const json = await res.json() as { code?: string; message?: string; data?: { token?: string; challenge_token?: string } };
+      if (json.code === "PASSWORD_SETUP_REQUIRED" && json.data?.challenge_token) {
+        setPasswordSetupChallenge(json.data.challenge_token);
+        setPassword("");
+        setStatus("idle");
+        return;
+      }
       if (!res.ok) { setAttempts((a) => a + 1); setError(json.message ?? "Credenciais inválidas."); setStatus("idle"); return; }
-      const token = (json.data as { token: string }).token;
+      const token = json.data?.token;
+      if (!token) throw new Error("token ausente");
       saveToken(token);
       setStatus("prefetch");
       try {
         const prof = await fetchAdminMeFresh(token);
         await prefetchDashboard(token, prof.role);
-      } catch {
-        // Um 401 aqui (raro: falha entre login e /admin/me) limpa token/cache
-        // em apiFetch; re-grava o token para o mont do dashboard revalidar.
-        saveToken(token);
-        await prefetchDashboard(token);
+      } catch (validationError) {
+        clearToken();
+        clearApiCache();
+        setError((validationError as Error).message === "UNAUTHORIZED"
+          ? "A sessão foi revogada. Entre novamente."
+          : "Não foi possível validar a sessão.");
+        setStatus("idle");
+        return;
       }
       onLogin(token);
     } catch { setError("Não foi possível conectar ao servidor."); setStatus("idle"); }
+  }
+
+  if (passwordSetupChallenge) {
+    return <FirstAccessForm challenge={passwordSetupChallenge} onComplete={onLogin} onBack={() => { setPasswordSetupChallenge(""); setError(""); }} />;
   }
 
   return (
@@ -111,7 +219,7 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
             <form className="login__form" onSubmit={submit} noValidate>
               {/* Usuário */}
               <label className="login__field">
-                <span className="login__label">Usuário</span>
+                <span className="login__label">E-mail ou usuário</span>
                 <div className="login__input-wrap">
                   <span className="login__input-icon" aria-hidden="true">
                     <svg viewBox="0 0 20 20" fill="none">
@@ -120,7 +228,7 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
                     </svg>
                   </span>
                   <input
-                    type="text" autoComplete="username" maxLength={64}
+                    type="text" autoComplete="username" maxLength={254}
                     className="login__input login__input--icon"
                     disabled={loading || blocked} value={username}
                     onChange={(e) => setUsername(e.target.value)}

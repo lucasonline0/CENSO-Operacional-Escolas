@@ -86,6 +86,13 @@ func setupDRELifecycleTestDB(t *testing.T, applyCanonicalMigration bool) (*sql.D
 		if _, err := db.Exec(authVersionMigrationSQL(t)); err != nil {
 			t.Fatalf("apply auth_version migration for lifecycle test: %v", err)
 		}
+		firstAccessMigration, err := migrationsFS.ReadFile("migrations/0026_admin_user_email_first_access.sql")
+		if err != nil {
+			t.Fatalf("read first-access migration for lifecycle test: %v", err)
+		}
+		if _, err := db.Exec(string(firstAccessMigration)); err != nil {
+			t.Fatalf("apply first-access migration for lifecycle test: %v", err)
+		}
 	}
 
 	return db, models.NewModels(db)

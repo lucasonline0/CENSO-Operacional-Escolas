@@ -99,6 +99,55 @@ func TestCriticalAdministrativeMigrationsCleanAndIdempotent(t *testing.T) {
 	}
 }
 
+func TestAdminUserEmailFirstAccessMigrationCompatibilityAndUniqueness(t *testing.T) {
+	db := newMigrationTestDB(t)
+	seedSchoolsWithDependentView(t, db)
+	execEmbeddedMigration(t, db, "0018_create_admin_users.sql")
+
+	// Simula rollout parcial/legado com e-mail ainda não normalizado.
+	if _, err := db.Exec(`ALTER TABLE admin_users ADD COLUMN email VARCHAR(254)`); err != nil {
+		t.Fatalf("seed legacy email column: %v", err)
+	}
+	if _, err := db.Exec(`
+		INSERT INTO admin_users (username, email, password_hash, role, active)
+		VALUES
+			('legacy.with.email', ' Legacy.User@Example.TEST ', 'hash', 'admin', true),
+			('legacy.without.email', NULL, 'hash', 'admin', true)`); err != nil {
+		t.Fatalf("seed legacy users: %v", err)
+	}
+
+	if err := applyMigrations(db, log.New(io.Discard, "", 0)); err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+	if !isCriticalAdministrativeMigration("0026_admin_user_email_first_access.sql") {
+		t.Fatal("0026 must fail closed as a critical administrative migration")
+	}
+
+	var normalized string
+	var legacyEmail *string
+	var legacyPending, noEmailPending bool
+	if err := db.QueryRow(`SELECT email, must_change_password FROM admin_users WHERE username = 'legacy.with.email'`).Scan(&normalized, &legacyPending); err != nil {
+		t.Fatalf("read normalized legacy user: %v", err)
+	}
+	if err := db.QueryRow(`SELECT email, must_change_password FROM admin_users WHERE username = 'legacy.without.email'`).Scan(&legacyEmail, &noEmailPending); err != nil {
+		t.Fatalf("read no-email legacy user: %v", err)
+	}
+	if normalized != "legacy.user@example.test" || legacyPending || legacyEmail != nil || noEmailPending {
+		t.Fatalf("migration compatibility mismatch: normalized=%q pending=%v email=%v pending_without=%v", normalized, legacyPending, legacyEmail, noEmailPending)
+	}
+
+	if _, err := db.Exec(`
+		INSERT INTO admin_users (username, email, password_hash, role, active)
+		VALUES ('duplicate.email', 'legacy.user@example.test', 'hash', 'admin', true)`); err == nil {
+		t.Fatal("case-insensitive normalized e-mail uniqueness was not enforced")
+	}
+	if _, err := db.Exec(`
+		INSERT INTO admin_users (username, email, password_hash, role, active)
+		VALUES ('invalid.email', 'not-an-email', 'hash', 'admin', true)`); err == nil {
+		t.Fatal("database accepted malformed e-mail")
+	}
+}
+
 func TestCriticalMigrationFailsClosedOnLegacyUsernameCollision(t *testing.T) {
 	db := newMigrationTestDB(t)
 	seedSchoolsWithDependentView(t, db)

@@ -79,10 +79,12 @@ export interface DREItem {
 export interface AdminUserItem {
   id: number;
   username: string;
+  email: string;
   role: "admin" | "dre";
   dre: string;
   dre_id: number | null;
   active: boolean;
+  must_change_password: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -551,6 +553,7 @@ export interface FiltrosOpcoes {
   municipios: string[];
   zonas: string[];
   escolas: FiltrosEscolaItem[];
+  codigos_inep: string[];
 }
 
 // ── Perfil dos Alunos e Resultados — IDEB (IDEB-05) ─────────────────────────

@@ -489,6 +489,41 @@ func TestAdminCreateUserValidation(t *testing.T) {
 		}
 	})
 
+	t.Run("missing email", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users", strings.NewReader(`{
+			"username": "user.without.email",
+			"password": "password1234",
+			"role": "dre",
+			"dre": "DRE BELEM"
+		}`))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(context.WithValue(req.Context(), contextKeyAdminScope, AdminAccessScope{Role: RoleAdmin}))
+
+		rr := httptest.NewRecorder()
+		app.AdminCreateUser(rr, req)
+		if rr.Code != http.StatusBadRequest || !strings.Contains(strings.ToLower(rr.Body.String()), "e-mail") {
+			t.Fatalf("missing email status=%d body=%s", rr.Code, rr.Body.String())
+		}
+	})
+
+	t.Run("invalid email", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users", strings.NewReader(`{
+			"username": "user.invalid.email",
+			"email": "not-an-email",
+			"password": "password1234",
+			"role": "dre",
+			"dre": "DRE BELEM"
+		}`))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(context.WithValue(req.Context(), contextKeyAdminScope, AdminAccessScope{Role: RoleAdmin}))
+
+		rr := httptest.NewRecorder()
+		app.AdminCreateUser(rr, req)
+		if rr.Code != http.StatusBadRequest || !strings.Contains(strings.ToLower(rr.Body.String()), "e-mail") {
+			t.Fatalf("invalid email status=%d body=%s", rr.Code, rr.Body.String())
+		}
+	})
+
 	t.Run("empty username", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users", strings.NewReader(`{
 			"username": "",

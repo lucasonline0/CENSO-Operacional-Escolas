@@ -27,7 +27,7 @@ type AnalyticsFilters struct {
 
 func parseAnalyticsFilters(r *http.Request) AnalyticsFilters {
 	f := parseAnalyticsFiltersFromValues(r.URL.Query(), time.Now())
-	if scope, ok := GetAdminAccessScope(r.Context()); ok && scope.Role == RoleDRE {
+	if scope, ok := GetAdminAccessScope(r.Context()); ok && (scope.DataScope == "selected" || scope.Role == RoleDRE) {
 		f.DREID = scope.DREID
 		f.DRE = strings.TrimSpace(scope.DRE)
 	}

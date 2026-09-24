@@ -45,13 +45,13 @@ var indiceGovernancaSelectSQL = `
 			school_id,
 			BOOL_OR(status_prestacao_contas = 'ok') AS prestacao_contas_ok
 		FROM prodep_repasses
-		WHERE usar_na_carga = true AND school_id IS NOT NULL
+		WHERE usar_na_carga = true AND school_id IS NOT NULL AND ano = $8
 		GROUP BY school_id
 	), latest_census AS (
 		SELECT DISTINCT ON (school_id)
 			school_id, id AS census_id, status, data
 		FROM census_responses
-		WHERE status = 'completed'
+		WHERE status = 'completed' AND year = $8
 		ORDER BY school_id, updated_at DESC, id DESC
 	)
 	SELECT
@@ -83,7 +83,7 @@ func (app *application) AdminAnalyticsGovernancaIndiceEscolas(w http.ResponseWri
 	filters := parseAnalyticsFilters(r)
 
 	rows, err := app.models.Schools.DB.QueryContext(r.Context(), indiceGovernancaSelectSQL,
-		filters.DRE, filters.Municipio, filters.Zona, filters.RegiaoIntegracao, filters.SchoolID, filters.CodigoINEP, filters.DREID)
+		filters.DRE, filters.Municipio, filters.Zona, filters.RegiaoIntegracao, filters.SchoolID, filters.CodigoINEP, filters.DREID, filters.Year)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro ao consultar indice de governanca: %w", err), http.StatusInternalServerError)
 		return

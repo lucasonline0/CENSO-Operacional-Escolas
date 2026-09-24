@@ -29,10 +29,23 @@ func (app *application) AdminMeCanonical(w http.ResponseWriter, r *http.Request)
 	app.writeJSON(w, http.StatusOK, jsonResponse{
 		Error: false,
 		Data: map[string]interface{}{
-			"username": scope.Username,
-			"role":     scope.Role,
-			"dre_id":   dreIDPtr,
-			"dre":      drePtr,
+			"username":             scope.Username,
+			"role":                 scope.Role,
+			"dre_id":               dreIDPtr,
+			"dre":                  drePtr,
+			"permissions":          scope.PermissionNames(),
+			"data_scope":           map[string]interface{}{"type": scope.DataScope, "dre_ids": scope.ScopedDREIDs()},
+			"must_change_password": scope.MustChangePassword,
 		},
 	})
+}
+
+func permissionNames(permissions map[string]bool) []string {
+	result := make([]string, 0, len(permissions))
+	for permission := range permissionCatalog {
+		if permissions[permission] {
+			result = append(result, permission)
+		}
+	}
+	return result
 }

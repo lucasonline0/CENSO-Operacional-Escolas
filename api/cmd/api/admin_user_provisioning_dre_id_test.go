@@ -51,7 +51,7 @@ func TestDRELifecycleCanonicalUserProvisioningByID(t *testing.T) {
 			t.Fatalf("create DRE: %v", err)
 		}
 
-		body := fmt.Sprintf(`{"username":"provision.by.id","password":"password1234","role":"dre","dre_id":%d}`, dre.ID)
+		body := fmt.Sprintf(`{"username":"provision.by.id","email":"provision.by.id@example.test","password":"password1234","role":"dre","dre_id":%d}`, dre.ID)
 		rr := callAdminCreateUser(t, app, body)
 		if rr.Code != http.StatusCreated {
 			t.Fatalf("dre_id provisioning status=%d want=201 body=%s", rr.Code, rr.Body.String())
@@ -64,6 +64,12 @@ func TestDRELifecycleCanonicalUserProvisioningByID(t *testing.T) {
 		if resp.Data.DREID != dre.ID || resp.Data.DRE != dre.Nome {
 			t.Fatalf("response relation mismatch: dre_id=%d dre=%q want id=%d name=%q", resp.Data.DREID, resp.Data.DRE, dre.ID, dre.Nome)
 		}
+		if resp.Data.Email != "provision.by.id@example.test" || !resp.Data.MustChangePassword {
+			t.Fatalf("response did not expose normalized e-mail/pending state: %+v", resp.Data)
+		}
+		if strings.Contains(rr.Body.String(), "password_hash") || strings.Contains(rr.Body.String(), "password1234") {
+			t.Fatalf("create response leaked password material: %s", rr.Body.String())
+		}
 
 		var storedID int
 		var storedName string
@@ -75,12 +81,41 @@ func TestDRELifecycleCanonicalUserProvisioningByID(t *testing.T) {
 		}
 	})
 
+	t.Run("email uniqueness is case insensitive", func(t *testing.T) {
+		dre, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE EMAIL UNIQUE", Ativa: true})
+		if err != nil {
+			t.Fatalf("create DRE: %v", err)
+		}
+		first := fmt.Sprintf(`{"username":"email.unique.one","email":"Unique.User@Example.Test","password":"password1234","role":"dre","dre_id":%d}`, dre.ID)
+		if rr := callAdminCreateUser(t, app, first); rr.Code != http.StatusCreated {
+			t.Fatalf("first email status=%d body=%s", rr.Code, rr.Body.String())
+		}
+		second := fmt.Sprintf(`{"username":"email.unique.two","email":"  UNIQUE.USER@example.test ","password":"password1234","role":"dre","dre_id":%d}`, dre.ID)
+		if rr := callAdminCreateUser(t, app, second); rr.Code != http.StatusConflict {
+			t.Fatalf("duplicate email status=%d want=409 body=%s", rr.Code, rr.Body.String())
+		}
+	})
+
+	t.Run("email and legacy username namespaces cannot collide", func(t *testing.T) {
+		dre, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE IDENTITY COLLISION", Ativa: true})
+		if err != nil {
+			t.Fatalf("create DRE: %v", err)
+		}
+		if _, err := m.AdminUsers.CreateForDREID(ctx, "legacy.identity@example.test", "password1234", RoleDRE, dre.ID); err != nil {
+			t.Fatalf("create legacy identity: %v", err)
+		}
+		body := fmt.Sprintf(`{"username":"new.identity","email":"LEGACY.IDENTITY@example.test","password":"password1234","role":"dre","dre_id":%d}`, dre.ID)
+		if rr := callAdminCreateUser(t, app, body); rr.Code != http.StatusConflict {
+			t.Fatalf("cross-namespace collision status=%d want=409 body=%s", rr.Code, rr.Body.String())
+		}
+	})
+
 	t.Run("matching dre text is only a consistency assertion", func(t *testing.T) {
 		dre, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE ASSERT MATCH", Ativa: true})
 		if err != nil {
 			t.Fatalf("create DRE: %v", err)
 		}
-		body := fmt.Sprintf(`{"username":"provision.match","password":"password1234","role":"dre","dre_id":%d,"dre":"  dre assert match  "}`, dre.ID)
+		body := fmt.Sprintf(`{"username":"provision.match","email":"provision.match@example.test","password":"password1234","role":"dre","dre_id":%d,"dre":"  dre assert match  "}`, dre.ID)
 		rr := callAdminCreateUser(t, app, body)
 		if rr.Code != http.StatusCreated {
 			t.Fatalf("matching assertion status=%d want=201 body=%s", rr.Code, rr.Body.String())
@@ -99,7 +134,7 @@ func TestDRELifecycleCanonicalUserProvisioningByID(t *testing.T) {
 		if _, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE ASSERT B", Ativa: true}); err != nil {
 			t.Fatalf("create DRE B: %v", err)
 		}
-		body := fmt.Sprintf(`{"username":"provision.conflict","password":"password1234","role":"dre","dre_id":%d,"dre":"DRE ASSERT B"}`, dreA.ID)
+		body := fmt.Sprintf(`{"username":"provision.conflict","email":"provision.conflict@example.test","password":"password1234","role":"dre","dre_id":%d,"dre":"DRE ASSERT B"}`, dreA.ID)
 		rr := callAdminCreateUser(t, app, body)
 		if rr.Code != http.StatusBadRequest {
 			t.Fatalf("contradictory payload status=%d want=400 body=%s", rr.Code, rr.Body.String())
@@ -117,7 +152,7 @@ func TestDRELifecycleCanonicalUserProvisioningByID(t *testing.T) {
 	})
 
 	t.Run("nonexistent dre_id is rejected", func(t *testing.T) {
-		rr := callAdminCreateUser(t, app, `{"username":"provision.missing","password":"password1234","role":"dre","dre_id":99999999}`)
+		rr := callAdminCreateUser(t, app, `{"username":"provision.missing","email":"provision.missing@example.test","password":"password1234","role":"dre","dre_id":99999999}`)
 		if rr.Code != http.StatusBadRequest {
 			t.Fatalf("nonexistent dre_id status=%d want=400 body=%s", rr.Code, rr.Body.String())
 		}
@@ -126,7 +161,7 @@ func TestDRELifecycleCanonicalUserProvisioningByID(t *testing.T) {
 	t.Run("nonpositive dre_id is rejected", func(t *testing.T) {
 		for _, id := range []int{0, -1} {
 			username := fmt.Sprintf("provision.badid.%d", -id)
-			body := fmt.Sprintf(`{"username":%q,"password":"password1234","role":"dre","dre_id":%d}`, username, id)
+			body := fmt.Sprintf(`{"username":%q,"email":"provision.badid@example.test","password":"password1234","role":"dre","dre_id":%d}`, username, id)
 			rr := callAdminCreateUser(t, app, body)
 			if rr.Code != http.StatusBadRequest {
 				t.Fatalf("dre_id=%d status=%d want=400 body=%s", id, rr.Code, rr.Body.String())
@@ -139,7 +174,7 @@ func TestDRELifecycleCanonicalUserProvisioningByID(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create inactive DRE: %v", err)
 		}
-		body := fmt.Sprintf(`{"username":"provision.inactive","password":"password1234","role":"dre","dre_id":%d}`, dre.ID)
+		body := fmt.Sprintf(`{"username":"provision.inactive","email":"provision.inactive@example.test","password":"password1234","role":"dre","dre_id":%d}`, dre.ID)
 		rr := callAdminCreateUser(t, app, body)
 		if rr.Code != http.StatusBadRequest {
 			t.Fatalf("inactive dre_id status=%d want=400 body=%s", rr.Code, rr.Body.String())
@@ -158,7 +193,7 @@ func TestDRELifecycleCanonicalUserProvisioningByID(t *testing.T) {
 			t.Fatalf("rename DRE: %v", err)
 		}
 
-		body := fmt.Sprintf(`{"username":"provision.after.rename","password":"password1234","role":"dre","dre_id":%d}`, originalID)
+		body := fmt.Sprintf(`{"username":"provision.after.rename","email":"provision.after.rename@example.test","password":"password1234","role":"dre","dre_id":%d}`, originalID)
 		rr := callAdminCreateUser(t, app, body)
 		if rr.Code != http.StatusCreated {
 			t.Fatalf("post-rename provisioning status=%d want=201 body=%s", rr.Code, rr.Body.String())
@@ -178,7 +213,7 @@ func TestDRELifecycleCanonicalUserProvisioningByID(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create long-name DRE: %v", err)
 		}
-		body := fmt.Sprintf(`{"username":"provision.long.name","password":"password1234","role":"dre","dre_id":%d}`, dre.ID)
+		body := fmt.Sprintf(`{"username":"provision.long.name","email":"provision.long.name@example.test","password":"password1234","role":"dre","dre_id":%d}`, dre.ID)
 		rr := callAdminCreateUser(t, app, body)
 		if rr.Code != http.StatusCreated {
 			t.Fatalf("long-name provisioning status=%d want=201 body=%s", rr.Code, rr.Body.String())
@@ -194,7 +229,7 @@ func TestDRELifecycleCanonicalUserProvisioningByID(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create DRE: %v", err)
 		}
-		rr := callAdminCreateUser(t, app, `{"username":"provision.legacy","password":"password1234","role":"dre","dre":"DRE LEGACY COMPAT"}`)
+		rr := callAdminCreateUser(t, app, `{"username":"provision.legacy","email":"provision.legacy@example.test","password":"password1234","role":"dre","dre":"DRE LEGACY COMPAT"}`)
 		if rr.Code != http.StatusCreated {
 			t.Fatalf("legacy provisioning status=%d want=201 body=%s", rr.Code, rr.Body.String())
 		}

@@ -47,6 +47,7 @@ type CredentialsState = {
   title: string;
   subtitle: string;
   username: string;
+  email?: string;
   password?: string;
   dre: string;
 };
@@ -149,7 +150,7 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
         .filter(Boolean)
         .some((value) => value.toLowerCase().includes(query));
       if (ownFields) return true;
-      return (usersByDreMap.get(dre.id) ?? []).some((user) => user.username.toLowerCase().includes(query));
+      return (usersByDreMap.get(dre.id) ?? []).some((user) => user.username.toLowerCase().includes(query) || user.email.toLowerCase().includes(query));
     });
   }, [dres, search, statusFilter, usersByDreMap]);
 
@@ -245,6 +246,7 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
       title: "Novo usuário cadastrado",
       subtitle: `A conta regional de ${createdUser.dre} foi criada com sucesso.`,
       username: createdUser.username,
+      email: createdUser.email,
       password,
       dre: createdUser.dre,
     });
@@ -252,10 +254,13 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
 
   function handleResetPasswordSuccess(user: AdminUserItem, newPassword: string) {
     setUserToResetPass(null);
+    setUsers((current) => current.map((item) => item.id === user.id ? { ...item, must_change_password: true } : item));
+    onDataChanged?.();
     setCredentialsModal({
-      title: "Senha redefinida com sucesso",
-      subtitle: `A nova senha de ${user.username} já está ativa no sistema.`,
+      title: "Credencial temporária gerada",
+      subtitle: `${user.email || user.username} deverá criar uma nova senha no próximo acesso.`,
       username: user.username,
+      email: user.email,
       password: newPassword,
       dre: user.dre,
     });
@@ -451,16 +456,24 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
                               ) : (
                                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                                   <table className="w-full min-w-[760px]">
-                                    <thead><tr><th>Usuário</th><th>Perfil</th><th>Cadastro</th><th className="text-center">Acesso</th><th className="text-right">Ações</th></tr></thead>
+                                    <thead><tr><th>Conta</th><th>Perfil</th><th>Cadastro</th><th className="text-center">Situação</th><th className="text-right">Ações</th></tr></thead>
                                     <tbody>
                                       {linkedUsers.map((user) => (
                                         <tr key={user.id} className={!user.active ? "opacity-60" : ""}>
                                           <td>
-                                            <div className="flex items-center gap-2"><span className="font-mono font-semibold text-slate-800">{user.username}</span><button type="button" onClick={async () => { if (await copyToClipboard(user.username)) showToast(`Usuário “${user.username}” copiado.`); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Copiar usuário"><Copy size={13} /></button></div>
+                                            <div className="flex items-center gap-2"><span className="font-semibold text-slate-800">{user.email || "Sem e-mail (legado)"}</span>{user.email && <button type="button" onClick={async () => { if (await copyToClipboard(user.email)) showToast(`E-mail “${user.email}” copiado.`); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Copiar e-mail"><Copy size={13} /></button>}</div>
+                                            <p className="mt-0.5 font-mono text-xs text-slate-500">Usuário legado: {user.username}</p>
                                           </td>
                                           <td><span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-600"><ShieldCheck size={11} />DRE</span></td>
                                           <td className="text-xs text-slate-500">{formatDate(user.created_at)}</td>
-                                          <td className="text-center"><QuickStatusToggle checked={user.active} loading={togglingUserId === user.id} onChange={(next) => handleToggleUserStatus(user, next)} activeLabel="Ativo" inactiveLabel="Inativo" size="sm" /></td>
+                                          <td className="text-center">
+                                            <div className="flex flex-col items-center gap-1.5">
+                                              <QuickStatusToggle checked={user.active} loading={togglingUserId === user.id} onChange={(next) => handleToggleUserStatus(user, next)} activeLabel="Ativo" inactiveLabel="Inativo" size="sm" />
+                                              <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${!user.active ? "border-slate-200 bg-slate-100 text-slate-500" : user.must_change_password ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+                                                {!user.active ? "Usuário inativo" : user.must_change_password ? "Primeiro acesso pendente" : "Acesso ativo"}
+                                              </span>
+                                            </div>
+                                          </td>
                                           <td className="text-right">
                                             <div className="inline-flex items-center gap-1.5">
                                               <button
@@ -508,13 +521,14 @@ export function AbaGestaoDres({ token, onUnauth, onDataChanged }: AbaGestaoDresP
           title="Acesso do usuário"
           subtitle="Consulte o login desta conta regional e redefina a senha quando necessário."
           username={userToViewAccess.username}
+          email={userToViewAccess.email}
           dre={userToViewAccess.dre}
           onResetPassword={handleResetFromAccessViewer}
         />
       )}
 
       <ResetPasswordModal isOpen={Boolean(userToResetPass)} onClose={() => setUserToResetPass(null)} onSuccess={handleResetPasswordSuccess} token={token} user={userToResetPass} />
-      {credentialsModal && <CredentialsSuccessModal isOpen onClose={() => setCredentialsModal(null)} title={credentialsModal.title} subtitle={credentialsModal.subtitle} username={credentialsModal.username} password={credentialsModal.password} dre={credentialsModal.dre} />}
+      {credentialsModal && <CredentialsSuccessModal isOpen onClose={() => setCredentialsModal(null)} title={credentialsModal.title} subtitle={credentialsModal.subtitle} username={credentialsModal.username} email={credentialsModal.email} password={credentialsModal.password} dre={credentialsModal.dre} />}
     </div>
   );
 }

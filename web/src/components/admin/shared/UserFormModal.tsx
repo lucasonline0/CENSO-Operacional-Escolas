@@ -284,14 +284,14 @@ export function UserFormModal({
               {activeDres.map((dre) => {
                 const checked = selectedDreIds.includes(dre.id);
                 const dreDelegable = creatorDelegableDres.has(dre.id);
-                const disabled = preset === "dre" && checked && selectedDreIds.length === 1 || !dreDelegable;
+                const disabled = !dreDelegable;
                 return (
                   <label key={dre.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 hover:bg-slate-50">
                     <input
                       type={preset === "dre" ? "radio" : "checkbox"}
                       name={preset === "dre" ? "dre" : undefined}
                       checked={checked}
-                      disabled={disabled && preset !== "dre"}
+                      disabled={disabled}
                       onChange={() => {
                         if (preset === "dre") {
                           setSelectedDreIds([dre.id]);

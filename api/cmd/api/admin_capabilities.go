@@ -14,13 +14,25 @@ func (app *application) requireRequestCapability(next http.Handler) http.Handler
 			next.ServeHTTP(w, r)
 			return
 		}
+		scope, ok := GetAdminAccessScope(r.Context())
+		if !ok {
+			app.errorJSON(w, fmt.Errorf("escopo de autorização ausente"), http.StatusForbidden)
+			return
+		}
+		if r.URL.Path == "/v1/admin/dres" && r.Method == http.MethodGet {
+			if scope.HasPermission(PermissionDREsManage) || scope.HasPermission(PermissionUsersCreate) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			app.errorJSON(w, fmt.Errorf("permissão insuficiente"), http.StatusForbidden)
+			return
+		}
 		permission := permissionForRequest(r)
 		if permission == "" {
 			app.errorJSON(w, fmt.Errorf("ação sem capability configurada"), http.StatusForbidden)
 			return
 		}
-		scope, ok := GetAdminAccessScope(r.Context())
-		if !ok || !scope.HasPermission(permission) {
+		if !scope.HasPermission(permission) {
 			app.errorJSON(w, fmt.Errorf("permissão insuficiente"), http.StatusForbidden)
 			return
 		}

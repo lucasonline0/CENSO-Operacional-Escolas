@@ -789,8 +789,8 @@ func (app *application) AdminCreateDRE(w http.ResponseWriter, r *http.Request) {
 // (exclusivo para role=admin).
 func (app *application) AdminListDREs(w http.ResponseWriter, r *http.Request) {
 	scope, ok := GetAdminAccessScope(r.Context())
-	if !ok || !scope.HasPermission(PermissionDREsManage) {
-		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+	if !ok || (!scope.HasPermission(PermissionDREsManage) && !scope.HasPermission(PermissionUsersCreate)) {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores de DRE ou criadores de contas"), http.StatusForbidden)
 		return
 	}
 
@@ -806,9 +806,13 @@ func (app *application) AdminListDREs(w http.ResponseWriter, r *http.Request) {
 	// Filter out invalid legacy DREs
 	filtered := make([]*models.DRE, 0, len(dres))
 	for _, dre := range dres {
-		if !isInvalidLegacyDRE(dre.Nome) {
-			filtered = append(filtered, dre)
+		if isInvalidLegacyDRE(dre.Nome) {
+			continue
 		}
+		if scope.DataScope == "selected" && !scope.IsAuthorizedForDREID(dre.ID) {
+			continue
+		}
+		filtered = append(filtered, dre)
 	}
 
 	app.writeJSON(w, http.StatusOK, jsonResponse{

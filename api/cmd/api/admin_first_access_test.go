@@ -345,3 +345,42 @@ func TestAuthenticatedUserCanRotateOwnPassword(t *testing.T) {
 		t.Fatalf("new password login failed: status=%d body=%s", login.Code, login.Body.String())
 	}
 }
+
+
+func TestCustomSelectedScopeRevokesWhenAllAssignedDREsAreInactive(t *testing.T) {
+	_, handler, m := setupRuntimeAuthTest(t)
+	ctx := context.Background()
+	dre, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE CUSTOM REVOCATION", Ativa: true})
+	if err != nil {
+		t.Fatalf("create DRE: %v", err)
+	}
+	user, err := m.AdminUsers.ProvisionCustom(
+		ctx,
+		"custom.revocation",
+		"custom.revocation@example.test",
+		"Temporary!Password123",
+		[]string{PermissionCensusRead},
+		"selected",
+		[]int{dre.ID},
+	)
+	if err != nil {
+		t.Fatalf("provision custom: %v", err)
+	}
+
+	firstLogin, _ := runtimeLoginRequest(t, handler, user.Email, "Temporary!Password123", "203.0.113.60:5060")
+	challenge := decodePasswordSetupResponse(t, firstLogin).Data.ChallengeToken
+	completed := passwordSetupRequest(handler, challenge, "Definitive!Password456", "Definitive!Password456")
+	token := decodePasswordSetupResponse(t, completed).Data.Token
+	if token == "" {
+		t.Fatalf("complete first access: %s", completed.Body.String())
+	}
+	if err := m.DREs.SetActive(ctx, dre.ID, false); err != nil {
+		t.Fatalf("deactivate DRE: %v", err)
+	}
+	if rr := runtimeMeRequest(handler, token); rr.Code != http.StatusUnauthorized {
+		t.Fatalf("session survived removal of every active DRE in selected scope: %d %s", rr.Code, rr.Body.String())
+	}
+	if login, newToken := runtimeLoginRequest(t, handler, user.Email, "Definitive!Password456", "203.0.113.61:5061"); login.Code != http.StatusUnauthorized || newToken != "" {
+		t.Fatalf("custom selected account authenticated with no active DRE: status=%d body=%s", login.Code, login.Body.String())
+	}
+}

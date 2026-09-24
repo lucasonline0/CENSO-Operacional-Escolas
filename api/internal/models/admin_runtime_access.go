@@ -148,7 +148,13 @@ func (m *AdminUserModel) getRuntimeAccess(ctx context.Context, byID bool, id int
 			return nil, err
 		}
 		if access.DataScope == "selected" {
-			dreRows, err := m.DB.QueryContext(ctx, `SELECT dre_id FROM admin_user_dres WHERE user_id=$1 ORDER BY dre_id`, access.ID)
+			dreRows, err := m.DB.QueryContext(ctx, `
+				SELECT aud.dre_id
+				FROM admin_user_dres aud
+				JOIN dres d ON d.id = aud.dre_id
+				WHERE aud.user_id = $1
+				  AND d.ativa = true
+				ORDER BY aud.dre_id`, access.ID)
 			if err != nil {
 				return nil, err
 			}

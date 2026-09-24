@@ -394,6 +394,9 @@ func validRuntimeAccess(access *models.RuntimeAdminAccess) bool {
 	if access.DataScope == "all" {
 		return true
 	}
+	if access.Role == RoleDRE {
+		return access.DREID > 0 && access.DREActive
+	}
 	// Selected IDs are FK-backed. Their active status is rechecked by the data
 	// queries' canonical authorization path; at least one association is
 	// mandatory here so an empty selected scope cannot authenticate.

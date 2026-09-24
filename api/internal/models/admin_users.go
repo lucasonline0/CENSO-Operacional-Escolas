@@ -352,13 +352,19 @@ func (m *AdminUserModel) ProvisionForDREID(ctx context.Context, username, email,
 	u.PasswordHash = string(hash)
 	// New legacy-compatible DRE provisioning receives the same explicit
 	// capabilities and selected scope as accounts backfilled by migration 0027.
-	for _, permission := range []string{"census.read", "analytics.read", "reports.read"} {
-		if _, execErr := tx.ExecContext(ctx, `INSERT INTO admin_user_permissions(user_id, permission) VALUES($1,$2) ON CONFLICT DO NOTHING`, u.ID, permission); execErr != nil {
+	var authorizationTablesPresent bool
+	if err := tx.QueryRowContext(ctx, `SELECT to_regclass(current_schema() || '.admin_user_permissions') IS NOT NULL AND to_regclass(current_schema() || '.admin_user_dres') IS NOT NULL`).Scan(&authorizationTablesPresent); err != nil {
+		return nil, err
+	}
+	if authorizationTablesPresent {
+		for _, permission := range []string{"census.read", "analytics.read", "reports.read"} {
+			if _, execErr := tx.ExecContext(ctx, `INSERT INTO admin_user_permissions(user_id, permission) VALUES($1,$2) ON CONFLICT DO NOTHING`, u.ID, permission); execErr != nil {
+				return nil, execErr
+			}
+		}
+		if _, execErr := tx.ExecContext(ctx, `INSERT INTO admin_user_dres(user_id, dre_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, u.ID, dre.ID); execErr != nil {
 			return nil, execErr
 		}
-	}
-	if _, execErr := tx.ExecContext(ctx, `INSERT INTO admin_user_dres(user_id, dre_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, u.ID, dre.ID); execErr != nil {
-		return nil, execErr
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, err

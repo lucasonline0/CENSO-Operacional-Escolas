@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -865,14 +866,14 @@ func TestSaudeOperacionalParseFilters(t *testing.T) {
 			Zona:             "Urbana",
 			RegiaoIntegracao: "GUAJARA",
 		}
-		if got != want {
+		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("parseSaudeOperacionalFilters = %+v; want %+v", got, want)
 		}
 	})
 
 	t.Run("ausentes viram vazio", func(t *testing.T) {
 		got := parseSaudeOperacionalFilters(url.Values{})
-		if got != (saudeOperacionalFilters{}) {
+		if !reflect.DeepEqual(got, saudeOperacionalFilters{}) {
 			t.Fatalf("parseSaudeOperacionalFilters(empty) = %+v; want zero value", got)
 		}
 	})
@@ -886,7 +887,7 @@ func TestSaudeOperacionalParseFilters(t *testing.T) {
 		}
 		got := parseSaudeOperacionalFilters(q)
 		want := saudeOperacionalFilters{Municipio: "Castanhal"}
-		if got != want {
+		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("parseSaudeOperacionalFilters(spaces) = %+v; want %+v", got, want)
 		}
 	})

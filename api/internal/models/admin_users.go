@@ -705,9 +705,20 @@ func (m *AdminUserModel) CompleteFirstAccess(ctx context.Context, userID, expect
 		  AND u.active = true
 		  AND u.must_change_password = true
 		  AND COALESCE(u.auth_version, 1) = $3
-		  AND EXISTS (
-		      SELECT 1 FROM dres d
-		      WHERE d.id = u.dre_id AND d.ativa = true
+		  AND (
+		      (u.role = 'dre' AND EXISTS (
+		          SELECT 1 FROM dres d
+		          WHERE d.id = u.dre_id AND d.ativa = true
+		      ))
+		      OR
+		      (u.role = 'custom' AND u.data_scope = 'all')
+		      OR
+		      (u.role = 'custom' AND u.data_scope = 'selected' AND EXISTS (
+		          SELECT 1
+		          FROM admin_user_dres aud
+		          JOIN dres d ON d.id = aud.dre_id
+		          WHERE aud.user_id = u.id AND d.ativa = true
+		      ))
 		  )
 		RETURNING u.auth_version`, string(hash), userID, expectedAuthVersion).Scan(&newAuthVersion)
 	if err == sql.ErrNoRows {

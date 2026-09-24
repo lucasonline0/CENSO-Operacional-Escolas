@@ -223,3 +223,65 @@ func TestAdministrativeResetReturnsAccountToFirstAccess(t *testing.T) {
 		t.Fatalf("reset did not restore first-access flow: status=%d token=%q body=%s", resetLogin.Code, resetToken, resetLogin.Body.String())
 	}
 }
+
+
+func TestCustomFirstAccessCompletesForGlobalAndSelectedScopes(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		dataScope string
+		selected  bool
+	}{
+		{name: "global", dataScope: "all"},
+		{name: "selected", dataScope: "selected", selected: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, handler, m := setupRuntimeAuthTest(t)
+			ctx := context.Background()
+
+			var dreIDs []int
+			if tc.selected {
+				dre, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE CUSTOM FIRST ACCESS " + tc.name, Ativa: true})
+				if err != nil {
+					t.Fatalf("create DRE: %v", err)
+				}
+				dreIDs = []int{dre.ID}
+			}
+
+			temporaryPassword := "Temporary!Custom123"
+			finalPassword := "Definitive!Custom456"
+			user, err := m.AdminUsers.ProvisionCustom(
+				ctx,
+				"custom.first."+tc.name,
+				"custom.first."+tc.name+"@example.test",
+				temporaryPassword,
+				[]string{PermissionCensusRead},
+				tc.dataScope,
+				dreIDs,
+			)
+			if err != nil {
+				t.Fatalf("provision custom: %v", err)
+			}
+
+			login, token := runtimeLoginRequest(t, handler, user.Email, temporaryPassword, "203.0.113.40:5040")
+			if login.Code != http.StatusForbidden || token != "" {
+				t.Fatalf("temporary credential received normal session: status=%d token=%q body=%s", login.Code, token, login.Body.String())
+			}
+			challenge := decodePasswordSetupResponse(t, login).Data.ChallengeToken
+			if challenge == "" {
+				t.Fatalf("missing first-access challenge: %s", login.Body.String())
+			}
+
+			completed := passwordSetupRequest(handler, challenge, finalPassword, finalPassword)
+			if completed.Code != http.StatusOK {
+				t.Fatalf("custom first access failed: status=%d body=%s", completed.Code, completed.Body.String())
+			}
+			normalToken := decodePasswordSetupResponse(t, completed).Data.Token
+			if normalToken == "" {
+				t.Fatal("custom first access did not issue a normal session")
+			}
+			if rr := runtimeMeRequest(handler, normalToken); rr.Code != http.StatusOK {
+				t.Fatalf("custom session after setup status=%d body=%s", rr.Code, rr.Body.String())
+			}
+		})
+	}
+}

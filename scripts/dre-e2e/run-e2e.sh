@@ -242,6 +242,21 @@ FROM dres d WHERE d.nome = '$E2E_DRE_A_NAME';
 INSERT INTO admin_users (username, email, password_hash, role, dre_id, active, auth_version, must_change_password, created_at, updated_at)
 SELECT '$DRE_B_USERNAME', '$DRE_B_EMAIL', '$DRE_B_PASSWORD_HASH', 'dre', d.id, true, 1, false, NOW(), NOW()
 FROM dres d WHERE d.nome = '$E2E_DRE_B_NAME';
+
+-- As contas abaixo representam contas existentes inseridas fora do fluxo de
+-- provisionamento da API; replique explicitamente o backfill da migration 0027.
+INSERT INTO admin_user_permissions (user_id, permission)
+SELECT u.id, p.permission
+FROM admin_users u
+CROSS JOIN (VALUES ('census.read'), ('analytics.read'), ('reports.read')) AS p(permission)
+WHERE u.username IN ('$DRE_A_USERNAME', '$DRE_B_USERNAME')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO admin_user_dres (user_id, dre_id)
+SELECT u.id, u.dre_id
+FROM admin_users u
+WHERE u.username IN ('$DRE_A_USERNAME', '$DRE_B_USERNAME')
+ON CONFLICT DO NOTHING;
 SQL
 
 # ─── 8. Frontend Next.js (production) ───────────────────────────────────

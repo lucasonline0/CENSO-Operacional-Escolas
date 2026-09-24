@@ -303,8 +303,15 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 	// Filter out invalid legacy DREs
 	dres = filterOutInvalidDREs(dres)
 
-	// Municípios: filtrados por dre, zona, regiao (não pelo próprio municipio)
-	municipiosWhere, municipiosArgs := filtrosOpcoesSchoolsWhereWithAuthorization(f, "s", "municipio", authorizedDRE)
+	// Municípios são um filtro pai de zona, escola e INEP. Não os restrinja
+	// pelos filtros descendentes ativos: caso contrário, após selecionar uma
+	// zona, o usuário só conseguiria trocar para municípios que também possuem
+	// aquela zona. Isso deixa o select sem opções válidas para mudar o recorte.
+	municipiosFilters := f
+	municipiosFilters.Zona = ""
+	municipiosFilters.SchoolID = 0
+	municipiosFilters.CodigoINEP = ""
+	municipiosWhere, municipiosArgs := filtrosOpcoesSchoolsWhereWithAuthorization(municipiosFilters, "s", "municipio", authorizedDRE)
 	municipios, err := queryStringSlice(app, ctx, `
 		SELECT DISTINCT COALESCE(NULLIF(TRIM(s.municipio), ''), 'Não informado') AS municipio
 		FROM schools s

@@ -107,17 +107,17 @@ function FirstAccessForm({ challenge, onComplete, onBack }: { challenge: string;
             </div>
             <form className="login__form" onSubmit={submit} noValidate>
               <label className="login__field">
-                <span className="login__label">Nova senha</span>
+                <span className="login__label" id="new-password-label">Nova senha</span>
                 <div className="login__input-wrap">
-                  <input type={showNew ? "text" : "password"} autoComplete="new-password" maxLength={128} className="login__input" disabled={loading} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+                  <input id="new-password" aria-labelledby="new-password-label" type={showNew ? "text" : "password"} autoComplete="new-password" maxLength={128} className="login__input" disabled={loading} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
                   <button type="button" className="login__input-toggle" aria-label={showNew ? "Ocultar nova senha" : "Mostrar nova senha"} onClick={() => setShowNew((value) => !value)}>{showNew ? "Ocultar" : "Mostrar"}</button>
                 </div>
                 <span className="text-xs text-slate-500">Use no mínimo 12 caracteres.</span>
               </label>
               <label className="login__field">
-                <span className="login__label">Confirmar nova senha</span>
+                <span className="login__label" id="confirm-new-password-label">Confirmar nova senha</span>
                 <div className="login__input-wrap">
-                  <input type={showConfirm ? "text" : "password"} autoComplete="new-password" maxLength={128} className="login__input" disabled={loading} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
+                  <input id="confirm-new-password" aria-labelledby="confirm-new-password-label" type={showConfirm ? "text" : "password"} autoComplete="new-password" maxLength={128} className="login__input" disabled={loading} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
                   <button type="button" className="login__input-toggle" aria-label={showConfirm ? "Ocultar confirmação" : "Mostrar confirmação"} onClick={() => setShowConfirm((value) => !value)}>{showConfirm ? "Ocultar" : "Mostrar"}</button>
                 </div>
               </label>

@@ -52,7 +52,7 @@ func schoolDREAuthorizationPredicate(alias, dreIDParam, dreNameParam string) str
 	alias = strings.TrimSpace(alias)
 	return fmt.Sprintf(`(
 	CASE
-		WHEN %s THEN %s = %s
+		WHEN %s THEN %s = ANY(string_to_array(BTRIM(%s::text), ',')::int[])
 		ELSE UPPER(TRIM(%s.dre)) = UPPER(TRIM(%s))
 	END
 )`, canonicalSchoolDREColumnSQL, schoolCanonicalDREIDExpr(alias), dreIDParam, alias, dreNameParam)
@@ -63,13 +63,14 @@ func schoolDREAuthorizationPredicate(alias, dreIDParam, dreNameParam string) str
 // scope, so authorization is by ID. dreID == 0 is the admin path, where a
 // textual query-string filter may optionally resolve through the master DRE.
 func schoolDREScopedFilterPredicate(alias, dreIDParam, dreNameParam string) string {
+	provided := fmt.Sprintf("(NULLIF(BTRIM(%s::text), '') IS NOT NULL AND BTRIM(%s::text) <> '0')", dreIDParam, dreIDParam)
 	return fmt.Sprintf(`(
-	(%s > 0 AND %s)
+	(%s AND %s)
 	OR
-	(%s = 0 AND (%s = '' OR %s))
-)`, dreIDParam,
+	(NOT %s AND (%s = '' OR %s))
+)`, provided,
 		schoolDREAuthorizationPredicate(alias, dreIDParam, dreNameParam),
-		dreIDParam, dreNameParam,
+		provided, dreNameParam,
 		schoolDRENamePredicate(alias, dreNameParam),
 	)
 }
@@ -130,7 +131,7 @@ func analyticsDREAuthorizationPredicate(schoolIDExpr, legacyDREExpr, dreIDParam,
 			SELECT 1
 			FROM schools dre_school
 			WHERE dre_school.id = %s
-			  AND %s = %s
+			  AND %s = ANY(string_to_array(BTRIM(%s::text), ',')::int[])
 		)
 		ELSE UPPER(TRIM(%s)) = UPPER(TRIM(%s))
 	END
@@ -144,13 +145,14 @@ func analyticsDREAuthorizationPredicate(schoolIDExpr, legacyDREExpr, dreIDParam,
 // analytics views. A runtime DRE scope (dreID > 0) is always an ID comparison;
 // an admin may still use the textual filter, resolved through the master table.
 func analyticsDREScopedFilterPredicate(schoolIDExpr, legacyDREExpr, dreIDParam, dreNameParam string) string {
+	provided := fmt.Sprintf("(NULLIF(BTRIM(%s::text), '') IS NOT NULL AND BTRIM(%s::text) <> '0')", dreIDParam, dreIDParam)
 	return fmt.Sprintf(`(
-	(%s > 0 AND %s)
+	(%s AND %s)
 	OR
-	(%s = 0 AND (%s = '' OR %s))
-)`, dreIDParam,
+	(NOT %s AND (%s = '' OR %s))
+)`, provided,
 		analyticsDREAuthorizationPredicate(schoolIDExpr, legacyDREExpr, dreIDParam, dreNameParam),
-		dreIDParam, dreNameParam,
+		provided, dreNameParam,
 		analyticsDREPredicate(schoolIDExpr, legacyDREExpr, dreNameParam),
 	)
 }

@@ -18,7 +18,7 @@ func (app *application) AdminDashboardCanonical(w http.ResponseWriter, r *http.R
 
 	if scope.DataScope == "selected" || scope.Role == RoleDRE {
 		auth := schoolDREAuthorizationPredicate("s", "$1", "$2")
-		args := []any{scope.DREID, strings.TrimSpace(scope.DRE)}
+		args := []any{scope.SQLDREScopeParam(), strings.TrimSpace(scope.DRE)}
 
 		err := db.QueryRowContext(ctx, `
 			SELECT

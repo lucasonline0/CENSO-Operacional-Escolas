@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -64,6 +65,20 @@ func TestDRECanonicalScopedPredicateIgnoresForgedLegacyTextAndLongName(t *testin
 	}
 	if count != 1 {
 		t.Fatalf("canonical analytics scope count=%d; want 1", count)
+	}
+
+	multiScope := fmt.Sprintf("%d,%d", targetID, otherID)
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM schools s WHERE `+predicate, multiScope, "").Scan(&count); err != nil {
+		t.Fatalf("canonical multi-DRE school predicate: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("canonical multi-DRE school count=%d; want 2", count)
+	}
+	if err := tx.QueryRow(viewQuery, multiScope, "").Scan(&count); err != nil {
+		t.Fatalf("canonical multi-DRE analytics predicate: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("canonical multi-DRE analytics count=%d; want 2", count)
 	}
 }
 

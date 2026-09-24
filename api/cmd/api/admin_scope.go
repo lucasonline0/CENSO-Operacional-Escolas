@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strconv"
 	"strings"
 )
 
@@ -77,6 +78,31 @@ func (scope AdminAccessScope) ScopedDREIDs() []int {
 		return nil
 	}
 	return append([]int(nil), (*scope.dreIDs)...)
+}
+
+func dreScopeSQLArg(primary int, ids []int) any {
+	seen := make(map[int]bool, len(ids)+1)
+	parts := make([]string, 0, len(ids)+1)
+	for _, id := range ids {
+		if id > 0 && !seen[id] {
+			seen[id] = true
+			parts = append(parts, strconv.Itoa(id))
+		}
+	}
+	if len(parts) == 0 && primary > 0 {
+		parts = append(parts, strconv.Itoa(primary))
+	}
+	if len(parts) == 0 {
+		return 0
+	}
+	return strings.Join(parts, ",")
+}
+
+func (scope AdminAccessScope) SQLDREScopeParam() any {
+	if scope.DataScope != "selected" && !(scope.DataScope == "" && scope.Role == RoleDRE) {
+		return 0
+	}
+	return dreScopeSQLArg(scope.DREID, scope.ScopedDREIDs())
 }
 
 type contextKey string

@@ -86,6 +86,7 @@ type idebFilters struct {
 	CodigoINEP          string
 	RequireLinkedSchool bool
 	DREID               int
+	DREIDs              []int
 }
 
 // args devolve os argumentos posicionais na ordem esperada por idebFromWhere
@@ -105,7 +106,7 @@ func (f idebFilters) args() []any {
 		f.SchoolID,            // $11
 		f.CodigoINEP,          // $12
 		f.RequireLinkedSchool, // $13
-		f.DREID,               // $14
+		dreScopeSQLArg(f.DREID, f.DREIDs), // $14
 	}
 }
 
@@ -171,6 +172,7 @@ func applyIdebAccessScope(r *http.Request, f idebFilters) idebFilters {
 	f.SchoolID = shared.SchoolID
 	f.CodigoINEP = shared.CodigoINEP
 	f.DREID = shared.DREID
+	f.DREIDs = append([]int(nil), shared.DREIDs...)
 	if scope, ok := GetAdminAccessScope(r.Context()); ok && scope.Role == RoleDRE {
 		f.RequireLinkedSchool = true
 	}

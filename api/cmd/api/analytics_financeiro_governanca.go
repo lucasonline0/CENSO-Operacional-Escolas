@@ -67,6 +67,7 @@ type prodepFilters struct {
 	CodigoINEP            string
 	RequireLinkedDRE      bool
 	DREID                 int
+	DREIDs                []int
 }
 
 // args devolve os argumentos posicionais na ordem esperada por prodepWhereSQL.
@@ -82,7 +83,7 @@ func (f prodepFilters) args() []any {
 		f.RequireLinkedDRE,
 		f.SchoolID,
 		f.CodigoINEP,
-		f.DREID,
+		dreScopeSQLArg(f.DREID, f.DREIDs),
 		f.Zona,
 	}
 }
@@ -315,6 +316,7 @@ func applyProdepAccessScope(r *http.Request, f prodepFilters) prodepFilters {
 	if scope, ok := GetAdminAccessScope(r.Context()); ok && scope.Role == RoleDRE {
 		f.RequireLinkedDRE = true
 		f.DREID = shared.DREID
+		f.DREIDs = append([]int(nil), shared.DREIDs...)
 	}
 	return f
 }

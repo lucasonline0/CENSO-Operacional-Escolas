@@ -83,13 +83,47 @@ func (m *AdminUserModel) ProvisionCustom(ctx context.Context, username, email, t
 		return nil, err
 	}
 	defer tx.Rollback()
+
+	// Serialize account identities exactly like regional provisioning. Username
+	// and email share the same login namespace, so cross-collisions must fail
+	// before a custom account can make another identity ambiguous.
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('admin_users_identity'))`); err != nil {
+		return nil, err
+	}
+	var usernameExists, emailExists, crossCollision bool
+	if err := tx.QueryRowContext(ctx, `
+		SELECT
+			EXISTS (SELECT 1 FROM admin_users WHERE LOWER(BTRIM(username)) = LOWER(BTRIM($1))),
+			EXISTS (SELECT 1 FROM admin_users WHERE email IS NOT NULL AND LOWER(BTRIM(email)) = LOWER(BTRIM($2))),
+			EXISTS (
+				SELECT 1 FROM admin_users
+				WHERE LOWER(BTRIM(username)) = LOWER(BTRIM($2))
+				   OR (email IS NOT NULL AND LOWER(BTRIM(email)) = LOWER(BTRIM($1)))
+			)`, username, email).Scan(&usernameExists, &emailExists, &crossCollision); err != nil {
+		return nil, err
+	}
+	if usernameExists {
+		return nil, ErrUsernameExists
+	}
+	if emailExists {
+		return nil, ErrEmailExists
+	}
+	if crossCollision {
+		return nil, ErrIdentityCollision
+	}
+
 	var u AdminUser
 	err = tx.QueryRowContext(ctx, `INSERT INTO admin_users (username,email,password_hash,role,active,auth_version,must_change_password,data_scope,created_at,updated_at) VALUES ($1,$2,$3,'custom',true,1,true,$4,NOW(),NOW()) RETURNING id,username,email,role,active,auth_version,must_change_password,data_scope,created_at,updated_at`, username, email, string(hash), dataScope).Scan(&u.ID, &u.Username, &u.Email, &u.Role, &u.Active, &u.AuthVersion, &u.MustChangePassword, &u.DataScope, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "unique") {
+		msg := strings.ToLower(err.Error())
+		switch {
+		case strings.Contains(msg, "email") && (strings.Contains(msg, "unique") || strings.Contains(msg, "duplicate")):
+			return nil, ErrEmailExists
+		case strings.Contains(msg, "username") && (strings.Contains(msg, "unique") || strings.Contains(msg, "duplicate")):
 			return nil, ErrUsernameExists
+		default:
+			return nil, err
 		}
-		return nil, err
 	}
 	for p := range unique {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO admin_user_permissions(user_id,permission) VALUES($1,$2)`, u.ID, p); err != nil {

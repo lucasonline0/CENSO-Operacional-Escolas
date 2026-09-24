@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -98,5 +100,52 @@ func TestSchoolManagementRoutesUseSchoolsCapability(t *testing.T) {
 		if got := permissionForRequest(req); got != PermissionSchoolsManageDRE {
 			t.Fatalf("%s %s capability=%q want=%q", tc.method, tc.path, got, PermissionSchoolsManageDRE)
 		}
+	}
+}
+
+
+func TestProvisionCustomRejectsCrossIdentityCollisions(t *testing.T) {
+	_, _, m := setupRuntimeAuthTest(t)
+	ctx := context.Background()
+	dre, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE IDENTITY COLLISION", Ativa: true})
+	if err != nil {
+		t.Fatalf("create DRE: %v", err)
+	}
+	_, err = m.AdminUsers.ProvisionForDREID(
+		ctx,
+		"regional.identity",
+		"regional.identity@example.test",
+		"Temporary!Password123",
+		RoleDRE,
+		dre.ID,
+	)
+	if err != nil {
+		t.Fatalf("seed regional account: %v", err)
+	}
+
+	_, err = m.AdminUsers.ProvisionCustom(
+		ctx,
+		"regional.identity@example.test",
+		"custom.one@example.test",
+		"Temporary!Password123",
+		[]string{PermissionCensusRead},
+		"all",
+		nil,
+	)
+	if !errors.Is(err, models.ErrIdentityCollision) {
+		t.Fatalf("username matching existing email error=%v want ErrIdentityCollision", err)
+	}
+
+	_, err = m.AdminUsers.ProvisionCustom(
+		ctx,
+		"custom.two",
+		"regional.identity",
+		"Temporary!Password123",
+		[]string{PermissionCensusRead},
+		"all",
+		nil,
+	)
+	if !errors.Is(err, models.ErrIdentityCollision) {
+		t.Fatalf("email matching existing username error=%v want ErrIdentityCollision", err)
 	}
 }

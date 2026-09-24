@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -19,6 +20,44 @@ func (app *application) requireAdminDREManagement(w http.ResponseWriter, r *http
 		return false
 	}
 	return true
+}
+
+func (app *application) ensureSchoolMutationScope(r *http.Request, schoolIDs []int, targetDREID int) error {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok {
+		return fmt.Errorf("escopo de acesso não encontrado")
+	}
+	if scope.DataScope == "all" || (scope.DataScope == "" && scope.Role == RoleAdmin) {
+		return nil
+	}
+	if targetDREID <= 0 || !scope.IsAuthorizedForDREID(targetDREID) {
+		return fmt.Errorf("DRE de destino fora do escopo autorizado")
+	}
+	for _, schoolID := range schoolIDs {
+		if schoolID <= 0 {
+			return models.ErrSchoolInvalidID
+		}
+		var currentDREID int
+		var currentDRE string
+		err := app.models.Schools.DB.QueryRowContext(r.Context(), `
+			SELECT `+schoolDREIDExpr("s")+`, `+schoolDRENameExpr("s")+`
+			FROM schools s
+			WHERE s.id = $1`, schoolID).Scan(&currentDREID, &currentDRE)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return models.ErrSchoolNotFound
+			}
+			return err
+		}
+		if currentDREID > 0 {
+			if !scope.IsAuthorizedForDREID(currentDREID) {
+				return fmt.Errorf("escola %d está fora do escopo autorizado", schoolID)
+			}
+		} else if !scope.IsAuthorizedForDRE(currentDRE) {
+			return fmt.Errorf("escola %d está fora do escopo autorizado", schoolID)
+		}
+	}
+	return nil
 }
 
 func parsePositiveRouteID(r *http.Request, param, label string) (int, error) {
@@ -70,6 +109,10 @@ func (app *application) AdminAssignSchoolsToDRE(w http.ResponseWriter, r *http.R
 	}
 	if req.SchoolID != nil {
 		req.SchoolIDs = append(req.SchoolIDs, *req.SchoolID)
+	}
+	if err := app.ensureSchoolMutationScope(r, req.SchoolIDs, dreID); err != nil {
+		app.errorJSON(w, err, http.StatusForbidden)
+		return
 	}
 
 	canonicalDRE, updated, err := app.models.Schools.AssignToDRE(r.Context(), dreID, req.SchoolIDs)
@@ -146,6 +189,11 @@ func (app *application) AdminMoveSchoolToDRE(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		dreID = dre.ID
+	}
+
+	if err := app.ensureSchoolMutationScope(r, []int{schoolID}, dreID); err != nil {
+		app.errorJSON(w, err, http.StatusForbidden)
+		return
 	}
 
 	canonicalDRE, _, err := app.models.Schools.AssignToDRE(r.Context(), dreID, []int{schoolID})

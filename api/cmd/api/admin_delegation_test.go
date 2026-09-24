@@ -1,6 +1,8 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"censo-api/internal/models"
@@ -80,5 +82,21 @@ func TestDelegatedAdministrationNeverTargetsMorePrivilegedAccount(t *testing.T) 
 	admin := AdminAccessScope{Username: "root", Role: RoleAdmin, DataScope: "all", permissions: &adminPerms}
 	if !canAdministerTarget(admin, &models.RuntimeAdminAccess{Username: "global", Role: "custom", DataScope: "all"}) {
 		t.Fatal("environment admin should be able to manage database accounts")
+	}
+}
+
+
+func TestSchoolManagementRoutesUseSchoolsCapability(t *testing.T) {
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodPost, path: "/v1/admin/dres/7/schools"},
+		{method: http.MethodPatch, path: "/v1/admin/schools/11/dre"},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, nil)
+		if got := permissionForRequest(req); got != PermissionSchoolsManageDRE {
+			t.Fatalf("%s %s capability=%q want=%q", tc.method, tc.path, got, PermissionSchoolsManageDRE)
+		}
 	}
 }

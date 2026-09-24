@@ -63,7 +63,9 @@ func permissionForRequest(r *http.Request) string {
 		return PermissionUsersCreate
 	case strings.HasPrefix(p, "/v1/admin/dres/") && strings.Contains(p, "/schools"):
 		return PermissionSchoolsManageDRE
-	case strings.HasPrefix(p, "/v1/admin/dres") || strings.HasPrefix(p, "/v1/admin/schools/"):
+	case strings.HasPrefix(p, "/v1/admin/schools/"):
+		return PermissionSchoolsManageDRE
+	case strings.HasPrefix(p, "/v1/admin/dres"):
 		return PermissionDREsManage
 	default:
 		return ""

@@ -35,7 +35,7 @@ import { AbaGestaoDres } from "@/components/admin/AbaGestaoDres";
 import { FiltrosGlobais } from "@/components/admin/FiltrosGlobais";
 import PresentationMode from "@/components/admin/PresentationMode";
 import type {
-  CensusPage, DashboardData, DashboardFilters, FiltrosOpcoes, AdminProfile,
+  CensusPage, DashboardData, DashboardFilters, FiltrosOpcoes, AdminProfile, AdminPermission,
 } from "@/components/admin/shared/types";
 
 // ─── Login ────────────────────────────────────────────────────────────────────
@@ -488,18 +488,37 @@ function NavGroup({
   );
 }
 
+function profileHasCapability(profile: AdminProfile | null | undefined, permission: AdminPermission): boolean {
+  return profile?.role === "admin" || profile?.permissions?.includes(permission) === true;
+}
+
+function profileCanManageAccess(profile: AdminProfile | null | undefined): boolean {
+  return (
+    profileHasCapability(profile, "users.read") ||
+    profileHasCapability(profile, "users.create") ||
+    profileHasCapability(profile, "users.manage") ||
+    profileHasCapability(profile, "users.reset_password") ||
+    profileHasCapability(profile, "dres.manage") ||
+    profileHasCapability(profile, "schools.manage_dre")
+  );
+}
+
+function preferredTabForProfile(profile: AdminProfile): Tab {
+  if (profileHasCapability(profile, "analytics.read")) return "perfil";
+  if (profileHasCapability(profile, "census.read")) return "census";
+  if (profileCanManageAccess(profile)) return "gestao";
+  return "census";
+}
+
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [profile, setProfile] = useState<AdminProfile | null>(null);
-  const hasCapability = useCallback((permission: string) => (
-    profile?.role === "admin" || profile?.permissions?.includes(permission as never) === true
-  ), [profile]);
-  const canAccessManagement =
-    hasCapability("users.read") ||
-    hasCapability("users.create") ||
-    hasCapability("users.manage") ||
-    hasCapability("users.reset_password") ||
-    hasCapability("dres.manage") ||
-    hasCapability("schools.manage_dre");
+  const hasCapability = useCallback(
+    (permission: AdminPermission) => profileHasCapability(profile, permission),
+    [profile],
+  );
+  const canReadAnalytics = hasCapability("analytics.read");
+  const canReadCensus = hasCapability("census.read");
+  const canAccessManagement = profileCanManageAccess(profile);
   const canSync = hasCapability("sync.execute");
   const [censusPage, setCensusPage] = useState<CensusPage | null>(null);
   const [tab, setTab] = useState<Tab>("perfil");
@@ -565,12 +584,23 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         }
       }
       setProfile(fresh);
+      const currentTab = tab;
+      const analyticsTabs: Tab[] = ["perfil", "pessoal", "tecnologia", "infraestrutura", "merenda", "servicos", "alunos", "governanca", "saude", "dre"];
+      const tabAllowed =
+        (analyticsTabs.includes(currentTab) && profileHasCapability(fresh, "analytics.read")) ||
+        (currentTab === "census" && profileHasCapability(fresh, "census.read")) ||
+        (currentTab === "gestao" && profileCanManageAccess(fresh));
+      if (!tabAllowed) {
+        const nextTab = preferredTabForProfile(fresh);
+        setTab(nextTab);
+        setVisited(new Set<Tab>([nextTab]));
+      }
     } catch (e) {
       if ((e as Error).message === "UNAUTHORIZED") { logout(); return; }
     } finally {
       revalidatingRef.current = false;
     }
-  }, [token, logout]);
+  }, [token, logout, tab]);
 
   // Heartbeat de sessão: valida a sessão na rede a cada intervalo e ao retornar
   // à aba/janela (visibilitychange/focus). Qualquer revogação remota encerra a
@@ -636,18 +666,26 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
          const userProfile = await fetchAdminMeFresh(token);
          if (!active) return;
          setProfile(userProfile);
-        profileRef.current = userProfile;
-        
+         profileRef.current = userProfile;
+         const initialTab = preferredTabForProfile(userProfile);
+         setTab(initialTab);
+         setVisited(new Set<Tab>([initialTab]));
+
          if (userProfile.role === "dre" && userProfile.dre) {
-            setFilters((prev) => ({ ...prev, dre: userProfile.dre ?? undefined }));
+           setFilters((prev) => ({ ...prev, dre: userProfile.dre ?? undefined }));
+         }
+         if (profileHasCapability(userProfile, "analytics.read")) {
+           await loadDb();
+         } else {
+           setLoading(false);
          }
        } catch (e) {
-        if ((e as Error).message === "UNAUTHORIZED") {
-            logout();
-            return;
-          }
+         if ((e as Error).message === "UNAUTHORIZED") {
+           logout();
+           return;
+         }
+         setLoading(false);
        }
-       loadDb();
      }
      init();
      return () => { active = false; };
@@ -657,11 +695,15 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   // Pequeno debounce: a busca textual agora dispara requisição ao backend e o
   // timeout evita uma chamada por tecla digitada.
   useEffect(() => {
-    if (tab !== "census") return;
+    if (tab !== "census" || !canReadCensus) return;
     const t = setTimeout(() => { loadCensus(); }, 300);
     return () => clearTimeout(t);
-  }, [tab, loadCensus]);
+  }, [tab, loadCensus, canReadCensus]);
   useEffect(() => {
+    if (!profile || !canReadAnalytics) {
+      setFiltrosOpcoes(null);
+      return;
+    }
     const qs = new URLSearchParams();
     if (filters.dre) qs.set("dre", filters.dre);
     if (filters.municipio) qs.set("municipio", filters.municipio);
@@ -673,10 +715,11 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     apiFetch<FiltrosOpcoes>(url, token)
       .then(setFiltrosOpcoes)
       .catch((e) => { if ((e as Error).message === "UNAUTHORIZED") logout(); });
-  }, [filters, token, logout, dataVersion]);
+  }, [filters, token, logout, dataVersion, profile, canReadAnalytics]);
 
 
   async function handleSync() {
+    if (!canSync) return;
     setSyncing(true);
     try {
       const res = await fetch(`${API}/v1/admin/sync-sheets`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
@@ -702,12 +745,19 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   };
 
   const handleNav = (id: Tab) => {
+    const analyticsTabs: Tab[] = ["perfil", "pessoal", "tecnologia", "infraestrutura", "merenda", "servicos", "alunos", "governanca", "saude", "dre"];
+    if (analyticsTabs.includes(id) && !canReadAnalytics) return;
+    if (id === "census" && !canReadCensus) return;
     if (id === "gestao" && !canAccessManagement) return;
     setTab(id);
     updateSearch("");
     setVisited((prev) => new Set([...prev, id]));
     setMobileNavOpen(false);
   };
+
+  const visibleOperationalNav = NAV_OPERACIONAL.filter((item) =>
+    item.id === "census" ? canReadCensus : canReadAnalytics,
+  );
 
   const [dark, setDark] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -761,15 +811,19 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             </button>
           </div>
 
-          <div className="ca-nav-group">
-            <div className="ca-nav-group-label">Indicadores</div>
-            <NavGroup items={NAV_INDICATORS} active={tab} onNav={handleNav} mobileOpen={mobileNavOpen} />
-          </div>
+          {canReadAnalytics && (
+            <div className="ca-nav-group">
+              <div className="ca-nav-group-label">Indicadores</div>
+              <NavGroup items={NAV_INDICATORS} active={tab} onNav={handleNav} mobileOpen={mobileNavOpen} />
+            </div>
+          )}
 
-          <div className="ca-nav-group">
-            <div className="ca-nav-group-label">Operacional</div>
-            <NavGroup items={NAV_OPERACIONAL} active={tab} onNav={handleNav} mobileOpen={mobileNavOpen} />
-          </div>
+          {visibleOperationalNav.length > 0 && (
+            <div className="ca-nav-group">
+              <div className="ca-nav-group-label">Operacional</div>
+              <NavGroup items={visibleOperationalNav} active={tab} onNav={handleNav} mobileOpen={mobileNavOpen} />
+            </div>
+          )}
 
           {canAccessManagement && (
             <div className="ca-nav-group">
@@ -815,7 +869,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 alt="FADEP · Secretaria de Educação · Governo do Pará"
                 className="ca-topbar-logo"
               />
-              <button
+              {canReadAnalytics && <button
                 type="button"
                 className="ca-pres-launch-btn ca-pres-mobile-disabled z-10"
                 title="Modo Apresentação"
@@ -829,7 +883,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               >
                 <MonitorPlay size={16} />
                 <span>Modo Apresentação</span>
-              </button>
+              </button>}
               <button className="ca-icon-btn" title="Mudar tema" onClick={() => setDark(!dark)}>
                 {
                   dark
@@ -852,7 +906,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               </div>
             )}
 
-            {tab !== "saude" && tab !== "gestao" && (
+            {canReadAnalytics && tab !== "saude" && tab !== "gestao" && (
               <div className="ca-filters-wrap">
                 <FiltrosGlobais
                   opcoes={filtrosOpcoes}
@@ -862,7 +916,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 />
               </div>
             )}
-            {visited.has("perfil") && (
+            {canReadAnalytics && visited.has("perfil") && (
               <div style={{ display: tab === "perfil" ? undefined : "none" }}>
                 <AbaCaracterizacao 
                   token={token} 
@@ -872,42 +926,42 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 />
               </div>
             )}
-            {visited.has("pessoal") && (
+            {canReadAnalytics && visited.has("pessoal") && (
               <div style={{ display: tab === "pessoal" ? undefined : "none" }}>
                 <AbaPessoalGestao token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
-            {visited.has("tecnologia") && (
+            {canReadAnalytics && visited.has("tecnologia") && (
               <div style={{ display: tab === "tecnologia" ? undefined : "none" }}>
                 <AbaTecnologia token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
-            {visited.has("infraestrutura") && (
+            {canReadAnalytics && visited.has("infraestrutura") && (
               <div style={{ display: tab === "infraestrutura" ? undefined : "none" }}>
                 <AbaInfraestruturaSeguranca token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
-            {visited.has("merenda") && (
+            {canReadAnalytics && visited.has("merenda") && (
               <div style={{ display: tab === "merenda" ? undefined : "none" }}>
                 <AbaMerenda token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
-            {visited.has("servicos") && (
+            {canReadAnalytics && visited.has("servicos") && (
               <div style={{ display: tab === "servicos" ? undefined : "none" }}>
                 <AbaServicosTerceirizados token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
-            {visited.has("alunos") && (
+            {canReadAnalytics && visited.has("alunos") && (
               <div style={{ display: tab === "alunos" ? undefined : "none" }}>
                 <AbaPerfilAlunos token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
-            {visited.has("governanca") && (
+            {canReadAnalytics && visited.has("governanca") && (
               <div style={{ display: tab === "governanca" ? undefined : "none" }}>
                 <AbaGestaoFinanceiraGovernanca token={token} onUnauth={logout} filters={filters} />
               </div>
             )}
-            {visited.has("saude") && (
+            {canReadAnalytics && visited.has("saude") && (
               <div style={{ display: tab === "saude" ? undefined : "none" }}>
                 <AbaSaudeOperacionalEscolas
                   token={token}
@@ -919,7 +973,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               </div>
             )}
 
-            {tab === "census" && (
+            {canReadCensus && tab === "census" && (
               <AbaTodosCensos
                 censusPage={censusPage}
                 filterStatus={filterStatus}
@@ -935,7 +989,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               />
             )}
 
-            {visited.has("dre") && (
+            {canReadAnalytics && visited.has("dre") && (
               <div style={{ display: tab === "dre" ? undefined : "none" }}>
                 <AbaPorDre token={token} onUnauth={logout} filters={filters} />
               </div>
@@ -959,11 +1013,11 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
       </div>
 
-      {viewId !== null && (
+      {canReadCensus && viewId !== null && (
         <JsonModal censusId={viewId} token={token} onClose={() => setViewId(null)} />
       )}
 
-      {presentationMode && (
+      {canReadAnalytics && presentationMode && (
         <PresentationMode
           onClose={() => setPresentationMode(false)}
           onNavigateTab={(tabId) => handleNav(tabId as Tab)}

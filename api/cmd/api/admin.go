@@ -53,12 +53,18 @@ var (
 		window:    10 * time.Minute,
 		lastSweep: time.Now(),
 	}
+
+	firstAccessRL = &rateLimiter{
+		attempts:  make(map[string][]time.Time),
+		window:    15 * time.Minute,
+		lastSweep: time.Now(),
+	}
 )
 
 const (
-	maxLoginAttempts = 5
-	rlWindow         = 15 * time.Minute
-	jwtExpiry        = 2 * time.Hour
+	maxLoginAttempts        = 5
+	rlWindow                = 15 * time.Minute
+	jwtExpiry               = 2 * time.Hour
 
 	// Escrita de censo/escola: alto o suficiente para o formulário completo
 	// (11 passos + salvamentos automáticos) repetido por várias escolas.
@@ -68,6 +74,10 @@ const (
 	// Upload de foto: uma por escola na prática; margem para reenvios.
 	maxUploads   = 40
 	uploadWindow = 10 * time.Minute
+
+	// Tentativas de primeira mudança de senha por IP
+	maxFirstAccessAttempts = 10
+	maxFirstAccessWindow   = 15 * time.Minute
 )
 
 // SweepNow executa uma limpeza imediata de chaves inativas sem depender de

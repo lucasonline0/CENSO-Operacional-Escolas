@@ -55,7 +55,7 @@ type CredentialsState = {
 
 export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGestaoDresProps) {
   const hasCapability = (permission: string) =>
-    profile.role === "admin" || profile.permissions?.includes(permission as never) === true;
+    profile?.permissions?.includes(permission as never) === true;
   const canReadUsers = hasCapability("users.read");
   const canCreateUsers = hasCapability("users.create");
   const canManageUsers = hasCapability("users.manage");

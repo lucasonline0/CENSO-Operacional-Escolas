@@ -41,7 +41,7 @@ import type {
 
 // ─── Login ────────────────────────────────────────────────────────────────────
 
-function FirstAccessForm({ challenge, onComplete, onBack }: { challenge: string; onComplete: (token: string) => void; onBack: () => void }) {
+function FirstAccessModal({ challenge, onComplete, onChallengeExpired }: { challenge: string; onComplete: (token: string) => void; onChallengeExpired: () => void }) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNew, setShowNew] = useState(false);
@@ -64,6 +64,12 @@ function FirstAccessForm({ challenge, onComplete, onBack }: { challenge: string;
       const payload = await response.json() as { message?: string; data?: { token?: string } };
       const token = payload.data?.token;
       if (!response.ok || !token) {
+        if (response.status === 401) {
+          clearToken();
+          clearApiCache();
+          onChallengeExpired();
+          return;
+        }
         setError(payload.message ?? "Não foi possível criar a nova senha.");
         return;
       }
@@ -88,48 +94,69 @@ function FirstAccessForm({ challenge, onComplete, onBack }: { challenge: string;
   }
 
   return (
-    <div className="censo-admin">
-      <main className="login">
-        <div className="login__left">
-          <div className="login__left-circle login__left-circle--lg" aria-hidden="true" />
-          <div className="login__left-circle login__left-circle--sm" aria-hidden="true" />
-          <div className="login__left-inner">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="login__left-logo" src="/logo-horizontal-letter-white.png" alt="FADEP · Secretaria de Educação · Governo do Pará" />
-            <div className="login__left-brand"><h1 className="login__left-title">Censo SEDUC</h1><p className="login__left-subtitle">Operacional e Estrutural</p></div>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="first-access-title">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+        <div className="mb-5">
+          <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+            <KeyRound size={19} />
           </div>
+          <h2 id="first-access-title" className="text-lg font-semibold text-slate-900">Crie sua senha</h2>
+          <p className="mt-1 text-sm leading-5 text-slate-500">
+            Sua credencial inicial é temporária. Você precisa criar uma senha definitiva antes de acessar o Censo.
+          </p>
         </div>
-        <div className="login__right">
-          <div className="login__form-wrapper">
-            <div className="login__form-header">
-              <span className="login__mobile-app">Censo SEDUC</span>
-              <h2 className="login__heading">Crie sua senha</h2>
-              <p className="login__subheading">A credencial inicial é temporária. Defina uma senha definitiva para acessar o painel.</p>
+
+        <form className="space-y-4" onSubmit={submit} noValidate>
+          <div className="block">
+            <label htmlFor="first-access-new-password" className="mb-1.5 block text-xs font-semibold text-slate-700">Nova senha</label>
+            <div className="relative">
+              <input
+                id="first-access-new-password"
+                type={showNew ? "text" : "password"}
+                autoComplete="new-password"
+                maxLength={128}
+                minLength={12}
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 pr-20 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                disabled={loading}
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                autoFocus
+              />
+              <button type="button" className="absolute inset-y-0 right-2 text-xs font-semibold text-slate-500" onClick={() => setShowNew((value) => !value)}>
+                {showNew ? "Ocultar" : "Mostrar"}
+              </button>
             </div>
-            <form className="login__form" onSubmit={submit} noValidate>
-              <label className="login__field">
-                <span className="login__label" id="new-password-label">Nova senha</span>
-                <div className="login__input-wrap">
-                  <input id="new-password" aria-labelledby="new-password-label" type={showNew ? "text" : "password"} autoComplete="new-password" maxLength={128} className="login__input" disabled={loading} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
-                  <button type="button" className="login__input-toggle" aria-label={showNew ? "Ocultar nova senha" : "Mostrar nova senha"} onClick={() => setShowNew((value) => !value)}>{showNew ? "Ocultar" : "Mostrar"}</button>
-                </div>
-                <span className="text-xs text-slate-500">Use no mínimo 12 caracteres.</span>
-              </label>
-              <label className="login__field">
-                <span className="login__label" id="confirm-new-password-label">Confirmar nova senha</span>
-                <div className="login__input-wrap">
-                  <input id="confirm-new-password" aria-labelledby="confirm-new-password-label" type={showConfirm ? "text" : "password"} autoComplete="new-password" maxLength={128} className="login__input" disabled={loading} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
-                  <button type="button" className="login__input-toggle" aria-label={showConfirm ? "Ocultar confirmação" : "Mostrar confirmação"} onClick={() => setShowConfirm((value) => !value)}>{showConfirm ? "Ocultar" : "Mostrar"}</button>
-                </div>
-              </label>
-              {confirmPassword && newPassword !== confirmPassword && <p className="login__error">As senhas não coincidem.</p>}
-              {error && <p className="login__error">{error}</p>}
-              <button type="submit" className="login__button" disabled={!valid || loading}>{loading ? <><Loader2 size={16} className="animate-spin" />Criando senha…</> : "Criar senha e entrar"}</button>
-              {error && <button type="button" className="text-sm font-semibold text-slate-600" onClick={onBack}>Voltar ao login</button>}
-            </form>
+            <span className="mt-1 block text-xs text-slate-500">Use no mínimo 12 caracteres.</span>
           </div>
-        </div>
-      </main>
+
+          <div className="block">
+            <label htmlFor="first-access-confirm-password" className="mb-1.5 block text-xs font-semibold text-slate-700">Confirmar nova senha</label>
+            <div className="relative">
+              <input
+                id="first-access-confirm-password"
+                type={showConfirm ? "text" : "password"}
+                autoComplete="new-password"
+                maxLength={128}
+                minLength={12}
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 pr-20 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                disabled={loading}
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+              />
+              <button type="button" className="absolute inset-y-0 right-2 text-xs font-semibold text-slate-500" onClick={() => setShowConfirm((value) => !value)}>
+                {showConfirm ? "Ocultar" : "Mostrar"}
+              </button>
+            </div>
+          </div>
+
+          {confirmPassword && newPassword !== confirmPassword && <p className="text-sm text-rose-600">As senhas não coincidem.</p>}
+          {error && <p className="text-sm text-rose-600">{error}</p>}
+
+          <button type="submit" className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" disabled={!valid || loading}>
+            {loading ? <><Loader2 size={16} className="animate-spin" />Salvando…</> : "Criar senha e entrar"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
@@ -182,10 +209,6 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
     } catch { setError("Não foi possível conectar ao servidor."); setStatus("idle"); }
   }
 
-  if (passwordSetupChallenge) {
-    return <FirstAccessForm challenge={passwordSetupChallenge} onComplete={onLogin} onBack={() => { setPasswordSetupChallenge(""); setError(""); }} />;
-  }
-
   return (
     <div className="censo-admin">
       <main className="login">
@@ -231,7 +254,7 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
                   <input
                     type="text" autoComplete="username" maxLength={254}
                     className="login__input login__input--icon"
-                    disabled={loading || blocked} value={username}
+                    disabled={loading || blocked || Boolean(passwordSetupChallenge)} value={username}
                     onChange={(e) => setUsername(e.target.value)}
                   />
                 </div>
@@ -251,7 +274,7 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
                     type={showPwd ? "text" : "password"}
                     autoComplete="current-password" maxLength={128}
                     className="login__input login__input--icon"
-                    disabled={loading || blocked} value={password}
+                    disabled={loading || blocked || Boolean(passwordSetupChallenge)} value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
                   <button
@@ -271,7 +294,7 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
               {error && <p className="login__error">{error}</p>}
               {blocked && <p className="login__warning">Muitas tentativas. Aguarde alguns minutos.</p>}
 
-              <button type="submit" className="login__button" disabled={loading || blocked}>
+              <button type="submit" className="login__button" disabled={loading || blocked || Boolean(passwordSetupChallenge)}>
                 {loading ? (
                   <><Loader2 size={16} className="animate-spin" />{status === "auth" ? "Autenticando…" : "Carregando painel…"}</>
                 ) : (
@@ -288,6 +311,18 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
         </div>
 
       </main>
+      {passwordSetupChallenge && (
+        <FirstAccessModal
+          challenge={passwordSetupChallenge}
+          onComplete={onLogin}
+          onChallengeExpired={() => {
+            setPasswordSetupChallenge("");
+            setPassword("");
+            setError("O acesso temporário expirou. Entre novamente para gerar um novo desafio.");
+            setStatus("idle");
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -490,7 +525,7 @@ function NavGroup({
 }
 
 function profileHasCapability(profile: AdminProfile | null | undefined, permission: AdminPermission): boolean {
-  return profile?.role === "admin" || profile?.permissions?.includes(permission) === true;
+  return profile?.permissions?.includes(permission) === true;
 }
 
 function profileCanManageAccess(profile: AdminProfile | null | undefined): boolean {
@@ -556,7 +591,10 @@ function Dashboard({ token, onLogout, onTokenRefresh }: { token: string; onLogou
   // (intervalo + visibilitychange/focus podem disparar próximos uns dos outros).
   const revalidatingRef = useRef(false);
   const profileRef = useRef<AdminProfile | null>(null);
-  useEffect(() => { profileRef.current = profile; }, [profile]);
+  useEffect(() => {
+    profileRef.current = profile;
+    if (profile?.must_change_password) logout();
+  }, [profile, logout]);
 
   // Revalida a sessão com /admin/me FORA do cache. 401 (reset de senha,
   // usuário inativo, DRE inativa) => logout imediato, sem reload. Um perfil com

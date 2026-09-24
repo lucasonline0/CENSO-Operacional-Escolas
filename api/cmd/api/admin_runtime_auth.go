@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -243,9 +244,21 @@ func (app *application) AdminCompleteFirstAccess(w http.ResponseWriter, r *http.
 		app.errorJSON(w, fmt.Errorf("challenge de primeiro acesso necessário"), http.StatusUnauthorized)
 		return
 	}
-	claims, err := parsePasswordSetupChallenge(strings.TrimPrefix(authHeader, "Bearer "))
+
+	challengeToken := strings.TrimPrefix(authHeader, "Bearer ")
+	claims, err := parsePasswordSetupChallenge(challengeToken)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("challenge inválido ou expirado"), http.StatusUnauthorized)
+		return
+	}
+
+	// Limita por challenge + IP. O fingerprint evita guardar o token bruto na
+	// memória e impede colisões entre contas/testes que reutilizem o mesmo user_id.
+	challengeFingerprint := sha256.Sum256([]byte(challengeToken))
+	rateKey := fmt.Sprintf("%x:%s", challengeFingerprint, clientIP(r))
+	if !firstAccessRL.allow(rateKey, maxFirstAccessAttempts, maxFirstAccessWindow) {
+		w.Header().Set("Retry-After", "900")
+		app.errorJSON(w, fmt.Errorf("muitas tentativas. Aguarde 15 minutos"), http.StatusTooManyRequests)
 		return
 	}
 

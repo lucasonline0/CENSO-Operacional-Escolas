@@ -746,33 +746,67 @@ func (m *AdminUserModel) CompleteFirstAccess(ctx context.Context, userID, expect
 		return 0, fmt.Errorf("erro ao gerar hash da senha: %w", err)
 	}
 
+	var authorizationSchemaPresent bool
+	if err := m.DB.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM information_schema.columns
+			WHERE table_schema = current_schema()
+			  AND table_name = 'admin_users'
+			  AND column_name = 'data_scope'
+		)
+		AND to_regclass(current_schema() || '.admin_user_dres') IS NOT NULL`).Scan(&authorizationSchemaPresent); err != nil {
+		return 0, err
+	}
+
 	var newAuthVersion int
-	err = m.DB.QueryRowContext(ctx, `
-		UPDATE admin_users u
-		SET password_hash = $1,
-		    must_change_password = false,
-		    auth_version = COALESCE(u.auth_version, 1) + 1,
-		    updated_at = NOW()
-		WHERE u.id = $2
-		  AND u.active = true
-		  AND u.must_change_password = true
-		  AND COALESCE(u.auth_version, 1) = $3
-		  AND (
-		      (u.role = 'dre' AND EXISTS (
-		          SELECT 1 FROM dres d
-		          WHERE d.id = u.dre_id AND d.ativa = true
-		      ))
-		      OR
-		      (u.role = 'custom' AND u.data_scope = 'all')
-		      OR
-		      (u.role = 'custom' AND u.data_scope = 'selected' AND EXISTS (
-		          SELECT 1
-		          FROM admin_user_dres aud
-		          JOIN dres d ON d.id = aud.dre_id
-		          WHERE aud.user_id = u.id AND d.ativa = true
-		      ))
-		  )
-		RETURNING u.auth_version`, string(hash), userID, expectedAuthVersion).Scan(&newAuthVersion)
+	if authorizationSchemaPresent {
+		err = m.DB.QueryRowContext(ctx, `
+			UPDATE admin_users u
+			SET password_hash = $1,
+			    must_change_password = false,
+			    auth_version = COALESCE(u.auth_version, 1) + 1,
+			    updated_at = NOW()
+			WHERE u.id = $2
+			  AND u.active = true
+			  AND u.must_change_password = true
+			  AND COALESCE(u.auth_version, 1) = $3
+			  AND (
+			      (u.role = 'dre' AND EXISTS (
+			          SELECT 1 FROM dres d
+			          WHERE d.id = u.dre_id AND d.ativa = true
+			      ))
+			      OR
+			      (u.role = 'custom' AND u.data_scope = 'all')
+			      OR
+			      (u.role = 'custom' AND u.data_scope = 'selected' AND EXISTS (
+			          SELECT 1
+			          FROM admin_user_dres aud
+			          JOIN dres d ON d.id = aud.dre_id
+			          WHERE aud.user_id = u.id AND d.ativa = true
+			      ))
+			  )
+			RETURNING u.auth_version`, string(hash), userID, expectedAuthVersion).Scan(&newAuthVersion)
+	} else {
+		// Compatibilidade com schemas anteriores à migration 0027. Neles somente
+		// contas DRE existem; custom depende explicitamente das tabelas de autorização.
+		err = m.DB.QueryRowContext(ctx, `
+			UPDATE admin_users u
+			SET password_hash = $1,
+			    must_change_password = false,
+			    auth_version = COALESCE(u.auth_version, 1) + 1,
+			    updated_at = NOW()
+			WHERE u.id = $2
+			  AND u.active = true
+			  AND u.must_change_password = true
+			  AND COALESCE(u.auth_version, 1) = $3
+			  AND u.role = 'dre'
+			  AND EXISTS (
+			      SELECT 1 FROM dres d
+			      WHERE d.id = u.dre_id AND d.ativa = true
+			  )
+			RETURNING u.auth_version`, string(hash), userID, expectedAuthVersion).Scan(&newAuthVersion)
+	}
 	if err == sql.ErrNoRows {
 		return 0, ErrPasswordSetupInvalid
 	}

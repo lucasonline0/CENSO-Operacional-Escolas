@@ -132,10 +132,17 @@ func (m *AdminUserModel) getRuntimeAccess(ctx context.Context, byID bool, id int
 	if err != nil {
 		return nil, err
 	}
-	// 0027 is required in production. During old-schema tests this query may
-	// not be available; legacy DRE permissions remain the safe equivalent.
-	rows, permissionsErr := m.DB.QueryContext(ctx, `SELECT permission FROM admin_user_permissions WHERE user_id=$1 ORDER BY permission`, access.ID)
-	if permissionsErr == nil {
+	var authorizationTablesPresent bool
+	if err := m.DB.QueryRowContext(ctx, `
+		SELECT to_regclass(current_schema() || '.admin_user_permissions') IS NOT NULL
+		   AND to_regclass(current_schema() || '.admin_user_dres') IS NOT NULL`).Scan(&authorizationTablesPresent); err != nil {
+		return nil, err
+	}
+	if authorizationTablesPresent {
+		rows, err := m.DB.QueryContext(ctx, `SELECT permission FROM admin_user_permissions WHERE user_id=$1 ORDER BY permission`, access.ID)
+		if err != nil {
+			return nil, err
+		}
 		defer rows.Close()
 		for rows.Next() {
 			var p string
@@ -176,7 +183,7 @@ func (m *AdminUserModel) getRuntimeAccess(ctx context.Context, byID bool, id int
 			access.DREIDs = []int{access.DREID}
 		}
 	} else {
-		return nil, permissionsErr
+		return nil, fmt.Errorf("authorization schema unavailable for role %q", access.Role)
 	}
 	return &access, nil
 }

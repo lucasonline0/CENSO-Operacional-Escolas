@@ -330,7 +330,7 @@ func (app *application) AdminChangeOwnPassword(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		switch {
 		case errors.Is(err, models.ErrCurrentPasswordInvalid):
-			app.errorJSON(w, fmt.Errorf("senha atual inválida"), http.StatusUnauthorized)
+			app.errorJSON(w, fmt.Errorf("senha atual inválida"), http.StatusBadRequest)
 		case errors.Is(err, models.ErrUserInactive), errors.Is(err, models.ErrUserNotFound):
 			app.errorJSON(w, fmt.Errorf("sessão revogada"), http.StatusUnauthorized)
 		case strings.Contains(err.Error(), "mínimo 12 caracteres"), strings.Contains(err.Error(), "máximo 128 caracteres"):

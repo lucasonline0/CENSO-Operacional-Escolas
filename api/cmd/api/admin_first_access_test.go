@@ -317,7 +317,7 @@ func TestAuthenticatedUserCanRotateOwnPassword(t *testing.T) {
 	}
 
 	wrong := selfPasswordChangeRequest(handler, oldToken, "Wrong!Password123", "Rotated!Password789")
-	if wrong.Code != http.StatusUnauthorized {
+	if wrong.Code != http.StatusBadRequest {
 		t.Fatalf("wrong current password status=%d body=%s", wrong.Code, wrong.Body.String())
 	}
 	if rr := runtimeMeRequest(handler, oldToken); rr.Code != http.StatusOK {

@@ -943,7 +943,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
             {canAccessManagement && visited.has("gestao") && (
               <div style={{ display: tab === "gestao" ? undefined : "none" }}>
-                <AbaGestaoDres token={token} onUnauth={logout} onDataChanged={handleDataChanged} />
+                <AbaGestaoDres token={token} profile={profile!} onUnauth={logout} onDataChanged={handleDataChanged} />
               </div>
             )}
           </div>

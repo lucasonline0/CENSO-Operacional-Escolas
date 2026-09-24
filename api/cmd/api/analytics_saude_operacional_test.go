@@ -914,7 +914,7 @@ func TestSaudeOperacionalBuildQueryArgs(t *testing.T) {
 			name:    "dre filtra o universo",
 			year:    2026,
 			filters: saudeOperacionalFilters{DRE: "CASTANHAL", DREID: 77},
-			want:    []any{2026, "CASTANHAL", "", "", "", 0, "", 77},
+			want:    []any{2026, "CASTANHAL", "", "", "", 0, "", "77"},
 		},
 		{
 			name:    "municipio filtra o universo",

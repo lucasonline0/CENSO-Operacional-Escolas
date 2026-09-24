@@ -133,7 +133,7 @@ func TestAdvancedScopeReportRequestCannotOverrideTokenDRE(t *testing.T) {
 		t.Fatalf("report honored hostile DRE query: %q", f.DRE)
 	}
 	args := f.scopedArgs()
-	if len(args) != 8 || args[1] != "DRE_A" || args[5] != 99 || args[6] != "X" || args[7] != 77 {
+	if len(args) != 8 || args[1] != "DRE_A" || args[5] != 99 || args[6] != "X" || args[7] != "77" {
 		t.Fatalf("unexpected scoped report args: %#v", args)
 	}
 }

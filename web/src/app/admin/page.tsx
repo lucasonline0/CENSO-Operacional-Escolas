@@ -107,10 +107,11 @@ function FirstAccessModal({ challenge, onComplete, onChallengeExpired }: { chall
         </div>
 
         <form className="space-y-4" onSubmit={submit} noValidate>
-          <label className="block">
+          <label className="block" htmlFor="first-access-new-password">
             <span className="mb-1.5 block text-xs font-semibold text-slate-700">Nova senha</span>
             <div className="relative">
               <input
+                id="first-access-new-password"
                 type={showNew ? "text" : "password"}
                 autoComplete="new-password"
                 maxLength={128}
@@ -128,10 +129,11 @@ function FirstAccessModal({ challenge, onComplete, onChallengeExpired }: { chall
             <span className="mt-1 block text-xs text-slate-500">Use no mínimo 12 caracteres.</span>
           </label>
 
-          <label className="block">
+          <label className="block" htmlFor="first-access-confirm-password">
             <span className="mb-1.5 block text-xs font-semibold text-slate-700">Confirmar nova senha</span>
             <div className="relative">
               <input
+                id="first-access-confirm-password"
                 type={showConfirm ? "text" : "password"}
                 autoComplete="new-password"
                 maxLength={128}

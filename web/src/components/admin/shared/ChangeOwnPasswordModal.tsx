@@ -64,7 +64,7 @@ export function ChangeOwnPasswordModal({ isOpen, token, onClose, onSuccess }: Ch
       Icon={KeyRound}
       onClose={onClose}
       closeDisabled={loading}
-      maxWidth="sm"
+      maxWidth="md"
     >
       <form onSubmit={submit} className="space-y-4 p-6">
         <label className="block">

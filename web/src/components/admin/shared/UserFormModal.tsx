@@ -85,6 +85,18 @@ export function UserFormModal({
     [creatorPermissions],
   );
 
+  // Compute which DREs the creator can delegate based on their data_scope.
+  // Admin can delegate all; custom with "selected" scope can only delegate DREs
+  // present in their own dre_ids list.
+  const creatorDelegableDres = useMemo(() => {
+    if (creatorIsAdmin) return new Set(activeDres.map((d) => d.id));
+    const creatorDres = new Set<number>();
+    if (creator?.data_scope?.type === "selected" && creator?.data_scope?.dre_ids) {
+      creator?.data_scope.dre_ids.forEach((id) => creatorDres.add(id));
+    }
+    return creatorDres;
+  }, [creator, activeDres, creatorIsAdmin]);
+
   useEffect(() => {
     if (!isOpen) return;
     const preselectedValid = preselectedDreId != null && activeDres.some((d) => d.id === preselectedDreId);
@@ -271,7 +283,8 @@ export function UserFormModal({
               {activeDres.length === 0 && <p className="p-2 text-xs text-slate-500">Nenhuma DRE disponível no seu escopo.</p>}
               {activeDres.map((dre) => {
                 const checked = selectedDreIds.includes(dre.id);
-                const disabled = preset === "dre" && checked && selectedDreIds.length === 1;
+                const dreDelegable = creatorDelegableDres.has(dre.id);
+                const disabled = preset === "dre" && checked && selectedDreIds.length === 1 || !dreDelegable;
                 return (
                   <label key={dre.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 hover:bg-slate-50">
                     <input

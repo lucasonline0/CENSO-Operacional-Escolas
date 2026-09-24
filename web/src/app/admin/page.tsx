@@ -41,7 +41,7 @@ import type {
 
 // ─── Login ────────────────────────────────────────────────────────────────────
 
-function FirstAccessForm({ challenge, onComplete, onBack }: { challenge: string; onComplete: (token: string) => void; onBack: () => void }) {
+function FirstAccessForm({ challenge, onComplete }: { challenge: string; onComplete: (token: string) => void }) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNew, setShowNew] = useState(false);
@@ -125,7 +125,6 @@ function FirstAccessForm({ challenge, onComplete, onBack }: { challenge: string;
               {confirmPassword && newPassword !== confirmPassword && <p className="login__error">As senhas não coincidem.</p>}
               {error && <p className="login__error">{error}</p>}
               <button type="submit" className="login__button" disabled={!valid || loading}>{loading ? <><Loader2 size={16} className="animate-spin" />Criando senha…</> : "Criar senha e entrar"}</button>
-              {error && <button type="button" className="text-sm font-semibold text-slate-600" onClick={onBack}>Voltar ao login</button>}
             </form>
           </div>
         </div>
@@ -183,7 +182,7 @@ function LoginForm({ onLogin }: { onLogin: (t: string) => void }) {
   }
 
   if (passwordSetupChallenge) {
-    return <FirstAccessForm challenge={passwordSetupChallenge} onComplete={onLogin} onBack={() => { setPasswordSetupChallenge(""); setError(""); }} />;
+    return <FirstAccessForm challenge={passwordSetupChallenge} onComplete={onLogin} />;
   }
 
   return (
@@ -490,7 +489,7 @@ function NavGroup({
 }
 
 function profileHasCapability(profile: AdminProfile | null | undefined, permission: AdminPermission): boolean {
-  return profile?.role === "admin" || profile?.permissions?.includes(permission) === true;
+  return profile?.permissions?.includes(permission) === true;
 }
 
 function profileCanManageAccess(profile: AdminProfile | null | undefined): boolean {
@@ -556,7 +555,7 @@ function Dashboard({ token, onLogout, onTokenRefresh }: { token: string; onLogou
   // (intervalo + visibilitychange/focus podem disparar próximos uns dos outros).
   const revalidatingRef = useRef(false);
   const profileRef = useRef<AdminProfile | null>(null);
-  useEffect(() => { profileRef.current = profile; }, [profile]);
+  useEffect(() => { profileRef.current = profile; if (profile?.must_change_password) { clearToken(); clearApiCache(); } }, [profile, clearToken, clearApiCache]);
 
   // Revalida a sessão com /admin/me FORA do cache. 401 (reset de senha,
   // usuário inativo, DRE inativa) => logout imediato, sem reload. Um perfil com

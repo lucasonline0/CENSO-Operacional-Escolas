@@ -243,6 +243,14 @@ func (app *application) AdminCompleteFirstAccess(w http.ResponseWriter, r *http.
 		app.errorJSON(w, fmt.Errorf("challenge de primeiro acesso necessário"), http.StatusUnauthorized)
 		return
 	}
+
+	ip := clientIP(r)
+	if !firstAccessRL.allow(ip, maxFirstAccessAttempts, maxFirstAccessWindow) {
+		w.Header().Set("Retry-After", "900")
+		app.errorJSON(w, fmt.Errorf("muitas tentativas. Aguarde 15 minutos"), http.StatusTooManyRequests)
+		return
+	}
+
 	claims, err := parsePasswordSetupChallenge(strings.TrimPrefix(authHeader, "Bearer "))
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("challenge inválido ou expirado"), http.StatusUnauthorized)

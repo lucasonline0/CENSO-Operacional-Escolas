@@ -89,10 +89,12 @@ export function UserFormModal({
   // Admin can delegate all; custom with "selected" scope can only delegate DREs
   // present in their own dre_ids list.
   const creatorDelegableDres = useMemo(() => {
-    if (creatorIsAdmin) return new Set(activeDres.map((d) => d.id));
+    if (creatorIsAdmin || creator?.data_scope?.type === "all") {
+      return new Set(activeDres.map((d) => d.id));
+    }
     const creatorDres = new Set<number>();
     if (creator?.data_scope?.type === "selected" && creator?.data_scope?.dre_ids) {
-      creator?.data_scope.dre_ids.forEach((id) => creatorDres.add(id));
+      creator.data_scope.dre_ids.forEach((id) => creatorDres.add(id));
     }
     return creatorDres;
   }, [creator, activeDres, creatorIsAdmin]);

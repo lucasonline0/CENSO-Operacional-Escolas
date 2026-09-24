@@ -100,7 +100,7 @@ function FirstAccessModal({ challenge, onComplete, onChallengeExpired }: { chall
           <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
             <KeyRound size={19} />
           </div>
-          <h2 id="first-access-title" className="text-lg font-semibold text-slate-900">Defina sua senha</h2>
+          <h2 id="first-access-title" className="text-lg font-semibold text-slate-900">Crie sua senha</h2>
           <p className="mt-1 text-sm leading-5 text-slate-500">
             Sua credencial inicial é temporária. Você precisa criar uma senha definitiva antes de acessar o Censo.
           </p>
@@ -151,7 +151,7 @@ function FirstAccessModal({ challenge, onComplete, onChallengeExpired }: { chall
           {error && <p className="text-sm text-rose-600">{error}</p>}
 
           <button type="submit" className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" disabled={!valid || loading}>
-            {loading ? <><Loader2 size={16} className="animate-spin" />Salvando…</> : "Criar senha e acessar o Censo"}
+            {loading ? <><Loader2 size={16} className="animate-spin" />Salvando…</> : "Criar senha e entrar"}
           </button>
         </form>
       </div>

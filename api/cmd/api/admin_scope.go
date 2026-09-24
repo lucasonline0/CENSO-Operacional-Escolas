@@ -94,14 +94,14 @@ func dreScopeSQLArg(primary int, ids []int) any {
 		parts = append(parts, strconv.Itoa(primary))
 	}
 	if len(parts) == 0 {
-		return 0
+		return "0"
 	}
 	return strings.Join(parts, ",")
 }
 
 func (scope AdminAccessScope) SQLDREScopeParam() any {
 	if scope.DataScope != "selected" && !(scope.DataScope == "" && scope.Role == RoleDRE) {
-		return 0
+		return "0"
 	}
 	return dreScopeSQLArg(scope.DREID, scope.ScopedDREIDs())
 }

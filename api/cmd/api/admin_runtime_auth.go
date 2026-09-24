@@ -244,16 +244,18 @@ func (app *application) AdminCompleteFirstAccess(w http.ResponseWriter, r *http.
 		return
 	}
 
-	ip := clientIP(r)
-	if !firstAccessRL.allow(ip, maxFirstAccessAttempts, maxFirstAccessWindow) {
-		w.Header().Set("Retry-After", "900")
-		app.errorJSON(w, fmt.Errorf("muitas tentativas. Aguarde 15 minutos"), http.StatusTooManyRequests)
-		return
-	}
-
 	claims, err := parsePasswordSetupChallenge(strings.TrimPrefix(authHeader, "Bearer "))
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("challenge inválido ou expirado"), http.StatusUnauthorized)
+		return
+	}
+
+	// Limita tentativas por identidade + IP, não apenas por IP. Isso evita que
+	// várias contas legítimas atrás do mesmo NAT bloqueiem umas às outras.
+	rateKey := fmt.Sprintf("%d:%s", claims.UserID, clientIP(r))
+	if !firstAccessRL.allow(rateKey, maxFirstAccessAttempts, maxFirstAccessWindow) {
+		w.Header().Set("Retry-After", "900")
+		app.errorJSON(w, fmt.Errorf("muitas tentativas. Aguarde 15 minutos"), http.StatusTooManyRequests)
 		return
 	}
 

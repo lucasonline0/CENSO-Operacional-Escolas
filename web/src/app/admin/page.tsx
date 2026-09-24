@@ -107,8 +107,8 @@ function FirstAccessModal({ challenge, onComplete, onChallengeExpired }: { chall
         </div>
 
         <form className="space-y-4" onSubmit={submit} noValidate>
-          <label className="block" htmlFor="first-access-new-password">
-            <span className="mb-1.5 block text-xs font-semibold text-slate-700">Nova senha</span>
+          <div className="block">
+            <label htmlFor="first-access-new-password" className="mb-1.5 block text-xs font-semibold text-slate-700">Nova senha</label>
             <div className="relative">
               <input
                 id="first-access-new-password"
@@ -127,10 +127,10 @@ function FirstAccessModal({ challenge, onComplete, onChallengeExpired }: { chall
               </button>
             </div>
             <span className="mt-1 block text-xs text-slate-500">Use no mínimo 12 caracteres.</span>
-          </label>
+          </div>
 
-          <label className="block" htmlFor="first-access-confirm-password">
-            <span className="mb-1.5 block text-xs font-semibold text-slate-700">Confirmar nova senha</span>
+          <div className="block">
+            <label htmlFor="first-access-confirm-password" className="mb-1.5 block text-xs font-semibold text-slate-700">Confirmar nova senha</label>
             <div className="relative">
               <input
                 id="first-access-confirm-password"
@@ -147,7 +147,7 @@ function FirstAccessModal({ challenge, onComplete, onChallengeExpired }: { chall
                 {showConfirm ? "Ocultar" : "Mostrar"}
               </button>
             </div>
-          </label>
+          </div>
 
           {confirmPassword && newPassword !== confirmPassword && <p className="text-sm text-rose-600">As senhas não coincidem.</p>}
           {error && <p className="text-sm text-rose-600">{error}</p>}

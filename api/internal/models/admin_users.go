@@ -603,7 +603,24 @@ func (m *AdminUserModel) GetByID(ctx context.Context, id int) (*AdminUser, error
 	if err != nil {
 		return nil, err
 	}
+	if err := m.hydrateAdminUserAuthorization(ctx, &u); err != nil {
+		return nil, err
+	}
 	return &u, nil
+}
+
+func (m *AdminUserModel) hydrateAdminUserAuthorization(ctx context.Context, u *AdminUser) error {
+	if u == nil || u.ID <= 0 {
+		return ErrUserNotFound
+	}
+	access, err := m.GetRuntimeAccessByID(ctx, u.ID)
+	if err != nil {
+		return err
+	}
+	u.DataScope = access.DataScope
+	u.Permissions = append([]string(nil), access.Permissions...)
+	u.DREIDs = append([]int(nil), access.DREIDs...)
+	return nil
 }
 
 // UpdatePassword atualiza a senha de um usuario existente usando bcrypt pelo username,
@@ -858,5 +875,16 @@ func (m *AdminUserModel) List(ctx context.Context) ([]*AdminUser, error) {
 		}
 		users = append(users, &u)
 	}
-	return users, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	for _, u := range users {
+		if err := m.hydrateAdminUserAuthorization(ctx, u); err != nil {
+			return nil, err
+		}
+	}
+	return users, nil
 }

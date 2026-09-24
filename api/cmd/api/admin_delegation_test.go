@@ -149,3 +149,54 @@ func TestProvisionCustomRejectsCrossIdentityCollisions(t *testing.T) {
 		t.Fatalf("email matching existing username error=%v want ErrIdentityCollision", err)
 	}
 }
+
+
+func TestAdminUserListIncludesCustomAuthorization(t *testing.T) {
+	_, _, m := setupRuntimeAuthTest(t)
+	ctx := context.Background()
+	dreA, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE LIST AUTH A", Ativa: true})
+	if err != nil {
+		t.Fatalf("create DRE A: %v", err)
+	}
+	dreB, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE LIST AUTH B", Ativa: true})
+	if err != nil {
+		t.Fatalf("create DRE B: %v", err)
+	}
+	created, err := m.AdminUsers.ProvisionCustom(
+		ctx,
+		"list.authorization",
+		"list.authorization@example.test",
+		"Temporary!Password123",
+		[]string{PermissionCensusRead, PermissionUsersCreate},
+		"selected",
+		[]int{dreA.ID, dreB.ID},
+	)
+	if err != nil {
+		t.Fatalf("provision custom: %v", err)
+	}
+
+	users, err := m.AdminUsers.List(ctx)
+	if err != nil {
+		t.Fatalf("list users: %v", err)
+	}
+	var got *models.AdminUser
+	for _, user := range users {
+		if user.ID == created.ID {
+			got = user
+			break
+		}
+	}
+	if got == nil {
+		t.Fatal("custom account missing from list")
+	}
+	if got.DataScope != "selected" || len(got.DREIDs) != 2 {
+		t.Fatalf("authorization scope missing from list: %+v", got)
+	}
+	permissions := map[string]bool{}
+	for _, permission := range got.Permissions {
+		permissions[permission] = true
+	}
+	if !permissions[PermissionCensusRead] || !permissions[PermissionUsersCreate] {
+		t.Fatalf("permissions missing from list: %+v", got.Permissions)
+	}
+}

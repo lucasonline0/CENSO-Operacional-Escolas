@@ -44,6 +44,19 @@ func setupRuntimeAuthTest(t *testing.T) (*application, http.Handler, models.Mode
 	return app, app.routes(), m
 }
 
+func setupRuntimeAuthorizationTest(t *testing.T) (*application, http.Handler, models.Models) {
+	t.Helper()
+	app, handler, m := setupRuntimeAuthTest(t)
+	migration, err := migrationsFS.ReadFile("migrations/0027_admin_user_authorization.sql")
+	if err != nil {
+		t.Fatalf("read admin authorization migration: %v", err)
+	}
+	if _, err := m.AdminUsers.DB.Exec(string(migration)); err != nil {
+		t.Fatalf("apply admin authorization migration: %v", err)
+	}
+	return app, handler, m
+}
+
 func runtimeLoginRequest(t *testing.T, handler http.Handler, username, password, remoteAddr string) (*httptest.ResponseRecorder, string) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/v1/admin/login", strings.NewReader(fmt.Sprintf(`{"username":%q,"password":%q}`, username, password)))

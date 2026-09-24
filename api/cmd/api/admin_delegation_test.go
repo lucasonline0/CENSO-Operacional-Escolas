@@ -105,7 +105,7 @@ func TestSchoolManagementRoutesUseSchoolsCapability(t *testing.T) {
 
 
 func TestProvisionCustomRejectsCrossIdentityCollisions(t *testing.T) {
-	_, _, m := setupRuntimeAuthTest(t)
+	_, _, m := setupRuntimeAuthorizationTest(t)
 	ctx := context.Background()
 	dre, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE IDENTITY COLLISION", Ativa: true})
 	if err != nil {
@@ -113,8 +113,8 @@ func TestProvisionCustomRejectsCrossIdentityCollisions(t *testing.T) {
 	}
 	_, err = m.AdminUsers.ProvisionForDREID(
 		ctx,
-		"regional.identity",
 		"regional.identity@example.test",
+		"regional.mail@example.test",
 		"Temporary!Password123",
 		RoleDRE,
 		dre.ID,
@@ -125,7 +125,7 @@ func TestProvisionCustomRejectsCrossIdentityCollisions(t *testing.T) {
 
 	_, err = m.AdminUsers.ProvisionCustom(
 		ctx,
-		"regional.identity@example.test",
+		"regional.mail@example.test",
 		"custom.one@example.test",
 		"Temporary!Password123",
 		[]string{PermissionCensusRead},
@@ -139,7 +139,7 @@ func TestProvisionCustomRejectsCrossIdentityCollisions(t *testing.T) {
 	_, err = m.AdminUsers.ProvisionCustom(
 		ctx,
 		"custom.two",
-		"regional.identity",
+		"regional.identity@example.test",
 		"Temporary!Password123",
 		[]string{PermissionCensusRead},
 		"all",
@@ -152,7 +152,7 @@ func TestProvisionCustomRejectsCrossIdentityCollisions(t *testing.T) {
 
 
 func TestAdminUserListIncludesCustomAuthorization(t *testing.T) {
-	_, _, m := setupRuntimeAuthTest(t)
+	_, _, m := setupRuntimeAuthorizationTest(t)
 	ctx := context.Background()
 	dreA, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE LIST AUTH A", Ativa: true})
 	if err != nil {

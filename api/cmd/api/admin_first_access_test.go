@@ -235,7 +235,7 @@ func TestCustomFirstAccessCompletesForGlobalAndSelectedScopes(t *testing.T) {
 		{name: "selected", dataScope: "selected", selected: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, handler, m := setupRuntimeAuthTest(t)
+			_, handler, m := setupRuntimeAuthorizationTest(t)
 			ctx := context.Background()
 
 			var dreIDs []int
@@ -348,7 +348,7 @@ func TestAuthenticatedUserCanRotateOwnPassword(t *testing.T) {
 
 
 func TestCustomSelectedScopeRevokesWhenAllAssignedDREsAreInactive(t *testing.T) {
-	_, handler, m := setupRuntimeAuthTest(t)
+	_, handler, m := setupRuntimeAuthorizationTest(t)
 	ctx := context.Background()
 	dre, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE CUSTOM REVOCATION", Ativa: true})
 	if err != nil {

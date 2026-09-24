@@ -41,6 +41,10 @@ func (m *AdminUserModel) getRuntimeAccess(ctx context.Context, byID bool, id int
 	if err != nil {
 		return nil, err
 	}
+	hasDataScope, err := hasColumn(ctx, m.DB, "admin_users", "data_scope")
+	if err != nil {
+		return nil, err
+	}
 
 	var query string
 	var arg any
@@ -75,13 +79,17 @@ func (m *AdminUserModel) getRuntimeAccess(ctx context.Context, byID bool, id int
 	if hasAuthVer {
 		authVerCol = "COALESCE(u.auth_version, 1)"
 	}
+	dataScopeCol := "'selected'"
+	if hasDataScope {
+		dataScopeCol = "COALESCE(u.data_scope, 'selected')"
+	}
 
 	if canonical {
 		query = `
 			SELECT u.id, u.username, COALESCE(to_jsonb(u)->>'email', ''), u.password_hash, u.role, u.active, ` + authVerCol + `,
 			       COALESCE((to_jsonb(u)->>'must_change_password')::boolean, false),
 			       COALESCE(d.id, 0), COALESCE(d.nome, ''), COALESCE(d.ativa, false),
-			       COALESCE(u.data_scope, 'selected')
+			       ` + dataScopeCol + `
 			FROM admin_users u
 			LEFT JOIN dres d ON d.id = u.dre_id
 			WHERE ` + predicate

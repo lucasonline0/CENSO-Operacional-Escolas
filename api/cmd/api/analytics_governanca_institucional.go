@@ -148,7 +148,7 @@ func (app *application) AdminAnalyticsFinanceiroGovernancaInstitucional(w http.R
 		shared.RegiaoIntegracao,
 		shared.SchoolID,
 		shared.CodigoINEP,
-		shared.DREID,
+		shared.SQLDREScopeParam(),
 		shared.Year,
 	}
 

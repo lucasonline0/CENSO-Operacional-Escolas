@@ -17,6 +17,7 @@ import (
 type AnalyticsFilters struct {
 	Year             int
 	DREID            int
+	DREIDs           []int
 	DRE              string
 	Municipio        string
 	Zona             string
@@ -29,7 +30,10 @@ func parseAnalyticsFilters(r *http.Request) AnalyticsFilters {
 	f := parseAnalyticsFiltersFromValues(r.URL.Query(), time.Now())
 	if scope, ok := GetAdminAccessScope(r.Context()); ok && (scope.DataScope == "selected" || scope.Role == RoleDRE) {
 		f.DREID = scope.DREID
-		f.DRE = strings.TrimSpace(scope.DRE)
+		f.DREIDs = scope.ScopedDREIDs()
+		if scope.Role == RoleDRE {
+			f.DRE = strings.TrimSpace(scope.DRE)
+		}
 	}
 	return f
 }
@@ -82,8 +86,16 @@ func (f AnalyticsFilters) WhereSQL() string {
 }
 
 // Args returns the positional arguments that match WhereSQL in order.
+func (f AnalyticsFilters) SQLDREScopeParam() any {
+	return dreScopeSQLArg(f.DREID, f.DREIDs)
+}
+
+func (f AnalyticsFilters) hasDREScope() bool {
+	return f.DREID > 0 || len(f.DREIDs) > 0
+}
+
 func (f AnalyticsFilters) Args() []any {
-	return []any{f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP, f.DREID}
+	return []any{f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP, f.SQLDREScopeParam()}
 }
 
 // LegacyArgs preserves the original five-argument contract for bespoke
@@ -149,17 +161,16 @@ func filtrosOpcoesSchoolsWhereWithAuthorization(f AnalyticsFilters, alias, excep
 		conditions = append(conditions, fmt.Sprintf(condition, len(args), len(args)))
 	}
 
-	if authorizedDRE = strings.TrimSpace(authorizedDRE); authorizedDRE != "" {
-		if f.DREID > 0 {
-			args = append(args, f.DREID)
-			idPos := len(args)
-			args = append(args, authorizedDRE)
-			namePos := len(args)
-			conditions = append(conditions, schoolDREAuthorizationPredicate(alias, "$"+strconv.Itoa(idPos), "$"+strconv.Itoa(namePos)))
-		} else {
-			args = append(args, authorizedDRE)
-			conditions = append(conditions, schoolDRENamePredicate(alias, "$"+strconv.Itoa(len(args))))
-		}
+	authorizedDRE = strings.TrimSpace(authorizedDRE)
+	if f.hasDREScope() {
+		args = append(args, f.SQLDREScopeParam())
+		idPos := len(args)
+		args = append(args, authorizedDRE)
+		namePos := len(args)
+		conditions = append(conditions, schoolDREAuthorizationPredicate(alias, "$"+strconv.Itoa(idPos), "$"+strconv.Itoa(namePos)))
+	} else if authorizedDRE != "" {
+		args = append(args, authorizedDRE)
+		conditions = append(conditions, schoolDRENamePredicate(alias, "$"+strconv.Itoa(len(args))))
 	} else if except != "dre" {
 		args = append(args, f.DRE)
 		pos := "$" + strconv.Itoa(len(args))
@@ -186,14 +197,13 @@ func filtrosOpcoesDREsQuery(f AnalyticsFilters, authorizedDRE string) (string, [
 		  AND NULLIF(TRIM(d.nome), '') IS NOT NULL
 	`
 	args := make([]any, 0, 7)
-	if authorizedDRE = strings.TrimSpace(authorizedDRE); authorizedDRE != "" {
-		if f.DREID > 0 {
-			args = append(args, f.DREID)
-			query += "\t  AND d.id = $" + strconv.Itoa(len(args)) + "\n"
-		} else {
-			args = append(args, authorizedDRE)
-			query += "\t  AND UPPER(TRIM(d.nome)) = UPPER(TRIM($" + strconv.Itoa(len(args)) + "))\n"
-		}
+	authorizedDRE = strings.TrimSpace(authorizedDRE)
+	if f.hasDREScope() {
+		args = append(args, f.SQLDREScopeParam())
+		query += "\t  AND d.id = ANY(string_to_array(BTRIM($" + strconv.Itoa(len(args)) + "::text), ',')::int[])\n"
+	} else if authorizedDRE != "" {
+		args = append(args, authorizedDRE)
+		query += "\t  AND UPPER(TRIM(d.nome)) = UPPER(TRIM($" + strconv.Itoa(len(args)) + "))\n"
 	}
 
 	if f.Municipio != "" || f.Zona != "" || f.RegiaoIntegracao != "" || f.SchoolID != 0 || f.CodigoINEP != "" {
@@ -240,14 +250,12 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 			WHERE cr.status = 'completed'
 	`
 	var anosArgs []any
-	if authorizedDRE != "" {
-		if f.DREID > 0 {
-			anosQuery += ` AND ` + schoolDREAuthorizationPredicate("s", "$1", "$2")
-			anosArgs = append(anosArgs, f.DREID, authorizedDRE)
-		} else {
-			anosQuery += ` AND ` + schoolDRENamePredicate("s", "$1")
-			anosArgs = append(anosArgs, authorizedDRE)
-		}
+	if f.hasDREScope() {
+		anosQuery += ` AND ` + schoolDREAuthorizationPredicate("s", "$1", "$2")
+		anosArgs = append(anosArgs, f.SQLDREScopeParam(), authorizedDRE)
+	} else if authorizedDRE != "" {
+		anosQuery += ` AND ` + schoolDRENamePredicate("s", "$1")
+		anosArgs = append(anosArgs, authorizedDRE)
 	}
 	anosQuery += `
 			UNION ALL
@@ -255,12 +263,10 @@ func (app *application) AdminAnalyticsFiltrosOpcoes(w http.ResponseWriter, r *ht
 			FROM ideb_resultados ir
 			JOIN schools s ON s.id = ir.school_id
 	`
-	if authorizedDRE != "" {
-		if f.DREID > 0 {
-			anosQuery += ` WHERE ` + schoolDREAuthorizationPredicate("s", "$1", "$2")
-		} else {
-			anosQuery += ` WHERE ` + schoolDRENamePredicate("s", "$1")
-		}
+	if f.hasDREScope() {
+		anosQuery += ` WHERE ` + schoolDREAuthorizationPredicate("s", "$1", "$2")
+	} else if authorizedDRE != "" {
+		anosQuery += ` WHERE ` + schoolDRENamePredicate("s", "$1")
 	}
 	anosQuery += `
 		) a

@@ -83,7 +83,7 @@ func (app *application) AdminAnalyticsGovernancaIndiceEscolas(w http.ResponseWri
 	filters := parseAnalyticsFilters(r)
 
 	rows, err := app.models.Schools.DB.QueryContext(r.Context(), indiceGovernancaSelectSQL,
-		filters.DRE, filters.Municipio, filters.Zona, filters.RegiaoIntegracao, filters.SchoolID, filters.CodigoINEP, filters.DREID, filters.Year)
+		filters.DRE, filters.Municipio, filters.Zona, filters.RegiaoIntegracao, filters.SchoolID, filters.CodigoINEP, filters.SQLDREScopeParam(), filters.Year)
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro ao consultar indice de governanca: %w", err), http.StatusInternalServerError)
 		return

@@ -202,7 +202,7 @@ func (app *application) AdminAnalyticsOverview(w http.ResponseWriter, r *http.Re
 		  AND ($6 = '' OR UPPER(TRIM(COALESCE(s.codigo_inep, ''))) = UPPER(TRIM($6)))
 		GROUP BY 1
 		ORDER BY 2 DESC, 1
-	`, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP, f.DREID)
+	`, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP, f.SQLDREScopeParam())
 	if err != nil {
 		app.errorJSON(w, fmt.Errorf("erro ao agrupar por zona: %v", err), http.StatusInternalServerError)
 		return

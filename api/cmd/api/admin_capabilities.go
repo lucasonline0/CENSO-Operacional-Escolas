@@ -31,6 +31,8 @@ func (app *application) requireRequestCapability(next http.Handler) http.Handler
 func permissionForRequest(r *http.Request) string {
 	p := r.URL.Path
 	switch {
+	case strings.HasPrefix(p, "/v1/admin/dres/") && strings.HasSuffix(p, "/resumo"):
+		return PermissionAnalyticsRead
 	case strings.Contains(p, "/analytics/") || p == "/v1/admin/dashboard" || p == "/v1/admin/sheet-metrics" || p == "/v1/admin/indicadores-metrics":
 		return PermissionAnalyticsRead
 	case strings.HasPrefix(p, "/v1/admin/reports/"):

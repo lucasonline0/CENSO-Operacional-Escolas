@@ -59,61 +59,112 @@ func isE2EDRE(name, sigla string) bool {
 	return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(name)), "DRE-E2E-") || strings.EqualFold(strings.TrimSpace(sigla), "E2E")
 }
 
-func bootstrapPreview(ctx context.Context, q interface {
+type bootstrapQueryer interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
-}) (DREBootstrapPreview, error) {
-	var out DREBootstrapPreview
-	out.Items = []DREBootstrapItem{}
-	rows, err := q.QueryContext(ctx, `SELECT d.id,d.nome,COALESCE(d.sigla,''),COALESCE(d.email,''),EXISTS(SELECT 1 FROM admin_users u WHERE u.dre_id=d.id AND u.role='dre'),EXISTS(SELECT 1 FROM admin_users u WHERE LOWER(BTRIM(u.username))=LOWER(BTRIM('dre.' || regexp_replace(translate(regexp_replace(lower(d.nome),'^dre[ _-]*','','i'),'áàâãäéêíóôõöúüç','aaaaaeeiooooouuc'),'[^a-z0-9]','','g')))) FROM dres d WHERE d.ativa ORDER BY d.nome`)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func bootstrapPreview(ctx context.Context, q bootstrapQueryer) (DREBootstrapPreview, error) {
+	out := DREBootstrapPreview{Items: []DREBootstrapItem{}}
+	rows, err := q.QueryContext(ctx, `SELECT d.id,d.nome,COALESCE(d.sigla,''),COALESCE(d.email,''),EXISTS(SELECT 1 FROM admin_users u WHERE u.dre_id=d.id AND u.role='dre') FROM dres d WHERE d.ativa ORDER BY d.nome`)
 	if err != nil {
 		return out, err
 	}
-	defer rows.Close()
+	type candidate struct {
+		id                 int
+		name, sigla, email string
+		existing           bool
+	}
+	candidates := []candidate{}
 	for rows.Next() {
-		var id int
-		var name, sigla, email string
-		var existing, collision bool
-		if err = rows.Scan(&id, &name, &sigla, &email, &existing, &collision); err != nil {
+		var c candidate
+		if err = rows.Scan(&c.id, &c.name, &c.sigla, &c.email, &c.existing); err != nil {
+			rows.Close()
 			return out, err
 		}
+		candidates = append(candidates, c)
+	}
+	if err = rows.Err(); err != nil {
+		rows.Close()
+		return out, err
+	}
+	if err = rows.Close(); err != nil {
+		return out, err
+	}
+	for _, c := range candidates {
 		out.Active++
-		item := DREBootstrapItem{DREID: id, DRE: name, Email: email, Username: "dre." + bootstrapSlug(name)}
+		item := DREBootstrapItem{DREID: c.id, DRE: c.name, Email: c.email, Username: "dre." + bootstrapSlug(c.name)}
 		switch {
-		case isE2EDRE(name, sigla):
+		case isE2EDRE(c.name, c.sigla):
 			item.Status = "ignored_e2e"
-			item.Message = "Ignorada — fixture de teste"
+			item.Message = "Ignorada — fixture E2E"
 			out.IgnoredE2E++
-		case existing:
+		case c.existing:
 			item.Status = "provisioned"
 			item.Message = "Já provisionada"
 			out.Provisioned++
-		case strings.TrimSpace(email) == "":
-			item.Status = "error"
+		case strings.TrimSpace(c.email) == "":
+			item.Status = "missing_email"
 			item.Message = "E-mail obrigatório"
 			out.Errors++
-		case collision:
-			item.Status = "error"
-			item.Message = "Nome de usuário já existe"
-			out.Errors++
 		default:
-			if _, e := NormalizeAdminEmail(email); e != nil {
-				item.Status = "error"
+			if _, e := NormalizeAdminEmail(c.email); e != nil {
+				item.Status = "invalid_email"
 				item.Message = "E-mail inválido"
+				out.Errors++
+			} else if conflict, queryErr := adminIdentityConflict(ctx, q, item.Username, c.email); queryErr != nil {
+				return out, queryErr
+			} else if conflict != nil {
+				item.Status = "error"
+				switch conflict {
+				case ErrUsernameExists:
+					item.Message = "Username em conflito"
+				case ErrEmailExists:
+					item.Message = "E-mail em conflito"
+				default:
+					item.Message = "Identidade em conflito"
+				}
 				out.Errors++
 			} else {
 				item.Status = "pending"
+				item.Message = "Pronta"
 				out.Pending++
 			}
 		}
 		out.Items = append(out.Items, item)
 	}
-	return out, rows.Err()
+	emailCounts, usernameCounts := map[string]int{}, map[string]int{}
+	for _, item := range out.Items {
+		if item.Status == "pending" {
+			emailCounts[strings.ToLower(strings.TrimSpace(item.Email))]++
+			usernameCounts[strings.ToLower(item.Username)]++
+		}
+	}
+	for i := range out.Items {
+		item := &out.Items[i]
+		if item.Status != "pending" {
+			continue
+		}
+		if usernameCounts[strings.ToLower(item.Username)] > 1 {
+			item.Status = "error"
+			item.Message = "Username em conflito"
+			out.Pending--
+			out.Errors++
+		} else if emailCounts[strings.ToLower(strings.TrimSpace(item.Email))] > 1 {
+			item.Status = "error"
+			item.Message = "E-mail em conflito"
+			out.Pending--
+			out.Errors++
+		}
+	}
+	return out, nil
 }
+
 func (m *AdminUserModel) PreviewDREBootstrap(ctx context.Context) (DREBootstrapPreview, error) {
 	return bootstrapPreview(ctx, m.DB)
 }
 
-func (m *AdminUserModel) BootstrapDREAccounts(ctx context.Context) (DREBootstrapPreview, []DREBootstrapCredential, error) {
+func (m *AdminUserModel) BootstrapDREAccounts(ctx context.Context, emailOverrides map[int]string) (DREBootstrapPreview, []DREBootstrapCredential, error) {
 	tx, err := m.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return DREBootstrapPreview{}, nil, err
@@ -121,6 +172,26 @@ func (m *AdminUserModel) BootstrapDREAccounts(ctx context.Context) (DREBootstrap
 	defer tx.Rollback()
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('bulk_dre_bootstrap'))`); err != nil {
 		return DREBootstrapPreview{}, nil, err
+	}
+	for dreID, rawEmail := range emailOverrides {
+		email, normalizeErr := NormalizeAdminEmail(rawEmail)
+		if normalizeErr != nil {
+			return DREBootstrapPreview{}, nil, normalizeErr
+		}
+		var name, sigla string
+		var active, provisioned bool
+		if err = tx.QueryRowContext(ctx, `SELECT d.nome,COALESCE(d.sigla,''),d.ativa,EXISTS(SELECT 1 FROM admin_users u WHERE u.dre_id=d.id AND u.role='dre') FROM dres d WHERE d.id=$1 FOR UPDATE`, dreID).Scan(&name, &sigla, &active, &provisioned); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return DREBootstrapPreview{}, nil, ErrInvalidDRE
+			}
+			return DREBootstrapPreview{}, nil, err
+		}
+		if !active || provisioned || isE2EDRE(name, sigla) {
+			return DREBootstrapPreview{}, nil, ErrInvalidDRE
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE dres SET email=$2,updated_at=NOW() WHERE id=$1`, dreID, email); err != nil {
+			return DREBootstrapPreview{}, nil, err
+		}
 	}
 	preview, err := bootstrapPreview(ctx, tx)
 	if err != nil {

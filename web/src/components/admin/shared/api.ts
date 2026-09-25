@@ -45,6 +45,17 @@ export function allCached(paths: string[], token: string): boolean {
   });
 }
 
+export class ApiRequestError extends Error {
+  status: number;
+  payload: Record<string, unknown>;
+  constructor(status: number, payload: Record<string, unknown>, fallback: string) {
+    super(typeof payload.message === "string" ? payload.message : fallback);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
 export interface ApiFetchOptions extends RequestInit {
   // Quando true, ignora o cache em memória e força uma requisição à rede.
   // Usado para revalidação de sessão (/admin/me) e leituras que precisam do
@@ -82,8 +93,8 @@ export async function apiFetch<T>(path: string, token: string, opts?: ApiFetchOp
     throw new Error("UNAUTHORIZED");
   }
   if (!res.ok) {
-    const b = await res.json().catch(() => ({}));
-    throw new Error((b as { message?: string }).message ?? `HTTP ${res.status}`);
+    const b = await res.json().catch(() => ({})) as Record<string, unknown>;
+    throw new ApiRequestError(res.status, b, `HTTP ${res.status}`);
   }
   const rawData = (await res.json()).data as T;
   const data = sanitizeLegacyDrePayload(path, rawData);
@@ -324,4 +335,6 @@ export interface DREBootstrapPreview {
 }
 export interface DREBootstrapResult { preview: DREBootstrapPreview; credentials: Array<{ dre: string; email: string; username: string; temporary_password: string }> }
 export async function previewDREBootstrap(token: string): Promise<DREBootstrapPreview> { return apiFetch("/v1/admin/users/bulk-dre-bootstrap/preview", token, { bypassCache: true }); }
-export async function executeDREBootstrap(token: string): Promise<DREBootstrapResult> { return apiMutation("/v1/admin/users/bulk-dre-bootstrap", token, { method: "POST" }); }
+export async function executeDREBootstrap(token: string, emailOverrides: Record<string, string>): Promise<DREBootstrapResult> {
+  return apiMutation("/v1/admin/users/bulk-dre-bootstrap", token, { method: "POST", body: JSON.stringify({ email_overrides: emailOverrides }) });
+}

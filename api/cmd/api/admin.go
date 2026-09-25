@@ -1399,7 +1399,25 @@ func (app *application) AdminBulkDREBootstrap(w http.ResponseWriter, r *http.Req
 		app.errorJSON(w, fmt.Errorf("exclusivo para o administrador global do ambiente"), http.StatusForbidden)
 		return
 	}
-	preview, credentials, err := app.models.AdminUsers.BootstrapDREAccounts(r.Context())
+	var req struct {
+		EmailOverrides map[string]string `json:"email_overrides"`
+	}
+	if r.Body != nil && r.ContentLength != 0 {
+		if err := app.readJSON(w, r, &req); err != nil {
+			app.errorJSON(w, fmt.Errorf("dados inválidos: %w", err), http.StatusBadRequest)
+			return
+		}
+	}
+	overrides := make(map[int]string, len(req.EmailOverrides))
+	for rawID, email := range req.EmailOverrides {
+		id, parseErr := strconv.Atoi(rawID)
+		if parseErr != nil || id <= 0 {
+			app.errorJSON(w, fmt.Errorf("ID de DRE inválido"), http.StatusBadRequest)
+			return
+		}
+		overrides[id] = email
+	}
+	preview, credentials, err := app.models.AdminUsers.BootstrapDREAccounts(r.Context(), overrides)
 	if err != nil {
 		app.writeJSON(w, http.StatusConflict, map[string]any{"error": true, "code": "BULK_DRE_INVALID", "message": err.Error(), "data": preview})
 		return

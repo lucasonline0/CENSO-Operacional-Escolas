@@ -1,3 +1,4 @@
+-- OPERATIONAL MANUAL SCRIPT ONLY. Never run as migration, startup hook, or CI task.
 -- Conservative cleanup: no CASCADE and no deletion when any known relation exists.
 BEGIN;
 CREATE TEMP TABLE e2e_dre_audit ON COMMIT DROP AS

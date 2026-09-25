@@ -30,23 +30,22 @@ func TestDelegationNeverExpandsCapabilitiesOrScope(t *testing.T) {
 	}
 }
 
-
 func TestDelegatedAdministrationNeverTargetsMorePrivilegedAccount(t *testing.T) {
 	actorPerms := permissionsMap([]string{PermissionUsersManage, PermissionUsersResetPassword, PermissionCensusRead})
 	actor := AdminAccessScope{
-		Username: "delegate",
-		Role: "custom",
-		DataScope: "selected",
+		Username:    "delegate",
+		Role:        "custom",
+		DataScope:   "selected",
 		permissions: &actorPerms,
-		dreIDs: newDREIDs([]int{3, 4}),
+		dreIDs:      newDREIDs([]int{3, 4}),
 	}
 
 	allowed := &models.RuntimeAdminAccess{
-		Username: "child",
-		Role: "custom",
-		DataScope: "selected",
+		Username:    "child",
+		Role:        "custom",
+		DataScope:   "selected",
 		Permissions: []string{PermissionCensusRead},
-		DREIDs: []int{3},
+		DREIDs:      []int{3},
 	}
 	if !canAdministerTarget(actor, allowed) {
 		t.Fatal("expected subordinate target to be manageable")
@@ -87,6 +86,47 @@ func TestDelegatedAdministrationNeverTargetsMorePrivilegedAccount(t *testing.T) 
 	}
 }
 
+func TestAuthorizationUpdateRevokesSessionAndReplacesScope(t *testing.T) {
+	_, _, m := setupRuntimeAuthorizationTest(t)
+	ctx := context.Background()
+	dreA, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE AUTH UPDATE A", Ativa: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dreB, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE AUTH UPDATE B", Ativa: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err := m.AdminUsers.ProvisionCustom(ctx, "auth.update", "auth.update@example.test", "Temporary!Password123", []string{PermissionCensusRead, PermissionAnalyticsRead}, "selected", []int{dreA.ID, dreB.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := m.AdminUsers.UpdateAuthorization(ctx, user.ID, []string{PermissionCensusRead}, "selected", []int{dreA.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.AuthVersion != user.AuthVersion+1 {
+		t.Fatalf("auth_version=%d want %d", updated.AuthVersion, user.AuthVersion+1)
+	}
+	if len(updated.Permissions) != 1 || updated.Permissions[0] != PermissionCensusRead {
+		t.Fatalf("permissions=%v", updated.Permissions)
+	}
+	if len(updated.DREIDs) != 1 || updated.DREIDs[0] != dreA.ID {
+		t.Fatalf("dre_ids=%v", updated.DREIDs)
+	}
+}
+
+func TestAuthorizationUpdateRouteRequiresUsersManage(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPut, "/v1/admin/users/42/authorization", nil)
+	if got := permissionForRequest(req); got != PermissionUsersManage {
+		t.Fatalf("capability=%q", got)
+	}
+	perms := permissionsMap([]string{PermissionUsersManage})
+	actor := AdminAccessScope{UserID: 42, Username: "renamed", Role: "custom", DataScope: "all", permissions: &perms}
+	if canAdministerTarget(actor, &models.RuntimeAdminAccess{ID: 42, Username: "old-name", Role: "custom", DataScope: "all"}) {
+		t.Fatal("self authorization edit allowed by stable ID")
+	}
+}
 
 func TestSchoolManagementRoutesUseSchoolsCapability(t *testing.T) {
 	for _, tc := range []struct {
@@ -102,7 +142,6 @@ func TestSchoolManagementRoutesUseSchoolsCapability(t *testing.T) {
 		}
 	}
 }
-
 
 func TestProvisionCustomRejectsCrossIdentityCollisions(t *testing.T) {
 	_, _, m := setupRuntimeAuthorizationTest(t)
@@ -149,7 +188,6 @@ func TestProvisionCustomRejectsCrossIdentityCollisions(t *testing.T) {
 		t.Fatalf("email matching existing username error=%v want ErrIdentityCollision", err)
 	}
 }
-
 
 func TestAdminUserListIncludesCustomAuthorization(t *testing.T) {
 	_, _, m := setupRuntimeAuthorizationTest(t)
@@ -200,7 +238,6 @@ func TestAdminUserListIncludesCustomAuthorization(t *testing.T) {
 		t.Fatalf("permissions missing from list: %+v", got.Permissions)
 	}
 }
-
 
 func TestRegionalPresetDelegationRequiresReadCapabilitiesAndTerritory(t *testing.T) {
 	perms := permissionsMap([]string{

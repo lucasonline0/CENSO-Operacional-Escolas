@@ -45,6 +45,17 @@ export function allCached(paths: string[], token: string): boolean {
   });
 }
 
+export class ApiRequestError extends Error {
+  status: number;
+  payload: Record<string, unknown>;
+  constructor(status: number, payload: Record<string, unknown>, fallback: string) {
+    super(typeof payload.message === "string" ? payload.message : fallback);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
 export interface ApiFetchOptions extends RequestInit {
   // Quando true, ignora o cache em memória e força uma requisição à rede.
   // Usado para revalidação de sessão (/admin/me) e leituras que precisam do
@@ -82,8 +93,8 @@ export async function apiFetch<T>(path: string, token: string, opts?: ApiFetchOp
     throw new Error("UNAUTHORIZED");
   }
   if (!res.ok) {
-    const b = await res.json().catch(() => ({}));
-    throw new Error((b as { message?: string }).message ?? `HTTP ${res.status}`);
+    const b = await res.json().catch(() => ({})) as Record<string, unknown>;
+    throw new ApiRequestError(res.status, b, `HTTP ${res.status}`);
   }
   const rawData = (await res.json()).data as T;
   const data = sanitizeLegacyDrePayload(path, rawData);
@@ -174,6 +185,14 @@ export async function resetAdminUserPassword(
     method: "POST",
     body: JSON.stringify({ password }),
   });
+}
+
+export async function deleteAdminUser(token: string, id: number): Promise<void> {
+  await apiMutation(`/v1/admin/users/${id}`, token, { method: "DELETE" });
+}
+
+export async function deleteDRE(token: string, id: number): Promise<void> {
+  await apiMutation(`/v1/admin/dres/${id}`, token, { method: "DELETE" });
 }
 
 export async function changeOwnPassword(
@@ -308,4 +327,14 @@ export function buildPostgresSourceLabel(filters?: DashboardFilters): string {
 
   if (parts.length === 0) return base;
   return `${base} (${parts.join(" · ")})`;
+}
+
+export interface DREBootstrapPreview {
+  active: number; provisioned: number; pending: number; ignored_e2e: number; errors: number;
+  items: Array<{ dre_id: number; dre: string; email: string; username: string; status: string; message?: string }>;
+}
+export interface DREBootstrapResult { preview: DREBootstrapPreview; credentials: Array<{ dre: string; email: string; username: string; temporary_password: string }> }
+export async function previewDREBootstrap(token: string): Promise<DREBootstrapPreview> { return apiFetch("/v1/admin/users/bulk-dre-bootstrap/preview", token, { bypassCache: true }); }
+export async function executeDREBootstrap(token: string, emailOverrides: Record<string, string>): Promise<DREBootstrapResult> {
+  return apiMutation("/v1/admin/users/bulk-dre-bootstrap", token, { method: "POST", body: JSON.stringify({ email_overrides: emailOverrides }) });
 }

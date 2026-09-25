@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Building2, Check, Copy, Eye, EyeOff, KeyRound, Loader2, Mail, Shield, Sparkles, User, UserPlus } from "lucide-react";
 import { createAdminUser } from "./api";
 import { AdminModalShell } from "./AdminModalShell";
@@ -18,7 +18,7 @@ interface UserFormModalProps {
   creator?: AdminProfile | null;
 }
 
-type Preset = "dre" | "global" | "custom";
+type Preset = "global" | "custom";
 type DataScope = "all" | "selected";
 
 const INPUT_CLASS = "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400";
@@ -38,16 +38,6 @@ const PERMISSION_OPTIONS: Array<{ id: AdminPermission; label: string; help: stri
   { id: "sync.execute", label: "Executar sincronização", help: "Pode disparar sincronização de dados." },
 ];
 
-function suggestedUsername(dre?: DREItem) {
-  if (!dre) return "";
-  const clean = dre.nome
-    .toLowerCase()
-    .replace(/^dre\s*[-_]?\s*/i, "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]/g, "");
-  return clean ? `dre.${clean}` : "";
-}
 
 export function UserFormModal({
   isOpen,
@@ -58,7 +48,9 @@ export function UserFormModal({
   preselectedDreId,
   creator,
 }: UserFormModalProps) {
-  const [preset, setPreset] = useState<Preset>("dre");
+  const [preset, setPreset] = useState<Preset>("custom");
+  const [dreSearch, setDreSearch] = useState("");
+  const wasOpen = useRef(false);
   const [dataScope, setDataScope] = useState<DataScope>("selected");
   const [selectedDreIds, setSelectedDreIds] = useState<number[]>([]);
   const [permissions, setPermissions] = useState<AdminPermission[]>(READ_PERMISSIONS);
@@ -77,9 +69,7 @@ export function UserFormModal({
     [creator, creatorIsAdmin],
   );
   const canGrantAllScope = creatorIsAdmin || creator?.data_scope?.type === "all";
-  const canGrantReadPreset = READ_PERMISSIONS.every((permission) => creatorPermissions.has(permission));
-  const canGrantDrePreset = canGrantReadPreset && activeDres.length > 0;
-  const canGrantGlobalPreset = canGrantReadPreset && canGrantAllScope;
+  const canGrantGlobalPreset = canGrantAllScope;
   const grantableOptions = useMemo(
     () => PERMISSION_OPTIONS.filter((option) => creatorPermissions.has(option.id)),
     [creatorPermissions],
@@ -99,26 +89,33 @@ export function UserFormModal({
     return creatorDres;
   }, [creator, activeDres, creatorIsAdmin]);
 
+  // Initialize exactly once per closed -> open transition. Derived arrays/Sets
+  // must never overwrite a model the operator has already selected.
   useEffect(() => {
-    if (!isOpen) return;
-    const preselectedValid = preselectedDreId != null && activeDres.some((d) => d.id === preselectedDreId);
-    const firstId = preselectedValid ? preselectedDreId! : (activeDres[0]?.id ?? null);
-    const firstDre = firstId == null ? undefined : activeDres.find((d) => d.id === firstId);
-    const defaultReads = READ_PERMISSIONS.filter((permission) => creatorPermissions.has(permission));
+    if (isOpen && !wasOpen.current) {
+      const preselectedValid = preselectedDreId != null
+        && activeDres.some((dre) => dre.id === preselectedDreId)
+        && creatorDelegableDres.has(preselectedDreId);
+      setPreset("custom");
+      setDataScope("selected");
+      setSelectedDreIds(preselectedValid ? [preselectedDreId] : []);
+      setPermissions(READ_PERMISSIONS.filter((permission) => creatorPermissions.has(permission)));
+      setDreSearch("");
+      setUsername("");
+      setEmail("");
+      setPassword(generateSecurePassword(16));
+      setShowPassword(true);
+      setLoading(false);
+      setCopied(false);
+      setError(preselectedDreId != null && !preselectedValid ? "A DRE selecionada não está disponível no seu escopo." : "");
+    }
+    wasOpen.current = isOpen;
+  });
 
-    const initialPreset: Preset = canGrantDrePreset ? "dre" : "custom";
-    setPreset(initialPreset);
-    setDataScope("selected");
-    setSelectedDreIds(firstId == null ? [] : [firstId]);
-    setPermissions(defaultReads);
-    setUsername(initialPreset === "dre" ? suggestedUsername(firstDre) : "");
-    setEmail("");
-    setPassword(generateSecurePassword(12));
-    setShowPassword(true);
-    setLoading(false);
-    setCopied(false);
-    setError(preselectedDreId != null && !preselectedValid ? "A DRE selecionada não está disponível no seu escopo." : "");
-  }, [isOpen, preselectedDreId, activeDres, creatorPermissions, canGrantDrePreset]);
+  // A live privilege reduction can only remove grants no longer delegable.
+  useEffect(() => {
+    setPermissions((current) => current.filter((permission) => creatorPermissions.has(permission)));
+  }, [creatorPermissions]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -131,38 +128,13 @@ export function UserFormModal({
   if (!isOpen) return null;
 
   function applyPreset(next: Preset) {
+    if (next === "global" && !canGrantGlobalPreset) {
+      setError("Seu perfil não pode delegar acesso global.");
+      return;
+    }
     setPreset(next);
+    setDataScope(next === "global" ? "all" : "selected");
     setError("");
-    const readSubset = READ_PERMISSIONS.filter((permission) => creatorPermissions.has(permission));
-
-    if (next === "dre") {
-      if (!canGrantDrePreset) {
-        setError("Seu perfil não pode delegar o pacote completo de leitura de uma conta DRE.");
-        setPreset("custom");
-        return;
-      }
-      const id = selectedDreIds[0] ?? activeDres[0]?.id;
-      setDataScope("selected");
-      setSelectedDreIds(id ? [id] : []);
-      setPermissions(readSubset);
-      setUsername(suggestedUsername(activeDres.find((d) => d.id === id)));
-      return;
-    }
-
-    if (next === "global") {
-      if (!canGrantGlobalPreset) {
-        setError("Seu perfil não pode delegar o pacote completo de consulta global.");
-        setPreset("custom");
-        return;
-      }
-      setDataScope("all");
-      setSelectedDreIds([]);
-      setPermissions(readSubset);
-      setUsername("");
-      return;
-    }
-
-    setUsername("");
   }
 
   function toggleDre(id: number) {
@@ -205,30 +177,15 @@ export function UserFormModal({
     setLoading(true);
     setError("");
     try {
-      let created: AdminUserItem;
-      if (preset === "dre") {
-        if (selectedDreIds.length !== 1) {
-          setError("O preset DRE exige exatamente uma DRE.");
-          return;
-        }
-        created = await createAdminUser(token, {
-          username: cleanUsername,
-          email: cleanEmail,
-          password: cleanPassword,
-          role: "dre",
-          dre_id: selectedDreIds[0],
-        });
-      } else {
-        created = await createAdminUser(token, {
-          username: cleanUsername,
-          email: cleanEmail,
-          password: cleanPassword,
-          role: "custom",
-          permissions,
-          data_scope: dataScope,
-          dre_ids: dataScope === "selected" ? selectedDreIds : [],
-        });
-      }
+      const created = await createAdminUser(token, {
+        username: cleanUsername,
+        email: cleanEmail,
+        password: cleanPassword,
+        role: "custom",
+        permissions,
+        data_scope: preset === "global" ? "all" : "selected",
+        dre_ids: preset === "custom" ? selectedDreIds : [],
+      });
       onSuccess(created, cleanPassword);
     } catch (requestError: unknown) {
       setError((requestError as Error).message || "Erro ao criar usuário.");
@@ -249,19 +206,9 @@ export function UserFormModal({
       <form onSubmit={handleSubmit} className="space-y-5 p-6">
         <div>
           <label className={LABEL_CLASS}><Shield size={13} className="text-slate-400" />Modelo de acesso</label>
-          <div className="grid grid-cols-3 gap-2">
-            {([
-              ["dre", "Acesso DRE"],
-              ["global", "Consulta global"],
-              ["custom", "Personalizado"],
-            ] as Array<[Preset, string]>).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                disabled={(id === "dre" && !canGrantDrePreset) || (id === "global" && !canGrantGlobalPreset)}
-                onClick={() => applyPreset(id)}
-                className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${preset === id ? "border-blue-400 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600"} disabled:cursor-not-allowed disabled:opacity-40`}
-              >
+          <div className="grid grid-cols-2 gap-2">
+            {([ ["global", "Consulta global"], ["custom", "Personalizado"] ] as Array<[Preset, string]>).map(([id, label]) => (
+              <button key={id} type="button" aria-pressed={preset === id} disabled={id === "global" && !canGrantGlobalPreset} onClick={() => applyPreset(id)} className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${preset === id ? "border-blue-400 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600"} disabled:cursor-not-allowed disabled:opacity-40`}>
                 {label}
               </button>
             ))}
@@ -270,47 +217,27 @@ export function UserFormModal({
 
         {preset === "custom" && (
           <div>
-            <label className={LABEL_CLASS}><Building2 size={13} className="text-slate-400" />Escopo dos dados</label>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setDataScope("selected")} className={`rounded-lg border px-3 py-2 text-xs font-semibold ${dataScope === "selected" ? "border-blue-400 bg-blue-50 text-blue-700" : "border-slate-200"}`}>DREs selecionadas</button>
-              <button type="button" disabled={!canGrantAllScope} onClick={() => { setDataScope("all"); setSelectedDreIds([]); }} className={`rounded-lg border px-3 py-2 text-xs font-semibold ${dataScope === "all" ? "border-blue-400 bg-blue-50 text-blue-700" : "border-slate-200"} disabled:opacity-40`}>Todas as DREs</button>
-            </div>
-          </div>
-        )}
-
-        {dataScope === "selected" && (
-          <div>
             <label className={LABEL_CLASS}><Building2 size={13} className="text-slate-400" />DREs autorizadas <span className="text-rose-500">*</span></label>
+            <input className={`${INPUT_CLASS} mb-2`} value={dreSearch} onChange={(event) => setDreSearch(event.target.value)} placeholder="Buscar DRE..." aria-label="Buscar DRE" />
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="font-semibold text-slate-600">{selectedDreIds.length} {selectedDreIds.length === 1 ? "DRE selecionada" : "DREs selecionadas"}</span>
+              <span className="flex gap-3">
+                <button type="button" className="font-semibold text-blue-700" onClick={() => setSelectedDreIds(activeDres.filter((dre) => creatorDelegableDres.has(dre.id)).map((dre) => dre.id))}>Selecionar todas disponíveis</button>
+                <button type="button" className="font-semibold text-slate-600" onClick={() => setSelectedDreIds([])}>Limpar</button>
+              </span>
+            </div>
             <div className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
-              {activeDres.length === 0 && <p className="p-2 text-xs text-slate-500">Nenhuma DRE disponível no seu escopo.</p>}
-              {activeDres.map((dre) => {
-                const checked = selectedDreIds.includes(dre.id);
-                const dreDelegable = creatorDelegableDres.has(dre.id);
-                const disabled = !dreDelegable;
-                return (
-                  <label key={dre.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 hover:bg-slate-50">
-                    <input
-                      type={preset === "dre" ? "radio" : "checkbox"}
-                      name={preset === "dre" ? "dre" : undefined}
-                      checked={checked}
-                      disabled={disabled}
-                      onChange={() => {
-                        if (preset === "dre") {
-                          setSelectedDreIds([dre.id]);
-                          setUsername(suggestedUsername(dre));
-                        } else toggleDre(dre.id);
-                      }}
-                    />
-                    <span className="text-sm text-slate-700">{dre.nome}{dre.sigla ? ` (${dre.sigla})` : ""}</span>
-                  </label>
-                );
-              })}
+              {activeDres.filter((dre) => `${dre.nome} ${dre.sigla}`.toLowerCase().includes(dreSearch.trim().toLowerCase())).map((dre) => (
+                <label key={dre.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 hover:bg-slate-50">
+                  <input type="checkbox" checked={selectedDreIds.includes(dre.id)} disabled={!creatorDelegableDres.has(dre.id)} onChange={() => toggleDre(dre.id)} />
+                  <span className="text-sm text-slate-700">{dre.nome}{dre.sigla ? ` (${dre.sigla})` : ""}</span>
+                </label>
+              ))}
             </div>
           </div>
         )}
 
-        {preset === "custom" && (
-          <div>
+        <div>
             <label className={LABEL_CLASS}><Shield size={13} className="text-slate-400" />Permissões</label>
             <div className="grid gap-2 md:grid-cols-2">
               {grantableOptions.map((option) => (
@@ -324,16 +251,15 @@ export function UserFormModal({
               ))}
             </div>
           </div>
-        )}
 
         <div>
-          <label className={LABEL_CLASS}><Mail size={13} className="text-slate-400" />E-mail institucional <span className="text-rose-500">*</span></label>
-          <input type="email" autoComplete="email" maxLength={254} className={INPUT_CLASS} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="responsavel@seduc.pa.gov.br" required />
+          <label htmlFor="admin-user-email" className={LABEL_CLASS}><Mail size={13} className="text-slate-400" />E-mail institucional <span className="text-rose-500">*</span></label>
+          <input id="admin-user-email" type="email" autoComplete="email" maxLength={254} className={INPUT_CLASS} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="responsavel@seduc.pa.gov.br" required />
         </div>
 
         <div>
-          <label className={LABEL_CLASS}><User size={13} className="text-slate-400" />Nome de usuário <span className="text-rose-500">*</span></label>
-          <input className={`${INPUT_CLASS} font-mono`} value={username} onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s+/g, ""))} placeholder="usuario.seduc" required />
+          <label htmlFor="admin-user-username" className={LABEL_CLASS}><User size={13} className="text-slate-400" />Nome de usuário <span className="text-rose-500">*</span></label>
+          <input id="admin-user-username" className={`${INPUT_CLASS} font-mono`} value={username} onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s+/g, ""))} placeholder="usuario.seduc" required />
         </div>
 
         <div>

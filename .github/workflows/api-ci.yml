@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 # Checks obrigatórios antes do merge (documentação curta do PR):
-# - DRE critical migrations gate: migrations administrativas 0018-0026 em ordem,
+# - DRE critical migrations gate: migrations administrativas 0018-0027 em ordem,
 #   aplicadas contra PostgreSQL 16 real. Falha de migration crítica => CI vermelho.
 # - DRE lifecycle & auth gate: contratos de lifecycle DRE e autenticação/#209/#241.
 # - API integration gate: go vet, go test ./..., stress/race atuais + build web lint.
@@ -83,6 +83,7 @@ jobs:
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0024_admin_users_auth_version.sql
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0025_dre_session_revocation.sql
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0026_admin_user_email_first_access.sql
+          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0027_admin_user_authorization.sql
 
       - name: Migration gate tests (applyMigrations ordem/idempotência + fail-closed)
         working-directory: api
@@ -145,7 +146,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # Gate 3 — Suíte completa de integração (vet + go test + stress/race).
   # Schema de integração compartilhado via init.sql + cadeia administrativa
-  # crítica em ordem (0014/0018/0019/0020/0021/0024/0025/0026) para espelhar o runtime.
+  # crítica em ordem (0014/0018/0019/0020/0021/0024/0025/0026/0027) para espelhar o runtime.
   # ---------------------------------------------------------------------------
   integration:
     name: API integration gate
@@ -193,7 +194,7 @@ jobs:
           set -euo pipefail
           # infra/init.sql contém o schema/base analítica. A cadeia administrativa
           # é aplicada integralmente no banco compartilhado da suíte para que
-          # go test, stress e race exercitem exatamente o schema pós-0026.
+          # go test, stress e race exercitem exatamente o schema pós-0027.
           # Fixtures de integração devem criar dres e relacionar schools por
           # dre_id; TestDREIntegrationSchemaIsCanonicalPost0021 falha se este
           # passo parar em 0019.
@@ -206,6 +207,7 @@ jobs:
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0024_admin_users_auth_version.sql
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0025_dre_session_revocation.sql
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0026_admin_user_email_first_access.sql
+          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f api/cmd/api/migrations/0027_admin_user_authorization.sql
 
       - name: Vet
         working-directory: api

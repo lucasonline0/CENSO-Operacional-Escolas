@@ -1307,3 +1307,120 @@ func (app *application) AdminResetUserPassword(w http.ResponseWriter, r *http.Re
 		Message: "Credencial temporária gerada; o usuário deverá criar uma nova senha no próximo acesso",
 	})
 }
+
+// AdminDeleteUser hard-deletes a subordinate account. Existing tokens fail on
+// their next request because runtime authentication re-resolves the DB identity.
+func (app *application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || !scope.HasPermission(PermissionUsersManage) {
+		app.errorJSON(w, fmt.Errorf("acesso restrito"), http.StatusForbidden)
+		return
+	}
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil || id <= 0 {
+		app.errorJSON(w, fmt.Errorf("ID de usuário inválido"), http.StatusBadRequest)
+		return
+	}
+	if scope.UserID > 0 && scope.UserID == id {
+		app.errorJSON(w, fmt.Errorf("não é permitido excluir a própria conta"), http.StatusForbidden)
+		return
+	}
+	target, err := app.models.AdminUsers.GetRuntimeAccessByID(r.Context(), id)
+	if errors.Is(err, models.ErrUserNotFound) {
+		app.errorJSON(w, fmt.Errorf("usuário não encontrado"), http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao validar usuário alvo: %w", err), http.StatusInternalServerError)
+		return
+	}
+	if target.Role == RoleAdmin || !canAdministerTarget(scope, target) {
+		app.errorJSON(w, fmt.Errorf("não é permitido excluir uma conta com privilégios ou escopo superiores"), http.StatusForbidden)
+		return
+	}
+	if err = app.models.AdminUsers.DeleteByID(r.Context(), id); errors.Is(err, models.ErrUserNotFound) {
+		app.errorJSON(w, err, http.StatusNotFound)
+		return
+	} else if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao excluir usuário: %w", err), http.StatusInternalServerError)
+		return
+	}
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Message: "Usuário excluído"})
+}
+
+// AdminDeleteDRE is intentionally restricted to the environment-backed global
+// administrator. Capability-bearing database accounts cannot delete master data.
+func (app *application) AdminDeleteDRE(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || scope.Role != RoleAdmin || scope.UserID != 0 || scope.DataScope != "all" {
+		app.errorJSON(w, fmt.Errorf("exclusivo para o administrador global do ambiente"), http.StatusForbidden)
+		return
+	}
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil || id <= 0 {
+		app.errorJSON(w, fmt.Errorf("ID de DRE inválido"), http.StatusBadRequest)
+		return
+	}
+	deps, err := app.models.DREs.DeleteEmpty(r.Context(), id)
+	if errors.Is(err, models.ErrDRENotFound) {
+		app.errorJSON(w, err, http.StatusNotFound)
+		return
+	}
+	if errors.Is(err, models.ErrDREHasDependencies) {
+		app.writeJSON(w, http.StatusConflict, map[string]any{"error": true, "code": "DRE_HAS_DEPENDENCIES", "message": "A DRE possui dados vinculados e foi preservada.", "dependencies": deps})
+		return
+	}
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao excluir DRE: %w", err), http.StatusInternalServerError)
+		return
+	}
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Message: "DRE excluída"})
+}
+
+func requireEnvAdminScope(r *http.Request) bool {
+	scope, ok := GetAdminAccessScope(r.Context())
+	return ok && scope.Role == RoleAdmin && scope.UserID == 0 && scope.DataScope == "all"
+}
+
+func (app *application) AdminBulkDREBootstrapPreview(w http.ResponseWriter, r *http.Request) {
+	if !requireEnvAdminScope(r) {
+		app.errorJSON(w, fmt.Errorf("exclusivo para o administrador global do ambiente"), http.StatusForbidden)
+		return
+	}
+	preview, err := app.models.AdminUsers.PreviewDREBootstrap(r.Context())
+	if err != nil {
+		app.errorJSON(w, fmt.Errorf("erro ao preparar provisionamento: %w", err), http.StatusInternalServerError)
+		return
+	}
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Data: preview})
+}
+func (app *application) AdminBulkDREBootstrap(w http.ResponseWriter, r *http.Request) {
+	if !requireEnvAdminScope(r) {
+		app.errorJSON(w, fmt.Errorf("exclusivo para o administrador global do ambiente"), http.StatusForbidden)
+		return
+	}
+	var req struct {
+		EmailOverrides map[string]string `json:"email_overrides"`
+	}
+	if r.Body != nil && r.ContentLength != 0 {
+		if err := app.readJSON(w, r, &req); err != nil {
+			app.errorJSON(w, fmt.Errorf("dados inválidos: %w", err), http.StatusBadRequest)
+			return
+		}
+	}
+	overrides := make(map[int]string, len(req.EmailOverrides))
+	for rawID, email := range req.EmailOverrides {
+		id, parseErr := strconv.Atoi(rawID)
+		if parseErr != nil || id <= 0 {
+			app.errorJSON(w, fmt.Errorf("ID de DRE inválido"), http.StatusBadRequest)
+			return
+		}
+		overrides[id] = email
+	}
+	preview, credentials, err := app.models.AdminUsers.BootstrapDREAccounts(r.Context(), overrides)
+	if err != nil {
+		app.writeJSON(w, http.StatusConflict, map[string]any{"error": true, "code": "BULK_DRE_INVALID", "message": err.Error(), "data": preview})
+		return
+	}
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Message: "Provisionamento concluído; salve as senhas agora, pois não poderão ser recuperadas.", Data: map[string]any{"preview": preview, "credentials": credentials}})
+}

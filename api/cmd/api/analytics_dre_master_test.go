@@ -295,8 +295,17 @@ func TestDREMasterIntegrationFlow(t *testing.T) {
 	// O escopo role=dre precisa impor a DRE da conta autenticada mesmo sem query param.
 	// A #206 exige que todo token DRE corresponda a um usuário real e ativo no banco.
 	if _, err := db.Exec(`
-		INSERT INTO admin_users (username, password_hash, role, dre_id, active, created_at, updated_at)
-		VALUES ($1, 'integration-test-hash', 'dre', $2, true, NOW(), NOW())
+		WITH inserted AS (
+			INSERT INTO admin_users (username, password_hash, role, dre_id, active, data_scope, created_at, updated_at)
+			VALUES ($1, 'integration-test-hash', 'dre', $2, true, 'selected', NOW(), NOW())
+			RETURNING id
+		), grants AS (
+			INSERT INTO admin_user_permissions (user_id, permission)
+			SELECT id, permission FROM inserted
+			CROSS JOIN (VALUES ('census.read'), ('analytics.read'), ('reports.read')) AS p(permission)
+		)
+		INSERT INTO admin_user_dres (user_id, dre_id)
+		SELECT id, $2 FROM inserted
 	`, "integration-dre", dreA.ID); err != nil {
 		t.Fatalf("inserir usuário DRE de integração: %v", err)
 	}

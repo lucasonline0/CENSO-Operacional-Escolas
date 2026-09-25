@@ -125,6 +125,43 @@ func (m *AdminUserModel) UpdateAuthorization(ctx context.Context, userID int, pe
 
 var authorizationPermissionCatalog = map[string]bool{"census.read": true, "analytics.read": true, "reports.read": true, "users.read": true, "users.create": true, "users.manage": true, "users.reset_password": true, "dres.manage": true, "schools.manage_dre": true, "sync.execute": true}
 
+type adminIdentityQueryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+// adminIdentityConflict is the single namespace check shared by every account
+// provisioning path, including bulk preview and execution.
+func adminIdentityConflict(ctx context.Context, q adminIdentityQueryer, username, email string) (error, error) {
+	var usernameExists, emailExists, emailAsUsername, usernameAsEmail bool
+	err := q.QueryRowContext(ctx, `SELECT
+		EXISTS(SELECT 1 FROM admin_users WHERE LOWER(BTRIM(username))=LOWER(BTRIM($1))),
+		EXISTS(SELECT 1 FROM admin_users WHERE email IS NOT NULL AND LOWER(BTRIM(email))=LOWER(BTRIM($2))),
+		EXISTS(SELECT 1 FROM admin_users WHERE LOWER(BTRIM(username))=LOWER(BTRIM($2))),
+		EXISTS(SELECT 1 FROM admin_users WHERE email IS NOT NULL AND LOWER(BTRIM(email))=LOWER(BTRIM($1)))`, username, email).
+		Scan(&usernameExists, &emailExists, &emailAsUsername, &usernameAsEmail)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case usernameExists:
+		return ErrUsernameExists, nil
+	case emailExists:
+		return ErrEmailExists, nil
+	case emailAsUsername || usernameAsEmail:
+		return ErrIdentityCollision, nil
+	default:
+		return nil, nil
+	}
+}
+
+func ensureAdminIdentityAvailable(ctx context.Context, q adminIdentityQueryer, username, email string) error {
+	conflict, err := adminIdentityConflict(ctx, q, username, email)
+	if err != nil {
+		return err
+	}
+	return conflict
+}
+
 func (m *AdminUserModel) ProvisionCustom(ctx context.Context, username, email, temporaryPassword string, permissions []string, dataScope string, dreIDs []int) (*AdminUser, error) {
 	username = strings.TrimSpace(username)
 	if username == "" || len(username) > 64 {
@@ -167,26 +204,8 @@ func (m *AdminUserModel) ProvisionCustom(ctx context.Context, username, email, t
 	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('admin_users_identity'))`); err != nil {
 		return nil, err
 	}
-	var usernameExists, emailExists, crossCollision bool
-	if err := tx.QueryRowContext(ctx, `
-		SELECT
-			EXISTS (SELECT 1 FROM admin_users WHERE LOWER(BTRIM(username)) = LOWER(BTRIM($1))),
-			EXISTS (SELECT 1 FROM admin_users WHERE email IS NOT NULL AND LOWER(BTRIM(email)) = LOWER(BTRIM($2))),
-			EXISTS (
-				SELECT 1 FROM admin_users
-				WHERE LOWER(BTRIM(username)) = LOWER(BTRIM($2))
-				   OR (email IS NOT NULL AND LOWER(BTRIM(email)) = LOWER(BTRIM($1)))
-			)`, username, email).Scan(&usernameExists, &emailExists, &crossCollision); err != nil {
+	if err := ensureAdminIdentityAvailable(ctx, tx, username, email); err != nil {
 		return nil, err
-	}
-	if usernameExists {
-		return nil, ErrUsernameExists
-	}
-	if emailExists {
-		return nil, ErrEmailExists
-	}
-	if crossCollision {
-		return nil, ErrIdentityCollision
 	}
 
 	var u AdminUser
@@ -413,26 +432,8 @@ func (m *AdminUserModel) ProvisionForDREID(ctx context.Context, username, email,
 	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('admin_users_identity'))`); err != nil {
 		return nil, err
 	}
-	var usernameExists, emailExists, crossCollision bool
-	if err := tx.QueryRowContext(ctx, `
-		SELECT
-			EXISTS (SELECT 1 FROM admin_users WHERE LOWER(BTRIM(username)) = LOWER(BTRIM($1))),
-			EXISTS (SELECT 1 FROM admin_users WHERE email IS NOT NULL AND LOWER(BTRIM(email)) = LOWER(BTRIM($2))),
-			EXISTS (
-				SELECT 1 FROM admin_users
-				WHERE LOWER(BTRIM(username)) = LOWER(BTRIM($2))
-				   OR (email IS NOT NULL AND LOWER(BTRIM(email)) = LOWER(BTRIM($1)))
-			)`, username, email).Scan(&usernameExists, &emailExists, &crossCollision); err != nil {
+	if err := ensureAdminIdentityAvailable(ctx, tx, username, email); err != nil {
 		return nil, err
-	}
-	if usernameExists {
-		return nil, ErrUsernameExists
-	}
-	if emailExists {
-		return nil, ErrEmailExists
-	}
-	if crossCollision {
-		return nil, ErrIdentityCollision
 	}
 
 	var u AdminUser
@@ -1059,4 +1060,37 @@ func (m *AdminUserModel) List(ctx context.Context) ([]*AdminUser, error) {
 		}
 	}
 	return users, nil
+}
+
+// DeleteByID permanently removes an administrative account and only its
+// authorization relations. The transaction prevents orphaned grants.
+func (m *AdminUserModel) DeleteByID(ctx context.Context, id int) error {
+	if id <= 0 {
+		return ErrUserNotFound
+	}
+	tx, err := m.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var role string
+	if err = tx.QueryRowContext(ctx, `SELECT role FROM admin_users WHERE id=$1 FOR UPDATE`, id).Scan(&role); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrUserNotFound
+		}
+		return err
+	}
+	if role == "admin" {
+		return ErrInvalidRole
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM admin_user_permissions WHERE user_id=$1`, id); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM admin_user_dres WHERE user_id=$1`, id); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM admin_users WHERE id=$1`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

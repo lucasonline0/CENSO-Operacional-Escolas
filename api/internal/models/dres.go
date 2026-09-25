@@ -327,3 +327,79 @@ func (m *DREModel) SetActiveByNome(ctx context.Context, nome string, active bool
 
 	return nil
 }
+
+type DREDependencies struct {
+	Schools        int `json:"schools"`
+	Users          int `json:"users"`
+	CustomProfiles int `json:"custom_profiles"`
+	Census         int `json:"census"`
+}
+
+var ErrDREHasDependencies = errors.New("DRE possui dependências")
+
+// Dependencies counts every canonical administrative/data relation used by the
+// application. DeleteEmpty repeats this query under a row lock in one transaction.
+func dreDependencies(ctx context.Context, q interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, id int) (DREDependencies, error) {
+	var d DREDependencies
+	err := q.QueryRowContext(ctx, `SELECT
+		 (SELECT COUNT(*) FROM schools WHERE dre_id=$1),
+		 (SELECT COUNT(*) FROM admin_users WHERE dre_id=$1),
+		 (SELECT COUNT(DISTINCT aud.user_id) FROM admin_user_dres aud WHERE aud.dre_id=$1),
+		 (SELECT COUNT(*) FROM census_responses cr JOIN schools s ON s.id=cr.school_id WHERE s.dre_id=$1)`, id).
+		Scan(&d.Schools, &d.Users, &d.CustomProfiles, &d.Census)
+	return d, err
+}
+
+func (m *DREModel) Dependencies(ctx context.Context, id int) (DREDependencies, error) {
+	if id <= 0 {
+		return DREDependencies{}, ErrDREInvalidID
+	}
+	var exists bool
+	if err := m.DB.QueryRowContext(ctx, `SELECT true FROM dres WHERE id=$1`, id).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
+		return DREDependencies{}, ErrDRENotFound
+	} else if err != nil {
+		return DREDependencies{}, err
+	}
+	return dreDependencies(ctx, m.DB, id)
+}
+
+func (m *DREModel) DeleteEmpty(ctx context.Context, id int) (DREDependencies, error) {
+	if id <= 0 {
+		return DREDependencies{}, ErrDREInvalidID
+	}
+	tx, err := m.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return DREDependencies{}, err
+	}
+	defer tx.Rollback()
+	var exists bool
+	if err = tx.QueryRowContext(ctx, `SELECT true FROM dres WHERE id=$1 FOR UPDATE`, id).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
+		return DREDependencies{}, ErrDRENotFound
+	} else if err != nil {
+		return DREDependencies{}, err
+	}
+	deps, err := dreDependencies(ctx, tx, id)
+	if err != nil {
+		return deps, err
+	}
+	if deps.Schools+deps.Users+deps.CustomProfiles+deps.Census > 0 {
+		return deps, ErrDREHasDependencies
+	}
+	result, err := tx.ExecContext(ctx, `DELETE FROM dres WHERE id=$1`, id)
+	if err != nil {
+		return deps, err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return deps, err
+	}
+	if n == 0 {
+		return deps, ErrDRENotFound
+	}
+	if err = tx.Commit(); err != nil {
+		return deps, err
+	}
+	return deps, nil
+}

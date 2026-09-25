@@ -1060,3 +1060,36 @@ func (m *AdminUserModel) List(ctx context.Context) ([]*AdminUser, error) {
 	}
 	return users, nil
 }
+
+// DeleteByID permanently removes an administrative account and only its
+// authorization relations. The transaction prevents orphaned grants.
+func (m *AdminUserModel) DeleteByID(ctx context.Context, id int) error {
+	if id <= 0 {
+		return ErrUserNotFound
+	}
+	tx, err := m.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var role string
+	if err = tx.QueryRowContext(ctx, `SELECT role FROM admin_users WHERE id=$1 FOR UPDATE`, id).Scan(&role); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrUserNotFound
+		}
+		return err
+	}
+	if role == "admin" {
+		return ErrInvalidRole
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM admin_user_permissions WHERE user_id=$1`, id); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM admin_user_dres WHERE user_id=$1`, id); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM admin_users WHERE id=$1`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}

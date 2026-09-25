@@ -176,6 +176,14 @@ export async function resetAdminUserPassword(
   });
 }
 
+export async function deleteAdminUser(token: string, id: number): Promise<void> {
+  await apiMutation(`/v1/admin/users/${id}`, token, { method: "DELETE" });
+}
+
+export async function deleteDRE(token: string, id: number): Promise<void> {
+  await apiMutation(`/v1/admin/dres/${id}`, token, { method: "DELETE" });
+}
+
 export async function changeOwnPassword(
   token: string,
   currentPassword: string,
@@ -309,3 +317,11 @@ export function buildPostgresSourceLabel(filters?: DashboardFilters): string {
   if (parts.length === 0) return base;
   return `${base} (${parts.join(" · ")})`;
 }
+
+export interface DREBootstrapPreview {
+  active: number; provisioned: number; pending: number; ignored_e2e: number; errors: number;
+  items: Array<{ dre_id: number; dre: string; email: string; username: string; status: string; message?: string }>;
+}
+export interface DREBootstrapResult { preview: DREBootstrapPreview; credentials: Array<{ dre: string; email: string; username: string; temporary_password: string }> }
+export async function previewDREBootstrap(token: string): Promise<DREBootstrapPreview> { return apiFetch("/v1/admin/users/bulk-dre-bootstrap/preview", token, { bypassCache: true }); }
+export async function executeDREBootstrap(token: string): Promise<DREBootstrapResult> { return apiMutation("/v1/admin/users/bulk-dre-bootstrap", token, { method: "POST" }); }

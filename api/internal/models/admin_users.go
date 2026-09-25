@@ -13,16 +13,16 @@ import (
 )
 
 var (
-	ErrUserNotFound         = errors.New("usuário não encontrado")
-	ErrUserInactive         = errors.New("usuário inativo")
-	ErrInvalidDRE           = errors.New("DRE não encontrada")
-	ErrUsernameExists       = errors.New("username já está em uso")
-	ErrEmailExists          = errors.New("e-mail já está em uso")
-	ErrIdentityCollision    = errors.New("e-mail e usuário conflitam com uma conta existente")
-	ErrInvalidEmail         = errors.New("e-mail inválido")
-	ErrInvalidRole          = errors.New("role inválida")
-	ErrDRERequiredForDRE    = errors.New("DRE é obrigatória para a role dre")
-	ErrPasswordSetupInvalid  = errors.New("desafio de primeiro acesso inválido ou já utilizado")
+	ErrUserNotFound           = errors.New("usuário não encontrado")
+	ErrUserInactive           = errors.New("usuário inativo")
+	ErrInvalidDRE             = errors.New("DRE não encontrada")
+	ErrUsernameExists         = errors.New("username já está em uso")
+	ErrEmailExists            = errors.New("e-mail já está em uso")
+	ErrIdentityCollision      = errors.New("e-mail e usuário conflitam com uma conta existente")
+	ErrInvalidEmail           = errors.New("e-mail inválido")
+	ErrInvalidRole            = errors.New("role inválida")
+	ErrDRERequiredForDRE      = errors.New("DRE é obrigatória para a role dre")
+	ErrPasswordSetupInvalid   = errors.New("desafio de primeiro acesso inválido ou já utilizado")
 	ErrCurrentPasswordInvalid = errors.New("senha atual inválida")
 )
 
@@ -46,6 +46,82 @@ type AdminUser struct {
 
 var ErrInvalidPermission = errors.New("permissão inválida")
 var ErrInvalidDataScope = errors.New("escopo de dados inválido")
+
+// UpdateAuthorization replaces a custom account's effective grants atomically.
+// Rotating auth_version is part of the same transaction, so an already-issued
+// token can never continue with the previous capabilities or territory.
+func (m *AdminUserModel) UpdateAuthorization(ctx context.Context, userID int, permissions []string, dataScope string, dreIDs []int) (*AdminUser, error) {
+	if userID <= 0 {
+		return nil, ErrUserNotFound
+	}
+	dataScope = strings.ToLower(strings.TrimSpace(dataScope))
+	if dataScope != "all" && dataScope != "selected" || dataScope == "selected" && len(dreIDs) == 0 {
+		return nil, ErrInvalidDataScope
+	}
+	permissionSet := make(map[string]struct{}, len(permissions))
+	for _, permission := range permissions {
+		if !authorizationPermissionCatalog[permission] {
+			return nil, ErrInvalidPermission
+		}
+		permissionSet[permission] = struct{}{}
+	}
+	dreSet := make(map[int]struct{}, len(dreIDs))
+	for _, dreID := range dreIDs {
+		if dreID <= 0 {
+			return nil, ErrInvalidDRE
+		}
+		dreSet[dreID] = struct{}{}
+	}
+
+	tx, err := m.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var role string
+	if err := tx.QueryRowContext(ctx, `SELECT role FROM admin_users WHERE id=$1 FOR UPDATE`, userID).Scan(&role); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+	if role == "admin" {
+		return nil, ErrInvalidRole
+	}
+	if dataScope == "selected" {
+		for dreID := range dreSet {
+			var active bool
+			if err := tx.QueryRowContext(ctx, `SELECT ativa FROM dres WHERE id=$1`, dreID).Scan(&active); err != nil || !active {
+				return nil, ErrInvalidDRE
+			}
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM admin_user_permissions WHERE user_id=$1`, userID); err != nil {
+		return nil, err
+	}
+	for permission := range permissionSet {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO admin_user_permissions(user_id,permission) VALUES($1,$2)`, userID, permission); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM admin_user_dres WHERE user_id=$1`, userID); err != nil {
+		return nil, err
+	}
+	if dataScope == "selected" {
+		for dreID := range dreSet {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO admin_user_dres(user_id,dre_id) VALUES($1,$2)`, userID, dreID); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE admin_users SET role='custom', dre_id=NULL, dre=NULL, data_scope=$2, auth_version=COALESCE(auth_version,1)+1, updated_at=NOW() WHERE id=$1`, userID, dataScope); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return m.GetByID(ctx, userID)
+}
 
 var authorizationPermissionCatalog = map[string]bool{"census.read": true, "analytics.read": true, "reports.read": true, "users.read": true, "users.create": true, "users.manage": true, "users.reset_password": true, "dres.manage": true, "schools.manage_dre": true, "sync.execute": true}
 

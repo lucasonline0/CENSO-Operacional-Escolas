@@ -335,6 +335,7 @@ func (app *application) routes() http.Handler {
 
 			protected.Post("/admin/users", app.AdminCreateUser)
 			protected.Get("/admin/users", app.AdminListUsers)
+			protected.Put("/admin/users/{id}/authorization", app.AdminUpdateUserAuthorization)
 			protected.Patch("/admin/users/{id}/status", app.AdminUpdateUserStatus)
 			protected.Post("/admin/users/{id}/reset-password", app.AdminResetUserPassword)
 

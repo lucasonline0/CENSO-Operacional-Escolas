@@ -34,7 +34,6 @@ func canDelegate(actor AdminAccessScope, permissions []string, dataScope string,
 	return true
 }
 
-
 func canAdministerTarget(actor AdminAccessScope, target *models.RuntimeAdminAccess) bool {
 	if target == nil {
 		return false
@@ -42,7 +41,7 @@ func canAdministerTarget(actor AdminAccessScope, target *models.RuntimeAdminAcce
 	if actor.Role == RoleAdmin && actor.DataScope == "all" {
 		return true
 	}
-	if strings.EqualFold(strings.TrimSpace(actor.Username), strings.TrimSpace(target.Username)) {
+	if actor.UserID > 0 && actor.UserID == target.ID || strings.EqualFold(strings.TrimSpace(actor.Username), strings.TrimSpace(target.Username)) {
 		return false
 	}
 	if target.Role == RoleAdmin {
@@ -75,7 +74,6 @@ func canAdministerTarget(actor AdminAccessScope, target *models.RuntimeAdminAcce
 	}
 }
 
-
 func canDelegateRegionalAccount(actor AdminAccessScope, dreID int) bool {
 	return canDelegate(
 		actor,
@@ -84,7 +82,6 @@ func canDelegateRegionalAccount(actor AdminAccessScope, dreID int) bool {
 		[]int{dreID},
 	)
 }
-
 
 func canViewAccountTarget(actor AdminAccessScope, target *models.AdminUser) bool {
 	if target == nil {

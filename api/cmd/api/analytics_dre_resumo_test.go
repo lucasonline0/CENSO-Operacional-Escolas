@@ -49,7 +49,7 @@ func TestPreenchimentoScopedArgs(t *testing.T) {
 	if query != preenchimentoDreScopedSelectSQL {
 		t.Fatal("buildPreenchimentoDreScopedQuery retornou SQL inesperado")
 	}
-	want := []any{2026, "DRE BELEM", "BELEM", "URBANA", "GUAJARA", 42, "15000000", 77}
+	want := []any{2026, "DRE BELEM", "BELEM", "URBANA", "GUAJARA", 42, "15000000", "77"}
 	if len(args) != len(want) {
 		t.Fatalf("len(args)=%d; want %d", len(args), len(want))
 	}

@@ -57,7 +57,7 @@ func (app *application) AdminAnalyticsPessoalEstrutura(w http.ResponseWriter, r 
 	regiaoIntegracao = sharedFilters.RegiaoIntegracao
 	schoolID := sharedFilters.SchoolID
 	codigoINEP := sharedFilters.CodigoINEP
-	scopeArgs := []any{year, dre, municipio, zona, porte, regiaoIntegracao, schoolID, codigoINEP, sharedFilters.DREID}
+	scopeArgs := []any{year, dre, municipio, zona, porte, regiaoIntegracao, schoolID, codigoINEP, sharedFilters.SQLDREScopeParam()}
 
 	out := PessoalEstrutura{
 		ComposicaoGestao: []CategoricStat{},
@@ -174,7 +174,7 @@ func (app *application) AdminAnalyticsPessoalCoordenacao(w http.ResponseWriter, 
 	regiaoIntegracao = sharedFilters.RegiaoIntegracao
 	schoolID := sharedFilters.SchoolID
 	codigoINEP := sharedFilters.CodigoINEP
-	scopeArgs := []any{year, dre, municipio, zona, porte, regiaoIntegracao, schoolID, codigoINEP, sharedFilters.DREID}
+	scopeArgs := []any{year, dre, municipio, zona, porte, regiaoIntegracao, schoolID, codigoINEP, sharedFilters.SQLDREScopeParam()}
 
 	out := PessoalCoordenacao{
 		PorArea: []CategoricStat{},
@@ -302,7 +302,7 @@ func (app *application) AdminAnalyticsPessoalQuadro(w http.ResponseWriter, r *ht
 	regiaoIntegracao = sharedFilters.RegiaoIntegracao
 	schoolID := sharedFilters.SchoolID
 	codigoINEP := sharedFilters.CodigoINEP
-	scopeArgs := []any{year, dre, municipio, zona, porte, regiaoIntegracao, schoolID, codigoINEP, sharedFilters.DREID}
+	scopeArgs := []any{year, dre, municipio, zona, porte, regiaoIntegracao, schoolID, codigoINEP, sharedFilters.SQLDREScopeParam()}
 
 	out := QuadroPessoal{PorDRE: []QuadroPessoalDRE{}}
 
@@ -445,7 +445,7 @@ func (app *application) AdminAnalyticsTecnologiaInfra(w http.ResponseWriter, r *
 	regiaoIntegracao = sharedFilters.RegiaoIntegracao
 	schoolID := sharedFilters.SchoolID
 	codigoINEP := sharedFilters.CodigoINEP
-	scopeArgs := []any{year, dre, municipio, zona, porte, regiaoIntegracao, schoolID, codigoINEP, sharedFilters.DREID}
+	scopeArgs := []any{year, dre, municipio, zona, porte, regiaoIntegracao, schoolID, codigoINEP, sharedFilters.SQLDREScopeParam()}
 
 	out := TecnologiaInfra{
 		DisponibilidadeInternet:    []CategoricStat{},
@@ -660,7 +660,7 @@ func (app *application) AdminAnalyticsTecnologiaUso(w http.ResponseWriter, r *ht
 	regiaoIntegracao = sharedFilters.RegiaoIntegracao
 	schoolID := sharedFilters.SchoolID
 	codigoINEP := sharedFilters.CodigoINEP
-	scopeArgs := []any{year, dre, municipio, zona, porte, regiaoIntegracao, schoolID, codigoINEP, sharedFilters.DREID}
+	scopeArgs := []any{year, dre, municipio, zona, porte, regiaoIntegracao, schoolID, codigoINEP, sharedFilters.SQLDREScopeParam()}
 
 	out := TecnologiaUso{
 		PossuiProjetorDist:     []CategoricStat{},

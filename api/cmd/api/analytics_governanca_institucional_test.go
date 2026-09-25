@@ -93,3 +93,9 @@ func TestGovernancaInstitucionalWhereSQLParametrizado(t *testing.T) {
 		}
 	}
 }
+
+func TestGovernancaInstitucionalScopedWhereAppliesYear(t *testing.T) {
+	if !strings.Contains(governancaInstitucionalScopedWhereSQL, "filtered_cr.year = $8") {
+		t.Fatal("handler deve aplicar o ano global ao census_id da view")
+	}
+}

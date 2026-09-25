@@ -1,0 +1,265 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"censo-api/internal/models"
+)
+
+func TestDelegationNeverExpandsCapabilitiesOrScope(t *testing.T) {
+	perms := permissionsMap([]string{PermissionUsersCreate, PermissionCensusRead})
+	actor := AdminAccessScope{Role: "custom", DataScope: "selected", permissions: &perms, dreIDs: newDREIDs([]int{3})}
+	if !canDelegate(actor, []string{PermissionCensusRead}, "selected", []int{3}) {
+		t.Fatal("expected subset grant to be allowed")
+	}
+	if canDelegate(actor, []string{PermissionUsersManage}, "selected", []int{3}) {
+		t.Fatal("escalated permission allowed")
+	}
+	if canDelegate(actor, []string{PermissionCensusRead}, "all", nil) {
+		t.Fatal("global scope escalation allowed")
+	}
+	if canDelegate(actor, []string{PermissionCensusRead}, "selected", []int{7}) {
+		t.Fatal("foreign DRE escalation allowed")
+	}
+	if canDelegate(actor, []string{"unknown.permission"}, "selected", []int{3}) {
+		t.Fatal("unknown permission allowed")
+	}
+}
+
+func TestDelegatedAdministrationNeverTargetsMorePrivilegedAccount(t *testing.T) {
+	actorPerms := permissionsMap([]string{PermissionUsersManage, PermissionUsersResetPassword, PermissionCensusRead})
+	actor := AdminAccessScope{
+		Username:    "delegate",
+		Role:        "custom",
+		DataScope:   "selected",
+		permissions: &actorPerms,
+		dreIDs:      newDREIDs([]int{3, 4}),
+	}
+
+	allowed := &models.RuntimeAdminAccess{
+		Username:    "child",
+		Role:        "custom",
+		DataScope:   "selected",
+		Permissions: []string{PermissionCensusRead},
+		DREIDs:      []int{3},
+	}
+	if !canAdministerTarget(actor, allowed) {
+		t.Fatal("expected subordinate target to be manageable")
+	}
+
+	for name, target := range map[string]*models.RuntimeAdminAccess{
+		"self": {
+			Username: "delegate", Role: "custom", DataScope: "selected",
+			Permissions: []string{PermissionCensusRead}, DREIDs: []int{3},
+		},
+		"higher permission": {
+			Username: "manager", Role: "custom", DataScope: "selected",
+			Permissions: []string{PermissionUsersCreate}, DREIDs: []int{3},
+		},
+		"foreign DRE": {
+			Username: "foreign", Role: "custom", DataScope: "selected",
+			Permissions: []string{PermissionCensusRead}, DREIDs: []int{7},
+		},
+		"global scope": {
+			Username: "global", Role: "custom", DataScope: "all",
+			Permissions: []string{PermissionCensusRead},
+		},
+		"admin": {
+			Username: "admin", Role: RoleAdmin, DataScope: "all",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if canAdministerTarget(actor, target) {
+				t.Fatal("privileged target was incorrectly manageable")
+			}
+		})
+	}
+
+	adminPerms := allPermissions()
+	admin := AdminAccessScope{Username: "root", Role: RoleAdmin, DataScope: "all", permissions: &adminPerms}
+	if !canAdministerTarget(admin, &models.RuntimeAdminAccess{Username: "global", Role: "custom", DataScope: "all"}) {
+		t.Fatal("environment admin should be able to manage database accounts")
+	}
+}
+
+func TestAuthorizationUpdateRevokesSessionAndReplacesScope(t *testing.T) {
+	_, _, m := setupRuntimeAuthorizationTest(t)
+	ctx := context.Background()
+	dreA, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE AUTH UPDATE A", Ativa: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dreB, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE AUTH UPDATE B", Ativa: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err := m.AdminUsers.ProvisionCustom(ctx, "auth.update", "auth.update@example.test", "Temporary!Password123", []string{PermissionCensusRead, PermissionAnalyticsRead}, "selected", []int{dreA.ID, dreB.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := m.AdminUsers.UpdateAuthorization(ctx, user.ID, []string{PermissionCensusRead}, "selected", []int{dreA.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.AuthVersion != user.AuthVersion+1 {
+		t.Fatalf("auth_version=%d want %d", updated.AuthVersion, user.AuthVersion+1)
+	}
+	if len(updated.Permissions) != 1 || updated.Permissions[0] != PermissionCensusRead {
+		t.Fatalf("permissions=%v", updated.Permissions)
+	}
+	if len(updated.DREIDs) != 1 || updated.DREIDs[0] != dreA.ID {
+		t.Fatalf("dre_ids=%v", updated.DREIDs)
+	}
+}
+
+func TestAuthorizationUpdateRouteRequiresUsersManage(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPut, "/v1/admin/users/42/authorization", nil)
+	if got := permissionForRequest(req); got != PermissionUsersManage {
+		t.Fatalf("capability=%q", got)
+	}
+	perms := permissionsMap([]string{PermissionUsersManage})
+	actor := AdminAccessScope{UserID: 42, Username: "renamed", Role: "custom", DataScope: "all", permissions: &perms}
+	if canAdministerTarget(actor, &models.RuntimeAdminAccess{ID: 42, Username: "old-name", Role: "custom", DataScope: "all"}) {
+		t.Fatal("self authorization edit allowed by stable ID")
+	}
+}
+
+func TestSchoolManagementRoutesUseSchoolsCapability(t *testing.T) {
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodPost, path: "/v1/admin/dres/7/schools"},
+		{method: http.MethodPatch, path: "/v1/admin/schools/11/dre"},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, nil)
+		if got := permissionForRequest(req); got != PermissionSchoolsManageDRE {
+			t.Fatalf("%s %s capability=%q want=%q", tc.method, tc.path, got, PermissionSchoolsManageDRE)
+		}
+	}
+}
+
+func TestProvisionCustomRejectsCrossIdentityCollisions(t *testing.T) {
+	_, _, m := setupRuntimeAuthorizationTest(t)
+	ctx := context.Background()
+	dre, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE IDENTITY COLLISION", Ativa: true})
+	if err != nil {
+		t.Fatalf("create DRE: %v", err)
+	}
+	_, err = m.AdminUsers.ProvisionForDREID(
+		ctx,
+		"regional.identity@example.test",
+		"regional.mail@example.test",
+		"Temporary!Password123",
+		RoleDRE,
+		dre.ID,
+	)
+	if err != nil {
+		t.Fatalf("seed regional account: %v", err)
+	}
+
+	_, err = m.AdminUsers.ProvisionCustom(
+		ctx,
+		"regional.mail@example.test",
+		"custom.one@example.test",
+		"Temporary!Password123",
+		[]string{PermissionCensusRead},
+		"all",
+		nil,
+	)
+	if !errors.Is(err, models.ErrIdentityCollision) {
+		t.Fatalf("username matching existing email error=%v want ErrIdentityCollision", err)
+	}
+
+	_, err = m.AdminUsers.ProvisionCustom(
+		ctx,
+		"custom.two",
+		"regional.identity@example.test",
+		"Temporary!Password123",
+		[]string{PermissionCensusRead},
+		"all",
+		nil,
+	)
+	if !errors.Is(err, models.ErrIdentityCollision) {
+		t.Fatalf("email matching existing username error=%v want ErrIdentityCollision", err)
+	}
+}
+
+func TestAdminUserListIncludesCustomAuthorization(t *testing.T) {
+	_, _, m := setupRuntimeAuthorizationTest(t)
+	ctx := context.Background()
+	dreA, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE LIST AUTH A", Ativa: true})
+	if err != nil {
+		t.Fatalf("create DRE A: %v", err)
+	}
+	dreB, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE LIST AUTH B", Ativa: true})
+	if err != nil {
+		t.Fatalf("create DRE B: %v", err)
+	}
+	created, err := m.AdminUsers.ProvisionCustom(
+		ctx,
+		"list.authorization",
+		"list.authorization@example.test",
+		"Temporary!Password123",
+		[]string{PermissionCensusRead, PermissionUsersCreate},
+		"selected",
+		[]int{dreA.ID, dreB.ID},
+	)
+	if err != nil {
+		t.Fatalf("provision custom: %v", err)
+	}
+
+	users, err := m.AdminUsers.List(ctx)
+	if err != nil {
+		t.Fatalf("list users: %v", err)
+	}
+	var got *models.AdminUser
+	for _, user := range users {
+		if user.ID == created.ID {
+			got = user
+			break
+		}
+	}
+	if got == nil {
+		t.Fatal("custom account missing from list")
+	}
+	if got.DataScope != "selected" || len(got.DREIDs) != 2 {
+		t.Fatalf("authorization scope missing from list: %+v", got)
+	}
+	permissions := map[string]bool{}
+	for _, permission := range got.Permissions {
+		permissions[permission] = true
+	}
+	if !permissions[PermissionCensusRead] || !permissions[PermissionUsersCreate] {
+		t.Fatalf("permissions missing from list: %+v", got.Permissions)
+	}
+}
+
+func TestRegionalPresetDelegationRequiresReadCapabilitiesAndTerritory(t *testing.T) {
+	perms := permissionsMap([]string{
+		PermissionUsersCreate,
+		PermissionCensusRead,
+		PermissionAnalyticsRead,
+		PermissionReportsRead,
+	})
+	actor := AdminAccessScope{
+		Role: "custom", DataScope: "selected",
+		permissions: &perms, dreIDs: newDREIDs([]int{3}),
+	}
+	if !canDelegateRegionalAccount(actor, 3) {
+		t.Fatal("regional preset inside the actor scope should be delegable")
+	}
+	if canDelegateRegionalAccount(actor, 7) {
+		t.Fatal("regional preset outside the actor scope was allowed")
+	}
+
+	limited := permissionsMap([]string{PermissionUsersCreate, PermissionCensusRead})
+	actor.permissions = &limited
+	if canDelegateRegionalAccount(actor, 3) {
+		t.Fatal("regional preset granted analytics/reports that actor does not own")
+	}
+}

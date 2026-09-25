@@ -98,7 +98,7 @@ export function AbaTodosCensos({
         <div className="bg-white rounded-2xl border border-slate-200 px-4 py-3 shadow-sm flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
           <span>
             {total === 0
-              ? "Nenhum registro encontrado"
+              ? "Exibindo 0 de 0 registros"
               : `Exibindo ${firstRow}–${lastRow} de ${total} registros`}
           </span>
 

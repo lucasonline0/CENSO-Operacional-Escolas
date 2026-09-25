@@ -26,6 +26,15 @@ func TestIndiceGovernancaSelectSQLCoalesceNullableIndicators(t *testing.T) {
 	}
 }
 
+func TestIndiceGovernancaSelectSQLAppliesYearToBothSources(t *testing.T) {
+	if !strings.Contains(indiceGovernancaSelectSQL, "ano = $8") {
+		t.Fatal("índice deve filtrar a fonte PRODEP pelo ano global")
+	}
+	if !strings.Contains(indiceGovernancaSelectSQL, "year = $8") {
+		t.Fatal("índice deve filtrar o Censo pelo ano global")
+	}
+}
+
 func TestWriteIndiceGovernancaPayloadUsesAPIEnvelope(t *testing.T) {
 	t.Parallel()
 

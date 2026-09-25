@@ -207,6 +207,7 @@ func optStringCell(v *string) any {
 func (app *application) buildSaudeOperacionalReportData(ctx context.Context, def ReportDefinition, f reportFilters) (reportData, error) {
 	soFilters := saudeOperacionalFilters{
 		DREID:            f.DREID,
+		DREIDs:           append([]int(nil), f.DREIDs...),
 		DRE:              f.DRE,
 		Municipio:        f.Municipio,
 		Zona:             f.Zona,

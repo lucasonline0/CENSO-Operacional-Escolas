@@ -7,6 +7,7 @@ import { defineConfig, devices, type PlaywrightTestConfig } from "@playwright/te
 const webURL = process.env.E2E_WEB_URL ?? "http://localhost:3000";
 const apiURL = process.env.E2E_API_URL ?? "http://localhost:8000";
 const isCI = !!process.env.CI;
+const chromiumExecutable = process.env.E2E_CHROMIUM_EXECUTABLE;
 
 // Workers = 1: a stack é real e o login tem rate limit por IP (5 tentativas/15min).
 // Execução serial evita estourar a janela e mantém o estado determinístico
@@ -39,7 +40,10 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        ...(chromiumExecutable ? { launchOptions: { executablePath: chromiumExecutable } } : {}),
+      },
     },
   ],
   outputDir: "test-results",

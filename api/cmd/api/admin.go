@@ -24,10 +24,10 @@ import (
 // rateLimiter implementa rate limit por IP com janela deslizante e limpeza
 // periódica de chaves inativas para evitar crescimento indefinido de memória.
 type rateLimiter struct {
-	mu         sync.Mutex
-	attempts   map[string][]time.Time
-	window     time.Duration
-	lastSweep  time.Time
+	mu        sync.Mutex
+	attempts  map[string][]time.Time
+	window    time.Duration
+	lastSweep time.Time
 }
 
 const rlSweepInterval = 5 * time.Minute
@@ -53,6 +53,12 @@ var (
 		window:    10 * time.Minute,
 		lastSweep: time.Now(),
 	}
+
+	firstAccessRL = &rateLimiter{
+		attempts:  make(map[string][]time.Time),
+		window:    15 * time.Minute,
+		lastSweep: time.Now(),
+	}
 )
 
 const (
@@ -68,6 +74,10 @@ const (
 	// Upload de foto: uma por escola na prática; margem para reenvios.
 	maxUploads   = 40
 	uploadWindow = 10 * time.Minute
+
+	// Tentativas de primeira mudança de senha por IP
+	maxFirstAccessAttempts = 10
+	maxFirstAccessWindow   = 15 * time.Minute
 )
 
 // SweepNow executa uma limpeza imediata de chaves inativas sem depender de
@@ -642,8 +652,14 @@ type CensusFullRecord struct {
 // AdminSheetMetrics retorna os indicadores calculados a partir da planilha Base_dados (apenas admin).
 func (app *application) AdminSheetMetrics(w http.ResponseWriter, r *http.Request) {
 	scope, _ := GetAdminAccessScope(r.Context())
-	if scope.Role != RoleAdmin {
+	if !scope.HasPermission(PermissionAnalyticsRead) {
 		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
+	// The legacy Sheets service cannot apply canonical DRE IDs. Fail closed for
+	// selected scopes instead of returning global spreadsheet aggregates.
+	if scope.DataScope == "selected" || scope.Role == RoleDRE {
+		app.errorJSON(w, fmt.Errorf("métrica legada indisponível para escopo territorial"), http.StatusForbidden)
 		return
 	}
 	if app.sheets == nil {
@@ -662,8 +678,12 @@ func (app *application) AdminSheetMetrics(w http.ResponseWriter, r *http.Request
 // AdminIndicadoresMetrics retorna métricas de perfil dos alunos da aba Indicadores_Flags (apenas admin).
 func (app *application) AdminIndicadoresMetrics(w http.ResponseWriter, r *http.Request) {
 	scope, _ := GetAdminAccessScope(r.Context())
-	if scope.Role != RoleAdmin {
+	if !scope.HasPermission(PermissionAnalyticsRead) {
 		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
+	if scope.DataScope == "selected" || scope.Role == RoleDRE {
+		app.errorJSON(w, fmt.Errorf("métrica legada indisponível para escopo territorial"), http.StatusForbidden)
 		return
 	}
 	if app.sheets == nil {
@@ -722,8 +742,12 @@ func (app *application) AdminGetCensusByID(w http.ResponseWriter, r *http.Reques
 // AdminCreateDRE cria uma nova DRE no sistema (exclusivo para role=admin).
 func (app *application) AdminCreateDRE(w http.ResponseWriter, r *http.Request) {
 	scope, ok := GetAdminAccessScope(r.Context())
-	if !ok || scope.Role != RoleAdmin {
+	if !ok || !scope.HasPermission(PermissionDREsManage) {
 		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+		return
+	}
+	if scope.DataScope != "all" && !(scope.Role == RoleAdmin && scope.DataScope == "") {
+		app.errorJSON(w, fmt.Errorf("criação de DRE exige escopo global"), http.StatusForbidden)
 		return
 	}
 
@@ -789,8 +813,8 @@ func (app *application) AdminCreateDRE(w http.ResponseWriter, r *http.Request) {
 // (exclusivo para role=admin).
 func (app *application) AdminListDREs(w http.ResponseWriter, r *http.Request) {
 	scope, ok := GetAdminAccessScope(r.Context())
-	if !ok || scope.Role != RoleAdmin {
-		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
+	if !ok || (!scope.HasPermission(PermissionDREsManage) && !scope.HasPermission(PermissionUsersCreate) && !scope.HasPermission(PermissionUsersRead)) {
+		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores de DRE ou criadores de contas"), http.StatusForbidden)
 		return
 	}
 
@@ -806,9 +830,13 @@ func (app *application) AdminListDREs(w http.ResponseWriter, r *http.Request) {
 	// Filter out invalid legacy DREs
 	filtered := make([]*models.DRE, 0, len(dres))
 	for _, dre := range dres {
-		if !isInvalidLegacyDRE(dre.Nome) {
-			filtered = append(filtered, dre)
+		if isInvalidLegacyDRE(dre.Nome) {
+			continue
 		}
+		if scope.DataScope == "selected" && !scope.IsAuthorizedForDREID(dre.ID) {
+			continue
+		}
+		filtered = append(filtered, dre)
 	}
 
 	app.writeJSON(w, http.StatusOK, jsonResponse{
@@ -817,11 +845,10 @@ func (app *application) AdminListDREs(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-
 // AdminUpdateDRE atualiza os dados de uma DRE existente (exclusivo para role=admin).
 func (app *application) AdminUpdateDRE(w http.ResponseWriter, r *http.Request) {
 	scope, ok := GetAdminAccessScope(r.Context())
-	if !ok || scope.Role != RoleAdmin {
+	if !ok || !scope.HasPermission(PermissionDREsManage) {
 		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
 		return
 	}
@@ -840,6 +867,10 @@ func (app *application) AdminUpdateDRE(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		app.errorJSON(w, fmt.Errorf("erro ao buscar DRE: %w", err), http.StatusInternalServerError)
+		return
+	}
+	if !scope.IsAuthorizedForDREID(id) {
+		app.errorJSON(w, fmt.Errorf("DRE fora do escopo autorizado"), http.StatusForbidden)
 		return
 	}
 
@@ -913,17 +944,21 @@ func (app *application) AdminUpdateDRE(w http.ResponseWriter, r *http.Request) {
 // legados que ainda não migraram para o contrato por ID.
 func (app *application) AdminCreateUser(w http.ResponseWriter, r *http.Request) {
 	scope, ok := GetAdminAccessScope(r.Context())
-	if !ok || scope.Role != RoleAdmin {
+	if !ok || !scope.HasPermission(PermissionUsersCreate) {
 		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
 		return
 	}
 
 	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-		Role     string `json:"role"`
-		DRE      string `json:"dre"`
-		DREID    *int   `json:"dre_id"`
+		Username    string   `json:"username"`
+		Email       string   `json:"email"`
+		Password    string   `json:"password"`
+		Role        string   `json:"role"`
+		DRE         string   `json:"dre"`
+		DREID       *int     `json:"dre_id"`
+		Permissions []string `json:"permissions"`
+		DataScope   string   `json:"data_scope"`
+		DREIDs      []int    `json:"dre_ids"`
 	}
 
 	if err := app.readJSON(w, r, &req); err != nil {
@@ -931,8 +966,44 @@ func (app *application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if strings.TrimSpace(req.Role) == "" {
+	if strings.TrimSpace(req.Role) == "" && len(req.Permissions) == 0 && strings.TrimSpace(req.DataScope) == "" {
 		req.Role = RoleDRE
+	}
+	if strings.TrimSpace(req.Username) == "" {
+		app.errorJSON(w, fmt.Errorf("username não pode ser vazio"), http.StatusBadRequest)
+		return
+	}
+	if len(strings.TrimSpace(req.Username)) > 64 {
+		app.errorJSON(w, fmt.Errorf("username deve ter no máximo 64 caracteres"), http.StatusBadRequest)
+		return
+	}
+	if len(req.Password) < 12 {
+		app.errorJSON(w, fmt.Errorf("senha deve ter no mínimo 12 caracteres"), http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(req.Role) != "" && strings.ToLower(strings.TrimSpace(req.Role)) != RoleDRE && strings.ToLower(strings.TrimSpace(req.Role)) != "custom" {
+		app.errorJSON(w, models.ErrInvalidRole, http.StatusBadRequest)
+		return
+	}
+	if _, err := models.NormalizeAdminEmail(req.Email); err != nil {
+		app.errorJSON(w, err, http.StatusBadRequest)
+		return
+	}
+
+	// Authorization of the requested grant is checked independently of UI.
+	// A delegated creator can only grant permissions and territory it has.
+	if len(req.Permissions) > 0 || strings.TrimSpace(req.DataScope) != "" {
+		if !canDelegate(scope, req.Permissions, req.DataScope, req.DREIDs) {
+			app.errorJSON(w, fmt.Errorf("não é permitido conceder permissões ou escopo superiores ao próprio"), http.StatusForbidden)
+			return
+		}
+		user, err := app.models.AdminUsers.ProvisionCustom(r.Context(), req.Username, req.Email, req.Password, req.Permissions, req.DataScope, req.DREIDs)
+		if err != nil {
+			app.errorJSON(w, fmt.Errorf("erro ao criar usuário: %w", err), http.StatusBadRequest)
+			return
+		}
+		app.writeJSON(w, http.StatusCreated, jsonResponse{Error: false, Message: "Usuário criado com credencial temporária; troca obrigatória no primeiro acesso", Data: user})
+		return
 	}
 
 	var (
@@ -959,24 +1030,39 @@ func (app *application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 		}
-		user, err = app.models.AdminUsers.CreateForDREID(r.Context(), req.Username, req.Password, req.Role, *req.DREID)
+		if !canDelegateRegionalAccount(scope, *req.DREID) {
+			app.errorJSON(w, fmt.Errorf("não é permitido criar uma conta DRE com permissões ou escopo superiores ao próprio"), http.StatusForbidden)
+			return
+		}
+		user, err = app.models.AdminUsers.ProvisionForDREID(r.Context(), req.Username, req.Email, req.Password, req.Role, *req.DREID)
 	} else {
 		// Compatibilidade temporária: clientes antigos ainda podem enviar apenas
-		// dre textual. Novos clientes devem enviar dre_id.
-		user, err = app.models.AdminUsers.Create(r.Context(), req.Username, req.Password, req.Role, req.DRE)
+		// dre textual. O nome apenas resolve o ID canônico; e-mail continua obrigatório.
+		canonical, lookupErr := app.models.DREs.GetByNome(r.Context(), req.DRE)
+		if lookupErr != nil {
+			err = lookupErr
+		} else if !canDelegateRegionalAccount(scope, canonical.ID) {
+			app.errorJSON(w, fmt.Errorf("não é permitido criar uma conta DRE com permissões ou escopo superiores ao próprio"), http.StatusForbidden)
+			return
+		} else {
+			user, err = app.models.AdminUsers.ProvisionForDREID(r.Context(), req.Username, req.Email, req.Password, req.Role, canonical.ID)
+		}
 	}
 
 	if err != nil {
-		if errors.Is(err, models.ErrUsernameExists) {
+		if errors.Is(err, models.ErrUsernameExists) || errors.Is(err, models.ErrEmailExists) || errors.Is(err, models.ErrIdentityCollision) {
 			app.errorJSON(w, err, http.StatusConflict)
 			return
 		}
 		if errors.Is(err, models.ErrInvalidRole) ||
 			errors.Is(err, models.ErrDRERequiredForDRE) ||
 			errors.Is(err, models.ErrInvalidDRE) ||
+			errors.Is(err, models.ErrDRENotFound) ||
 			errors.Is(err, models.ErrDREInactive) ||
+			errors.Is(err, models.ErrInvalidEmail) ||
 			strings.Contains(err.Error(), "não pode ser vazio") ||
-			strings.Contains(err.Error(), "mínimo 12 caracteres") {
+			strings.Contains(err.Error(), "mínimo 12 caracteres") ||
+			strings.Contains(err.Error(), "máximo 64 caracteres") {
 			app.errorJSON(w, err, http.StatusBadRequest)
 			return
 		}
@@ -986,7 +1072,7 @@ func (app *application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 
 	app.writeJSON(w, http.StatusCreated, jsonResponse{
 		Error:   false,
-		Message: "Usuário criado com sucesso",
+		Message: "Usuário criado com credencial temporária; troca obrigatória no primeiro acesso",
 		Data:    user,
 	})
 }
@@ -994,7 +1080,7 @@ func (app *application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 // AdminListUsers lista todos os usuários administrativos sem expor senhas (exclusivo para role=admin).
 func (app *application) AdminListUsers(w http.ResponseWriter, r *http.Request) {
 	scope, ok := GetAdminAccessScope(r.Context())
-	if !ok || scope.Role != RoleAdmin {
+	if !ok || !scope.HasPermission(PermissionUsersRead) {
 		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
 		return
 	}
@@ -1007,17 +1093,23 @@ func (app *application) AdminListUsers(w http.ResponseWriter, r *http.Request) {
 	if users == nil {
 		users = []*models.AdminUser{}
 	}
+	filtered := make([]*models.AdminUser, 0, len(users))
+	for _, user := range users {
+		if canViewAccountTarget(scope, user) {
+			filtered = append(filtered, user)
+		}
+	}
 
 	app.writeJSON(w, http.StatusOK, jsonResponse{
 		Error: false,
-		Data:  users,
+		Data:  filtered,
 	})
 }
 
 // AdminUpdateUserStatus ativa ou desativa um usuário pelo ID (exclusivo para role=admin).
 func (app *application) AdminUpdateUserStatus(w http.ResponseWriter, r *http.Request) {
 	scope, ok := GetAdminAccessScope(r.Context())
-	if !ok || scope.Role != RoleAdmin {
+	if !ok || !scope.HasPermission(PermissionUsersManage) {
 		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
 		return
 	}
@@ -1057,6 +1149,20 @@ func (app *application) AdminUpdateUserStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	target, err := app.models.AdminUsers.GetRuntimeAccessByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, models.ErrUserNotFound) {
+			app.errorJSON(w, fmt.Errorf("usuário não encontrado"), http.StatusNotFound)
+			return
+		}
+		app.errorJSON(w, fmt.Errorf("erro ao validar usuário alvo: %w", err), http.StatusInternalServerError)
+		return
+	}
+	if !canAdministerTarget(scope, target) {
+		app.errorJSON(w, fmt.Errorf("não é permitido gerenciar uma conta com privilégios ou escopo superiores"), http.StatusForbidden)
+		return
+	}
+
 	err = app.models.AdminUsers.SetActiveByID(r.Context(), id, active)
 	if err != nil {
 		if errors.Is(err, models.ErrUserNotFound) {
@@ -1084,10 +1190,58 @@ func (app *application) AdminUpdateUserStatus(w http.ResponseWriter, r *http.Req
 	})
 }
 
+// AdminUpdateUserAuthorization safely replaces capabilities and territorial
+// scope. Both the existing target and requested result must be subordinate to
+// the actor; the model rotates auth_version in the same transaction.
+func (app *application) AdminUpdateUserAuthorization(w http.ResponseWriter, r *http.Request) {
+	scope, ok := GetAdminAccessScope(r.Context())
+	if !ok || !scope.HasPermission(PermissionUsersManage) {
+		app.errorJSON(w, fmt.Errorf("permissão insuficiente"), http.StatusForbidden)
+		return
+	}
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil || id <= 0 {
+		app.errorJSON(w, fmt.Errorf("ID de usuário inválido"), http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Permissions []string `json:"permissions"`
+		DataScope   string   `json:"data_scope"`
+		DREIDs      []int    `json:"dre_ids"`
+	}
+	if err := app.readJSON(w, r, &req); err != nil {
+		app.errorJSON(w, fmt.Errorf("dados inválidos: %w", err), http.StatusBadRequest)
+		return
+	}
+	target, err := app.models.AdminUsers.GetRuntimeAccessByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, models.ErrUserNotFound) {
+			app.errorJSON(w, err, http.StatusNotFound)
+		} else {
+			app.errorJSON(w, err, http.StatusInternalServerError)
+		}
+		return
+	}
+	if !canAdministerTarget(scope, target) || !canDelegate(scope, req.Permissions, req.DataScope, req.DREIDs) {
+		app.errorJSON(w, fmt.Errorf("não é permitido elevar ou editar esta conta"), http.StatusForbidden)
+		return
+	}
+	user, err := app.models.AdminUsers.UpdateAuthorization(r.Context(), id, req.Permissions, req.DataScope, req.DREIDs)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, models.ErrInvalidPermission) || errors.Is(err, models.ErrInvalidDataScope) || errors.Is(err, models.ErrInvalidDRE) {
+			status = http.StatusBadRequest
+		}
+		app.errorJSON(w, err, status)
+		return
+	}
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Message: "Autorização atualizada; sessões anteriores foram revogadas", Data: user})
+}
+
 // AdminResetUserPassword redefine a senha de um usuário pelo ID (exclusivo para role=admin).
 func (app *application) AdminResetUserPassword(w http.ResponseWriter, r *http.Request) {
 	scope, ok := GetAdminAccessScope(r.Context())
-	if !ok || scope.Role != RoleAdmin {
+	if !ok || !scope.HasPermission(PermissionUsersResetPassword) {
 		app.errorJSON(w, fmt.Errorf("acesso restrito para administradores"), http.StatusForbidden)
 		return
 	}
@@ -1120,7 +1274,21 @@ func (app *application) AdminResetUserPassword(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	err = app.models.AdminUsers.UpdatePasswordByID(r.Context(), id, newPassword)
+	target, err := app.models.AdminUsers.GetRuntimeAccessByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, models.ErrUserNotFound) {
+			app.errorJSON(w, fmt.Errorf("usuário não encontrado"), http.StatusNotFound)
+			return
+		}
+		app.errorJSON(w, fmt.Errorf("erro ao validar usuário alvo: %w", err), http.StatusInternalServerError)
+		return
+	}
+	if !canAdministerTarget(scope, target) {
+		app.errorJSON(w, fmt.Errorf("não é permitido redefinir a credencial de uma conta com privilégios ou escopo superiores"), http.StatusForbidden)
+		return
+	}
+
+	err = app.models.AdminUsers.ResetTemporaryPasswordByID(r.Context(), id, newPassword)
 	if err != nil {
 		if errors.Is(err, models.ErrUserNotFound) {
 			app.errorJSON(w, fmt.Errorf("usuário não encontrado"), http.StatusNotFound)
@@ -1136,6 +1304,6 @@ func (app *application) AdminResetUserPassword(w http.ResponseWriter, r *http.Re
 
 	app.writeJSON(w, http.StatusOK, jsonResponse{
 		Error:   false,
-		Message: "Senha redefinida com sucesso",
+		Message: "Credencial temporária gerada; o usuário deverá criar uma nova senha no próximo acesso",
 	})
 }

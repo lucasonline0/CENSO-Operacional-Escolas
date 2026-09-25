@@ -154,7 +154,7 @@ func TestDREIDScopeCanonicalIgnoresStaleLegacyText(t *testing.T) {
 	}
 
 	var scopedCount int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM schools s WHERE `+schoolDREAuthorizationPredicate("s", "$1", "$2"), dreA, "DRE BETA").Scan(&scopedCount); err != nil {
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM schools s WHERE `+schoolDREAuthorizationPredicate("s", "$1", "$2"), fmt.Sprintf("%d", dreA), "DRE BETA").Scan(&scopedCount); err != nil {
 		t.Fatalf("canonical authorization predicate: %v", err)
 	}
 	if scopedCount != 2 {
@@ -204,7 +204,7 @@ func TestDREIDScopeCanonicalIgnoresStaleLegacyText(t *testing.T) {
 	// Simula claim/nome stale: DREID deve dominar no endpoint de preenchimento.
 	pf := preenchimentoDreFilters{Year: 2026, DREID: dreA, DRE: "NOME STALE DO TOKEN"}
 	rows, err := tx.Query(preenchimentoDreScopedSelectSQL,
-		pf.Year, pf.DRE, pf.Municipio, pf.Zona, pf.RegiaoIntegracao, pf.SchoolID, pf.CodigoINEP, pf.DREID)
+		pf.Year, pf.DRE, pf.Municipio, pf.Zona, pf.RegiaoIntegracao, pf.SchoolID, pf.CodigoINEP, dreScopeSQLArg(pf.DREID, pf.DREIDs))
 	if err != nil {
 		t.Fatalf("preenchimento canonical by ID: %v", err)
 	}

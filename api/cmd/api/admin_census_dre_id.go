@@ -11,10 +11,7 @@ import (
 )
 
 func canonicalCensusListWhereSQL() string {
-	dreFilter := `(
-		$10 > 0 AND ` + schoolDREAuthorizationPredicate("s", "$10", "$3") + `
-		OR $10 = 0 AND ($3 = '' OR ` + schoolDRENamePredicate("s", "$3") + `)
-	)`
+	dreFilter := schoolDREScopedFilterPredicate("s", "$10", "$3")
 	dreSearch := schoolDRENameExpr("s")
 	return `
 	WHERE ($1 = '' OR cr.status = $1)
@@ -39,10 +36,6 @@ func canonicalCensusListWhereSQL() string {
 }
 
 func canonicalCensusWhereArgs(p censusListParams, scope AdminAccessScope, schoolID int, codigoINEP string) []any {
-	dreID := 0
-	if scope.Role == RoleDRE {
-		dreID = scope.DREID
-	}
 	return []any{
 		p.Status,
 		p.Year,
@@ -53,15 +46,12 @@ func canonicalCensusWhereArgs(p censusListParams, scope AdminAccessScope, school
 		p.Search,
 		schoolID,
 		strings.TrimSpace(codigoINEP),
-		dreID,
+		scope.SQLDREScopeParam(),
 	}
 }
 
 func canonicalCensusSummarySQL() string {
-	dreFilter := `(
-		$8 > 0 AND ` + schoolDREAuthorizationPredicate("s", "$8", "$2") + `
-		OR $8 = 0 AND ($2 = '' OR ` + schoolDRENamePredicate("s", "$2") + `)
-	)`
+	dreFilter := schoolDREScopedFilterPredicate("s", "$8", "$2")
 	return `
 	SELECT
 		(SELECT COUNT(*)
@@ -158,14 +148,10 @@ func (app *application) AdminGetCensusCanonical(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	dreID := 0
-	if scope.Role == RoleDRE {
-		dreID = scope.DREID
-	}
 	var summary CensusSummary
 	if err := db.QueryRowContext(ctx, canonicalCensusSummarySQL(),
 		p.Year, p.DRE, p.Municipio, p.Zona, p.RegiaoIntegracao,
-		schoolID, codigoINEP, dreID).Scan(
+		schoolID, codigoINEP, scope.SQLDREScopeParam()).Scan(
 		&summary.TotalSchools, &summary.CompletedCensuses,
 		&summary.DraftCensuses, &summary.PendingSync); err != nil {
 		app.errorJSON(w, fmt.Errorf("erro ao resumir censos"), http.StatusInternalServerError)
@@ -213,8 +199,8 @@ func (app *application) AdminGetCensusByIDCanonical(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if scope.Role == RoleDRE && canonicalMode {
-		if scope.DREID <= 0 || targetDREID <= 0 || !scope.IsAuthorizedForDREID(targetDREID) {
+	if (scope.DataScope == "selected" || scope.Role == RoleDRE) && canonicalMode {
+		if targetDREID <= 0 || !scope.IsAuthorizedForDREID(targetDREID) {
 			app.errorJSON(w, fmt.Errorf("acesso não permitido para esta DRE"), http.StatusForbidden)
 			return
 		}

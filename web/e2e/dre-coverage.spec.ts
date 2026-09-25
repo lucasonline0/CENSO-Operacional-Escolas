@@ -46,6 +46,7 @@ interface FiltrosOpcoes {
   zonas: string[];
   regioes_integracao: string[];
   escolas: Array<{ school_id: number; nome_escola: string; codigo_inep: string; dre: string }>;
+  codigos_inep: string[];
 }
 
 interface PreenchimentoPayload {
@@ -227,7 +228,95 @@ test("5 — forging de DRE, school_id e INEP não amplia o escopo", async ({ req
   expect(preenchBody.data.dres.some((r) => r.dre === dreB().name)).toBe(false);
 });
 
-test("6 — divergência legado: schools.dre != dre_id → autoriza por ID", async ({ browser, request }) => {
+test("6 — matriz de filtros e cascata permanecem dentro da DRE autenticada", async ({ request }) => {
+  expect(dreAToken).toBeTruthy();
+
+  const base = await apiGet<FiltrosOpcoes>(request, dreAToken!, "/v1/admin/analytics/filtros/opcoes");
+  const schoolA2 = base.escolas.find((school) => school.nome_escola === "Escola A2");
+  expect(schoolA2).toBeTruthy();
+  expect(base.anos).toEqual(expect.arrayContaining([2026, 2023]));
+  expect(base.municipios).toEqual(expect.arrayContaining(["Municipio A1", "Municipio A2"]));
+  expect(base.zonas).toEqual(expect.arrayContaining(["Urbana", "Rural"]));
+  expect(base.codigos_inep).toContain("260002E1");
+
+  const cases: Array<{ query: string; total: number }> = [
+    { query: "year=2026", total: 4 },
+    { query: "municipio=Municipio%20A1", total: 3 },
+    { query: "regiao_integracao=REGIAO%20E2E%20A", total: 4 },
+    { query: "zona=Rural", total: 1 },
+    { query: `school_id=${schoolA2!.school_id}`, total: 1 },
+    { query: "codigo_inep=260002E1", total: 1 },
+    { query: "year=2026&municipio=Municipio%20A1&zona=Rural", total: 1 },
+    { query: "regiao_integracao=REGIAO%20E2E%20A&municipio=Municipio%20A1", total: 3 },
+    { query: `year=2026&regiao_integracao=REGIAO%20E2E%20A&dre=${encodeURIComponent(dreB().name)}`, total: 4 },
+    { query: `year=2026&school_id=${schoolA2!.school_id}`, total: 1 },
+    { query: "year=2026&municipio=Municipio%20Inexistente", total: 0 },
+  ];
+  for (const item of cases) {
+    const response = await apiRaw(request, dreAToken!, `/v1/admin/census?${item.query}`);
+    expect(response.ok(), item.query).toBeTruthy();
+    const body = (await response.json()) as { data: { total: number; rows: Array<{ dre: string }> } };
+    expect(body.data.total, item.query).toBe(item.total);
+    expect(body.data.rows.every((row) => row.dre === dreA().name), item.query).toBe(true);
+  }
+
+  const municipalityCascade = await apiGet<FiltrosOpcoes>(
+    request, dreAToken!, "/v1/admin/analytics/filtros/opcoes?municipio=Municipio%20A1",
+  );
+  expect(municipalityCascade.escolas.map((school) => school.nome_escola).sort())
+    .toEqual(["Escola A1", "Escola A2", "Escola Divergente"].sort());
+
+  const zoneCascade = await apiGet<FiltrosOpcoes>(
+    request, dreAToken!, "/v1/admin/analytics/filtros/opcoes?municipio=Municipio%20A1&zona=Rural",
+  );
+  expect(zoneCascade.escolas.map((school) => school.nome_escola)).toEqual(["Escola A2"]);
+  expect(zoneCascade.codigos_inep).toEqual(["260002E1"]);
+});
+
+test("7 — UI limpa dependências inválidas, preserva escopo DRE e mantém filtros entre abas", async ({ browser }) => {
+  expect(dreAToken).toBeTruthy();
+  const page = await pageWithToken(browser, dreAToken!);
+  await page.goto("/admin/");
+  await expect(page.locator(".ca-sidebar")).toBeVisible();
+
+  const dreSelect = page.getByLabel("DRE", { exact: true });
+  const yearSelect = page.getByLabel("Ano de referência", { exact: true });
+  const municipalitySelect = page.getByLabel("Município", { exact: true });
+  const zoneSelect = page.getByLabel("Zona", { exact: true });
+  const inepSelect = page.getByLabel("Código INEP", { exact: true });
+
+  await expect(dreSelect).toBeDisabled();
+  await expect(dreSelect).toHaveValue(dreA().name);
+  await yearSelect.selectOption("2026");
+  await municipalitySelect.selectOption("Municipio A1");
+  await expect(zoneSelect).toContainText("Rural");
+  await zoneSelect.selectOption("Rural");
+  await expect(inepSelect).toContainText("260002E1");
+  await inepSelect.selectOption("260002E1");
+
+  // Município é pai de zona/escola/INEP: a troca elimina filhos do recorte antigo.
+  await municipalitySelect.selectOption("Municipio A2");
+  await expect(zoneSelect).toHaveValue("");
+  await expect(inepSelect).toHaveValue("");
+
+  // Trocas rápidas não podem restaurar seleção filha obsoleta.
+  await municipalitySelect.selectOption("Municipio A1");
+  await municipalitySelect.selectOption("Municipio A2");
+  await expect(zoneSelect).toHaveValue("");
+
+  await page.getByText("Pessoal e Gestão Escolar", { exact: false }).first().click();
+  await expect(yearSelect).toHaveValue("2026");
+  await expect(municipalitySelect).toHaveValue("Municipio A2");
+
+  await page.getByRole("button", { name: "Limpar filtros" }).click();
+  await expect(yearSelect).toHaveValue("");
+  await expect(municipalitySelect).toHaveValue("");
+  await expect(dreSelect).toHaveValue(dreA().name);
+  await expect(dreSelect).toBeDisabled();
+  await page.context().close();
+});
+
+test("8 — divergência legado: schools.dre != dre_id → autoriza por ID", async ({ browser, request }) => {
   expect(dreAToken).toBeTruthy();
   expect(dreBToken).toBeTruthy();
 
@@ -248,7 +337,7 @@ test("6 — divergência legado: schools.dre != dre_id → autoriza por ID", asy
   await page.context().close();
 });
 
-test("7 — reset remoto encerra a sessão visualmente sem F5", async ({ browser, request }) => {
+test("9 — reset remoto encerra a sessão visualmente sem F5 e exige setup", async ({ browser, request }) => {
   expect(adminToken).toBeTruthy();
   expect(dreAUserId).toBeTruthy();
   expect(dreAToken).toBeTruthy();
@@ -276,20 +365,30 @@ test("7 — reset remoto encerra a sessão visualmente sem F5", async ({ browser
   await expect(page.locator(".ca-sidebar")).toHaveCount(0);
   expect((await apiRaw(request, freshToken, "/v1/admin/me")).status()).toBe(401);
 
-  const newToken = await loginViaAPIWithIP(
-    request,
-    dreACredentials!.username,
-    newPassword,
-    TEST_NET_IPS[3],
-  );
+  const setupLogin = await request.post(`${apiURL}/v1/admin/login`, {
+    data: JSON.stringify({ username: dreACredentials!.username, password: newPassword }),
+    headers: { "Content-Type": "application/json", "X-Forwarded-For": TEST_NET_IPS[3] },
+  });
+  expect(setupLogin.status()).toBe(403);
+  const setupBody = (await setupLogin.json()) as { code: string; data: { challenge_token: string } };
+  expect(setupBody.code).toBe("PASSWORD_SETUP_REQUIRED");
+
+  const definitivePassword = await randomPassword();
+  const completed = await request.post(`${apiURL}/v1/admin/first-access/password`, {
+    data: JSON.stringify({ new_password: definitivePassword, confirm_password: definitivePassword }),
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${setupBody.data.challenge_token}` },
+  });
+  expect(completed.ok()).toBeTruthy();
+  const completedBody = (await completed.json()) as { data: { token: string } };
+  const newToken = completedBody.data.token;
   const me = await apiGet<MeResponse>(request, newToken, "/v1/admin/me");
   expect(me.role).toBe("dre");
   dreAToken = newToken;
-  dreACredentials = { username: dreACredentials!.username, password: newPassword };
+  dreACredentials = { username: dreACredentials!.username, password: definitivePassword };
   await page.context().close();
 });
 
-test("8 — desativação remota encerra UI e token antigo não ressuscita", async ({ browser, request }) => {
+test("10 — desativação remota encerra UI e token antigo não ressuscita", async ({ browser, request }) => {
   expect(adminToken).toBeTruthy();
   expect(dreAUserId).toBeTruthy();
   expect(dreAToken).toBeTruthy();
@@ -332,7 +431,7 @@ test("8 — desativação remota encerra UI e token antigo não ressuscita", asy
   await page.context().close();
 });
 
-test("9 — troca DRE_A → DRE_B não reaproveita cache/estado", async ({ browser, request }) => {
+test("11 — troca DRE_A → DRE_B não reaproveita cache/estado", async ({ browser, request }) => {
   expect(dreAToken).toBeTruthy();
   expect(dreBToken).toBeTruthy();
 

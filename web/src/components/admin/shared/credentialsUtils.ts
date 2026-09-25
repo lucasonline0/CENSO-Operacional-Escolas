@@ -79,11 +79,13 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 export function formatCredentialsText({
   dre,
   username,
+  email,
   password,
   url,
 }: {
   dre: string;
   username: string;
+  email?: string;
   password?: string;
   url?: string;
 }): string {
@@ -92,15 +94,16 @@ export function formatCredentialsText({
     "Credenciais de Acesso ao Painel Administrativo",
     "--------------------------------------------------",
     `DRE / Regional: ${dre}`,
-    `Usuário: ${username}`,
+    ...(email ? [`E-mail: ${email}`] : []),
+    `Usuário legado: ${username}`,
   ];
   if (password) {
-    parts.push(`Senha de Acesso: ${password}`);
+    parts.push(`Senha temporária: ${password}`);
   }
   if (url) {
     parts.push(`Link do Painel: ${url}`);
   }
   parts.push("--------------------------------------------------");
-  parts.push("Atenção: Guarde esta senha em local seguro.");
+  parts.push("Atenção: esta senha é temporária e deverá ser trocada no primeiro acesso.");
   return parts.join("\n");
 }

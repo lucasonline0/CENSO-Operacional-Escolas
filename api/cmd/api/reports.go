@@ -40,6 +40,7 @@ const reportFormatXLSX = "xlsx"
 type reportFilters struct {
 	Year             int // 0 = todos os anos
 	DREID            int
+	DREIDs           []int
 	DRE              string
 	Municipio        string
 	Zona             string
@@ -75,7 +76,7 @@ func (f reportFilters) args() []any {
 // de identidade. O método args legado é mantido para helpers/testes que ainda
 // exercitam o contrato histórico de cinco argumentos.
 func (f reportFilters) scopedArgs() []any {
-	return []any{f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP, f.DREID}
+	return []any{f.Year, f.DRE, f.Municipio, f.Zona, f.RegiaoIntegracao, f.SchoolID, f.CodigoINEP, dreScopeSQLArg(f.DREID, f.DREIDs)}
 }
 
 // parseReportFiltersRequest aplica o escopo autenticado antes do dispatch para
@@ -86,6 +87,7 @@ func parseReportFiltersRequest(r *http.Request) reportFilters {
 	shared := parseAnalyticsFilters(r)
 	f.DRE = shared.DRE
 	f.DREID = shared.DREID
+	f.DREIDs = append([]int(nil), shared.DREIDs...)
 	f.Municipio = shared.Municipio
 	f.Zona = shared.Zona
 	f.RegiaoIntegracao = shared.RegiaoIntegracao

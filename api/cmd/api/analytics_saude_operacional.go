@@ -1105,6 +1105,7 @@ func buildSaudeOperacionalPage(
 // Strings vazias significam "filtro desativado".
 type saudeOperacionalFilters struct {
 	DREID            int
+	DREIDs           []int
 	DRE              string
 	Municipio        string
 	Zona             string
@@ -1133,6 +1134,7 @@ func saudeOperacionalFiltersFromRequest(r *http.Request) saudeOperacionalFilters
 	shared := parseAnalyticsFilters(r)
 	return saudeOperacionalFilters{
 		DREID:            shared.DREID,
+		DREIDs:           append([]int(nil), shared.DREIDs...),
 		DRE:              shared.DRE,
 		Municipio:        shared.Municipio,
 		Zona:             shared.Zona,
@@ -1254,7 +1256,7 @@ func buildSaudeOperacionalQuery(year int, f saudeOperacionalFilters) (string, []
 		f.RegiaoIntegracao,
 		f.SchoolID,
 		f.CodigoINEP,
-		f.DREID,
+		dreScopeSQLArg(f.DREID, f.DREIDs),
 	}
 }
 

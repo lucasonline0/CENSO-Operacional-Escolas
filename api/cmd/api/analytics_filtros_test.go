@@ -149,7 +149,7 @@ func TestAnalyticsFilters_ArgsOrder(t *testing.T) {
 	if len(args) != 8 {
 		t.Fatalf("expected 8 args, got %d", len(args))
 	}
-	want := []any{2024, "d", "m", "z", "r", 99, "15000001", 77}
+	want := []any{2024, "d", "m", "z", "r", 99, "15000001", "77"}
 	for i := range want {
 		if args[i] != want[i] {
 			t.Fatalf("arg %d: expected %v, got %v", i, want[i], args[i])

@@ -11,6 +11,7 @@ import {
   EyeOff,
   KeyRound,
   LockKeyhole,
+  Mail,
   User,
 } from "lucide-react";
 import { AdminModalShell } from "./AdminModalShell";
@@ -23,6 +24,7 @@ interface CredentialsSuccessModalProps {
   title?: string;
   subtitle?: string;
   username: string;
+  email?: string;
   password?: string;
   dre: string;
   onResetPassword?: () => void;
@@ -34,6 +36,7 @@ export function CredentialsSuccessModal({
   title = "Credenciais geradas com sucesso",
   subtitle = "Copie os dados abaixo antes de concluir.",
   username,
+  email,
   password,
   dre,
   onResetPassword,
@@ -44,15 +47,6 @@ export function CredentialsSuccessModal({
   const [copiedPass, setCopiedPass] = useState(false);
 
   const hasVisiblePassword = Boolean(password);
-
-  useEffect(() => {
-    if (isOpen) {
-      setShowPassword(true);
-      setCopiedAll(false);
-      setCopiedUser(false);
-      setCopiedPass(false);
-    }
-  }, [isOpen]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -67,7 +61,7 @@ export function CredentialsSuccessModal({
   async function copyAll() {
     if (!password) return;
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const text = formatCredentialsText({ dre, username, password, url: origin ? `${origin}/admin` : undefined });
+    const text = formatCredentialsText({ dre, username, email, password, url: origin ? `${origin}/admin` : undefined });
     if (await copyToClipboard(text)) {
       setCopiedAll(true);
       setTimeout(() => setCopiedAll(false), 2500);
@@ -104,6 +98,13 @@ export function CredentialsSuccessModal({
             <span className="text-right text-sm font-semibold text-slate-800">{dre}</span>
           </div>
 
+          {email && (
+            <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-4 py-3">
+              <span className="flex items-center gap-2 text-sm text-slate-500"><Mail size={15} />E-mail</span>
+              <code className="truncate rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-sm font-semibold" style={{ color: C.primary }}>{email}</code>
+            </div>
+          )}
+
           <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-4 py-3">
             <span className="flex items-center gap-2 text-sm text-slate-500"><User size={15} />Usuário</span>
             <div className="flex min-w-0 items-center gap-2">
@@ -114,7 +115,7 @@ export function CredentialsSuccessModal({
 
           {password ? (
             <div className="flex items-center justify-between gap-4 px-4 py-3">
-              <span className="flex items-center gap-2 text-sm text-slate-500"><KeyRound size={15} />Senha de acesso</span>
+              <span className="flex items-center gap-2 text-sm text-slate-500"><KeyRound size={15} />Senha temporária</span>
               <div className="flex min-w-0 items-center gap-1">
                 <code className="truncate rounded-md border border-amber-200 bg-amber-50 px-2 py-1 font-mono text-sm font-semibold text-amber-900">{showPassword ? password : "••••••••••••"}</code>
                 <button type="button" onClick={() => setShowPassword((value) => !value)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}>{showPassword ? <EyeOff size={15} /> : <Eye size={15} />}</button>
@@ -135,7 +136,7 @@ export function CredentialsSuccessModal({
         {password ? (
           <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
             <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
-            <p><strong>Segurança:</strong> a senha não será exibida novamente depois que esta janela for fechada. Copie as credenciais agora e compartilhe-as por canal seguro.</p>
+            <p><strong>Segurança:</strong> a senha temporária não será exibida novamente. No próximo login, o responsável deverá criar e confirmar uma senha definitiva.</p>
           </div>
         ) : (
           <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">

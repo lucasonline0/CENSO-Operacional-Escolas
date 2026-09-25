@@ -236,8 +236,29 @@ export function FiltrosGlobais({
       (next as Record<string, string>)[key] = String(raw);
     }
 
-    if (key === "school_id" && raw !== undefined) {
+    // Invalida descendentes ao alterar/remover um filtro pai. Isso evita que
+    // uma opção válida no recorte anterior permaneça silenciosamente ativa.
+    if (key === "dre") {
+      delete next.municipio;
+      delete next.zona;
+      delete next.school_id;
       delete next.codigo_inep;
+    } else if (key === "regiao_integracao") {
+      delete next.municipio;
+      delete next.zona;
+      delete next.school_id;
+      delete next.codigo_inep;
+    } else if (key === "municipio") {
+      delete next.zona;
+      delete next.school_id;
+      delete next.codigo_inep;
+    } else if (key === "zona") {
+      delete next.school_id;
+      delete next.codigo_inep;
+    } else if (key === "school_id") {
+      delete next.codigo_inep;
+    } else if (key === "codigo_inep") {
+      delete next.school_id;
     }
 
     onFiltersChange(next);
@@ -324,6 +345,13 @@ export function FiltrosGlobais({
           onChange={(v) => set("school_id", v)}
           disabled={!opcoes?.escolas?.length}
         />
+        <FilterSelect
+          label="Código INEP"
+          value={filters.codigo_inep}
+          options={opcoes?.codigos_inep ?? []}
+          onChange={(v) => set("codigo_inep", v)}
+          disabled={!opcoes?.codigos_inep?.length}
+        />
       </div>
 
       {/* Tags dos filtros ativos */}
@@ -348,6 +376,9 @@ export function FiltrosGlobais({
             <ActiveTag label={`Escola: ${opcoes?.escolas?.find(e => e.school_id === filters.school_id)?.nome_escola || filters.school_id}`} 
               onRemove={() => set("school_id", undefined)} 
             />
+          )}
+          {filters.codigo_inep && (
+            <ActiveTag label={`INEP: ${filters.codigo_inep}`} onRemove={() => set("codigo_inep", "")} />
           )}
         </div>
       )}

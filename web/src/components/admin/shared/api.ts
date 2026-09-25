@@ -132,9 +132,21 @@ export async function fetchAdminUsers(token: string): Promise<AdminUserItem[]> {
   return apiFetch<AdminUserItem[]>("/v1/admin/users", token);
 }
 
+export type AdminUserCreatePayload =
+  | { username: string; email: string; password: string; role: "dre"; dre_id: number }
+  | {
+      username: string;
+      email: string;
+      password: string;
+      role: "custom";
+      permissions: AdminPermission[];
+      data_scope: "all" | "selected";
+      dre_ids: number[];
+    };
+
 export async function createAdminUser(
   token: string,
-  payload: { username: string; password: string; role?: string; dre_id: number }
+  payload: AdminUserCreatePayload
 ): Promise<AdminUserItem> {
   return apiMutation<AdminUserItem>("/v1/admin/users", token, {
     method: "POST",
@@ -161,6 +173,22 @@ export async function resetAdminUserPassword(
   return apiMutation<{ message?: string }>(`/v1/admin/users/${id}/reset-password`, token, {
     method: "POST",
     body: JSON.stringify({ password }),
+  });
+}
+
+export async function changeOwnPassword(
+  token: string,
+  currentPassword: string,
+  newPassword: string,
+  confirmPassword: string
+): Promise<{ token: string; expires_in: number }> {
+  return apiMutation<{ token: string; expires_in: number }>("/v1/admin/me/change-password", token, {
+    method: "POST",
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+      confirm_password: confirmPassword,
+    }),
   });
 }
 
@@ -202,15 +230,32 @@ const ADMIN_ONLY_PREFETCH_ENDPOINTS = new Set([
 ]);
 
 export function dashboardEndpointsForRole(role?: string): string[] {
-  // Fail closed while /admin/me is unresolved: a DRE session must never issue
-  // speculative requests to endpoints that are restricted to role=admin.
-  // Confirmed admins keep the complete warm-up set.
   if (role === "admin") return [...DASHBOARD_ENDPOINTS];
   return DASHBOARD_ENDPOINTS.filter((ep) => !ADMIN_ONLY_PREFETCH_ENDPOINTS.has(ep));
 }
 
-export async function prefetchDashboard(token: string, role?: string): Promise<void> {
-  const endpoints = dashboardEndpointsForRole(role);
+function profileHasPermission(profile: AdminProfile, permission: AdminPermission): boolean {
+  return profile.role === "admin" || profile.permissions.includes(permission);
+}
+
+export function dashboardEndpointsForProfile(profile?: AdminProfile): string[] {
+  if (!profile) return [];
+  return DASHBOARD_ENDPOINTS.filter((ep) => {
+    if (ep.startsWith("/v1/admin/census")) return profileHasPermission(profile, "census.read");
+    if (
+      ep.startsWith("/v1/admin/analytics/") ||
+      ep === "/v1/admin/dashboard" ||
+      ep === "/v1/admin/sheet-metrics" ||
+      ep === "/v1/admin/indicadores-metrics"
+    ) return profileHasPermission(profile, "analytics.read");
+    return false;
+  });
+}
+
+export async function prefetchDashboard(token: string, profile?: AdminProfile | string): Promise<void> {
+  const endpoints = typeof profile === "string"
+    ? dashboardEndpointsForRole(profile)
+    : dashboardEndpointsForProfile(profile);
 
   const fetches = Promise.allSettled(endpoints.map((ep) => apiFetch(ep, token)));
   const timeout = new Promise<void>((resolve) => setTimeout(resolve, 6000));
@@ -235,7 +280,7 @@ export async function createDre(token: string, payload: DreCreatePayload): Promi
 
 // ── Filtros e Labels ────────────────────────────────────────────────────────
 
-import type { DashboardFilters, AdminProfile, DreCreatePayload, DreRecord, DREItem, AdminUserItem } from "./types";
+import type { DashboardFilters, AdminProfile, AdminPermission, DreCreatePayload, DreRecord, DREItem, AdminUserItem } from "./types";
 
 export function buildFilterParams(filters?: DashboardFilters): string {
   if (!filters) return "";

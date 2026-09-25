@@ -15,6 +15,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CI="${CI:-false}"
 
+# Never let this destructive real-stack suite inherit a production database.
+inherited_dsn="${DATABASE_URL:-${DB_DSN:-}}"
+if [[ "${NODE_ENV:-}" == "production" || "${RAILWAY_ENVIRONMENT_NAME:-}" == "production" || "${VERCEL_ENV:-}" == "production" ]]; then
+  printf 'ABORTAR E2E: ambiente de produção detectado.\n' >&2; exit 64
+fi
+if [[ -n "$inherited_dsn" && ! "$inherited_dsn" =~ (localhost|127\.0\.0\.1|censo[_-]e2e) ]]; then
+  printf 'ABORTAR E2E: DATABASE_URL/DB_DSN não aponta para PostgreSQL efêmero local.\n' >&2; exit 64
+fi
+unset DB_DSN
+
 PG_IMAGE="${CENSUS_E2E_PG_IMAGE:-postgres:16-alpine}"
 PG_PORT="${CENSUS_E2E_PG_PORT:-54329}"
 API_PORT="${CENSUS_E2E_API_PORT:-8001}"

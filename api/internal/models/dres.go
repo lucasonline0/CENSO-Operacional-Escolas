@@ -327,3 +327,51 @@ func (m *DREModel) SetActiveByNome(ctx context.Context, nome string, active bool
 
 	return nil
 }
+
+type DREDependencies struct {
+	Schools        int `json:"schools"`
+	Users          int `json:"users"`
+	CustomProfiles int `json:"custom_profiles"`
+	Census         int `json:"census"`
+}
+
+var ErrDREHasDependencies = errors.New("DRE possui dependências")
+
+// Dependencies counts every canonical administrative/data relation used by the
+// application. DeleteEmpty fails closed rather than relying on destructive FK cascades.
+func (m *DREModel) Dependencies(ctx context.Context, id int) (DREDependencies, error) {
+	var d DREDependencies
+	if id <= 0 {
+		return d, ErrDREInvalidID
+	}
+	err := m.DB.QueryRowContext(ctx, `
+		SELECT
+		 (SELECT COUNT(*) FROM schools WHERE dre_id=$1),
+		 (SELECT COUNT(*) FROM admin_users WHERE dre_id=$1),
+		 (SELECT COUNT(DISTINCT aud.user_id) FROM admin_user_dres aud WHERE aud.dre_id=$1),
+		 (SELECT COUNT(*) FROM census_responses cr JOIN schools s ON s.id=cr.school_id WHERE s.dre_id=$1)`, id).
+		Scan(&d.Schools, &d.Users, &d.CustomProfiles, &d.Census)
+	return d, err
+}
+
+func (m *DREModel) DeleteEmpty(ctx context.Context, id int) (DREDependencies, error) {
+	deps, err := m.Dependencies(ctx, id)
+	if err != nil {
+		return deps, err
+	}
+	if deps.Schools+deps.Users+deps.CustomProfiles+deps.Census > 0 {
+		return deps, ErrDREHasDependencies
+	}
+	result, err := m.DB.ExecContext(ctx, `DELETE FROM dres WHERE id=$1`, id)
+	if err != nil {
+		return deps, err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return deps, err
+	}
+	if n == 0 {
+		return deps, ErrDRENotFound
+	}
+	return deps, nil
+}

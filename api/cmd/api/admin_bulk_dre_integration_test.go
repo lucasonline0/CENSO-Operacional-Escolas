@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"sync"
 	"testing"
 
@@ -23,6 +24,9 @@ func TestBulkDREBootstrapPostgreSQLLifecycleAndIdempotency(t *testing.T) {
 	}
 	readyID := insert("DRE ALTAMIRA", "ALT", "altamira@example.test")
 	missingID := insert("DRE MARABA", "MAR", "")
+	if _, err := db.Exec(`UPDATE dres SET email=NULL WHERE id=$1`, missingID); err != nil {
+		t.Fatal(err)
+	}
 	ignoredID := insert("DRE-E2E-TEST", "E2E", "fixture@example.test")
 	existingID := insert("DRE EXISTENTE", "EXI", "existing@example.test")
 	existing, err := m.AdminUsers.ProvisionForDREID(ctx, "dre.existente", "existing@example.test", "TemporaryPassword-123", "dre", existingID)
@@ -45,6 +49,7 @@ func TestBulkDREBootstrapPostgreSQLLifecycleAndIdempotency(t *testing.T) {
 		t.Fatal(err)
 	}
 	crossID := insert("DRE CROSS", "CRS", "cross@example.test")
+	invalidEmailID := insert("DRE EMAIL INVALIDO", "INV", "invalido")
 	preview, err := m.AdminUsers.PreviewDREBootstrap(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +61,7 @@ func TestBulkDREBootstrapPostgreSQLLifecycleAndIdempotency(t *testing.T) {
 	if byID[readyID].Status != "pending" {
 		t.Fatalf("ready=%+v", byID[readyID])
 	}
-	if byID[missingID].Message != "E-mail obrigatório" {
+	if byID[missingID].Status != "pending" || byID[missingID].Message != "Pronta" {
 		t.Fatalf("missing=%+v", byID[missingID])
 	}
 	if byID[ignoredID].Status != "ignored_e2e" {
@@ -74,14 +79,17 @@ func TestBulkDREBootstrapPostgreSQLLifecycleAndIdempotency(t *testing.T) {
 	if byID[crossID].Message != "Identidade em conflito" {
 		t.Fatalf("cross=%+v", byID[crossID])
 	}
+	if byID[invalidEmailID].Status != "invalid_email" {
+		t.Fatalf("invalid email=%+v", byID[invalidEmailID])
+	}
 	// Remove intentional collisions so the valid batch can execute.
-	if _, err = db.Exec(`DELETE FROM dres WHERE id IN ($1,$2,$3)`, emailConflictID, usernameConflictID, crossID); err != nil {
+	if _, err = db.Exec(`DELETE FROM dres WHERE id IN ($1,$2,$3,$4)`, emailConflictID, usernameConflictID, crossID, invalidEmailID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = db.Exec(`DELETE FROM admin_users WHERE username IN ('dre.occupiedusername','cross@example.test')`); err != nil {
 		t.Fatal(err)
 	}
-	result, credentials, err := m.AdminUsers.BootstrapDREAccounts(ctx, map[int]string{missingID: "maraba@example.test"})
+	result, credentials, err := m.AdminUsers.BootstrapDREAccounts(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,8 +120,32 @@ func TestBulkDREBootstrapPostgreSQLLifecycleAndIdempotency(t *testing.T) {
 	if dreLinks != 1 || permissions != 3 {
 		t.Fatalf("links=%d permissions=%d", dreLinks, permissions)
 	}
-	if err = db.QueryRow(`SELECT email FROM dres WHERE id=$1`, missingID).Scan(&email); err != nil || email != "maraba@example.test" {
-		t.Fatalf("override email=%q err=%v", email, err)
+	var missingEmail sql.NullString
+	if err = db.QueryRow(`SELECT email FROM admin_users WHERE dre_id=$1`, missingID).Scan(&missingEmail); err != nil {
+		t.Fatal(err)
+	}
+	if missingEmail.Valid {
+		t.Fatalf("missing-email account persisted email=%q", missingEmail.String)
+	}
+	var missingUserID, missingAuthVersion int
+	var missingHash string
+	if err = db.QueryRow(`SELECT id,password_hash,auth_version FROM admin_users WHERE dre_id=$1`, missingID).Scan(&missingUserID, &missingHash, &missingAuthVersion); err != nil {
+		t.Fatal(err)
+	}
+	var missingTemporaryPassword string
+	for _, credential := range credentials {
+		if credential.DRE == "DRE MARABA" {
+			if credential.Email != "" {
+				t.Fatalf("missing-email credential=%+v", credential)
+			}
+			missingTemporaryPassword = credential.TemporaryPassword
+		}
+	}
+	if bcrypt.CompareHashAndPassword([]byte(missingHash), []byte(missingTemporaryPassword)) != nil {
+		t.Fatal("missing-email temporary password is not valid")
+	}
+	if _, err = m.AdminUsers.CompleteFirstAccess(ctx, missingUserID, missingAuthVersion, "DefinitivePassword-123"); err != nil {
+		t.Fatalf("complete first access without email: %v", err)
 	}
 	_, second, err := m.AdminUsers.BootstrapDREAccounts(ctx, nil)
 	if err != nil {

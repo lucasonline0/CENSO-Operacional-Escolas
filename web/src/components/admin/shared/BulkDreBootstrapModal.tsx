@@ -15,7 +15,7 @@ interface Props {
 
 function downloadCredentials(credentials: Array<{ dre: string; email: string; username: string; temporary_password: string }>) {
   const text = ["CENSO OPERACIONAL — ACESSOS INICIAIS", "", ...credentials.flatMap((item) => [
-    `DRE: ${item.dre}`, `E-mail: ${item.email}`, `Usuário: ${item.username}`,
+    `DRE: ${item.dre}`, `E-mail: ${item.email || "não informado"}`, `Usuário: ${item.username}`,
     `Senha temporária: ${item.temporary_password}`, "Troca obrigatória no primeiro acesso: SIM", "", "----------------------------------------", "",
   ])].join("\n");
   const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
@@ -31,8 +31,11 @@ export function BulkDreBootstrapModal({ token, preview, onClose, onCompleted }: 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [completed, setCompleted] = useState(0);
-  const editableIDs = useMemo(() => new Set(preview.items.filter((item) => item.status === "missing_email" || item.status === "invalid_email").map((item) => item.dre_id)), [preview]);
-  const invalidEditable = [...editableIDs].some((id) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((emails[id] ?? "").trim()));
+  const editableIDs = useMemo(() => new Set(preview.items.filter((item) => item.status === "invalid_email" || item.status === "pending" && !item.email).map((item) => item.dre_id)), [preview]);
+  const invalidEditable = [...editableIDs].some((id) => {
+    const email = (emails[id] ?? "").trim();
+    return email !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  });
   const nonEmailErrors = preview.items.some((item) => item.status === "error");
 
   async function provision() {
@@ -49,7 +52,7 @@ export function BulkDreBootstrapModal({ token, preview, onClose, onCompleted }: 
     } finally { setLoading(false); }
   }
 
-  return <AdminModalShell title="Provisionar acessos das DREs" subtitle="Revise identidades e corrija e-mails antes de criar as contas." Icon={UsersRound} onClose={onClose} closeDisabled={loading} maxWidth="xl">
+  return <AdminModalShell title="Provisionar acessos das DREs" subtitle="Revise as identidades; o e-mail é opcional." Icon={UsersRound} onClose={onClose} closeDisabled={loading} maxWidth="xl">
     <div className="space-y-5 p-6">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         {[["DREs ativas", preview.active], ["Já provisionadas", preview.provisioned], ["Pendentes", preview.pending], ["Ignoradas E2E", preview.ignored_e2e], ["Com erro", preview.errors]].map(([label, value]) => <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-center"><div className="text-lg font-bold text-slate-800">{value}</div><div className="text-[11px] text-slate-500">{label}</div></div>)}

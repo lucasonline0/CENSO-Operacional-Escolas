@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { adminCredentials, apiGet, apiRawPost, apiURL, loginViaAPI, loginViaUI, randomPassword } from "./helpers";
+import { adminCredentials, apiGet, apiRawPost, apiURL, loginViaAPI, randomPassword } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 const suffix = Date.now().toString(36);
@@ -19,7 +19,7 @@ async function openManagement(page: Page) {
 }
 
 test("bulk real corrige e-mail, ignora fixture e é idempotente", async ({ page, request }) => {
-  const admin = adminCredentials(); token = await loginViaUI(page, admin.username, admin.password);
+  const admin = adminCredentials(); token = await loginViaAPI(request, admin.username, admin.password, "198.51.100.180"); await page.addInitScript((value)=>sessionStorage.setItem("censo_admin_token",value),token); await page.goto("/admin/");
   readyDreID = await createDre(request, `DRE BULK READY ${suffix}`, "BRD", `bulk.ready.${suffix}@example.test`);
   missingDreID = await createDre(request, `DRE BULK EMAIL ${suffix}`, "BEM");
   ignoredDreID = await createDre(request, `DRE-E2E-TEST-${suffix}`, "E2E", `ignored.${suffix}@example.test`);
@@ -37,7 +37,7 @@ test("bulk real corrige e-mail, ignora fixture e é idempotente", async ({ page,
   const download = await downloadPromise; const path = await download.path(); expect(path).toBeTruthy();
   const fs = await import("node:fs/promises"); const content = await fs.readFile(path!, "utf8");
   expect(content).toContain("CENSO OPERACIONAL — ACESSOS INICIAIS"); expect(content).toContain("Senha temporária:");
-  await expect(modal.getByText(/contas criadas/)).toBeVisible(); await modal.getByRole("button", { name: "Fechar" }).click();
+  await expect(modal.getByText(/contas criadas/)).toBeVisible(); await modal.getByRole("button", { name: "Fechar", exact: true }).click();
 
   const users = await apiGet<Array<{ role:string;dre_id:number;must_change_password:boolean;data_scope:string;dre_ids:number[];permissions:string[] }>>(request, token, "/v1/admin/users");
   for (const id of [readyDreID, missingDreID]) { const user=users.find((item)=>item.dre_id===id);expect(user).toBeTruthy();expect(user).toMatchObject({role:"dre",must_change_password:true,data_scope:"selected"});expect(user!.dre_ids).toEqual([id]);expect(user!.permissions.sort()).toEqual(["analytics.read","census.read","reports.read"]); }

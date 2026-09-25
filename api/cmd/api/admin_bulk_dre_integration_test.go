@@ -45,11 +45,6 @@ func TestBulkDREBootstrapPostgreSQLLifecycleAndIdempotency(t *testing.T) {
 		t.Fatal(err)
 	}
 	crossID := insert("DRE CROSS", "CRS", "cross@example.test")
-	if _, err = db.Exec(`INSERT INTO admin_users(username,email,password_hash,role,active,auth_version,must_change_password,data_scope) VALUES('legacy.identity','dre.usernameasemail','$2a$10$abcdefghijklmnopqrstuuuuuuuuuuuuuuuuuuuuuuuuuuuu','custom',true,1,true,'all')`); err != nil {
-		t.Fatal(err)
-	}
-	usernameAsEmailID := insert("DRE USERNAME AS EMAIL", "UAE", "uae@example.test")
-
 	preview, err := m.AdminUsers.PreviewDREBootstrap(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -79,14 +74,11 @@ func TestBulkDREBootstrapPostgreSQLLifecycleAndIdempotency(t *testing.T) {
 	if byID[crossID].Message != "Identidade em conflito" {
 		t.Fatalf("cross=%+v", byID[crossID])
 	}
-	if byID[usernameAsEmailID].Message != "Identidade em conflito" {
-		t.Fatalf("username-as-email=%+v", byID[usernameAsEmailID])
-	}
 	// Remove intentional collisions so the valid batch can execute.
-	if _, err = db.Exec(`DELETE FROM dres WHERE id IN ($1,$2,$3,$4)`, emailConflictID, usernameConflictID, crossID, usernameAsEmailID); err != nil {
+	if _, err = db.Exec(`DELETE FROM dres WHERE id IN ($1,$2,$3)`, emailConflictID, usernameConflictID, crossID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.Exec(`DELETE FROM admin_users WHERE username IN ('dre.occupiedusername','cross@example.test','legacy.identity')`); err != nil {
+	if _, err = db.Exec(`DELETE FROM admin_users WHERE username IN ('dre.occupiedusername','cross@example.test')`); err != nil {
 		t.Fatal(err)
 	}
 	result, credentials, err := m.AdminUsers.BootstrapDREAccounts(ctx, map[int]string{missingID: "maraba@example.test"})

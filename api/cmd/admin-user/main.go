@@ -42,13 +42,14 @@ func main() {
 	case "create":
 		createCmd := flag.NewFlagSet("create", flag.ExitOnError)
 		username := createCmd.String("username", "", "Username do usuário")
-		email := createCmd.String("email", "", "E-mail institucional do usuário")
+		email := createCmd.String("email", "", "E-mail do usuário (opcional)")
 		password := createCmd.String("password", "", "Senha temporária (opcional, será solicitada se omitida)")
 		dre := createCmd.String("dre", "", "DRE vinculada ao usuário")
 		_ = createCmd.Parse(os.Args[2:])
 
-		if *username == "" || *dre == "" {
+		if err := validateCreateArgs(*username, *email, *dre); err != nil {
 			fmt.Println("Uso: admin-user create -username <username> -dre <DRE> [-email <email>] [-password <senha_temporaria>]")
+			fmt.Printf("Erro: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -66,11 +67,13 @@ func main() {
 			log.Fatalf("Erro ao criar usuário: %v", err)
 		}
 
-		emailDisplay := user.Email
-		if emailDisplay == "" {
-			emailDisplay = "(sem e-mail)"
+		emailPart := ""
+		if user.Email != "" {
+			emailPart = "<" + user.Email + ">"
+		} else {
+			emailPart = "(sem e-mail)"
 		}
-		fmt.Printf("Usuário '%s' <%s> (role: %s, DRE: %s) criado com credencial temporária. Primeiro acesso obrigatório. ID: %d\n", user.Username, emailDisplay, user.Role, user.DRE, user.ID)
+		fmt.Printf("Usuário '%s' %s (role: %s, DRE: %s) criado com credencial temporária. Primeiro acesso obrigatório. ID: %d\n", user.Username, emailPart, user.Role, user.DRE, user.ID)
 
 	case "update-password":
 		updateCmd := flag.NewFlagSet("update-password", flag.ExitOnError)
@@ -162,6 +165,26 @@ func main() {
 	}
 }
 
+func printUsage() {
+	fmt.Println("Ferramenta de Gerenciamento de Usuários Administrativos DRE")
+	fmt.Println("Comandos disponíveis:")
+	fmt.Println("  create -username <name> -dre <DRE> [-email <email>] [-password <pass>]  Cria usuário com credencial temporária")
+	fmt.Println("  update-password -username <name> [-password <pass>]                    Gera credencial temporária e exige nova senha")
+	fmt.Println("  deactivate -username <name>                             Desativa uma conta de usuário")
+	fmt.Println("  activate -username <name>                               Ativa uma conta de usuário")
+	fmt.Println("  list                                                     Lista todos os usuários sem expor hash")
+}
+
+func validateCreateArgs(username, email, dre string) error {
+	if strings.TrimSpace(username) == "" {
+		return fmt.Errorf("username é obrigatório")
+	}
+	if strings.TrimSpace(dre) == "" {
+		return fmt.Errorf("dre é obrigatório")
+	}
+	return nil
+}
+
 func readPasswordPrompt(prompt string) string {
 	fmt.Print(prompt)
 	if term.IsTerminal(int(syscall.Stdin)) {
@@ -179,16 +202,6 @@ func readPasswordPrompt(prompt string) string {
 		log.Fatalf("Erro ao ler senha: %v", err)
 	}
 	return strings.TrimSpace(text)
-}
-
-func printUsage() {
-	fmt.Println("Ferramenta de Gerenciamento de Usuários Administrativos DRE")
-	fmt.Println("Comandos disponíveis:")
-	fmt.Println("  create -username <name> -dre <DRE> [-email <email>] [-password <pass>]  Cria usuário com credencial temporária")
-	fmt.Println("  update-password -username <name> [-password <pass>]                    Gera credencial temporária e exige nova senha")
-	fmt.Println("  deactivate -username <name>                             Desativa uma conta de usuário")
-	fmt.Println("  activate -username <name>                               Ativa uma conta de usuário")
-	fmt.Println("  list                                                     Lista todos os usuários sem expor hash")
 }
 
 func loadEnv() {

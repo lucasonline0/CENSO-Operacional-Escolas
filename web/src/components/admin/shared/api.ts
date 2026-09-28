@@ -144,10 +144,10 @@ export async function fetchAdminUsers(token: string): Promise<AdminUserItem[]> {
 }
 
 export type AdminUserCreatePayload =
-  | { username: string; email: string; password: string; role: "dre"; dre_id: number }
+  | { username: string; email?: string; password: string; role: "dre"; dre_id: number }
   | {
       username: string;
-      email: string;
+      email?: string;
       password: string;
       role: "custom";
       permissions: AdminPermission[];

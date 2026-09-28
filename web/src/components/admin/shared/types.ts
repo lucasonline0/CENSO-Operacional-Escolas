@@ -99,7 +99,7 @@ export interface DREItem {
 export interface AdminUserItem {
   id: number;
   username: string;
-  email: string;
+  email?: string | null;
   role: "admin" | "dre" | "custom";
   dre: string;
   dre_id: number | null;

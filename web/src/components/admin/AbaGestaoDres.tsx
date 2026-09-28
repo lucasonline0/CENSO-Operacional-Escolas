@@ -573,8 +573,8 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
                                       {linkedUsers.map((user) => (
                                         <tr key={user.id} className={!user.active ? "opacity-60" : ""}>
                                           <td>
-                                            <div className="flex items-center gap-2"><span className="font-semibold text-slate-800">{user.email || "Sem e-mail (legado)"}</span>{user.email && <button type="button" onClick={async () => { if (await copyToClipboard(user.email ?? "")) showToast(`E-mail “${user.email}” copiado.`); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Copiar e-mail"><Copy size={13} /></button>}</div>
-                                            <p className="mt-0.5 font-mono text-xs text-slate-500">Usuário legado: {user.username}</p>
+                                            <div className="flex items-center gap-2"><span className="font-semibold text-slate-800">{user.email || "Sem e-mail"}</span>{user.email && <button type="button" onClick={async () => { if (await copyToClipboard(user.email ?? "")) showToast(`E-mail “${user.email}” copiado.`); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Copiar e-mail"><Copy size={13} /></button>}</div>
+                                            <p className="mt-0.5 font-mono text-xs text-slate-500">Usuário: {user.username}</p>
                                           </td>
                                           <td><span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-600"><ShieldCheck size={11} />DRE</span></td>
                                           <td className="text-xs text-slate-500">{formatDate(user.created_at)}</td>

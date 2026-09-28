@@ -81,6 +81,41 @@ func TestDRELifecycleCanonicalUserProvisioningByID(t *testing.T) {
 		}
 	})
 
+
+	t.Run("dre_id provisioning accepts omitted email and stores NULL", func(t *testing.T) {
+		dre, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE OPTIONAL EMAIL", Ativa: true})
+		if err != nil {
+			t.Fatalf("create DRE: %v", err)
+		}
+
+		for _, username := range []string{"provision.no.email.one", "provision.no.email.two"} {
+			body := fmt.Sprintf(`{"username":%q,"password":"password1234","role":"dre","dre_id":%d}`, username, dre.ID)
+			rr := callAdminCreateUser(t, app, body)
+			if rr.Code != http.StatusCreated {
+				t.Fatalf("no-email provisioning username=%s status=%d want=201 body=%s", username, rr.Code, rr.Body.String())
+			}
+			resp := decodeAdminCreateUserResponse(t, rr)
+			if resp.Data.Email != "" || resp.Data.DREID != dre.ID || !resp.Data.MustChangePassword {
+				t.Fatalf("unexpected no-email response: %+v", resp.Data)
+			}
+		}
+
+		var nullEmails int
+		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM admin_users WHERE username LIKE 'provision.no.email.%' AND email IS NULL`).Scan(&nullEmails); err != nil {
+			t.Fatalf("count NULL emails: %v", err)
+		}
+		if nullEmails != 2 {
+			t.Fatalf("NULL email users=%d want=2", nullEmails)
+		}
+
+		user, err := m.AdminUsers.GetActiveByUsername(ctx, "provision.no.email.one")
+		if err != nil {
+			t.Fatalf("username lookup without email failed: %v", err)
+		}
+		if user.Email != "" || user.DREID != dre.ID {
+			t.Fatalf("username lookup returned unexpected identity: %+v", user)
+		}
+	})
 	t.Run("email uniqueness is case insensitive", func(t *testing.T) {
 		dre, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE EMAIL UNIQUE", Ativa: true})
 		if err != nil {

@@ -209,7 +209,7 @@ func (m *AdminUserModel) ProvisionCustom(ctx context.Context, username, email, t
 	}
 
 	var u AdminUser
-	err = tx.QueryRowContext(ctx, `INSERT INTO admin_users (username,email,password_hash,role,active,auth_version,must_change_password,data_scope,created_at,updated_at) VALUES ($1,$2,$3,'custom',true,1,true,$4,NOW(),NOW()) RETURNING id,username,email,role,active,auth_version,must_change_password,data_scope,created_at,updated_at`, username, email, string(hash), dataScope).Scan(&u.ID, &u.Username, &u.Email, &u.Role, &u.Active, &u.AuthVersion, &u.MustChangePassword, &u.DataScope, &u.CreatedAt, &u.UpdatedAt)
+	err = tx.QueryRowContext(ctx, `INSERT INTO admin_users (username,email,password_hash,role,active,auth_version,must_change_password,data_scope,created_at,updated_at) VALUES ($1,$2,$3,'custom',true,1,true,$4,NOW(),NOW()) RETURNING id,username,COALESCE(email,''),role,active,auth_version,must_change_password,data_scope,created_at,updated_at`, username, adminEmailDBValue(email), string(hash), dataScope).Scan(&u.ID, &u.Username, &u.Email, &u.Role, &u.Active, &u.AuthVersion, &u.MustChangePassword, &u.DataScope, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		msg := strings.ToLower(err.Error())
 		switch {
@@ -322,7 +322,7 @@ func normalizeAdminUserCreateInput(username, plainPassword, role string) (string
 func NormalizeAdminEmail(raw string) (string, error) {
 	email := strings.ToLower(strings.TrimSpace(raw))
 	if email == "" {
-		return "", errors.New("e-mail não pode ser vazio")
+		return "", nil
 	}
 	if len(email) > 254 || strings.ContainsAny(email, "\r\n\t ") {
 		return "", ErrInvalidEmail
@@ -337,6 +337,13 @@ func NormalizeAdminEmail(raw string) (string, error) {
 		return "", ErrInvalidEmail
 	}
 	return email, nil
+}
+
+func adminEmailDBValue(email string) any {
+	if email == "" {
+		return nil
+	}
+	return email
 }
 
 func (m *AdminUserModel) createForCanonicalDRE(ctx context.Context, username, plainPassword, role string, dre *canonicalDRE) (*AdminUser, error) {
@@ -385,7 +392,7 @@ func (m *AdminUserModel) createForCanonicalDRE(ctx context.Context, username, pl
 	return &u, nil
 }
 
-// ProvisionForDREID cria uma nova conta com e-mail obrigatório e credencial
+// ProvisionForDREID cria uma nova conta com e-mail opcional e credencial
 // temporária. O hash é a única representação persistida da senha e a conta não
 // pode receber sessão normal enquanto MustChangePassword permanecer verdadeiro.
 func (m *AdminUserModel) ProvisionForDREID(ctx context.Context, username, email, temporaryPassword, role string, dreID int) (*AdminUser, error) {
@@ -443,9 +450,9 @@ func (m *AdminUserModel) ProvisionForDREID(ctx context.Context, username, email,
 			auth_version, must_change_password, created_at, updated_at
 		)
 		VALUES ($1, $2, $3, $4, $5, true, 1, true, NOW(), NOW())
-		RETURNING id, username, email, role, COALESCE(dre, ''), dre_id,
+		RETURNING id, username, COALESCE(email,''), role, COALESCE(dre, ''), dre_id,
 		          active, auth_version, must_change_password, created_at, updated_at`,
-		username, email, string(hash), role, dre.ID,
+		username, adminEmailDBValue(email), string(hash), role, dre.ID,
 	).Scan(
 		&u.ID, &u.Username, &u.Email, &u.Role, &u.DRE, &u.DREID,
 		&u.Active, &u.AuthVersion, &u.MustChangePassword, &u.CreatedAt, &u.UpdatedAt,

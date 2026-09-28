@@ -70,6 +70,8 @@ export function UserFormModal({
   );
   const canGrantAllScope = creatorIsAdmin || creator?.data_scope?.type === "all";
   const canGrantGlobalPreset = canGrantAllScope;
+  const isRegionalAccount = preselectedDreId != null;
+  const regionalDre = isRegionalAccount ? activeDres.find((dre) => dre.id === preselectedDreId) : undefined;
   const grantableOptions = useMemo(
     () => PERMISSION_OPTIONS.filter((option) => creatorPermissions.has(option.id)),
     [creatorPermissions],
@@ -168,24 +170,39 @@ export function UserFormModal({
     if (!cleanUsername) return setError("Informe o nome de usuário.");
     if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return setError("Informe um e-mail válido.");
     if (cleanPassword.length < 12) return setError("A senha deve ter no mínimo 12 caracteres.");
-    if (dataScope === "selected" && selectedDreIds.length === 0) return setError("Selecione pelo menos uma DRE.");
-    if (dataScope === "all" && !canGrantAllScope) return setError("Seu perfil não pode delegar acesso global.");
-    if (permissions.some((permission) => !creatorPermissions.has(permission))) {
-      return setError("O formulário contém uma permissão que seu perfil não pode delegar.");
+    if (isRegionalAccount) {
+      if (selectedDreIds.length !== 1) return setError("A conta DRE precisa estar vinculada a exatamente uma DRE.");
+    } else {
+      if (dataScope === "selected" && selectedDreIds.length === 0) return setError("Selecione pelo menos uma DRE.");
+      if (dataScope === "all" && !canGrantAllScope) return setError("Seu perfil não pode delegar acesso global.");
+      if (permissions.some((permission) => !creatorPermissions.has(permission))) {
+        return setError("O formulário contém uma permissão que seu perfil não pode delegar.");
+      }
     }
 
     setLoading(true);
     setError("");
     try {
-      const created = await createAdminUser(token, {
-        username: cleanUsername,
-        ...(cleanEmail ? { email: cleanEmail } : {}),
-        password: cleanPassword,
-        role: "custom",
-        permissions,
-        data_scope: preset === "global" ? "all" : "selected",
-        dre_ids: preset === "custom" ? selectedDreIds : [],
-      });
+      let created: AdminUserItem;
+      if (isRegionalAccount) {
+        created = await createAdminUser(token, {
+          username: cleanUsername,
+          ...(cleanEmail ? { email: cleanEmail } : {}),
+          password: cleanPassword,
+          role: "dre",
+          dre_id: selectedDreIds[0],
+        });
+      } else {
+        created = await createAdminUser(token, {
+          username: cleanUsername,
+          ...(cleanEmail ? { email: cleanEmail } : {}),
+          password: cleanPassword,
+          role: "custom",
+          permissions,
+          data_scope: preset === "global" ? "all" : "selected",
+          dre_ids: preset === "custom" ? selectedDreIds : [],
+        });
+      }
       onSuccess(created, cleanPassword);
     } catch (requestError: unknown) {
       setError((requestError as Error).message || "Erro ao criar usuário.");
@@ -196,26 +213,37 @@ export function UserFormModal({
 
   return (
     <AdminModalShell
-      title="Criar conta de acesso"
-      subtitle="Defina o escopo de dados e exatamente quais ações esta conta poderá executar."
+      title={isRegionalAccount ? "Criar conta DRE" : "Criar conta de acesso"}
+      subtitle={isRegionalAccount ? "Crie um acesso regional vinculado exclusivamente à DRE selecionada." : "Defina o escopo de dados e exatamente quais ações esta conta poderá executar."}
       Icon={UserPlus}
       onClose={onClose}
       closeDisabled={loading}
       maxWidth="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-5 p-6">
-        <div>
-          <label className={LABEL_CLASS}><Shield size={13} className="text-slate-400" />Modelo de acesso</label>
-          <div className="grid grid-cols-2 gap-2">
-            {([ ["global", "Consulta global"], ["custom", "Personalizado"] ] as Array<[Preset, string]>).map(([id, label]) => (
-              <button key={id} type="button" aria-pressed={preset === id} disabled={id === "global" && !canGrantGlobalPreset} onClick={() => applyPreset(id)} className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${preset === id ? "border-blue-400 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600"} disabled:cursor-not-allowed disabled:opacity-40`}>
-                {label}
-              </button>
-            ))}
+        {!isRegionalAccount && (
+          <div>
+            <label className={LABEL_CLASS}><Shield size={13} className="text-slate-400" />Modelo de acesso</label>
+            <div className="grid grid-cols-2 gap-2">
+              {([ ["global", "Consulta global"], ["custom", "Personalizado"] ] as Array<[Preset, string]>).map(([id, label]) => (
+                <button key={id} type="button" aria-pressed={preset === id} disabled={id === "global" && !canGrantGlobalPreset} onClick={() => applyPreset(id)} className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${preset === id ? "border-blue-400 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600"} disabled:cursor-not-allowed disabled:opacity-40`}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        {preset === "custom" && (
+        {isRegionalAccount && (
+          <div>
+            <label className={LABEL_CLASS}><Building2 size={13} className="text-slate-400" />DRE vinculada</label>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+              {regionalDre ? `${regionalDre.nome}${regionalDre.sigla ? ` (${regionalDre.sigla})` : ""}` : "DRE indisponível"}
+            </div>
+          </div>
+        )}
+
+        {!isRegionalAccount && preset === "custom" && (
           <div>
             <label className={LABEL_CLASS}><Building2 size={13} className="text-slate-400" />DREs autorizadas <span className="text-rose-500">*</span></label>
             <input className={`${INPUT_CLASS} mb-2`} value={dreSearch} onChange={(event) => setDreSearch(event.target.value)} placeholder="Buscar DRE..." aria-label="Buscar DRE" />
@@ -237,7 +265,8 @@ export function UserFormModal({
           </div>
         )}
 
-        <div>
+        {!isRegionalAccount && (
+          <div>
             <label className={LABEL_CLASS}><Shield size={13} className="text-slate-400" />Permissões</label>
             <div className="grid gap-2 md:grid-cols-2">
               {grantableOptions.map((option) => (
@@ -251,6 +280,7 @@ export function UserFormModal({
               ))}
             </div>
           </div>
+        )}
 
         <div>
           <label htmlFor="admin-user-email" className={LABEL_CLASS}><Mail size={13} className="text-slate-400" />E-mail (opcional)</label>

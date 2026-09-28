@@ -128,7 +128,7 @@ func TestNormalizeAdminEmail(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "trim and lowercase", input: "  Gestor.DRE@Example.COM ", want: "gestor.dre@example.com"},
-		{name: "empty", input: "   ", wantErr: true},
+		{name: "empty is optional", input: "   ", want: ""},
 		{name: "missing at", input: "gestor.example.com", wantErr: true},
 		{name: "missing domain", input: "gestor@", wantErr: true},
 		{name: "domain without dot", input: "gestor@localhost", wantErr: true},

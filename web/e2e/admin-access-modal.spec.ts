@@ -19,7 +19,7 @@ test("modelo manual permanece estável e separa território de capabilities", as
   await modal.getByLabel("Buscar DRE").fill("DRE");
   await modal.locator('input[type="checkbox"]').first().check();
   await modal.getByText("Visualizar contas", { exact: true }).click();
-  await modal.getByLabel("E-mail institucional").fill("modal.persistence@example.test");
+  await modal.getByLabel("E-mail (opcional)").fill("modal.persistence@example.test");
   await modal.getByLabel("Nome de usuário").fill("modal.persistence");
   await expect(custom).toHaveAttribute("aria-pressed", "true");
   expect(await modal.locator('input[type="checkbox"]').count()).toBeGreaterThan(0);

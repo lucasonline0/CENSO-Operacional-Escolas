@@ -1037,7 +1037,7 @@ func (app *application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		user, err = app.models.AdminUsers.ProvisionForDREID(r.Context(), req.Username, req.Email, req.Password, req.Role, *req.DREID)
 	} else {
 		// Compatibilidade temporária: clientes antigos ainda podem enviar apenas
-		// dre textual. O nome apenas resolve o ID canônico; e-mail continua obrigatório.
+		// dre textual. O nome apenas resolve o ID canônico; e-mail continua opcional.
 		canonical, lookupErr := app.models.DREs.GetByNome(r.Context(), req.DRE)
 		if lookupErr != nil {
 			err = lookupErr

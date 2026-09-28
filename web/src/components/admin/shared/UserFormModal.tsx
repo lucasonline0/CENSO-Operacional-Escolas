@@ -70,6 +70,8 @@ export function UserFormModal({
   );
   const canGrantAllScope = creatorIsAdmin || creator?.data_scope?.type === "all";
   const canGrantGlobalPreset = canGrantAllScope;
+  const isRegionalAccount = preselectedDreId != null;
+  const regionalDre = isRegionalAccount ? activeDres.find((dre) => dre.id === preselectedDreId) : undefined;
   const grantableOptions = useMemo(
     () => PERMISSION_OPTIONS.filter((option) => creatorPermissions.has(option.id)),
     [creatorPermissions],
@@ -166,26 +168,41 @@ export function UserFormModal({
     const cleanPassword = password.trim();
 
     if (!cleanUsername) return setError("Informe o nome de usuário.");
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return setError("Informe um e-mail válido.");
+    if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return setError("Informe um e-mail válido.");
     if (cleanPassword.length < 12) return setError("A senha deve ter no mínimo 12 caracteres.");
-    if (dataScope === "selected" && selectedDreIds.length === 0) return setError("Selecione pelo menos uma DRE.");
-    if (dataScope === "all" && !canGrantAllScope) return setError("Seu perfil não pode delegar acesso global.");
-    if (permissions.some((permission) => !creatorPermissions.has(permission))) {
-      return setError("O formulário contém uma permissão que seu perfil não pode delegar.");
+    if (isRegionalAccount) {
+      if (selectedDreIds.length !== 1) return setError("A conta DRE precisa estar vinculada a exatamente uma DRE.");
+    } else {
+      if (dataScope === "selected" && selectedDreIds.length === 0) return setError("Selecione pelo menos uma DRE.");
+      if (dataScope === "all" && !canGrantAllScope) return setError("Seu perfil não pode delegar acesso global.");
+      if (permissions.some((permission) => !creatorPermissions.has(permission))) {
+        return setError("O formulário contém uma permissão que seu perfil não pode delegar.");
+      }
     }
 
     setLoading(true);
     setError("");
     try {
-      const created = await createAdminUser(token, {
-        username: cleanUsername,
-        email: cleanEmail,
-        password: cleanPassword,
-        role: "custom",
-        permissions,
-        data_scope: preset === "global" ? "all" : "selected",
-        dre_ids: preset === "custom" ? selectedDreIds : [],
-      });
+      let created: AdminUserItem;
+      if (isRegionalAccount) {
+        created = await createAdminUser(token, {
+          username: cleanUsername,
+          ...(cleanEmail ? { email: cleanEmail } : {}),
+          password: cleanPassword,
+          role: "dre",
+          dre_id: selectedDreIds[0],
+        });
+      } else {
+        created = await createAdminUser(token, {
+          username: cleanUsername,
+          ...(cleanEmail ? { email: cleanEmail } : {}),
+          password: cleanPassword,
+          role: "custom",
+          permissions,
+          data_scope: preset === "global" ? "all" : "selected",
+          dre_ids: preset === "custom" ? selectedDreIds : [],
+        });
+      }
       onSuccess(created, cleanPassword);
     } catch (requestError: unknown) {
       setError((requestError as Error).message || "Erro ao criar usuário.");
@@ -196,26 +213,37 @@ export function UserFormModal({
 
   return (
     <AdminModalShell
-      title="Criar conta de acesso"
-      subtitle="Defina o escopo de dados e exatamente quais ações esta conta poderá executar."
+      title={isRegionalAccount ? "Criar conta DRE" : "Criar conta de acesso"}
+      subtitle={isRegionalAccount ? "Crie um acesso regional vinculado exclusivamente à DRE selecionada." : "Defina o escopo de dados e exatamente quais ações esta conta poderá executar."}
       Icon={UserPlus}
       onClose={onClose}
       closeDisabled={loading}
       maxWidth="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-5 p-6">
-        <div>
-          <label className={LABEL_CLASS}><Shield size={13} className="text-slate-400" />Modelo de acesso</label>
-          <div className="grid grid-cols-2 gap-2">
-            {([ ["global", "Consulta global"], ["custom", "Personalizado"] ] as Array<[Preset, string]>).map(([id, label]) => (
-              <button key={id} type="button" aria-pressed={preset === id} disabled={id === "global" && !canGrantGlobalPreset} onClick={() => applyPreset(id)} className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${preset === id ? "border-blue-400 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600"} disabled:cursor-not-allowed disabled:opacity-40`}>
-                {label}
-              </button>
-            ))}
+        {!isRegionalAccount && (
+          <div>
+            <label className={LABEL_CLASS}><Shield size={13} className="text-slate-400" />Modelo de acesso</label>
+            <div className="grid grid-cols-2 gap-2">
+              {([ ["global", "Consulta global"], ["custom", "Personalizado"] ] as Array<[Preset, string]>).map(([id, label]) => (
+                <button key={id} type="button" aria-pressed={preset === id} disabled={id === "global" && !canGrantGlobalPreset} onClick={() => applyPreset(id)} className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${preset === id ? "border-blue-400 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600"} disabled:cursor-not-allowed disabled:opacity-40`}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        {preset === "custom" && (
+        {isRegionalAccount && (
+          <div>
+            <label className={LABEL_CLASS}><Building2 size={13} className="text-slate-400" />DRE vinculada</label>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+              {regionalDre ? `${regionalDre.nome}${regionalDre.sigla ? ` (${regionalDre.sigla})` : ""}` : "DRE indisponível"}
+            </div>
+          </div>
+        )}
+
+        {!isRegionalAccount && preset === "custom" && (
           <div>
             <label className={LABEL_CLASS}><Building2 size={13} className="text-slate-400" />DREs autorizadas <span className="text-rose-500">*</span></label>
             <input className={`${INPUT_CLASS} mb-2`} value={dreSearch} onChange={(event) => setDreSearch(event.target.value)} placeholder="Buscar DRE..." aria-label="Buscar DRE" />
@@ -237,7 +265,8 @@ export function UserFormModal({
           </div>
         )}
 
-        <div>
+        {!isRegionalAccount && (
+          <div>
             <label className={LABEL_CLASS}><Shield size={13} className="text-slate-400" />Permissões</label>
             <div className="grid gap-2 md:grid-cols-2">
               {grantableOptions.map((option) => (
@@ -251,10 +280,11 @@ export function UserFormModal({
               ))}
             </div>
           </div>
+        )}
 
         <div>
-          <label htmlFor="admin-user-email" className={LABEL_CLASS}><Mail size={13} className="text-slate-400" />E-mail institucional <span className="text-rose-500">*</span></label>
-          <input id="admin-user-email" type="email" autoComplete="email" maxLength={254} className={INPUT_CLASS} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="responsavel@seduc.pa.gov.br" required />
+          <label htmlFor="admin-user-email" className={LABEL_CLASS}><Mail size={13} className="text-slate-400" />E-mail (opcional)</label>
+          <input id="admin-user-email" type="email" autoComplete="email" maxLength={254} className={INPUT_CLASS} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@exemplo.com" />
         </div>
 
         <div>
@@ -286,7 +316,7 @@ export function UserFormModal({
 
         <div className="flex items-center justify-end gap-2 border-t border-slate-200 pt-4">
           <button type="button" onClick={onClose} disabled={loading} className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancelar</button>
-          <button type="submit" disabled={loading || !username.trim() || !email.trim() || !password.trim()} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white disabled:opacity-50" style={{ background: C.primary }}>{loading ? <><Loader2 size={15} className="animate-spin" />Criando…</> : "Criar conta"}</button>
+          <button type="submit" disabled={loading || !username.trim() || !password.trim()} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white disabled:opacity-50" style={{ background: C.primary }}>{loading ? <><Loader2 size={15} className="animate-spin" />Criando…</> : "Criar conta"}</button>
         </div>
       </form>
     </AdminModalShell>

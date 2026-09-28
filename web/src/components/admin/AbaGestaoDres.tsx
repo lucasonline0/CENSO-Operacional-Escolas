@@ -185,7 +185,7 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
         .filter(Boolean)
         .some((value) => value.toLowerCase().includes(query));
       if (ownFields) return true;
-      return (usersByDreMap.get(dre.id) ?? []).some((user) => user.username.toLowerCase().includes(query) || user.email.toLowerCase().includes(query));
+      return (usersByDreMap.get(dre.id) ?? []).some((user) => user.username.toLowerCase().includes(query) || (user.email ?? "").toLowerCase().includes(query));
     });
   }, [dres, search, statusFilter, usersByDreMap]);
 
@@ -317,7 +317,7 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
         ? "A conta personalizada foi criada com as permissões e o escopo selecionados."
         : `A conta regional de ${createdUser.dre} foi criada com sucesso.`,
       username: createdUser.username,
-      email: createdUser.email,
+      email: createdUser.email ?? undefined,
       password,
       dre: createdUser.dre,
     });
@@ -331,7 +331,7 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
       title: "Credencial temporária gerada",
       subtitle: `${user.email || user.username} deverá criar uma nova senha no próximo acesso.`,
       username: user.username,
-      email: user.email,
+      email: user.email ?? undefined,
       password: newPassword,
       dre: user.dre,
     });
@@ -573,8 +573,8 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
                                       {linkedUsers.map((user) => (
                                         <tr key={user.id} className={!user.active ? "opacity-60" : ""}>
                                           <td>
-                                            <div className="flex items-center gap-2"><span className="font-semibold text-slate-800">{user.email || "Sem e-mail (legado)"}</span>{user.email && <button type="button" onClick={async () => { if (await copyToClipboard(user.email)) showToast(`E-mail “${user.email}” copiado.`); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Copiar e-mail"><Copy size={13} /></button>}</div>
-                                            <p className="mt-0.5 font-mono text-xs text-slate-500">Usuário legado: {user.username}</p>
+                                            <div className="flex items-center gap-2"><span className="font-semibold text-slate-800">{user.email || "Sem e-mail"}</span>{user.email && <button type="button" onClick={async () => { if (await copyToClipboard(user.email ?? "")) showToast(`E-mail “${user.email}” copiado.`); }} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Copiar e-mail"><Copy size={13} /></button>}</div>
+                                            <p className="mt-0.5 font-mono text-xs text-slate-500">Usuário: {user.username}</p>
                                           </td>
                                           <td><span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-600"><ShieldCheck size={11} />DRE</span></td>
                                           <td className="text-xs text-slate-500">{formatDate(user.created_at)}</td>
@@ -633,7 +633,7 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
           title="Acesso do usuário"
           subtitle="Consulte o login desta conta regional e redefina a senha quando necessário."
           username={userToViewAccess.username}
-          email={userToViewAccess.email}
+          email={userToViewAccess.email ?? undefined}
           dre={userToViewAccess.dre}
           onResetPassword={canResetPasswords ? handleResetFromAccessViewer : undefined}
         />

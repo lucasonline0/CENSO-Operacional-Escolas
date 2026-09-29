@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"strings"
 	"sync"
 	"testing"
 
@@ -56,7 +58,7 @@ func TestBulkDREBootstrapPostgreSQLLifecycleAndIdempotency(t *testing.T) {
 	if byID[readyID].Status != "pending" {
 		t.Fatalf("ready=%+v", byID[readyID])
 	}
-	if byID[missingID].Message != "E-mail obrigatório" {
+	if byID[missingID].Status != "pending" || !strings.Contains(byID[missingID].Message, "sem e-mail") {
 		t.Fatalf("missing=%+v", byID[missingID])
 	}
 	if byID[ignoredID].Status != "ignored_e2e" {
@@ -147,4 +149,162 @@ func TestBulkDREBootstrapPostgreSQLLifecycleAndIdempotency(t *testing.T) {
 	if err = db.QueryRow(`SELECT count(*) FROM admin_users WHERE dre_id=$1`, ignoredID).Scan(&ignoredUsers); err != nil || ignoredUsers != 0 {
 		t.Fatalf("E2E account count=%d err=%v", ignoredUsers, err)
 	}
+}
+
+func TestBulkDREBootstrapWithoutEmail(t *testing.T) {
+	db := openDREIntegrationDB(t)
+	resetDREIntegrationData(t, db)
+	m := models.NewModels(db)
+	ctx := context.Background()
+	var noEmailID int
+	if err := db.QueryRow(`INSERT INTO dres(nome,sigla,email,ativa) VALUES('DRE SEM EMAIL','NME','',true) RETURNING id`).Scan(&noEmailID); err != nil {
+		t.Fatal(err)
+	}
+	preview, err := m.AdminUsers.PreviewDREBootstrap(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, item := range preview.Items {
+		if item.DREID == noEmailID {
+			found = true
+			if item.Status != "pending" {
+				t.Fatalf("preview status=%q, want pending", item.Status)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("DRE without email missing from preview")
+	}
+	if preview.Errors != 0 {
+		t.Fatalf("preview errors=%d, want 0", preview.Errors)
+	}
+	credentials, err := bootstrapWithoutOverride(ctx, m, noEmailID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(credentials) != 1 {
+		t.Fatalf("credentials=%d, want 1", len(credentials))
+	}
+	if credentials[0].Email != "" {
+		t.Fatalf("credential email=%q, want empty", credentials[0].Email)
+	}
+	var storedEmail sql.NullString
+	if err = db.QueryRow(`SELECT email FROM admin_users WHERE dre_id=$1`, noEmailID).Scan(&storedEmail); err != nil {
+		t.Fatal(err)
+	}
+	if storedEmail.Valid {
+		t.Fatalf("admin_users.email=%q, want NULL", storedEmail.String)
+	}
+	var must bool
+	if err = db.QueryRow(`SELECT must_change_password FROM admin_users WHERE dre_id=$1`, noEmailID).Scan(&must); err != nil {
+		t.Fatal(err)
+	}
+	if !must {
+		t.Fatal("must_change_password=false, want true")
+	}
+	_, second, err := m.AdminUsers.BootstrapDREAccounts(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second) != 0 {
+		t.Fatalf("second run created %d, want 0", len(second))
+	}
+}
+
+func TestBulkDREBootstrapUsernameConflictWithoutEmail(t *testing.T) {
+	db := openDREIntegrationDB(t)
+	resetDREIntegrationData(t, db)
+	m := models.NewModels(db)
+	ctx := context.Background()
+	if _, err := db.Exec(`INSERT INTO dres(nome,sigla,email,ativa) VALUES('DRE TESTE-A','CFA','',true),('DRE TESTE A','CFB','',true)`); err != nil {
+		t.Fatal(err)
+	}
+	preview, err := m.AdminUsers.PreviewDREBootstrap(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conflicts := 0
+	for _, item := range preview.Items {
+		if item.Status == "error" && item.Message == "Username em conflito" {
+			conflicts++
+		}
+	}
+	if conflicts != 2 {
+		t.Fatalf("username conflicts=%d, want 2; items=%+v", conflicts, preview.Items)
+	}
+	if preview.Errors != 2 {
+		t.Fatalf("preview errors=%d, want 2", preview.Errors)
+	}
+	if preview.Pending != 0 {
+		t.Fatalf("preview pending=%d, want 0", preview.Pending)
+	}
+}
+
+func TestBulkDREBootstrapArbitraryDomainOverride(t *testing.T) {
+	db := openDREIntegrationDB(t)
+	resetDREIntegrationData(t, db)
+	m := models.NewModels(db)
+	ctx := context.Background()
+	var dreID int
+	if err := db.QueryRow(`INSERT INTO dres(nome,sigla,email,ativa) VALUES('DRE OVERRIDE','OVR','',true) RETURNING id`).Scan(&dreID); err != nil {
+		t.Fatal(err)
+	}
+	_, credentials, err := m.AdminUsers.BootstrapDREAccounts(ctx, map[int]string{dreID: "gestor@qualquer-dominio.org.br"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(credentials) != 1 {
+		t.Fatalf("credentials=%d, want 1", len(credentials))
+	}
+	if credentials[0].Email != "gestor@qualquer-dominio.org.br" {
+		t.Fatalf("credential email=%q", credentials[0].Email)
+	}
+	var dresEmail sql.NullString
+	if err = db.QueryRow(`SELECT email FROM dres WHERE id=$1`, dreID).Scan(&dresEmail); err != nil {
+		t.Fatal(err)
+	}
+	if !dresEmail.Valid || dresEmail.String != "gestor@qualquer-dominio.org.br" {
+		t.Fatalf("dres.email=%v", dresEmail)
+	}
+}
+
+func TestBulkDREBootstrapEmptyOverride(t *testing.T) {
+	db := openDREIntegrationDB(t)
+	resetDREIntegrationData(t, db)
+	m := models.NewModels(db)
+	ctx := context.Background()
+	var dreID int
+	if err := db.QueryRow(`INSERT INTO dres(nome,sigla,email,ativa) VALUES('DRE COM EMAIL','CEM','antigo@example.test',true) RETURNING id`).Scan(&dreID); err != nil {
+		t.Fatal(err)
+	}
+	_, credentials, err := m.AdminUsers.BootstrapDREAccounts(ctx, map[int]string{dreID: ""})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(credentials) != 1 {
+		t.Fatalf("credentials=%d, want 1", len(credentials))
+	}
+	if credentials[0].Email != "" {
+		t.Fatalf("credential email=%q, want empty", credentials[0].Email)
+	}
+	var dresEmail sql.NullString
+	if err = db.QueryRow(`SELECT email FROM dres WHERE id=$1`, dreID).Scan(&dresEmail); err != nil {
+		t.Fatal(err)
+	}
+	if dresEmail.Valid {
+		t.Fatalf("dres.email=%q, want NULL", dresEmail.String)
+	}
+	var userEmail sql.NullString
+	if err = db.QueryRow(`SELECT email FROM admin_users WHERE dre_id=$1`, dreID).Scan(&userEmail); err != nil {
+		t.Fatal(err)
+	}
+	if userEmail.Valid {
+		t.Fatalf("admin_users.email=%q, want NULL", userEmail.String)
+	}
+}
+
+func bootstrapWithoutOverride(ctx context.Context, m models.Models, dreID int) ([]models.DREBootstrapCredential, error) {
+	_, credentials, err := m.AdminUsers.BootstrapDREAccounts(ctx, nil)
+	return credentials, err
 }

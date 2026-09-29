@@ -33,3 +33,12 @@ func TestIsE2EDRE(t *testing.T) {
 		t.Fatal("fixture classification failed")
 	}
 }
+
+func TestAdminEmailDBValue(t *testing.T) {
+	if got := adminEmailDBValue(""); got != nil {
+		t.Errorf("adminEmailDBValue(empty)=%v, want nil", got)
+	}
+	if got := adminEmailDBValue("a@b.com"); got != "a@b.com" {
+		t.Errorf("adminEmailDBValue(a@b.com)=%v, want a@b.com", got)
+	}
+}

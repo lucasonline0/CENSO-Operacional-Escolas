@@ -104,9 +104,24 @@ func bootstrapPreview(ctx context.Context, q bootstrapQueryer) (DREBootstrapPrev
 			item.Message = "Já provisionada"
 			out.Provisioned++
 		case strings.TrimSpace(c.email) == "":
-			item.Status = "pending"
-			item.Message = "Pronta (sem e-mail — override opcional)"
-			out.Pending++
+			if conflict, queryErr := adminIdentityConflict(ctx, q, item.Username, ""); queryErr != nil {
+				return out, queryErr
+			} else if conflict != nil {
+				item.Status = "error"
+				switch conflict {
+				case ErrUsernameExists:
+					item.Message = "Username em conflito"
+				case ErrEmailExists:
+					item.Message = "E-mail em conflito"
+				default:
+					item.Message = "Identidade em conflito"
+				}
+				out.Errors++
+			} else {
+				item.Status = "pending"
+				item.Message = "Pronta (sem e-mail — override opcional)"
+				out.Pending++
+			}
 		default:
 			if _, e := NormalizeAdminEmail(c.email); e != nil {
 				item.Status = "invalid_email"

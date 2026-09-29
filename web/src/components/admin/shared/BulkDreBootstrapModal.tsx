@@ -31,7 +31,7 @@ export function BulkDreBootstrapModal({ token, preview, onClose, onCompleted }: 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [completed, setCompleted] = useState(0);
-  const editableIDs = useMemo(() => new Set(preview.items.filter((item) => item.status === "missing_email" || item.status === "invalid_email").map((item) => item.dre_id)), [preview]);
+  const editableIDs = useMemo(() => new Set(preview.items.filter((item) => item.status === "invalid_email" || (item.status === "pending" && item.email === "")).map((item) => item.dre_id)), [preview]);
   const invalidEditable = [...editableIDs].some((id) => {
     const v = (emails[id] ?? "").trim();
     return v !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);

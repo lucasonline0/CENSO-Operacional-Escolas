@@ -179,7 +179,7 @@ func TestBulkDREBootstrapWithoutEmail(t *testing.T) {
 	if preview.Errors != 0 {
 		t.Fatalf("preview errors=%d, want 0", preview.Errors)
 	}
-	credentials, err := bootstrapWithoutOverride(ctx, m, noEmailID)
+	credentials, err := bootstrapWithoutOverride(ctx, m)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,6 +209,42 @@ func TestBulkDREBootstrapWithoutEmail(t *testing.T) {
 	}
 	if len(second) != 0 {
 		t.Fatalf("second run created %d, want 0", len(second))
+	}
+}
+
+func TestBulkDREBootstrapWithoutEmailUsernameExistsInDB(t *testing.T) {
+	db := openDREIntegrationDB(t)
+	resetDREIntegrationData(t, db)
+	m := models.NewModels(db)
+	ctx := context.Background()
+	if _, err := db.Exec(`INSERT INTO admin_users(username,email,password_hash,role,active,auth_version,must_change_password,data_scope) VALUES('dre.sememail',NULL,'$2a$10$abcdefghijklmnopqrstuuuuuuuuuuuuuuuuuuuuuuuuuuuu','custom',true,1,true,'all')`); err != nil {
+		t.Fatal(err)
+	}
+	var noEmailID int
+	if err := db.QueryRow(`INSERT INTO dres(nome,sigla,email,ativa) VALUES('DRE SEM EMAIL','NME','',true) RETURNING id`).Scan(&noEmailID); err != nil {
+		t.Fatal(err)
+	}
+	preview, err := m.AdminUsers.PreviewDREBootstrap(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, item := range preview.Items {
+		if item.DREID == noEmailID {
+			found = true
+			if item.Status != "error" || item.Message != "Username em conflito" {
+				t.Fatalf("preview item=%+v, want error/Username em conflito", item)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("DRE without email missing from preview")
+	}
+	if preview.Errors == 0 || preview.Pending != 0 {
+		t.Fatalf("errors=%d pending=%d, want errors>0 pending=0", preview.Errors, preview.Pending)
+	}
+	if _, _, err = m.AdminUsers.BootstrapDREAccounts(ctx, nil); err == nil {
+		t.Fatal("bootstrap with username conflict must fail")
 	}
 }
 
@@ -304,7 +340,7 @@ func TestBulkDREBootstrapEmptyOverride(t *testing.T) {
 	}
 }
 
-func bootstrapWithoutOverride(ctx context.Context, m models.Models, dreID int) ([]models.DREBootstrapCredential, error) {
+func bootstrapWithoutOverride(ctx context.Context, m models.Models) ([]models.DREBootstrapCredential, error) {
 	_, credentials, err := m.AdminUsers.BootstrapDREAccounts(ctx, nil)
 	return credentials, err
 }

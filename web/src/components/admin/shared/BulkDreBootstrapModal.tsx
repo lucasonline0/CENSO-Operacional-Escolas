@@ -13,9 +13,9 @@ interface Props {
   onCompleted: (preview: DREBootstrapPreview) => void;
 }
 
-function downloadCredentials(credentials: Array<{ dre: string; email: string; username: string; temporary_password: string }>) {
+function downloadCredentials(credentials: Array<{ dre: string; email?: string | null; username: string; temporary_password: string }>) {
   const text = ["CENSO OPERACIONAL — ACESSOS INICIAIS", "", ...credentials.flatMap((item) => [
-    `DRE: ${item.dre}`, `E-mail: ${item.email}`, `Usuário: ${item.username}`,
+    `DRE: ${item.dre}`, ...(item.email?.trim() ? [`E-mail: ${item.email}`] : []), `Usuário: ${item.username}`,
     `Senha temporária: ${item.temporary_password}`, "Troca obrigatória no primeiro acesso: SIM", "", "----------------------------------------", "",
   ])].join("\n");
   const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
@@ -27,11 +27,11 @@ function downloadCredentials(credentials: Array<{ dre: string; email: string; us
 }
 
 export function BulkDreBootstrapModal({ token, preview, onClose, onCompleted }: Props) {
-  const [emails, setEmails] = useState<Record<number, string>>(() => Object.fromEntries(preview.items.map((item) => [item.dre_id, item.email])));
+  const [emails, setEmails] = useState<Record<number, string>>(() => Object.fromEntries(preview.items.map((item) => [item.dre_id, item.email ?? ""])));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [completed, setCompleted] = useState(0);
-  const editableIDs = useMemo(() => new Set(preview.items.filter((item) => item.status === "invalid_email" || (item.status === "pending" && item.email === "")).map((item) => item.dre_id)), [preview]);
+  const editableIDs = useMemo(() => new Set(preview.items.filter((item) => item.status === "invalid_email" || (item.status === "pending" && !item.email?.trim())).map((item) => item.dre_id)), [preview]);
   const invalidEditable = [...editableIDs].some((id) => {
     const v = (emails[id] ?? "").trim();
     return v !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
@@ -59,7 +59,7 @@ export function BulkDreBootstrapModal({ token, preview, onClose, onCompleted }: 
       </div>
       <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full min-w-[720px] text-sm"><thead><tr><th>DRE</th><th>E-mail</th><th>Usuário</th><th>Status</th></tr></thead><tbody>
-          {preview.items.map((item) => <tr key={item.dre_id}><td className="font-semibold text-slate-700">{item.dre}</td><td>{editableIDs.has(item.dre_id) ? <input aria-label={`E-mail ${item.dre}`} type="email" value={emails[item.dre_id] ?? ""} onChange={(event) => setEmails((current) => ({ ...current, [item.dre_id]: event.target.value }))} placeholder="email@seduc.pa.gov.br" className="h-9 w-full rounded-lg border border-slate-200 px-2 text-sm" /> : <span className="text-slate-600">{item.email || "—"}</span>}</td><td className="font-mono text-xs text-slate-600">{item.username}</td><td><span className={item.status === "pending" ? "font-semibold text-emerald-700" : item.status === "error" || editableIDs.has(item.dre_id) ? "font-semibold text-rose-700" : "text-slate-600"}>{item.message}</span></td></tr>)}
+          {preview.items.map((item) => <tr key={item.dre_id}><td className="font-semibold text-slate-700">{item.dre}</td><td>{editableIDs.has(item.dre_id) ? <input aria-label={`E-mail ${item.dre}`} type="email" value={emails[item.dre_id] ?? ""} onChange={(event) => setEmails((current) => ({ ...current, [item.dre_id]: event.target.value }))} placeholder="Opcional — email@dominio.org" className="h-9 w-full rounded-lg border border-slate-200 px-2 text-sm" /> : <span className="text-slate-600">{item.email || "—"}</span>}</td><td className="font-mono text-xs text-slate-600">{item.username}</td><td><span className={item.status === "pending" ? "font-semibold text-emerald-700" : item.status === "error" || editableIDs.has(item.dre_id) ? "font-semibold text-rose-700" : "text-slate-600"}>{item.message}</span></td></tr>)}
         </tbody></table>
       </div>
       {completed > 0 && <div className="flex gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"><CheckCircle2 size={18} /><div><strong>{completed} contas criadas.</strong><p>Salve o arquivo agora. As senhas temporárias não poderão ser exibidas novamente.</p></div></div>}

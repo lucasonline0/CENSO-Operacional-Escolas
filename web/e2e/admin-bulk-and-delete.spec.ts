@@ -6,6 +6,7 @@ const suffix = Date.now().toString(36);
 let token = "";
 let readyDreID = 0;
 let missingDreID = 0;
+let noEmailDreID = 0;
 let ignoredDreID = 0;
 
 async function createDre(request: APIRequestContext, name: string, sigla: string, email = "") {
@@ -22,6 +23,7 @@ test("bulk real corrige e-mail, ignora fixture e é idempotente", async ({ page,
   const admin = adminCredentials(); token = await loginViaAPI(request, admin.username, admin.password, "198.51.100.180"); await page.addInitScript((value)=>sessionStorage.setItem("censo_admin_token",value),token); await page.goto("/admin/");
   readyDreID = await createDre(request, `DRE BULK READY ${suffix}`, "BRD", `bulk.ready.${suffix}@example.test`);
   missingDreID = await createDre(request, `DRE BULK EMAIL ${suffix}`, "BEM");
+  noEmailDreID = await createDre(request, `DRE BULK NO EMAIL ${suffix}`, "BNE");
   ignoredDreID = await createDre(request, `DRE-E2E-TEST-${suffix}`, "E2E", `ignored.${suffix}@example.test`);
   await openManagement(page);
 
@@ -29,7 +31,8 @@ test("bulk real corrige e-mail, ignora fixture e é idempotente", async ({ page,
   await expect(bulkButton).toBeVisible(); await bulkButton.click();
   const modal = page.getByRole("dialog", { name: "Provisionar acessos das DREs" });
   await expect(modal.getByText(`DRE BULK READY ${suffix}`, { exact: true })).toBeVisible();
-  await expect(modal.getByText("Pronta (sem e-mail — override opcional)", { exact: true })).toBeVisible();
+  await expect(modal.getByText("Pronta (sem e-mail — override opcional)", { exact: true })).toHaveCount(2);
+  await expect(modal.getByLabel(`E-mail DRE BULK NO EMAIL ${suffix}`)).toBeVisible();
   await expect(modal.getByText("Ignorada — fixture E2E", { exact: true })).toBeVisible();
   await modal.getByLabel(`E-mail DRE BULK EMAIL ${suffix}`).fill(`bulk.email.${suffix}@example.test`);
   const downloadPromise = page.waitForEvent("download");
@@ -37,10 +40,12 @@ test("bulk real corrige e-mail, ignora fixture e é idempotente", async ({ page,
   const download = await downloadPromise; const path = await download.path(); expect(path).toBeTruthy();
   const fs = await import("node:fs/promises"); const content = await fs.readFile(path!, "utf8");
   expect(content).toContain("CENSO OPERACIONAL — ACESSOS INICIAIS"); expect(content).toContain("Senha temporária:");
+  const noEmailBlock = content.split("----------------------------------------").find((block) => block.includes(`DRE: DRE BULK NO EMAIL ${suffix}`));
+  expect(noEmailBlock).toBeTruthy(); expect(noEmailBlock).not.toContain("E-mail:");
   await expect(modal.getByText(/contas criadas/)).toBeVisible(); await modal.getByRole("button", { name: "Fechar", exact: true }).click();
 
   const users = await apiGet<Array<{ role:string;dre_id:number;must_change_password:boolean;data_scope:string;dre_ids:number[];permissions:string[] }>>(request, token, "/v1/admin/users");
-  for (const id of [readyDreID, missingDreID]) { const user=users.find((item)=>item.dre_id===id);expect(user).toBeTruthy();expect(user).toMatchObject({role:"dre",must_change_password:true,data_scope:"selected"});expect(user!.dre_ids).toEqual([id]);expect(user!.permissions.sort()).toEqual(["analytics.read","census.read","reports.read"]); }
+  for (const id of [readyDreID, missingDreID, noEmailDreID]) { const user=users.find((item)=>item.dre_id===id);expect(user).toBeTruthy();expect(user).toMatchObject({role:"dre",must_change_password:true,data_scope:"selected"});expect(user!.dre_ids).toEqual([id]);expect(user!.permissions.sort()).toEqual(["analytics.read","census.read","reports.read"]); }
   expect(users.some((item)=>item.dre_id===ignoredDreID)).toBe(false);
   const dres=await apiGet<Array<{id:number;email:string}>>(request,token,"/v1/admin/dres");expect(dres.find((item)=>item.id===missingDreID)?.email).toBe(`bulk.email.${suffix}@example.test`);
   const preview=await apiGet<{pending:number}>(request,token,"/v1/admin/users/bulk-dre-bootstrap/preview");expect(preview.pending).toBe(0);

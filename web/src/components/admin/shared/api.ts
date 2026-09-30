@@ -329,11 +329,12 @@ export function buildPostgresSourceLabel(filters?: DashboardFilters): string {
   return `${base} (${parts.join(" · ")})`;
 }
 
+export type DREBootstrapStatus = "pending" | "provisioned" | "ignored_e2e" | "invalid_email" | "error";
 export interface DREBootstrapPreview {
   active: number; provisioned: number; pending: number; ignored_e2e: number; errors: number;
-  items: Array<{ dre_id: number; dre: string; email: string; username: string; status: string; message?: string }>;
+  items: Array<{ dre_id: number; dre: string; email?: string | null; username: string; status: DREBootstrapStatus; message?: string }>;
 }
-export interface DREBootstrapResult { preview: DREBootstrapPreview; credentials: Array<{ dre: string; email: string; username: string; temporary_password: string }> }
+export interface DREBootstrapResult { preview: DREBootstrapPreview; credentials: Array<{ dre: string; email?: string | null; username: string; temporary_password: string }> }
 export async function previewDREBootstrap(token: string): Promise<DREBootstrapPreview> { return apiFetch("/v1/admin/users/bulk-dre-bootstrap/preview", token, { bypassCache: true }); }
 export async function executeDREBootstrap(token: string, emailOverrides: Record<string, string>): Promise<DREBootstrapResult> {
   return apiMutation("/v1/admin/users/bulk-dre-bootstrap", token, { method: "POST", body: JSON.stringify({ email_overrides: emailOverrides }) });

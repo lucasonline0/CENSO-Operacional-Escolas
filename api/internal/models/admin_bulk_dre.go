@@ -104,9 +104,24 @@ func bootstrapPreview(ctx context.Context, q bootstrapQueryer) (DREBootstrapPrev
 			item.Message = "Já provisionada"
 			out.Provisioned++
 		case strings.TrimSpace(c.email) == "":
-			item.Status = "missing_email"
-			item.Message = "E-mail obrigatório"
-			out.Errors++
+			if conflict, queryErr := adminIdentityConflict(ctx, q, item.Username, ""); queryErr != nil {
+				return out, queryErr
+			} else if conflict != nil {
+				item.Status = "error"
+				switch conflict {
+				case ErrUsernameExists:
+					item.Message = "Username em conflito"
+				case ErrEmailExists:
+					item.Message = "E-mail em conflito"
+				default:
+					item.Message = "Identidade em conflito"
+				}
+				out.Errors++
+			} else {
+				item.Status = "pending"
+				item.Message = "Pronta (sem e-mail — override opcional)"
+				out.Pending++
+			}
 		default:
 			if _, e := NormalizeAdminEmail(c.email); e != nil {
 				item.Status = "invalid_email"
@@ -136,8 +151,10 @@ func bootstrapPreview(ctx context.Context, q bootstrapQueryer) (DREBootstrapPrev
 	emailCounts, usernameCounts := map[string]int{}, map[string]int{}
 	for _, item := range out.Items {
 		if item.Status == "pending" {
-			emailCounts[strings.ToLower(strings.TrimSpace(item.Email))]++
 			usernameCounts[strings.ToLower(item.Username)]++
+			if strings.TrimSpace(item.Email) != "" {
+				emailCounts[strings.ToLower(strings.TrimSpace(item.Email))]++
+			}
 		}
 	}
 	for i := range out.Items {
@@ -174,10 +191,6 @@ func (m *AdminUserModel) BootstrapDREAccounts(ctx context.Context, emailOverride
 		return DREBootstrapPreview{}, nil, err
 	}
 	for dreID, rawEmail := range emailOverrides {
-		email, normalizeErr := NormalizeAdminEmail(rawEmail)
-		if normalizeErr != nil {
-			return DREBootstrapPreview{}, nil, normalizeErr
-		}
 		var name, sigla string
 		var active, provisioned bool
 		if err = tx.QueryRowContext(ctx, `SELECT d.nome,COALESCE(d.sigla,''),d.ativa,EXISTS(SELECT 1 FROM admin_users u WHERE u.dre_id=d.id AND u.role='dre') FROM dres d WHERE d.id=$1 FOR UPDATE`, dreID).Scan(&name, &sigla, &active, &provisioned); err != nil {
@@ -189,7 +202,18 @@ func (m *AdminUserModel) BootstrapDREAccounts(ctx context.Context, emailOverride
 		if !active || provisioned || isE2EDRE(name, sigla) {
 			return DREBootstrapPreview{}, nil, ErrInvalidDRE
 		}
-		if _, err = tx.ExecContext(ctx, `UPDATE dres SET email=$2,updated_at=NOW() WHERE id=$1`, dreID, email); err != nil {
+		email := strings.TrimSpace(rawEmail)
+		if email == "" {
+			if _, err = tx.ExecContext(ctx, `UPDATE dres SET email=NULL,updated_at=NOW() WHERE id=$1`, dreID); err != nil {
+				return DREBootstrapPreview{}, nil, err
+			}
+			continue
+		}
+		normalized, normalizeErr := NormalizeAdminEmail(email)
+		if normalizeErr != nil {
+			return DREBootstrapPreview{}, nil, normalizeErr
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE dres SET email=$2,updated_at=NOW() WHERE id=$1`, dreID, normalized); err != nil {
 			return DREBootstrapPreview{}, nil, err
 		}
 	}
@@ -214,7 +238,7 @@ func (m *AdminUserModel) BootstrapDREAccounts(ctx context.Context, emailOverride
 			return preview, nil, e
 		}
 		var uid int
-		e = tx.QueryRowContext(ctx, `INSERT INTO admin_users(username,email,password_hash,role,dre_id,active,auth_version,must_change_password,data_scope,created_at,updated_at) VALUES($1,$2,$3,'dre',$4,true,1,true,'selected',NOW(),NOW()) RETURNING id`, item.Username, strings.ToLower(strings.TrimSpace(item.Email)), string(hash), item.DREID).Scan(&uid)
+		e = tx.QueryRowContext(ctx, `INSERT INTO admin_users(username,email,password_hash,role,dre_id,active,auth_version,must_change_password,data_scope,created_at,updated_at) VALUES($1,$2,$3,'dre',$4,true,1,true,'selected',NOW(),NOW()) RETURNING id`, item.Username, adminEmailDBValue(strings.ToLower(strings.TrimSpace(item.Email))), string(hash), item.DREID).Scan(&uid)
 		if e != nil {
 			return preview, nil, fmt.Errorf("%s: %w", item.DRE, e)
 		}

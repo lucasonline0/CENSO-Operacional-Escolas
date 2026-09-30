@@ -31,7 +31,7 @@ test("bulk real corrige e-mail, ignora fixture e é idempotente", async ({ page,
   await expect(bulkButton).toBeVisible(); await bulkButton.click();
   const modal = page.getByRole("dialog", { name: "Provisionar acessos das DREs" });
   await expect(modal.getByText(`DRE BULK READY ${suffix}`, { exact: true })).toBeVisible();
-  await expect(modal.getByText("Pronta (sem e-mail — override opcional)", { exact: true })).toBeVisible();
+  await expect(modal.getByText("Pronta (sem e-mail — override opcional)", { exact: true })).toHaveCount(2);
   await expect(modal.getByLabel(`E-mail DRE BULK NO EMAIL ${suffix}`)).toBeVisible();
   await expect(modal.getByText("Ignorada — fixture E2E", { exact: true })).toBeVisible();
   await modal.getByLabel(`E-mail DRE BULK EMAIL ${suffix}`).fill(`bulk.email.${suffix}@example.test`);

@@ -191,10 +191,6 @@ export async function deleteAdminUser(token: string, id: number): Promise<void> 
   await apiMutation(`/v1/admin/users/${id}`, token, { method: "DELETE" });
 }
 
-export async function deleteDRE(token: string, id: number): Promise<void> {
-  await apiMutation(`/v1/admin/dres/${id}`, token, { method: "DELETE" });
-}
-
 export async function changeOwnPassword(
   token: string,
   currentPassword: string,

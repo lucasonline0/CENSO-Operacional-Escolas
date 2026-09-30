@@ -24,7 +24,7 @@ import {
   UserX,
   Trash2,
 } from "lucide-react";
-import { ApiRequestError, deleteAdminUser, deleteDRE, fetchAdminUsers, fetchDREs, previewDREBootstrap, updateAdminUserStatus, updateDRE, type DREBootstrapPreview } from "./shared/api";
+import { deleteAdminUser, fetchAdminUsers, fetchDREs, previewDREBootstrap, updateAdminUserStatus, updateDRE, type DREBootstrapPreview } from "./shared/api";
 import { AdminToast, type AdminToastData } from "./shared/AdminToast";
 import { BulkDreBootstrapModal } from "./shared/BulkDreBootstrapModal";
 import { DeleteConfirmationModal } from "./shared/DeleteConfirmationModal";
@@ -85,10 +85,8 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
   const [bulkPreview, setBulkPreview] = useState<DREBootstrapPreview | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [deleteUserTarget, setDeleteUserTarget] = useState<AdminUserItem | null>(null);
-  const [deleteDreTarget, setDeleteDreTarget] = useState<DREItem | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
-  const [deleteDependencies, setDeleteDependencies] = useState<{ schools?: number; users?: number; custom_profiles?: number; census?: number } | null>(null);
 
   const [togglingDreId, setTogglingDreId] = useState<number | null>(null);
   const [togglingUserId, setTogglingUserId] = useState<number | null>(null);
@@ -251,24 +249,6 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
       showToast(`Perfil “${deleteUserTarget.username}” excluído.`); setDeleteUserTarget(null); onDataChanged?.();
     } catch (requestError: unknown) { setDeleteError((requestError as Error).message || "Erro ao excluir perfil."); }
     finally { setDeleteLoading(false); }
-  }
-
-  async function confirmDeleteDre() {
-    if (!deleteDreTarget || deleteLoading) return;
-    setDeleteLoading(true); setDeleteError(""); setDeleteDependencies(null);
-    try {
-      await deleteDRE(token, deleteDreTarget.id);
-      setDres((current) => current.filter((item) => item.id !== deleteDreTarget.id));
-      showToast(`DRE “${deleteDreTarget.nome}” excluída.`); setDeleteDreTarget(null); onDataChanged?.();
-    } catch (requestError: unknown) {
-      if (requestError instanceof ApiRequestError && requestError.payload.code === "DRE_HAS_DEPENDENCIES") {
-        setDeleteDependencies(requestError.payload.dependencies as { schools?: number; users?: number; custom_profiles?: number; census?: number });
-      } else setDeleteError((requestError as Error).message || "Erro ao excluir DRE.");
-    } finally { setDeleteLoading(false); }
-  }
-
-  function requestDeleteDre(dre: DREItem, event: React.MouseEvent) {
-    event.stopPropagation(); setDeleteError(""); setDeleteDependencies(null); setDeleteDreTarget(dre);
   }
 
   function openNewDre() {
@@ -546,7 +526,7 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
                         <td className="text-right">
                           <div className="inline-flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
                             {canCreateUsers && <button type="button" onClick={(event) => openNewUser(dre.id, event)} disabled={!dre.ativa} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35" title={dre.ativa ? "Adicionar conta" : "DRE inativa"}><UserPlus size={14} /></button>}
-                            {canManageDres && <button type="button" onClick={(event) => openEditDre(dre, event)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50" title="Editar DRE"><Pencil size={14} /></button>}{profile.role === "admin" && <button type="button" onClick={(event) => requestDeleteDre(dre, event)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-600 hover:bg-rose-50" title="Excluir DRE"><Trash2 size={14} /></button>}
+                            {canManageDres && <button type="button" onClick={(event) => openEditDre(dre, event)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50" title="Editar DRE"><Pencil size={14} /></button>}
                           </div>
                         </td>
                       </tr>
@@ -642,8 +622,7 @@ export function AbaGestaoDres({ token, profile, onUnauth, onDataChanged }: AbaGe
       <ResetPasswordModal isOpen={Boolean(userToResetPass)} onClose={() => setUserToResetPass(null)} onSuccess={handleResetPasswordSuccess} token={token} user={userToResetPass} />
       {credentialsModal && <CredentialsSuccessModal isOpen onClose={() => setCredentialsModal(null)} title={credentialsModal.title} subtitle={credentialsModal.subtitle} username={credentialsModal.username} email={credentialsModal.email} password={credentialsModal.password} dre={credentialsModal.dre} />}
       {bulkOpen && bulkPreview && <BulkDreBootstrapModal token={token} preview={bulkPreview} onClose={() => setBulkOpen(false)} onCompleted={(next) => { setBulkPreview(next); loadData(true); }} />}
-      {deleteUserTarget && <DeleteConfirmationModal kind="user" name={deleteUserTarget.username} loading={deleteLoading} error={deleteError} onClose={() => !deleteLoading && setDeleteUserTarget(null)} onConfirm={confirmDeleteUser} />}
-      {deleteDreTarget && <DeleteConfirmationModal kind="dre" name={deleteDreTarget.nome} loading={deleteLoading} error={deleteError} dependencies={deleteDependencies} onClose={() => !deleteLoading && setDeleteDreTarget(null)} onConfirm={confirmDeleteDre} />}
+      {deleteUserTarget && <DeleteConfirmationModal name={deleteUserTarget.username} loading={deleteLoading} error={deleteError} onClose={() => !deleteLoading && setDeleteUserTarget(null)} onConfirm={confirmDeleteUser} />}
     </div>
   );
 }

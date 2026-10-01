@@ -5,42 +5,50 @@
 import { API, TOKEN_KEY } from "./constants";
 import { sanitizeLegacyDrePayload } from "./legacyDreFilter";
 
-export const saveToken  = (t: string) => { try { sessionStorage.setItem(TOKEN_KEY, t); } catch {} };
+export const saveToken  = (t: string) => {
+  if (activeToken !== null && activeToken !== t) clearApiCache();
+  activeToken = t;
+  try { sessionStorage.setItem(TOKEN_KEY, t); } catch {}
+};
 export const loadToken  = (): string | null => { try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; } };
 export const clearToken = () => { try { sessionStorage.removeItem(TOKEN_KEY); } catch {} };
 export const sanitize   = (s: string) => s.replace(/[\x00-\x1F\x7F]/g, "");
 
 // Cache em memória para requisições GET — evita re-fetch ao trocar de aba.
-// O cache é NAMESPACED pelo token: dados de uma sessão/conta nunca são
-// reutilizados por outra identidade. Troca de token => namespace novo.
+// Há no máximo um namespace: uma rotação de token nunca deixa dados de uma
+// sessão anterior retidos na aba.
 interface CacheEntry { data: unknown; expiresAt: number }
-const apiCache = new Map<string, Map<string, CacheEntry>>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+let activeToken: string | null = null;
+let activeNamespace = new Map<string, CacheEntry>();
+let cacheGeneration = 0;
+const CACHE_TTL = 60 * 1000; // dados administrativos/analíticos: no máximo 1 min
 
 function namespaceFor(token: string): Map<string, CacheEntry> {
-  let ns = apiCache.get(token);
-  if (!ns) {
-    ns = new Map();
-    apiCache.set(token, ns);
+  if (activeToken !== token) {
+    activeToken = token;
+    activeNamespace = new Map();
   }
-  return ns;
+  return activeNamespace;
 }
 
-export function clearApiCache() { apiCache.clear(); }
+export function clearApiCache() {
+  activeNamespace.clear();
+  activeToken = null;
+  cacheGeneration += 1;
+}
 
 export function getCached<T>(path: string, token: string): T | null {
-  const ns = apiCache.get(token);
-  if (!ns) return null;
-  const entry = ns.get(path);
+  if (activeToken !== token) return null;
+  const entry = activeNamespace.get(path);
   if (entry && entry.expiresAt > Date.now()) return entry.data as T;
   return null;
 }
 
 export function allCached(paths: string[], token: string): boolean {
   const now = Date.now();
-  const ns = apiCache.get(token);
+  if (activeToken !== token) return false;
   return paths.every((p) => {
-    const e = ns?.get(p);
+    const e = activeNamespace.get(p);
     return e !== undefined && e.expiresAt > now;
   });
 }
@@ -72,10 +80,10 @@ export function setUnauthorizedHandler(h: (() => void) | null) { unauthorizedHan
 export async function apiFetch<T>(path: string, token: string, opts?: ApiFetchOptions): Promise<T> {
   const isGet = !opts?.method || opts.method.toUpperCase() === "GET";
   const useCache = isGet && !opts?.bypassCache;
+  const requestGeneration = cacheGeneration;
 
   if (useCache) {
-    const ns = apiCache.get(token);
-    const cached = ns?.get(path);
+    const cached = activeToken === token ? activeNamespace.get(path) : undefined;
     if (cached && cached.expiresAt > Date.now()) return cached.data as T;
   }
 
@@ -98,7 +106,11 @@ export async function apiFetch<T>(path: string, token: string, opts?: ApiFetchOp
   }
   const rawData = (await res.json()).data as T;
   const data = sanitizeLegacyDrePayload(path, rawData);
-  if (useCache) namespaceFor(token).set(path, { data, expiresAt: Date.now() + CACHE_TTL });
+  // Uma resposta de uma requisição iniciada antes da rotação não pode
+  // reativar o namespace antigo nem apagar o cache da sessão atual.
+  if (useCache && activeToken === token && cacheGeneration === requestGeneration) {
+    namespaceFor(token).set(path, { data, expiresAt: Date.now() + CACHE_TTL });
+  }
   return data;
 }
 

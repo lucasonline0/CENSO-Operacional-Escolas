@@ -112,12 +112,18 @@ export function UserFormModal({
       setError(preselectedDreId != null && !preselectedValid ? "A DRE selecionada não está disponível no seu escopo." : "");
     }
     wasOpen.current = isOpen;
-  });
+  }, [isOpen, preselectedDreId, activeDres, creatorDelegableDres, creatorPermissions]);
 
   // A live privilege reduction can only remove grants no longer delegable.
   useEffect(() => {
+    if (!isOpen) return;
     setPermissions((current) => current.filter((permission) => creatorPermissions.has(permission)));
-  }, [creatorPermissions]);
+    setSelectedDreIds((current) => current.filter((id) => creatorDelegableDres.has(id)));
+    if (!canGrantAllScope && preset === "global") {
+      setPreset("custom");
+      setDataScope("selected");
+    }
+  }, [canGrantAllScope, creatorDelegableDres, creatorPermissions, isOpen, preset]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

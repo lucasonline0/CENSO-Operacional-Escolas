@@ -546,6 +546,20 @@ function preferredTabForProfile(profile: AdminProfile): Tab {
   return "census";
 }
 
+function profileAuthorizationKey(profile: AdminProfile): string {
+  return JSON.stringify({
+    username: profile.username,
+    role: profile.role,
+    dre: profile.dre,
+    dre_id: profile.dre_id,
+    permissions: [...profile.permissions].sort(),
+    data_scope: {
+      type: profile.data_scope.type,
+      dre_ids: [...profile.data_scope.dre_ids].sort((a, b) => a - b),
+    },
+  });
+}
+
 function Dashboard({ token, onLogout, onTokenRefresh }: { token: string; onLogout: () => void; onTokenRefresh: (token: string) => void }) {
   const [profile, setProfile] = useState<AdminProfile | null>(null);
   const hasCapability = useCallback(
@@ -605,17 +619,12 @@ function Dashboard({ token, onLogout, onTokenRefresh }: { token: string; onLogou
     try {
       const fresh = await fetchAdminMeFresh(token);
       const prev = profileRef.current;
-      const identityChanged =
-        prev !== null &&
-        (
-          prev.username !== fresh.username ||
-          prev.role !== fresh.role ||
-          prev.dre !== fresh.dre ||
-          prev.dre_id !== fresh.dre_id ||
-          JSON.stringify(prev.permissions) !== JSON.stringify(fresh.permissions) ||
-          JSON.stringify(prev.data_scope) !== JSON.stringify(fresh.data_scope)
-        );
+      const identityChanged = prev !== null && profileAuthorizationKey(prev) !== profileAuthorizationKey(fresh);
       if (identityChanged) {
+        // Permissões e território mudam a resposta autorizada de todos os
+        // endpoints administrativos; nenhum dado anterior pode sobreviver à
+        // atualização do perfil.
+        clearApiCache();
         setFilters({});
         setFiltrosOpcoes(null);
         setCensusPage(null);

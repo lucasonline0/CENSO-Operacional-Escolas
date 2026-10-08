@@ -109,7 +109,7 @@ func createRuntimeDREUser(t *testing.T, m models.Models, dreName, username, pass
 	if err != nil {
 		t.Fatalf("create DRE: %v", err)
 	}
-	user, err := m.AdminUsers.CreateForDREID(ctx, username, password, RoleDRE, dre.ID)
+	user, err := m.AdminUsers.CreateForDREID(ctx, username, username+"@example.test", password, RoleDRE, dre.ID)
 	if err != nil {
 		t.Fatalf("create DRE user: %v", err)
 	}

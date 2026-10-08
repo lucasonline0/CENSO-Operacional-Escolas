@@ -53,6 +53,69 @@ const FAIXA_COBERTURA_COLORS: Record<string, string> = {
 const CARACT_ESCOLAS_SORT_KEYS = ["escola", "dre", "municipio", "zona", "total_alunos", "porte"] as const;
 type CaractEscolasSortKey = (typeof CARACT_ESCOLAS_SORT_KEYS)[number];
 
+type ArrayDisplayObject = { label?: unknown; nome?: unknown; name?: unknown; value?: unknown };
+
+/**
+ * Os campos multivalorados da tabela ainda chegam do endpoint legado como
+ * TEXT contendo JSON (ex.: `["Manhã","Tarde"]`). A API também pode enviar
+ * arrays diretamente durante a migração do contrato. Normalizamos os dois
+ * formatos somente para apresentação e nunca usamos String(object), que
+ * produziria `[object Object]`.
+ */
+function getArrayDisplayItems(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => {
+      if (typeof item === "string" || typeof item === "number") {
+        const text = String(item).trim();
+        return text ? [text] : [];
+      }
+      if (item && typeof item === "object") {
+        const candidate = item as ArrayDisplayObject;
+        const presentationValue = candidate.label ?? candidate.nome ?? candidate.name ?? candidate.value;
+        return typeof presentationValue === "string" || typeof presentationValue === "number"
+          ? String(presentationValue).trim() ? [String(presentationValue).trim()] : []
+          : [];
+      }
+      return [];
+    });
+  }
+
+  if (typeof value !== "string") return [];
+  const text = value.trim();
+  if (!text) return [];
+
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (parsed !== value) return getArrayDisplayItems(parsed);
+  } catch {
+    // Também aceitamos o formato textual antigo quando não for JSON válido.
+    // O valor inteiro continua sendo preservado como um único item.
+  }
+
+  return [text];
+}
+
+function ArrayCell({ value }: { value: unknown }) {
+  const items = getArrayDisplayItems(value);
+
+  if (items.length === 0) {
+    return <span className="text-slate-400" title="Nenhum valor informado">Não informado</span>;
+  }
+
+  return (
+    <div className="flex min-w-[150px] max-w-[260px] flex-wrap gap-1" aria-label={items.join(", ")}>
+      {items.map((item, index) => (
+        <span
+          key={`${item}-${index}`}
+          className="max-w-full whitespace-normal break-words rounded-md border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-[11px] leading-4 text-blue-800"
+        >
+          {item}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 const CARACT_ESCOLAS_COLUMNS: DataTableColumn<CaracterizacaoEscolaRow>[] = [
   { key: "nome_escola",  label: "Escola",       sortable: true },
   { key: "codigo_inep",  label: "INEP"                         },
@@ -61,8 +124,9 @@ const CARACT_ESCOLAS_COLUMNS: DataTableColumn<CaracterizacaoEscolaRow>[] = [
   { key: "zona",         label: "Zona",         sortable: true },
   { key: "porte",        label: "Porte",        sortable: true },
   { key: "total_alunos", label: "Total Alunos", sortable: true, align: "right" },
-  { key: "turnos_texto", label: "Turnos"                        },
-  { key: "etapas_texto", label: "Etapas"                        },
+  { key: "turnos_texto", label: "Turnos", render: (row) => <ArrayCell value={row.turnos_texto} /> },
+  { key: "etapas_texto", label: "Etapas", render: (row) => <ArrayCell value={row.etapas_texto} /> },
+  { key: "modalidades_texto", label: "Modalidades", render: (row) => <ArrayCell value={row.modalidades_texto} /> },
   {
     key: "has_censo",
     label: "Censo",

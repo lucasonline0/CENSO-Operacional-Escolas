@@ -81,8 +81,7 @@ func TestDRELifecycleCanonicalUserProvisioningByID(t *testing.T) {
 		}
 	})
 
-
-	t.Run("dre_id provisioning accepts omitted email and stores NULL", func(t *testing.T) {
+	t.Run("dre_id provisioning rejects omitted email without creating account", func(t *testing.T) {
 		dre, err := m.DREs.Create(ctx, models.DRE{Nome: "DRE OPTIONAL EMAIL", Ativa: true})
 		if err != nil {
 			t.Fatalf("create DRE: %v", err)
@@ -91,29 +90,17 @@ func TestDRELifecycleCanonicalUserProvisioningByID(t *testing.T) {
 		for _, username := range []string{"provision.no.email.one", "provision.no.email.two"} {
 			body := fmt.Sprintf(`{"username":%q,"password":"password1234","role":"dre","dre_id":%d}`, username, dre.ID)
 			rr := callAdminCreateUser(t, app, body)
-			if rr.Code != http.StatusCreated {
-				t.Fatalf("no-email provisioning username=%s status=%d want=201 body=%s", username, rr.Code, rr.Body.String())
-			}
-			resp := decodeAdminCreateUserResponse(t, rr)
-			if resp.Data.Email != "" || resp.Data.DREID != dre.ID || !resp.Data.MustChangePassword {
-				t.Fatalf("unexpected no-email response: %+v", resp.Data)
+			if rr.Code != http.StatusBadRequest || !strings.Contains(strings.ToLower(rr.Body.String()), "obrigatório") {
+				t.Fatalf("no-email provisioning username=%s status=%d want=400 body=%s", username, rr.Code, rr.Body.String())
 			}
 		}
 
-		var nullEmails int
-		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM admin_users WHERE username LIKE 'provision.no.email.%' AND email IS NULL`).Scan(&nullEmails); err != nil {
-			t.Fatalf("count NULL emails: %v", err)
+		var created int
+		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM admin_users WHERE username LIKE 'provision.no.email.%'`).Scan(&created); err != nil {
+			t.Fatalf("count rejected accounts: %v", err)
 		}
-		if nullEmails != 2 {
-			t.Fatalf("NULL email users=%d want=2", nullEmails)
-		}
-
-		user, err := m.AdminUsers.GetActiveByUsername(ctx, "provision.no.email.one")
-		if err != nil {
-			t.Fatalf("username lookup without email failed: %v", err)
-		}
-		if user.Email != "" || user.DREID != dre.ID {
-			t.Fatalf("username lookup returned unexpected identity: %+v", user)
+		if created != 0 {
+			t.Fatalf("rejected accounts=%d want=0", created)
 		}
 	})
 	t.Run("email uniqueness is case insensitive", func(t *testing.T) {
@@ -136,7 +123,7 @@ func TestDRELifecycleCanonicalUserProvisioningByID(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create DRE: %v", err)
 		}
-		if _, err := m.AdminUsers.CreateForDREID(ctx, "legacy.identity@example.test", "password1234", RoleDRE, dre.ID); err != nil {
+		if _, err := m.AdminUsers.CreateForDREID(ctx, "legacy.identity@example.test", "legacy.identity@example.test", "password1234", RoleDRE, dre.ID); err != nil {
 			t.Fatalf("create legacy identity: %v", err)
 		}
 		body := fmt.Sprintf(`{"username":"new.identity","email":"LEGACY.IDENTITY@example.test","password":"password1234","role":"dre","dre_id":%d}`, dre.ID)
@@ -284,7 +271,7 @@ func TestDRELifecycleCanonicalUserProvisioningModel(t *testing.T) {
 		t.Fatalf("create DRE: %v", err)
 	}
 
-	user, err := m.AdminUsers.CreateForDREID(ctx, "model.by.id", "password1234", RoleDRE, dre.ID)
+	user, err := m.AdminUsers.CreateForDREID(ctx, "model.by.id", "model.by.id@example.test", "password1234", RoleDRE, dre.ID)
 	if err != nil {
 		t.Fatalf("CreateForDREID valid: %v", err)
 	}
@@ -297,7 +284,7 @@ func TestDRELifecycleCanonicalUserProvisioningModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rename DRE: %v", err)
 	}
-	postRename, err := m.AdminUsers.CreateForDREID(ctx, "model.after.rename", "password1234", RoleDRE, dre.ID)
+	postRename, err := m.AdminUsers.CreateForDREID(ctx, "model.after.rename", "model.after.rename@example.test", "password1234", RoleDRE, dre.ID)
 	if err != nil {
 		t.Fatalf("CreateForDREID after rename: %v", err)
 	}
@@ -308,10 +295,10 @@ func TestDRELifecycleCanonicalUserProvisioningModel(t *testing.T) {
 	if err := m.DREs.SetActive(ctx, dre.ID, false); err != nil {
 		t.Fatalf("deactivate DRE: %v", err)
 	}
-	if _, err := m.AdminUsers.CreateForDREID(ctx, "model.inactive", "password1234", RoleDRE, dre.ID); !errors.Is(err, models.ErrDREInactive) {
+	if _, err := m.AdminUsers.CreateForDREID(ctx, "model.inactive", "model.inactive@example.test", "password1234", RoleDRE, dre.ID); !errors.Is(err, models.ErrDREInactive) {
 		t.Fatalf("inactive DRE error=%v want ErrDREInactive", err)
 	}
-	if _, err := m.AdminUsers.CreateForDREID(ctx, "model.missing", "password1234", RoleDRE, 99999999); !errors.Is(err, models.ErrInvalidDRE) {
+	if _, err := m.AdminUsers.CreateForDREID(ctx, "model.missing", "model.missing@example.test", "password1234", RoleDRE, 99999999); !errors.Is(err, models.ErrInvalidDRE) {
 		t.Fatalf("missing DRE error=%v want ErrInvalidDRE", err)
 	}
 }

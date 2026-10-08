@@ -58,7 +58,7 @@ func TestBulkDREBootstrapPostgreSQLLifecycleAndIdempotency(t *testing.T) {
 	if byID[readyID].Status != "pending" {
 		t.Fatalf("ready=%+v", byID[readyID])
 	}
-	if byID[missingID].Status != "pending" || !strings.Contains(byID[missingID].Message, "sem e-mail") {
+	if byID[missingID].Status != "missing_email" || !strings.Contains(byID[missingID].Message, "obrigatório") {
 		t.Fatalf("missing=%+v", byID[missingID])
 	}
 	if byID[ignoredID].Status != "ignored_e2e" {
@@ -151,7 +151,7 @@ func TestBulkDREBootstrapPostgreSQLLifecycleAndIdempotency(t *testing.T) {
 	}
 }
 
-func TestBulkDREBootstrapWithoutEmail(t *testing.T) {
+func TestBulkDREBootstrapWithoutEmailIsBlocked(t *testing.T) {
 	db := openDREIntegrationDB(t)
 	resetDREIntegrationData(t, db)
 	m := models.NewModels(db)
@@ -168,47 +168,22 @@ func TestBulkDREBootstrapWithoutEmail(t *testing.T) {
 	for _, item := range preview.Items {
 		if item.DREID == noEmailID {
 			found = true
-			if item.Status != "pending" {
-				t.Fatalf("preview status=%q, want pending", item.Status)
+			if item.Status != "missing_email" {
+				t.Fatalf("preview status=%q, want missing_email", item.Status)
+			}
+			if !strings.Contains(item.Message, "obrigatório") {
+				t.Fatalf("preview message=%q, want required-email guidance", item.Message)
 			}
 		}
 	}
 	if !found {
 		t.Fatal("DRE without email missing from preview")
 	}
-	if preview.Errors != 0 {
-		t.Fatalf("preview errors=%d, want 0", preview.Errors)
+	if preview.Errors != 1 {
+		t.Fatalf("preview errors=%d, want 1", preview.Errors)
 	}
-	credentials, err := bootstrapWithoutOverride(ctx, m)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(credentials) != 1 {
-		t.Fatalf("credentials=%d, want 1", len(credentials))
-	}
-	if credentials[0].Email != "" {
-		t.Fatalf("credential email=%q, want empty", credentials[0].Email)
-	}
-	var storedEmail sql.NullString
-	if err = db.QueryRow(`SELECT email FROM admin_users WHERE dre_id=$1`, noEmailID).Scan(&storedEmail); err != nil {
-		t.Fatal(err)
-	}
-	if storedEmail.Valid {
-		t.Fatalf("admin_users.email=%q, want NULL", storedEmail.String)
-	}
-	var must bool
-	if err = db.QueryRow(`SELECT must_change_password FROM admin_users WHERE dre_id=$1`, noEmailID).Scan(&must); err != nil {
-		t.Fatal(err)
-	}
-	if !must {
-		t.Fatal("must_change_password=false, want true")
-	}
-	_, second, err := m.AdminUsers.BootstrapDREAccounts(ctx, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(second) != 0 {
-		t.Fatalf("second run created %d, want 0", len(second))
+	if _, _, err = m.AdminUsers.BootstrapDREAccounts(ctx, nil); err == nil {
+		t.Fatal("bulk bootstrap without email unexpectedly succeeded")
 	}
 }
 
@@ -321,22 +296,22 @@ func TestBulkDREBootstrapEmptyOverride(t *testing.T) {
 	if len(credentials) != 1 {
 		t.Fatalf("credentials=%d, want 1", len(credentials))
 	}
-	if credentials[0].Email != "" {
-		t.Fatalf("credential email=%q, want empty", credentials[0].Email)
+	if credentials[0].Email != "antigo@example.test" {
+		t.Fatalf("credential email=%q, want existing email", credentials[0].Email)
 	}
 	var dresEmail sql.NullString
 	if err = db.QueryRow(`SELECT email FROM dres WHERE id=$1`, dreID).Scan(&dresEmail); err != nil {
 		t.Fatal(err)
 	}
-	if dresEmail.Valid {
-		t.Fatalf("dres.email=%q, want NULL", dresEmail.String)
+	if !dresEmail.Valid || dresEmail.String != "antigo@example.test" {
+		t.Fatalf("dres.email=%v, want existing email", dresEmail)
 	}
 	var userEmail sql.NullString
 	if err = db.QueryRow(`SELECT email FROM admin_users WHERE dre_id=$1`, dreID).Scan(&userEmail); err != nil {
 		t.Fatal(err)
 	}
-	if userEmail.Valid {
-		t.Fatalf("admin_users.email=%q, want NULL", userEmail.String)
+	if !userEmail.Valid || userEmail.String != "antigo@example.test" {
+		t.Fatalf("admin_users.email=%v, want existing email", userEmail)
 	}
 }
 

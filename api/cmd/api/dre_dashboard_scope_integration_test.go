@@ -54,7 +54,7 @@ func TestRuntimeDREDashboardScopeEndToEnd(t *testing.T) {
 		t.Fatalf("resolve school B: %v", err)
 	}
 
-	if _, err := m.AdminUsers.CreateForDREID(context.Background(), "dashboard.alpha", "dashboard-password", RoleDRE, ids.dreAID); err != nil {
+	if _, err := m.AdminUsers.CreateForDREID(context.Background(), "dashboard.alpha", "dashboard.alpha@example.test", "dashboard-password", RoleDRE, ids.dreAID); err != nil {
 		t.Fatalf("create DRE dashboard user: %v", err)
 	}
 

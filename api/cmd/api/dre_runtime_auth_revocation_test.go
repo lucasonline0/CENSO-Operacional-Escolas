@@ -113,7 +113,18 @@ func createRuntimeDREUser(t *testing.T, m models.Models, dreName, username, pass
 	if err != nil {
 		t.Fatalf("create DRE user: %v", err)
 	}
+	markRuntimeUserReady(t, m, user.ID)
 	return dre, user
+}
+
+// Runtime authorization tests exercise established sessions. New accounts
+// intentionally start in first-access state, so make this fixture represent a
+// completed first access without changing the production provisioning contract.
+func markRuntimeUserReady(t *testing.T, m models.Models, userID int) {
+	t.Helper()
+	if _, err := m.AdminUsers.DB.Exec(`UPDATE admin_users SET must_change_password = false WHERE id = $1`, userID); err != nil {
+		t.Fatalf("complete runtime user first access: %v", err)
+	}
 }
 
 func TestRuntimeDRETokenStableIdentityAndMeTracksCurrentDatabaseState(t *testing.T) {

@@ -235,14 +235,14 @@ func TestBulkDREBootstrapUsernameConflictWithoutEmail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	conflicts := 0
+	missingEmail := 0
 	for _, item := range preview.Items {
-		if item.Status == "error" && item.Message == "Username em conflito" {
-			conflicts++
+		if item.Status == "missing_email" && item.Message == "E-mail obrigatório para criar o perfil" {
+			missingEmail++
 		}
 	}
-	if conflicts != 2 {
-		t.Fatalf("username conflicts=%d, want 2; items=%+v", conflicts, preview.Items)
+	if missingEmail != 2 {
+		t.Fatalf("missing-email items=%d, want 2; items=%+v", missingEmail, preview.Items)
 	}
 	if preview.Errors != 2 {
 		t.Fatalf("preview errors=%d, want 2", preview.Errors)

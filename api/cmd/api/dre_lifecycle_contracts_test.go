@@ -131,10 +131,11 @@ func TestAdminMeReflectsRenameAndStatus(t *testing.T) {
 		t.Fatalf("create DRE: %v", err)
 	}
 
-	_, err = m.AdminUsers.CreateForDREID(ctx, "me.user", "me.user@example.test", "password1234", "dre", dre.ID)
+	user, err := m.AdminUsers.CreateForDREID(ctx, "me.user", "me.user@example.test", "password1234", "dre", dre.ID)
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
+	markRuntimeUserReady(t, m, user.ID)
 
 	dre.Nome = "DRE RENAMED"
 	if _, err := m.DREs.Update(ctx, *dre); err != nil {

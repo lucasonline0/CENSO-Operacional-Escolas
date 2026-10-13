@@ -42,13 +42,13 @@ func main() {
 	case "create":
 		createCmd := flag.NewFlagSet("create", flag.ExitOnError)
 		username := createCmd.String("username", "", "Username do usuário")
-		email := createCmd.String("email", "", "E-mail do usuário (opcional)")
+		email := createCmd.String("email", "", "E-mail obrigatório do usuário")
 		password := createCmd.String("password", "", "Senha temporária (opcional, será solicitada se omitida)")
 		dre := createCmd.String("dre", "", "DRE vinculada ao usuário")
 		_ = createCmd.Parse(os.Args[2:])
 
 		if err := validateCreateArgs(*username, *email, *dre); err != nil {
-			fmt.Println("Uso: admin-user create -username <username> -dre <DRE> [-email <email>] [-password <senha_temporaria>]")
+			fmt.Println("Uso: admin-user create -username <username> -email <email> -dre <DRE> [-password <senha_temporaria>]")
 			fmt.Printf("Erro: %v\n", err)
 			os.Exit(1)
 		}
@@ -67,12 +67,7 @@ func main() {
 			log.Fatalf("Erro ao criar usuário: %v", err)
 		}
 
-		emailPart := ""
-		if user.Email != "" {
-			emailPart = "<" + user.Email + ">"
-		} else {
-			emailPart = "(sem e-mail)"
-		}
+		emailPart := "<" + user.Email + ">"
 		fmt.Printf("Usuário '%s' %s (role: %s, DRE: %s) criado com credencial temporária. Primeiro acesso obrigatório. ID: %d\n", user.Username, emailPart, user.Role, user.DRE, user.ID)
 
 	case "update-password":
@@ -168,7 +163,7 @@ func main() {
 func printUsage() {
 	fmt.Println("Ferramenta de Gerenciamento de Usuários Administrativos DRE")
 	fmt.Println("Comandos disponíveis:")
-	fmt.Println("  create -username <name> -dre <DRE> [-email <email>] [-password <pass>]  Cria usuário com credencial temporária")
+	fmt.Println("  create -username <name> -email <email> -dre <DRE> [-password <pass>]  Cria usuário com credencial temporária")
 	fmt.Println("  update-password -username <name> [-password <pass>]                    Gera credencial temporária e exige nova senha")
 	fmt.Println("  deactivate -username <name>                             Desativa uma conta de usuário")
 	fmt.Println("  activate -username <name>                               Ativa uma conta de usuário")
@@ -181,6 +176,12 @@ func validateCreateArgs(username, email, dre string) error {
 	}
 	if strings.TrimSpace(dre) == "" {
 		return fmt.Errorf("dre é obrigatório")
+	}
+	if strings.TrimSpace(email) == "" {
+		return fmt.Errorf("e-mail é obrigatório")
+	}
+	if _, err := models.NormalizeAdminEmail(email); err != nil {
+		return err
 	}
 	return nil
 }

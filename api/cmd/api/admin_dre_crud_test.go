@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -489,7 +490,6 @@ func TestAdminCreateUserValidation(t *testing.T) {
 		}
 	})
 
-
 	t.Run("invalid email", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users", strings.NewReader(`{
 			"username": "user.invalid.email",
@@ -507,6 +507,32 @@ func TestAdminCreateUserValidation(t *testing.T) {
 			t.Fatalf("invalid email status=%d body=%s", rr.Code, rr.Body.String())
 		}
 	})
+
+	for _, tc := range []struct {
+		name  string
+		email string
+	}{
+		{name: "missing email", email: ""},
+		{name: "whitespace email", email: "   "},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := fmt.Sprintf(`{
+				"username": "user.%s",
+				"email": %q,
+				"password": "password1234",
+				"role": "dre",
+				"dre": "DRE BELEM"
+			}`, strings.ReplaceAll(tc.name, " ", "."), tc.email)
+			req := httptest.NewRequest(http.MethodPost, "/v1/admin/users", strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req = req.WithContext(context.WithValue(req.Context(), contextKeyAdminScope, AdminAccessScope{Role: RoleAdmin}))
+			rr := httptest.NewRecorder()
+			app.AdminCreateUser(rr, req)
+			if rr.Code != http.StatusBadRequest || !strings.Contains(strings.ToLower(rr.Body.String()), "obrigatório") {
+				t.Fatalf("missing email status=%d body=%s", rr.Code, rr.Body.String())
+			}
+		})
+	}
 
 	t.Run("empty username", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users", strings.NewReader(`{

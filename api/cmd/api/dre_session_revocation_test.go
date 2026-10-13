@@ -108,10 +108,11 @@ func TestDREDeactivationViaUpdateRevokesOnlyLinkedUsersAndNeverResurrects(t *tes
 	passwordB := "dre-update-password-b"
 
 	dreA, userA1 := createRuntimeDREUser(t, m, "DRE UPDATE A", "update.a1", passwordA)
-	userA2, err := m.AdminUsers.CreateForDREID(ctx, "update.a2", "dre-update-password-a2", RoleDRE, dreA.ID)
+	userA2, err := m.AdminUsers.CreateForDREID(ctx, "update.a2", "update.a2@example.test", "dre-update-password-a2", RoleDRE, dreA.ID)
 	if err != nil {
 		t.Fatalf("create second DRE A user: %v", err)
 	}
+	markRuntimeUserReady(t, m, userA2.ID)
 	_, userB := createRuntimeDREUser(t, m, "DRE UPDATE B", "update.b", passwordB)
 
 	loginA, tokenA := runtimeLoginRequest(t, handler, userA1.Username, passwordA, "10.90.2.1:8101")

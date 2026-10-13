@@ -19,6 +19,7 @@ var (
 	ErrUsernameExists         = errors.New("username já está em uso")
 	ErrEmailExists            = errors.New("e-mail já está em uso")
 	ErrIdentityCollision      = errors.New("e-mail e usuário conflitam com uma conta existente")
+	ErrEmailRequired          = errors.New("e-mail é obrigatório para novos perfis")
 	ErrInvalidEmail           = errors.New("e-mail inválido")
 	ErrInvalidRole            = errors.New("role inválida")
 	ErrDRERequiredForDRE      = errors.New("DRE é obrigatória para a role dre")
@@ -173,6 +174,9 @@ func (m *AdminUserModel) ProvisionCustom(ctx context.Context, username, email, t
 	email, err := NormalizeAdminEmail(email)
 	if err != nil {
 		return nil, err
+	}
+	if email == "" {
+		return nil, ErrEmailRequired
 	}
 	dataScope = strings.ToLower(strings.TrimSpace(dataScope))
 	if dataScope != "all" && dataScope != "selected" {
@@ -333,7 +337,7 @@ func NormalizeAdminEmail(raw string) (string, error) {
 	}
 	at := strings.LastIndex(email, "@")
 	domain := email[at+1:]
-	if !strings.Contains(domain, ".") || strings.HasPrefix(domain, ".") || strings.HasSuffix(domain, ".") {
+	if domain == "" || strings.HasPrefix(domain, ".") || strings.HasSuffix(domain, ".") {
 		return "", ErrInvalidEmail
 	}
 	return email, nil
@@ -346,53 +350,7 @@ func adminEmailDBValue(email string) any {
 	return email
 }
 
-func (m *AdminUserModel) createForCanonicalDRE(ctx context.Context, username, plainPassword, role string, dre *canonicalDRE) (*AdminUser, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(plainPassword), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao gerar hash da senha: %w", err)
-	}
-
-	hasAuthVer, err := hasColumn(ctx, m.DB, "admin_users", "auth_version")
-	if err != nil {
-		return nil, err
-	}
-
-	var (
-		query string
-		u     AdminUser
-	)
-	u.PasswordHash = string(hash)
-
-	if hasAuthVer {
-		query = `
-			INSERT INTO admin_users (username, password_hash, role, dre_id, active, auth_version, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, true, 1, NOW(), NOW())
-			RETURNING id, username, role, COALESCE(dre, ''), dre_id, active, COALESCE(auth_version, 1), created_at, updated_at`
-		err = m.DB.QueryRowContext(ctx, query, username, u.PasswordHash, role, dre.ID).Scan(
-			&u.ID, &u.Username, &u.Role, &u.DRE, &u.DREID, &u.Active, &u.AuthVersion, &u.CreatedAt, &u.UpdatedAt,
-		)
-	} else {
-		query = `
-			INSERT INTO admin_users (username, password_hash, role, dre_id, active, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, true, NOW(), NOW())
-			RETURNING id, username, role, COALESCE(dre, ''), dre_id, active, created_at, updated_at`
-		u.AuthVersion = 1
-		err = m.DB.QueryRowContext(ctx, query, username, u.PasswordHash, role, dre.ID).Scan(
-			&u.ID, &u.Username, &u.Role, &u.DRE, &u.DREID, &u.Active, &u.CreatedAt, &u.UpdatedAt,
-		)
-	}
-
-	if err != nil {
-		msg := strings.ToLower(err.Error())
-		if strings.Contains(msg, "unique") || strings.Contains(msg, "duplicate") {
-			return nil, ErrUsernameExists
-		}
-		return nil, err
-	}
-	return &u, nil
-}
-
-// ProvisionForDREID cria uma nova conta com e-mail opcional e credencial
+// ProvisionForDREID cria uma nova conta com e-mail obrigatório e credencial
 // temporária. O hash é a única representação persistida da senha e a conta não
 // pode receber sessão normal enquanto MustChangePassword permanecer verdadeiro.
 func (m *AdminUserModel) ProvisionForDREID(ctx context.Context, username, email, temporaryPassword, role string, dreID int) (*AdminUser, error) {
@@ -403,6 +361,9 @@ func (m *AdminUserModel) ProvisionForDREID(ctx context.Context, username, email,
 	email, err = NormalizeAdminEmail(email)
 	if err != nil {
 		return nil, err
+	}
+	if email == "" {
+		return nil, ErrEmailRequired
 	}
 	if dreID <= 0 {
 		return nil, ErrInvalidDRE
@@ -609,9 +570,9 @@ func (m *AdminUserModel) ValidateDRE(ctx context.Context, dre string) (bool, err
 	return true, nil
 }
 
-// Create preserva o contrato legado que recebe o nome da DRE, mas o nome e
-// apenas resolvido na entidade mestre. O INSERT persiste o vinculo por dre_id.
-func (m *AdminUserModel) Create(ctx context.Context, username, plainPassword, role, dre string) (*AdminUser, error) {
+// Create preserva o contrato legado que recebe o nome da DRE, mas exige e-mail
+// para que nenhum novo perfil seja criado sem destinatário de acesso.
+func (m *AdminUserModel) Create(ctx context.Context, username, email, plainPassword, role, dre string) (*AdminUser, error) {
 	username, role, err := normalizeAdminUserCreateInput(username, plainPassword, role)
 	if err != nil {
 		return nil, err
@@ -624,12 +585,12 @@ func (m *AdminUserModel) Create(ctx context.Context, username, plainPassword, ro
 	if err != nil {
 		return nil, err
 	}
-	return m.createForCanonicalDRE(ctx, username, plainPassword, role, canonical)
+	return m.ProvisionForDREID(ctx, username, email, plainPassword, role, canonical.ID)
 }
 
-// CreateForDREID e o caminho canonico para novos callers/handlers. Ele evita
-// qualquer dependencia de nome textual para estabelecer o relacionamento.
-func (m *AdminUserModel) CreateForDREID(ctx context.Context, username, plainPassword, role string, dreID int) (*AdminUser, error) {
+// CreateForDREID é o caminho canônico para callers que ainda usam o nome
+// histórico do método; o e-mail é obrigatório como em todo novo perfil.
+func (m *AdminUserModel) CreateForDREID(ctx context.Context, username, email, plainPassword, role string, dreID int) (*AdminUser, error) {
 	username, role, err := normalizeAdminUserCreateInput(username, plainPassword, role)
 	if err != nil {
 		return nil, err
@@ -638,7 +599,7 @@ func (m *AdminUserModel) CreateForDREID(ctx context.Context, username, plainPass
 	if err != nil {
 		return nil, err
 	}
-	return m.createForCanonicalDRE(ctx, username, plainPassword, role, canonical)
+	return m.ProvisionForDREID(ctx, username, email, plainPassword, role, canonical.ID)
 }
 
 // GetByID localiza um usuario pelo seu ID numerico.

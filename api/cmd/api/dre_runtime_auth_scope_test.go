@@ -159,9 +159,11 @@ func TestRuntimeBOLACrossDRECensusBlocked(t *testing.T) {
 	handler := app.routes()
 
 	ids := seedScopeCensusFixture(t, db, m)
-	if _, err := m.AdminUsers.CreateForDREID(context.Background(), "scope.alpha", "scope-password", RoleDRE, ids.dreAID); err != nil {
+	user, err := m.AdminUsers.CreateForDREID(context.Background(), "scope.alpha", "scope.alpha@example.test", "scope-password", RoleDRE, ids.dreAID)
+	if err != nil {
 		t.Fatalf("create DRE Alpha user: %v", err)
 	}
+	markRuntimeUserReady(t, m, user.ID)
 
 	_, token := runtimeLoginRequest(t, handler, "scope.alpha", "scope-password", "10.70.2.1:6002")
 	if token == "" {

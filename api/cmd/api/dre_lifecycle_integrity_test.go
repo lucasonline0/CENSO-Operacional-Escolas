@@ -109,7 +109,7 @@ func TestDRELifecycleCreateStatusAndCanonicalUser(t *testing.T) {
 	if inactive.Ativa {
 		t.Fatalf("DRE created with ativa=false was persisted active")
 	}
-	if _, err := m.AdminUsers.Create(ctx, "inactive.user", "password1234", "dre", inactive.Nome); !errors.Is(err, models.ErrDREInactive) {
+	if _, err := m.AdminUsers.Create(ctx, "inactive.user", "inactive.user@example.test", "password1234", "dre", inactive.Nome); !errors.Is(err, models.ErrDREInactive) {
 		t.Fatalf("inactive DRE accepted new user: %v", err)
 	}
 
@@ -117,7 +117,7 @@ func TestDRELifecycleCreateStatusAndCanonicalUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create active DRE: %v", err)
 	}
-	user, err := m.AdminUsers.Create(ctx, "active.user", "password1234", "dre", "  dre ativa  ")
+	user, err := m.AdminUsers.Create(ctx, "active.user", "active.user@example.test", "password1234", "dre", "  dre ativa  ")
 	if err != nil {
 		t.Fatalf("create canonical DRE user: %v", err)
 	}
@@ -137,13 +137,13 @@ func TestDRELifecycleCreateStatusAndCanonicalUser(t *testing.T) {
 	if err := m.DREs.SetActive(ctx, active.ID, false); err != nil {
 		t.Fatalf("deactivate DRE: %v", err)
 	}
-	if _, err := m.AdminUsers.CreateForDREID(ctx, "blocked.by.id", "password1234", "dre", active.ID); !errors.Is(err, models.ErrDREInactive) {
+	if _, err := m.AdminUsers.CreateForDREID(ctx, "blocked.by.id", "blocked.by.id@example.test", "password1234", "dre", active.ID); !errors.Is(err, models.ErrDREInactive) {
 		t.Fatalf("inactive DRE accepted user by dre_id: %v", err)
 	}
 	if err := m.DREs.SetActive(ctx, active.ID, true); err != nil {
 		t.Fatalf("reactivate DRE: %v", err)
 	}
-	if _, err := m.AdminUsers.CreateForDREID(ctx, "reactivated.user", "password1234", "dre", active.ID); err != nil {
+	if _, err := m.AdminUsers.CreateForDREID(ctx, "reactivated.user", "reactivated.user@example.test", "password1234", "dre", active.ID); err != nil {
 		t.Fatalf("reactivated DRE did not accept user: %v", err)
 	}
 }
@@ -162,7 +162,7 @@ func TestDRELifecycleNeverFallsBackToSchools(t *testing.T) {
 	if valid {
 		t.Fatalf("schools text incorrectly validated a DRE absent from master table")
 	}
-	if _, err := m.AdminUsers.Create(ctx, "ghost.user", "password1234", "dre", "DRE FANTASMA"); !errors.Is(err, models.ErrInvalidDRE) {
+	if _, err := m.AdminUsers.Create(ctx, "ghost.user", "ghost.user@example.test", "password1234", "dre", "DRE FANTASMA"); !errors.Is(err, models.ErrInvalidDRE) {
 		t.Fatalf("master-absent DRE did not return ErrInvalidDRE: %v", err)
 	}
 }
@@ -187,7 +187,7 @@ func TestDRELifecycleRenamePreservesCanonicalRelationsAndRemap(t *testing.T) {
 	if _, _, err := m.Schools.AssignToDRE(ctx, dreA.ID, []int{schoolID}); err != nil {
 		t.Fatalf("assign school to DRE A: %v", err)
 	}
-	user, err := m.AdminUsers.CreateForDREID(ctx, "alpha.user", "password1234", "dre", dreA.ID)
+	user, err := m.AdminUsers.CreateForDREID(ctx, "alpha.user", "alpha.user@example.test", "password1234", "dre", dreA.ID)
 	if err != nil {
 		t.Fatalf("create DRE A user: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestDRELifecycleRenameRollsBackEveryRelatedWrite(t *testing.T) {
 	if _, _, err := m.Schools.AssignToDRE(ctx, dre.ID, []int{schoolID}); err != nil {
 		t.Fatalf("assign school: %v", err)
 	}
-	user, err := m.AdminUsers.CreateForDREID(ctx, "rollback.user", "password1234", "dre", dre.ID)
+	user, err := m.AdminUsers.CreateForDREID(ctx, "rollback.user", "rollback.user@example.test", "password1234", "dre", dre.ID)
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}

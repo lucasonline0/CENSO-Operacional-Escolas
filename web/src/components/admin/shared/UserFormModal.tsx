@@ -174,7 +174,8 @@ export function UserFormModal({
     const cleanPassword = password.trim();
 
     if (!cleanUsername) return setError("Informe o nome de usuário.");
-    if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return setError("Informe um e-mail válido.");
+    if (!cleanEmail) return setError("Informe um e-mail para criar o perfil.");
+    if (!/^[^\s@]+@[^\s@]+$/.test(cleanEmail)) return setError("Informe um e-mail válido.");
     if (cleanPassword.length < 12) return setError("A senha deve ter no mínimo 12 caracteres.");
     if (isRegionalAccount) {
       if (selectedDreIds.length !== 1) return setError("A conta DRE precisa estar vinculada a exatamente uma DRE.");
@@ -193,7 +194,7 @@ export function UserFormModal({
       if (isRegionalAccount) {
         created = await createAdminUser(token, {
           username: cleanUsername,
-          ...(cleanEmail ? { email: cleanEmail } : {}),
+          email: cleanEmail,
           password: cleanPassword,
           role: "dre",
           dre_id: selectedDreIds[0],
@@ -201,7 +202,7 @@ export function UserFormModal({
       } else {
         created = await createAdminUser(token, {
           username: cleanUsername,
-          ...(cleanEmail ? { email: cleanEmail } : {}),
+          email: cleanEmail,
           password: cleanPassword,
           role: "custom",
           permissions,
@@ -289,8 +290,9 @@ export function UserFormModal({
         )}
 
         <div>
-          <label htmlFor="admin-user-email" className={LABEL_CLASS}><Mail size={13} className="text-slate-400" />E-mail (opcional)</label>
-          <input id="admin-user-email" type="email" autoComplete="email" maxLength={254} className={INPUT_CLASS} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@exemplo.com" />
+          <label htmlFor="admin-user-email" className={LABEL_CLASS}><Mail size={13} className="text-slate-400" />E-mail <span className="text-rose-500">*</span></label>
+          <input id="admin-user-email" type="email" autoComplete="email" maxLength={254} required className={INPUT_CLASS} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@exemplo.com" aria-describedby="admin-user-email-help" />
+          <p id="admin-user-email-help" className="mt-1.5 text-xs text-slate-500">Obrigatório para enviar a comunicação de acesso.</p>
         </div>
 
         <div>
@@ -322,7 +324,7 @@ export function UserFormModal({
 
         <div className="flex items-center justify-end gap-2 border-t border-slate-200 pt-4">
           <button type="button" onClick={onClose} disabled={loading} className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancelar</button>
-          <button type="submit" disabled={loading || !username.trim() || !password.trim()} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white disabled:opacity-50" style={{ background: C.primary }}>{loading ? <><Loader2 size={15} className="animate-spin" />Criando…</> : "Criar conta"}</button>
+          <button type="submit" disabled={loading || !username.trim() || !email.trim() || !password.trim()} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold text-white disabled:opacity-50" style={{ background: C.primary }}>{loading ? <><Loader2 size={15} className="animate-spin" />Criando…</> : "Criar conta"}</button>
         </div>
       </form>
     </AdminModalShell>

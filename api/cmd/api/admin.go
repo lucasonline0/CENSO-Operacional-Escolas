@@ -985,10 +985,16 @@ func (app *application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		app.errorJSON(w, models.ErrInvalidRole, http.StatusBadRequest)
 		return
 	}
-	if _, err := models.NormalizeAdminEmail(req.Email); err != nil {
-		app.errorJSON(w, err, http.StatusBadRequest)
+	normalizedEmail, emailErr := models.NormalizeAdminEmail(req.Email)
+	if emailErr != nil {
+		app.errorJSON(w, emailErr, http.StatusBadRequest)
 		return
 	}
+	if normalizedEmail == "" {
+		app.errorJSON(w, models.ErrEmailRequired, http.StatusBadRequest)
+		return
+	}
+	req.Email = normalizedEmail
 
 	// Authorization of the requested grant is checked independently of UI.
 	// A delegated creator can only grant permissions and territory it has.
@@ -1037,7 +1043,8 @@ func (app *application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 		user, err = app.models.AdminUsers.ProvisionForDREID(r.Context(), req.Username, req.Email, req.Password, req.Role, *req.DREID)
 	} else {
 		// Compatibilidade temporária: clientes antigos ainda podem enviar apenas
-		// dre textual. O nome apenas resolve o ID canônico; e-mail continua opcional.
+		// dre textual. O nome apenas resolve o ID canônico; e-mail é obrigatório
+		// para qualquer novo perfil, inclusive neste caminho legado.
 		canonical, lookupErr := app.models.DREs.GetByNome(r.Context(), req.DRE)
 		if lookupErr != nil {
 			err = lookupErr
@@ -1055,6 +1062,7 @@ func (app *application) AdminCreateUser(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		if errors.Is(err, models.ErrInvalidRole) ||
+			errors.Is(err, models.ErrEmailRequired) ||
 			errors.Is(err, models.ErrDRERequiredForDRE) ||
 			errors.Is(err, models.ErrInvalidDRE) ||
 			errors.Is(err, models.ErrDRENotFound) ||

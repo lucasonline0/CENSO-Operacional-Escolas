@@ -13,7 +13,7 @@ interface Props {
   onCompleted: (preview: DREBootstrapPreview) => void;
 }
 
-function downloadCredentials(credentials: Array<{ dre: string; email?: string | null; username: string; temporary_password: string }>) {
+function downloadCredentials(credentials: Array<{ dre: string; email: string; username: string; temporary_password: string }>) {
   const text = ["CENSO OPERACIONAL — ACESSOS INICIAIS", "", ...credentials.flatMap((item) => [
     `DRE: ${item.dre}`, ...(item.email?.trim() ? [`E-mail: ${item.email}`] : []), `Usuário: ${item.username}`,
     `Senha temporária: ${item.temporary_password}`, "Troca obrigatória no primeiro acesso: SIM", "", "----------------------------------------", "",
@@ -31,10 +31,10 @@ export function BulkDreBootstrapModal({ token, preview, onClose, onCompleted }: 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [completed, setCompleted] = useState(0);
-  const editableIDs = useMemo(() => new Set(preview.items.filter((item) => item.status === "invalid_email" || (item.status === "pending" && !item.email?.trim())).map((item) => item.dre_id)), [preview]);
+  const editableIDs = useMemo(() => new Set(preview.items.filter((item) => item.status === "missing_email" || item.status === "invalid_email").map((item) => item.dre_id)), [preview]);
   const invalidEditable = [...editableIDs].some((id) => {
     const v = (emails[id] ?? "").trim();
-    return v !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+    return v === "" || !/^[^\s@]+@[^\s@]+$/.test(v);
   });
   const nonEmailErrors = preview.items.some((item) => item.status === "error");
 
@@ -52,14 +52,14 @@ export function BulkDreBootstrapModal({ token, preview, onClose, onCompleted }: 
     } finally { setLoading(false); }
   }
 
-  return <AdminModalShell title="Provisionar acessos das DREs" subtitle="Revise identidades e corrija e-mails antes de criar as contas." Icon={UsersRound} onClose={onClose} closeDisabled={loading} maxWidth="xl">
+  return <AdminModalShell title="Provisionar acessos das DREs" subtitle="Informe e-mails válidos para todos os novos perfis antes de criar as contas." Icon={UsersRound} onClose={onClose} closeDisabled={loading} maxWidth="xl">
     <div className="space-y-5 p-6">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         {[["DREs ativas", preview.active], ["Já provisionadas", preview.provisioned], ["Pendentes", preview.pending], ["Ignoradas E2E", preview.ignored_e2e], ["Com erro", preview.errors]].map(([label, value]) => <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-center"><div className="text-lg font-bold text-slate-800">{value}</div><div className="text-[11px] text-slate-500">{label}</div></div>)}
       </div>
       <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full min-w-[720px] text-sm"><thead><tr><th>DRE</th><th>E-mail</th><th>Usuário</th><th>Status</th></tr></thead><tbody>
-          {preview.items.map((item) => <tr key={item.dre_id}><td className="font-semibold text-slate-700">{item.dre}</td><td>{editableIDs.has(item.dre_id) ? <input aria-label={`E-mail ${item.dre}`} type="email" value={emails[item.dre_id] ?? ""} onChange={(event) => setEmails((current) => ({ ...current, [item.dre_id]: event.target.value }))} placeholder="Opcional — email@dominio.org" className="h-9 w-full rounded-lg border border-slate-200 px-2 text-sm" /> : <span className="text-slate-600">{item.email || "—"}</span>}</td><td className="font-mono text-xs text-slate-600">{item.username}</td><td><span className={item.status === "pending" ? "font-semibold text-emerald-700" : item.status === "error" || editableIDs.has(item.dre_id) ? "font-semibold text-rose-700" : "text-slate-600"}>{item.message}</span></td></tr>)}
+          {preview.items.map((item) => <tr key={item.dre_id}><td className="font-semibold text-slate-700">{item.dre}</td><td>{editableIDs.has(item.dre_id) ? <input aria-label={`E-mail ${item.dre}`} type="email" value={emails[item.dre_id] ?? ""} onChange={(event) => setEmails((current) => ({ ...current, [item.dre_id]: event.target.value }))} placeholder="Obrigatório — email@dominio.org" className="h-9 w-full rounded-lg border border-slate-200 px-2 text-sm" /> : <span className="text-slate-600">{item.email || "—"}</span>}</td><td className="font-mono text-xs text-slate-600">{item.username}</td><td><span className={item.status === "pending" ? "font-semibold text-emerald-700" : item.status === "error" || editableIDs.has(item.dre_id) ? "font-semibold text-rose-700" : "text-slate-600"}>{item.message}</span></td></tr>)}
         </tbody></table>
       </div>
       {completed > 0 && <div className="flex gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"><CheckCircle2 size={18} /><div><strong>{completed} contas criadas.</strong><p>Salve o arquivo agora. As senhas temporárias não poderão ser exibidas novamente.</p></div></div>}

@@ -10,44 +10,58 @@ func TestAdminUserModelValidation(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("empty username validation", func(t *testing.T) {
-		_, err := m.Create(ctx, "", "password1234", "dre", "DRE BELEM")
+		_, err := m.Create(ctx, "", "invalid@example.test", "password1234", "dre", "DRE BELEM")
 		if err == nil || err.Error() != "username não pode ser vazio" {
 			t.Fatalf("expected empty username error, got %v", err)
 		}
 	})
 
 	t.Run("whitespace username validation", func(t *testing.T) {
-		_, err := m.Create(ctx, "   ", "password1234", "dre", "DRE BELEM")
+		_, err := m.Create(ctx, "   ", "invalid@example.test", "password1234", "dre", "DRE BELEM")
 		if err == nil || err.Error() != "username não pode ser vazio" {
 			t.Fatalf("expected empty username error, got %v", err)
 		}
 	})
 
 	t.Run("short password validation", func(t *testing.T) {
-		_, err := m.Create(ctx, "user1", "123", "dre", "DRE BELEM")
+		_, err := m.Create(ctx, "user1", "invalid@example.test", "123", "dre", "DRE BELEM")
 		if err == nil || err.Error() != "senha deve ter no mínimo 12 caracteres" {
 			t.Fatalf("expected short password error, got %v", err)
 		}
 	})
 
 	t.Run("invalid role validation", func(t *testing.T) {
-		_, err := m.Create(ctx, "user1", "password1234", "admin", "DRE BELEM")
+		_, err := m.Create(ctx, "user1", "invalid@example.test", "password1234", "admin", "DRE BELEM")
 		if err != ErrInvalidRole {
 			t.Fatalf("expected ErrInvalidRole, got %v", err)
 		}
 	})
 
 	t.Run("missing DRE validation for dre role", func(t *testing.T) {
-		_, err := m.Create(ctx, "user1", "password1234", "dre", "")
+		_, err := m.Create(ctx, "user1", "invalid@example.test", "password1234", "dre", "")
 		if err != ErrDRERequiredForDRE {
 			t.Fatalf("expected ErrDRERequiredForDRE, got %v", err)
 		}
 	})
 
 	t.Run("whitespace DRE validation for dre role", func(t *testing.T) {
-		_, err := m.Create(ctx, "user1", "password1234", "dre", "   ")
+		_, err := m.Create(ctx, "user1", "invalid@example.test", "password1234", "dre", "   ")
 		if err != ErrDRERequiredForDRE {
 			t.Fatalf("expected ErrDRERequiredForDRE, got %v", err)
+		}
+	})
+
+	t.Run("missing email validation for custom profile", func(t *testing.T) {
+		_, err := m.ProvisionCustom(ctx, "user1", "   ", "password1234", []string{"census.read"}, "all", nil)
+		if err != ErrEmailRequired {
+			t.Fatalf("expected ErrEmailRequired, got %v", err)
+		}
+	})
+
+	t.Run("missing email validation for DRE profile", func(t *testing.T) {
+		_, err := m.ProvisionForDREID(ctx, "user1", "", "password1234", "dre", 1)
+		if err != ErrEmailRequired {
+			t.Fatalf("expected ErrEmailRequired, got %v", err)
 		}
 	})
 
@@ -128,10 +142,10 @@ func TestNormalizeAdminEmail(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "trim and lowercase", input: "  Gestor.DRE@Example.COM ", want: "gestor.dre@example.com"},
-		{name: "empty is optional", input: "   ", want: ""},
+		{name: "empty remains representable for legacy reads", input: "   ", want: ""},
 		{name: "missing at", input: "gestor.example.com", wantErr: true},
 		{name: "missing domain", input: "gestor@", wantErr: true},
-		{name: "domain without dot", input: "gestor@localhost", wantErr: true},
+		{name: "arbitrary valid domain", input: "gestor@localhost", want: "gestor@localhost"},
 		{name: "display name rejected", input: "Gestor <gestor@example.com>", wantErr: true},
 		{name: "spaces rejected", input: "gestor dre@example.com", wantErr: true},
 	}

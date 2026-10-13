@@ -118,9 +118,9 @@ func bootstrapPreview(ctx context.Context, q bootstrapQueryer) (DREBootstrapPrev
 				}
 				out.Errors++
 			} else {
-				item.Status = "pending"
-				item.Message = "Pronta (sem e-mail — override opcional)"
-				out.Pending++
+				item.Status = "missing_email"
+				item.Message = "E-mail obrigatório para criar o perfil"
+				out.Errors++
 			}
 		default:
 			if _, e := NormalizeAdminEmail(c.email); e != nil {
@@ -204,9 +204,6 @@ func (m *AdminUserModel) BootstrapDREAccounts(ctx context.Context, emailOverride
 		}
 		email := strings.TrimSpace(rawEmail)
 		if email == "" {
-			if _, err = tx.ExecContext(ctx, `UPDATE dres SET email=NULL,updated_at=NOW() WHERE id=$1`, dreID); err != nil {
-				return DREBootstrapPreview{}, nil, err
-			}
 			continue
 		}
 		normalized, normalizeErr := NormalizeAdminEmail(email)
@@ -228,6 +225,9 @@ func (m *AdminUserModel) BootstrapDREAccounts(ctx context.Context, emailOverride
 	for _, item := range preview.Items {
 		if item.Status != "pending" {
 			continue
+		}
+		if strings.TrimSpace(item.Email) == "" {
+			return preview, nil, ErrEmailRequired
 		}
 		password, e := bootstrapPassword()
 		if e != nil {

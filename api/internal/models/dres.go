@@ -335,10 +335,8 @@ type DREDependencies struct {
 	Census         int `json:"census"`
 }
 
-var ErrDREHasDependencies = errors.New("DRE possui dependências")
-
 // Dependencies counts every canonical administrative/data relation used by the
-// application. DeleteEmpty repeats this query under a row lock in one transaction.
+// application.
 func dreDependencies(ctx context.Context, q interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, id int) (DREDependencies, error) {
@@ -363,43 +361,4 @@ func (m *DREModel) Dependencies(ctx context.Context, id int) (DREDependencies, e
 		return DREDependencies{}, err
 	}
 	return dreDependencies(ctx, m.DB, id)
-}
-
-func (m *DREModel) DeleteEmpty(ctx context.Context, id int) (DREDependencies, error) {
-	if id <= 0 {
-		return DREDependencies{}, ErrDREInvalidID
-	}
-	tx, err := m.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return DREDependencies{}, err
-	}
-	defer tx.Rollback()
-	var exists bool
-	if err = tx.QueryRowContext(ctx, `SELECT true FROM dres WHERE id=$1 FOR UPDATE`, id).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
-		return DREDependencies{}, ErrDRENotFound
-	} else if err != nil {
-		return DREDependencies{}, err
-	}
-	deps, err := dreDependencies(ctx, tx, id)
-	if err != nil {
-		return deps, err
-	}
-	if deps.Schools+deps.Users+deps.CustomProfiles+deps.Census > 0 {
-		return deps, ErrDREHasDependencies
-	}
-	result, err := tx.ExecContext(ctx, `DELETE FROM dres WHERE id=$1`, id)
-	if err != nil {
-		return deps, err
-	}
-	n, err := result.RowsAffected()
-	if err != nil {
-		return deps, err
-	}
-	if n == 0 {
-		return deps, ErrDRENotFound
-	}
-	if err = tx.Commit(); err != nil {
-		return deps, err
-	}
-	return deps, nil
 }

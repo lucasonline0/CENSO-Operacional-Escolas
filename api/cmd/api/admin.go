@@ -1356,35 +1356,6 @@ func (app *application) AdminDeleteUser(w http.ResponseWriter, r *http.Request) 
 	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Message: "Usuário excluído"})
 }
 
-// AdminDeleteDRE is intentionally restricted to the environment-backed global
-// administrator. Capability-bearing database accounts cannot delete master data.
-func (app *application) AdminDeleteDRE(w http.ResponseWriter, r *http.Request) {
-	scope, ok := GetAdminAccessScope(r.Context())
-	if !ok || scope.Role != RoleAdmin || scope.UserID != 0 || scope.DataScope != "all" {
-		app.errorJSON(w, fmt.Errorf("exclusivo para o administrador global do ambiente"), http.StatusForbidden)
-		return
-	}
-	id, err := strconv.Atoi(chi.URLParam(r, "id"))
-	if err != nil || id <= 0 {
-		app.errorJSON(w, fmt.Errorf("ID de DRE inválido"), http.StatusBadRequest)
-		return
-	}
-	deps, err := app.models.DREs.DeleteEmpty(r.Context(), id)
-	if errors.Is(err, models.ErrDRENotFound) {
-		app.errorJSON(w, err, http.StatusNotFound)
-		return
-	}
-	if errors.Is(err, models.ErrDREHasDependencies) {
-		app.writeJSON(w, http.StatusConflict, map[string]any{"error": true, "code": "DRE_HAS_DEPENDENCIES", "message": "A DRE possui dados vinculados e foi preservada.", "dependencies": deps})
-		return
-	}
-	if err != nil {
-		app.errorJSON(w, fmt.Errorf("erro ao excluir DRE: %w", err), http.StatusInternalServerError)
-		return
-	}
-	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Message: "DRE excluída"})
-}
-
 func requireEnvAdminScope(r *http.Request) bool {
 	scope, ok := GetAdminAccessScope(r.Context())
 	return ok && scope.Role == RoleAdmin && scope.UserID == 0 && scope.DataScope == "all"

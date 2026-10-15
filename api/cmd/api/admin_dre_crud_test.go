@@ -332,6 +332,30 @@ func TestAdminDREAndUsersRoutesWithMux(t *testing.T) {
 	}
 }
 
+// TestAdminDeleteDRERouteNotRegisteredWithMux (PEDRO-09C) — a rota
+// DELETE /v1/admin/dres/{id} foi removida do roteador: mesmo com token
+// válido de administrador global a requisição cai no 405 Method Not Allowed
+// do Chi e nunca alcança um handler de exclusão. O caminho é 405 (não 401/
+// 403) justamente porque nenhuma rota DELETE existe nesse padrão — se a rota
+// fosse re-introduzida, o middleware de autenticação responderia e o teste
+// falharia. As demais operações de DRE são cobertas acima por
+// TestAdminDREAndUsersRoutesWithMux.
+func TestAdminDeleteDRERouteNotRegisteredWithMux(t *testing.T) {
+	os.Setenv("ADMIN_JWT_SECRET", "123456789012345678901234567890123456")
+	app := setupTestApp()
+	handler := app.routes()
+	adminToken := createTestJWT("admin_master", RoleAdmin, "")
+
+	req := httptest.NewRequest(http.MethodDelete, "/v1/admin/dres/1", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 Method Not Allowed for removed DELETE DRE route, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 // ─── 4. Testes Unitários de Validação de Input dos Handlers (Admin) ──────────
 
 func TestAdminCreateDREValidation(t *testing.T) {
